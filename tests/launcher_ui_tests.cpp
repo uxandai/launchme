@@ -190,6 +190,7 @@ public:
         if (!app.profiler_.overlay()) app.profiler_.toggle();
         app.renderer_.profile(true);
         app.controller_input_.initialize(window);
+        app.real_pads_ = true; // Profiled with the machine's own pad.
         auto library = std::make_unique<LibraryMessage>(); library->account = 1;
         // LAUNCHME_PERF_GAMES: library size (default 80); LAUNCHME_PERF_LIBRARY=1: the "all games" grid.
         wchar_t games_value[16]{};

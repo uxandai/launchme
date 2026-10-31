@@ -477,6 +477,7 @@ void Launcher::tick() {
     pollMemory();
     pollGameFocus();
     pollTray();
+    pollReturnFocus();
     startRatings();
     pollLibrarySave();
     pollPluginGameViews();
@@ -811,7 +812,12 @@ void Launcher::tick() {
         profiler_.overlay() || renderer_.animating())
         needs_paint = true;
     const auto input_started = std::chrono::steady_clock::now();
-    if (!guide_timer_active_) { controller(); tickGameOverlay(GetTickCount64()); }
+#ifdef LAUNCHME_UI_TEST
+    const bool read_pads = real_pads_;
+#else
+    constexpr bool read_pads = true;
+#endif
+    if (!guide_timer_active_) { if (read_pads) controller(); tickGameOverlay(GetTickCount64()); }
     autoKeyboard();
     pollGameOverlay();
     const auto input_finished = std::chrono::steady_clock::now();

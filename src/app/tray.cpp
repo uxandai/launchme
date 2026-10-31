@@ -49,13 +49,18 @@ void Launcher::hideToTray(const std::wstring& game) {
     ShowWindow(hwnd_, SW_HIDE);
 }
 
-void Launcher::leaveTray() {
+void Launcher::leaveTray(HWND behind) {
     removeTrayIcon();
     if (!in_tray_) return;
     in_tray_ = false;
     // In its own state (maximized, full screen, minimized) and without taking the foreground: the
-    // caller decides that (bringToFront, returnFromGame).
-    if (hwnd_ && !IsWindowVisible(hwnd_)) ShowWindow(hwnd_, SW_SHOWNA);
+    // caller decides that (bringToFront, returnFromGame). SW_SHOWNA puts it on top of every other
+    // window, so the one that keeps the screen goes right in front of it (a topmost one is above it
+    // anyway; placed after one, the launcher would become topmost too).
+    if (!hwnd_ || IsWindowVisible(hwnd_)) return;
+    if (!behind || behind == hwnd_ || (GetWindowLongPtrW(behind, GWL_EXSTYLE) & WS_EX_TOPMOST) ||
+        !SetWindowPos(hwnd_, behind, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW))
+        ShowWindow(hwnd_, SW_SHOWNA);
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 

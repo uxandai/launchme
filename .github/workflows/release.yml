@@ -3,7 +3,7 @@
 #   launchme-<version>-win64-setup.exe   Windows installer (installer/launchme.iss)
 #   launchme-<version>-win64.zip         Windows without installer, the Windows updater's package (launchme/...)
 #   launchme-<version>-x86_64.AppImage   Linux (tools/linux/make-appimage.sh), the Linux updater's package
-#   SHA256SUMS (+ .sig/.pem)             every asset's SHA-256, signed keylessly with Sigstore cosign
+#   SHA256SUMS (+ .sigstore.json)        every asset's SHA-256, signed keylessly with Sigstore cosign
 #
 # A pushed v<version> tag builds and publishes (the tag must match project() in CMakeLists.txt);
 # workflow_dispatch only builds and keeps the files as workflow artifacts.
@@ -229,20 +229,25 @@ jobs:
 
       - name: Generate SHA256SUMS
         run: |
-          rm -f release-assets/SHA256SUMS release-assets/SHA256SUMS.sig release-assets/SHA256SUMS.pem
+          rm -f release-assets/SHA256SUMS release-assets/SHA256SUMS.sig release-assets/SHA256SUMS.pem release-assets/SHA256SUMS.sigstore.json
           (cd release-assets && find . -maxdepth 1 -type f -printf '%f\n' | sort | xargs -d '\n' sha256sum --) > SHA256SUMS
           test -s SHA256SUMS
           cat SHA256SUMS
 
-      # cosign-installer publishes no moving major tag (v4): a full version.
+      # cosign-installer publishes no moving major tag (v4): a full version. Its cosign 3 signs into
+      # one Sigstore bundle (signature, certificate, transparency-log proof); with its default signing
+      # config the old --output-signature/--output-certificate files are never written.
       - uses: sigstore/cosign-installer@v4.1.2
 
       - name: Sign SHA256SUMS
         run: |
-          cosign sign-blob SHA256SUMS --yes --output-signature SHA256SUMS.sig --output-certificate SHA256SUMS.pem
-          test -s SHA256SUMS.sig && test -s SHA256SUMS.pem
+          cosign sign-blob SHA256SUMS --yes --bundle SHA256SUMS.sigstore.json
+          test -s SHA256SUMS.sigstore.json
+          cosign verify-blob SHA256SUMS --bundle SHA256SUMS.sigstore.json \
+            --certificate-identity "https://github.com/$GITHUB_REPOSITORY/.github/workflows/release.yml@$GITHUB_REF" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
       - name: Publish checksums and signature
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "$GITHUB_REF_NAME" SHA256SUMS SHA256SUMS.sig SHA256SUMS.pem --repo "$GITHUB_REPOSITORY" --clobber
+        run: gh release upload "$GITHUB_REF_NAME" SHA256SUMS SHA256SUMS.sigstore.json --repo "$GITHUB_REPOSITORY" --clobber

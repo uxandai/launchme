@@ -690,8 +690,9 @@ public:
     static constexpr UINT_PTR guide_timer = 0x4C47;
     static constexpr UINT_PTR foreground_scan_timer = 0x4C48;
     static constexpr int guide_hotkey = 0x4C47;
-    // EVENT_SYSTEM_FOREGROUND from the WinEvent hook (main.cpp): a game may have started.
-    void foregroundChanged();
+    // EVENT_SYSTEM_FOREGROUND from the WinEvent hook (main.cpp): another program's `window` came to
+    // the front. A game may have started; returnFromGame also learns when that window arrived.
+    void foregroundChanged(HWND window);
     void foregroundScanDue();
     void pollGuideInput();
     void toggleGameOverlay();
@@ -1332,15 +1333,34 @@ private:
     // launch (Steam has no foreground permission) waits up to a minute for slow starts.
     static constexpr uint64_t default_focus_ms = 15000, silent_focus_ms = 60000;
     void beginGameSession(const Game& game, uint64_t focus_ms = default_focus_ms, std::shared_ptr<void> job = {});
-    // The last game started here ended: the launcher returns to the front when a store client,
-    // the desktop or nothing holds it (never over another program the user chose).
-    void returnFromGame();
-    void bringToFront(); // Restored and in front now (a shell's own window may take the foreground back).
+    // The last game started here ended (`ended_at`, GetTickCount64): the launcher returns to the
+    // front when what the game left there holds it: a store client, the desktop, nothing, or the
+    // window Windows activated when the game's went away. Never over another program the user chose
+    // during play (in front since well before the end); the window then waits behind it.
+    void returnFromGame(uint64_t ended_at);
+    // Restored, in front and focused now. Windows may refuse a background process the foreground
+    // (or a client take it back): retried for return_focus_ms (pollReturnFocus).
+    void bringToFront();
+    // A program that came to the front at most this long before the game's session ended was put
+    // there by the game's end (its window closing, the process shutting down, the 1.5 s stop check).
+    static constexpr uint64_t game_exit_window_ms = 10000;
+    static constexpr uint64_t return_focus_ms = 2000, return_focus_retry_ms = 250;
+    HWND foreground_seen_ = nullptr; // foregroundChanged: the last program window in front, and when.
+    uint64_t foreground_seen_at_ = 0;
+    uint64_t return_focus_until_ = 0, return_focus_next_ = 0;
+    HWND return_focus_from_ = nullptr; // What held the front when the return began.
+    void pollReturnFocus();
+    bool takeForeground(); // take_foreground_(hwnd_); true once the launcher holds the foreground.
+    // Tests record the attempts; empty = takeForegroundWindow (game_sessions.cpp), which UI test
+    // builds never run: they never take the user's real foreground.
+    std::function<bool(HWND)> take_foreground_;
+    HWND frontWindow() const { return foreground_window_ ? foreground_window_() : GetForegroundWindow(); }
     std::set<std::string> launched_here_; // Sessions started by the launcher itself (not adopted).
     // The tray (src/app/tray.cpp). hideToTray: only with the setting on and the icon added. leaveTray:
-    // the icon goes and the window is shown again (without taking the foreground).
+    // the icon goes and the window is shown again without taking the foreground: on top, or right
+    // behind `behind` (a program that keeps the screen).
     void hideToTray(const std::wstring& game);
-    void leaveTray();
+    void leaveTray(HWND behind = nullptr);
     // Each tick: hides once a game started here runs and something else (the game) is in front;
     // shows again when no session is left or the setting was turned off.
     void pollTray();
@@ -1969,6 +1989,11 @@ private:
     int frame_limit_ = 240;
     std::chrono::steady_clock::time_point still_since_ = std::chrono::steady_clock::now();
     std::function<HWND()> foreground_window_; // Tests: the window in front; GetForegroundWindow otherwise.
+#ifdef LAUNCHME_UI_TEST
+    // UI tests feed pads through controller(PadReading): the machine's own pads (a stick something
+    // rests on) reach tick() only in a run that asks for them, the performance profile.
+    bool real_pads_ = false;
+#endif
     void startArtworkWorkers(bool network = true); // Tests can run the actual disk lane alone.
     // The screensaver's slideshow (screensaver_state.hpp).
     using ScreensaverItem = launcher_state::ScreensaverItem;

@@ -43,10 +43,11 @@ constexpr WPARAM DBT_DEVNODES_CHANGED_VALUE = 0x0007; // Dbt.h: a device was add
 
 // EVENT_SYSTEM_FOREGROUND for every process but ours: a game that starts outside the launcher
 // takes the foreground, so this replaces a periodic process scan (Launcher::foregroundChanged).
+// It also dates each program's arrival in front, for the return after a game (returnFromGame).
 void CALLBACK foregroundEvent(HWINEVENTHOOK, DWORD, HWND window, LONG, LONG, DWORD, DWORD) {
     if (!main_window || window == main_window) return;
     if (auto* app = reinterpret_cast<Launcher*>(GetWindowLongPtrW(main_window, GWLP_USERDATA)); app && !app->closing())
-        app->foregroundChanged();
+        app->foregroundChanged(window);
 }
 
 // A "play:" command's end (Launchme's shortcut in Steam, src/app/game_links.cpp): Steam sees the game

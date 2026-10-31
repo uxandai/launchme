@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(launchme VERSION 0.4.6 LANGUAGES C CXX)
+project(launchme VERSION 0.4.7 LANGUAGES C CXX)
 
 if(NOT WIN32)
     # Linux (highly experimental, docs/linux-port.md): the shared core, its tests and the launcher on SDL3 + Skia.

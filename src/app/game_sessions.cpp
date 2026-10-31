@@ -122,7 +122,8 @@ void Launcher::initializeGameSessions() {
 
 // EVENT_SYSTEM_FOREGROUND (main.cpp): another window came to the front. Bursts (Alt+Tab
 // cycling, a splash screen then the game) become one scan a second later.
-void Launcher::foregroundChanged() {
+void Launcher::foregroundChanged(HWND window) {
+    foreground_seen_ = window; foreground_seen_at_ = GetTickCount64();
     if (closing_ || !runtime_started_) return;
     const auto now = GetTickCount64();
     if (now < foreground_scan_at_) return;
@@ -379,66 +380,139 @@ void Launcher::onGameActivity(std::unique_ptr<GameActivityMessage> message) {
     for (const auto& key : finished) returned |= launched_here_.erase(key) > 0;
     if (!anyActiveSession() && !another_play) {
         audio_.resumeMusic();
-        // Hidden in the tray while it ran: the window is back in the taskbar either way.
-        leaveTray();
         // The last game started here has ended: the launcher comes back, as a console's home
         // screen does, instead of leaving a pad user in the store client that started it.
-        if (returned) returnFromGame();
+        // Hidden in the tray while it ran: the window is back in the taskbar either way.
+        if (returned) returnFromGame(message->observed_at);
+        else leaveTray();
     }
 }
 
-void Launcher::returnFromGame() {
-    if (closing_ || !hwnd_) return;
-    const HWND foreground = GetForegroundWindow();
-    if (foreground == hwnd_) return;
-    // Only from what a game leaves behind: a store client, the desktop, or nothing. A browser or
-    // any other program the user switched to keeps the screen.
-    if (foreground) {
-#ifndef _WIN32
-        // Linux: the display server names only the launcher's own windows (another one of them,
-        // a sign-in page say, has the user's attention); other programs answer nullptr.
-        return;
+namespace {
+// What a game leaves in front when it ends: the store client that started it, the desktop, a
+// crash reporter, or nothing at all.
+bool leftByGame(HWND window) {
+    if (!window) return true;
+#ifdef _WIN32
+    wchar_t name[256]{};
+    if (GetClassNameW(window, name, static_cast<int>(std::size(name))) &&
+        (std::wstring_view(name) == L"Progman" || std::wstring_view(name) == L"WorkerW" || std::wstring_view(name) == L"Shell_TrayWnd")) return true;
+    DWORD pid = 0;
+    GetWindowThreadProcessId(window, &pid);
+    const HANDLE process = pid ? OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid) : nullptr;
+    wchar_t path[MAX_PATH * 2]{}; DWORD size = static_cast<DWORD>(std::size(path));
+    const bool known = process && QueryFullProcessImageNameW(process, 0, path, &size);
+    if (process) CloseHandle(process);
+    if (!known) return false;
+    auto file = std::filesystem::path(path).filename().wstring();
+    std::transform(file.begin(), file.end(), file.begin(), [](wchar_t c) { return static_cast<wchar_t>(std::towlower(c)); });
+    static constexpr std::wstring_view clients[]{L"steam.exe", L"steamwebhelper.exe", L"galaxyclient.exe", L"battle.net.exe",
+        L"epicgameslauncher.exe", L"ubisoftconnect.exe", L"upc.exe", L"eadesktop.exe", L"xboxpcapp.exe", L"xboxpcappce.exe",
+        L"explorer.exe", L"crashreportclient.exe", L"unitycrashhandler64.exe", L"werfault.exe"};
+    return std::find(std::begin(clients), std::end(clients), file) != std::end(clients);
 #else
-        wchar_t name[256]{};
-        const bool desktop = GetClassNameW(foreground, name, static_cast<int>(std::size(name))) &&
-            (std::wstring_view(name) == L"Progman" || std::wstring_view(name) == L"WorkerW" || std::wstring_view(name) == L"Shell_TrayWnd");
-        if (!desktop) {
-            DWORD pid = 0;
-            GetWindowThreadProcessId(foreground, &pid);
-            const HANDLE process = pid ? OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid) : nullptr;
-            wchar_t path[MAX_PATH * 2]{}; DWORD size = static_cast<DWORD>(std::size(path));
-            const bool known = process && QueryFullProcessImageNameW(process, 0, path, &size);
-            if (process) CloseHandle(process);
-            if (known) {
-                auto file = std::filesystem::path(path).filename().wstring();
-                std::transform(file.begin(), file.end(), file.begin(), [](wchar_t c) { return static_cast<wchar_t>(std::towlower(c)); });
-                static constexpr std::wstring_view clients[]{L"steam.exe", L"steamwebhelper.exe", L"galaxyclient.exe", L"battle.net.exe",
-                    L"epicgameslauncher.exe", L"ubisoftconnect.exe", L"upc.exe", L"eadesktop.exe", L"xboxpcapp.exe", L"xboxpcappce.exe",
-                    L"explorer.exe", L"crashreportclient.exe", L"unitycrashhandler64.exe", L"werfault.exe"};
-                if (std::find(std::begin(clients), std::end(clients), file) == std::end(clients)) return;
-            }
-        }
+    return false;
 #endif
+}
+
+#ifndef LAUNCHME_UI_TEST
+// SetForegroundWindow is refused to a background process unless, among others, it provided the
+// last input or nothing holds the foreground; a refusal only flashes the taskbar button. Joining
+// the foreground thread's input covers a window in front; when nothing is in front, or the lock
+// after the user's last keypress in the game still holds, an empty mouse event (no move, no
+// button: nothing happens) makes this process the last input's provider (as PowerToys Run does).
+bool takeForegroundWindow(HWND window) {
+    const auto attempt = [window] {
+        const HWND front = GetForegroundWindow();
+        if (front == window) return true;
+        const DWORD self = GetCurrentThreadId();
+        const DWORD other = front ? GetWindowThreadProcessId(front, nullptr) : 0;
+        const bool attached = other && other != self && AttachThreadInput(self, other, TRUE);
+        SetForegroundWindow(window);
+        BringWindowToTop(window);
+        if (attached) AttachThreadInput(self, other, FALSE);
+        return GetForegroundWindow() == window;
+    };
+    if (attempt()) return true;
+#ifdef _WIN32
+    INPUT input{};
+    input.type = INPUT_MOUSE;
+    return SendInput(1, &input, sizeof(input)) == 1 && attempt();
+#else
+    return false;
+#endif
+}
+#endif
+}
+
+void Launcher::returnFromGame([[maybe_unused]] uint64_t ended_at) { // Linux: other programs are never seen.
+    if (closing_ || !hwnd_) return;
+    const HWND front = frontWindow();
+    if (front == hwnd_) { leaveTray(); return; }
+#ifndef _WIN32
+    // Linux: the display server names only the launcher's own windows (another one of them,
+    // a sign-in page say, has the user's attention); other programs answer nullptr.
+    if (front) { leaveTray(); return; }
+#else
+    if (!leftByGame(front)) {
+        // Another program in front. Hidden in the tray, the launcher could not be the window Windows
+        // activates when the game's goes away: the next one in line was (a browser, a terminal), just
+        // as the game ended. One in front since well before the end, or not seen arriving (the
+        // launcher's own windows, a sign-in page say), is the user's: it keeps the screen.
+        DWORD pid = 0;
+        GetWindowThreadProcessId(front, &pid);
+        const bool arrived_with_end = front == foreground_seen_ && foreground_seen_at_ + game_exit_window_ms >= ended_at;
+        if (pid == GetCurrentProcessId() || !arrived_with_end) { leaveTray(front); return; }
     }
+#endif
     bringToFront();
+}
+
+bool Launcher::takeForeground() {
+    if (take_foreground_) return take_foreground_(hwnd_);
+#ifdef LAUNCHME_UI_TEST
+    return frontWindow() == hwnd_; // UI tests never take the user's real foreground.
+#else
+    return takeForegroundWindow(hwnd_);
+#endif
 }
 
 void Launcher::bringToFront() {
     if (closing_ || !hwnd_) return;
     leaveTray(); // Hidden while a game runs (src/app/tray.cpp): shown first.
-    const HWND foreground = GetForegroundWindow();
-    if (foreground == hwnd_ && !IsIconic(hwnd_)) return;
+    const HWND front = frontWindow();
+    if (front == hwnd_ && !IsIconic(hwnd_)) { return_focus_until_ = 0; return; }
     if (IsIconic(hwnd_)) ShowWindow(hwnd_, SW_RESTORE);
-    // A background process may not take the foreground on its own; joining the foreground
-    // thread's input for this call is the accepted way for a shell-like app to come back.
-    const DWORD self = GetCurrentThreadId();
-    const DWORD other = foreground ? GetWindowThreadProcessId(foreground, nullptr) : 0;
-    const bool attached = other && other != self && AttachThreadInput(self, other, TRUE);
-    SetForegroundWindow(hwnd_);
-    BringWindowToTop(hwnd_);
-    if (attached) AttachThreadInput(self, other, FALSE);
+    if (takeForeground()) return_focus_until_ = 0;
+    else {
+        // Refused (or the next window's activation still under way): tried again for a moment.
+        const auto now = GetTickCount64();
+        return_focus_from_ = front;
+        return_focus_until_ = now + return_focus_ms;
+        return_focus_next_ = now + return_focus_retry_ms;
+    }
     if (coversMonitor()) displayChanged(); // A game may have left the display in another mode.
     InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+// Each tick while a refused return lasts: another attempt every 250 ms, until the launcher holds
+// the foreground. It gives up after return_focus_ms, when a game starts, or when another program
+// comes forward (the user went there) instead of what the game left.
+void Launcher::pollReturnFocus() {
+    if (!return_focus_until_) return;
+    const auto now = GetTickCount64();
+    const HWND front = frontWindow();
+    if (closing_ || !hwnd_ || front == hwnd_ || now >= return_focus_until_ || pending_launch_ || anyActiveSession() ||
+        (front != return_focus_from_ && !leftByGame(front))) {
+        return_focus_until_ = 0;
+        return;
+    }
+    if (now < return_focus_next_) return;
+    return_focus_next_ = now + return_focus_retry_ms;
+    if (takeForeground()) {
+        return_focus_until_ = 0;
+        InvalidateRect(hwnd_, nullptr, FALSE);
+    }
 }
 
 // Czas gry as shown everywhere: Steam's own count for Steam games (unknown until read), else the

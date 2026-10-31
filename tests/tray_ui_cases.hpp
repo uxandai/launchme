@@ -2,6 +2,7 @@
 // podczas gry" (src/app/tray.cpp): off by default; on, a game started here hides the window once the
 // game holds the foreground, an icon (recorded, never added to the real notification area) stands in,
 // the icon brings it back, Explorer's restart adds it again and the game's end shows the window.
+// The game's end returns the foreground (0.4.7) unless the user chose another program meanwhile.
 // Then "Popraw kadr" on Tło (src/app/crop.cpp): the screen-shaped window moves over a wide
 // background, is saved bound to its bytes and reset by "Wyśrodkuj"; "Zmień grafikę" keeps the pages seen
 // during a visit; and the empty library view's
@@ -73,6 +74,92 @@ int LauncherUiTest::trayAndBackgroundCrop(HWND window) {
         if (!app.settings_.hide_while_playing) return 1962;
         app.game_sessions_.clear(); app.launched_here_.clear();
         ShowWindow(window, SW_HIDE);
+    }
+    {
+        // 0.4.7: the game ends while the window waits in the tray. Windows activated the next window in
+        // line (a terminal, a browser) as the game's went away: the launcher, shown on top again, takes
+        // the foreground (refused once by Windows: tried again) instead of leaving the keyboard and the
+        // pad with that program. One in front since well before the end keeps the screen; the launcher
+        // waits right behind it.
+        Launcher app; app.hwnd_ = window; app.execute_ = fakeExecute;
+        app.settings_.launch_animation = false; app.settings_.hide_while_playing = true;
+        app.fullscreen_ = false; // Never resized to the monitor here.
+        app.tray_call_ = [](DWORD, NOTIFYICONDATAW*) { return TRUE; };
+        const auto helper = [](const wchar_t* title) {
+            return CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, L"LaunchmeUiRegression", title, WS_POPUP, -4000, -4000, 64, 64,
+                                   nullptr, nullptr, GetModuleHandleW(nullptr), nullptr);
+        };
+        const HWND game_window = helper(L"Game"), own = helper(L"Sign-in page");
+        // Other programs' windows: neither a store client nor the desktop.
+        const HWND terminal = reinterpret_cast<HWND>(static_cast<UINT_PTR>(0x6666));
+        const HWND browser = reinterpret_cast<HWND>(static_cast<UINT_PTR>(0x7777));
+        const auto code = [&]() -> int {
+            if (!game_window || !own) return 1982;
+            ShowWindow(own, SW_SHOWNOACTIVATE);
+            HWND front = window;
+            app.foreground_window_ = [&] { return front; };
+            int attempts = 0;
+            bool grant = false;
+            app.take_foreground_ = [&](HWND target) {
+                ++attempts;
+                if (target == window && grant) front = window;
+                return front == window;
+            };
+            const Game game{6401, L"Focus game"};
+            const auto activity = [&](GameActivity state, uint64_t time) {
+                auto message = std::make_unique<GameActivityMessage>();
+                message->generation = app.game_activity_jobs_->generation.load(); message->observed_at = time;
+                message->activities.emplace_back(gameKey(game), state);
+                app.onGameActivity(std::move(message));
+            };
+            // Started here and confirmed; the game in front hides the launcher.
+            const auto play = [&](uint64_t at) {
+                front = window; ShowWindow(window, SW_SHOWNOACTIVATE);
+                app.beginGameSession(game);
+                activity(GameActivity::running, at);
+                front = game_window; app.foregroundChanged(game_window);
+                app.pollTray();
+                return app.inTray() && !IsWindowVisible(window);
+            };
+            const auto end = [&](uint64_t at) {
+                activity(GameActivity::stopped, at); activity(GameActivity::stopped, at + 1800);
+                return app.game_sessions_.empty() && !app.inTray() && IsWindowVisible(window);
+            };
+            const auto start = GetTickCount64();
+            if (!play(start + 100)) return 1983;
+            front = terminal; app.foregroundChanged(terminal); // The next window in line, as the game ended.
+            if (!end(start + 900) || attempts != 1 || front == window || !app.return_focus_until_) return 1984;
+            app.pollReturnFocus(); // Not before the retry interval.
+            if (attempts != 1) return 1985;
+            grant = true; app.return_focus_next_ = 0; app.pollReturnFocus();
+            if (attempts != 2 || front != window || app.return_focus_until_) return 1986;
+            // Refused again, then the user goes to another program: no more attempts.
+            grant = false;
+            if (!play(start + 5000)) return 1987;
+            front = terminal; app.foregroundChanged(terminal);
+            if (!end(start + 5800) || attempts != 3 || !app.return_focus_until_) return 1988;
+            front = browser; app.return_focus_next_ = 0; app.pollReturnFocus();
+            if (attempts != 3 || app.return_focus_until_) return 1989;
+            // In the browser for a minute while the game ran: it keeps the screen.
+            if (!play(start + 10000)) return 1990;
+            front = browser; app.foregroundChanged(browser);
+            const uint64_t ended = start + 11800, minute = Launcher::game_exit_window_ms + 60000;
+            app.foreground_seen_at_ = ended > minute ? ended - minute : 0;
+            if (!end(start + 10000) || attempts != 3 || front != browser || app.return_focus_until_) return 1991;
+            // The launcher's own window in front (never seen by the hook): kept too, the launcher right behind it.
+            if (!play(start + 15000)) return 1992;
+            front = own;
+            if (!end(start + 15000) || attempts != 3 || front != own) return 1993;
+            bool behind = false;
+            for (HWND next = GetWindow(own, GW_HWNDNEXT); next && !behind; next = GetWindow(next, GW_HWNDNEXT)) behind = next == window;
+            if (!behind) return 1994;
+            return 0;
+        }();
+        app.game_sessions_.clear(); app.launched_here_.clear(); app.removeTrayIcon();
+        if (game_window) DestroyWindow(game_window);
+        if (own) DestroyWindow(own);
+        ShowWindow(window, SW_HIDE);
+        if (code) return code;
     }
     Launcher app; app.hwnd_ = window; app.execute_ = fakeExecute;
     app.settings_.launch_animation = false;
