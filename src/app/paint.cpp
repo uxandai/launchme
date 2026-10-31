@@ -442,6 +442,8 @@ void Launcher::paint(bool overlay) {
             // The quick bar's icons at the top: they make way for the bar itself and the drawers.
             context.flix_icons = true;
             context.flix_icon_hover = flix_icon_hover_;
+            context.flix_icon_focus = flixIconsFocused() ? flix_icon_focus_ : -1;
+            context.flix_icon_glance = settings_.glance;
             context.flix_icon_total = flixIconCount();
             const float away = std::max({quick_progress_, friends_progress_, category_menu_progress_, menu_progress_});
             context.flix_icons_alpha = homeOverlayAvailable(true) ? std::clamp(1.0f - away, 0.0f, 1.0f) : 0.0f;
@@ -555,7 +557,7 @@ void Launcher::paint(bool overlay) {
         }
     }
     context.metro_light = settings_.metro_light;
-    context.menu_dialog = settings_.menu_dialog;
+    context.menu_dialog = menuDialog();
     context.friends_progress = friends_progress_;
     context.friends = &friends_;
     context.friends_loading = friends_loading_;

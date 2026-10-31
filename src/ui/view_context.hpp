@@ -379,6 +379,8 @@ struct ViewContext {
     // Flix (AppSettings::flix_top_icons): the quick bar's icons small in the top-right corner.
     bool flix_icons = false;
     int flix_icon_hover = -1; // home_widgets::icons index under the pointer; -1 none.
+    int flix_icon_focus = -1; // The pad's icon (Launcher::flix_icon_focus_); -1 none.
+    bool flix_icon_glance = false; // Glance's icon follows the quick ones.
     int flix_icon_total = 0;  // Quick icons, then Glance's and her avatar when shown.
     float flix_icons_alpha = 0;
     // XMB home: cards = [xmb_top tiles..., focused column games...].

@@ -2794,7 +2794,7 @@ constexpr Entry entries[] = {
     {L"Zrzuty ekranu", L"Screenshots"},
     {L"Podobne gry", L"Similar games"},
     {L"Duże menu gry", L"Large game menu"},
-    {L"Menu gry na ekranie głównym jako duże przewijane okno z ikoną przy każdej opcji.", L"The home screen's game menu as a large scrolling window with an icon beside each option."},
+    {L"Menu gry (ekran główny, Szczegóły, biblioteki) jako duże przewijane okno z ikoną przy każdej opcji.", L"The game menu (home screen, Details, libraries) as a large scrolling window with an icon beside each option."},
     {L"Jasny motyw", L"Light theme"},
     {L"Białe tło i ciemne napisy, jak jasny motyw Windows Phone. Kafle zostają kolorowe.", L"A white page and dark text, like the light theme of Windows Phone. The tiles stay coloured."},
     // Entries of extras built only on this machine (local/i18n), when present.

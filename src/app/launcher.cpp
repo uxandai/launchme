@@ -467,7 +467,7 @@ void Launcher::snapCardsForTransition() {
         card.size = target_size;
         card.aspect = aspect;
         card.opacity = 1.0f;
-        card.emphasis = i == selected_ && !quick_open_ && !(metro && metro_tabs_) && !psfive_buttons && !searchBackFocused() &&
+        card.emphasis = i == selected_ && !quick_open_ && !flixIconsFocused() && !(metro && metro_tabs_) && !psfive_buttons && !searchBackFocused() &&
             !(libraryControls() && (library_controls_.focus >= 0 || library_controls_.open() ||
                                     (libraryOverview() && library_controls_.action >= 0))) ? 1.0f : 0.0f;
         if (renderer_.hasCover(i) || renderer_.hasPoster(i)) card.cover_opacity = 1.0f;
@@ -712,7 +712,7 @@ void Launcher::tick() {
         }
         card.aspect = aspect;
         if (i == selected_) { focus_x = target_x; focus_y = target_y; focus_w = target_size * aspect; focus_h = target_size; }
-        const float emphasis = i == selected_ && !quick_open_ && !(metro && metro_tabs_) && !psfive_buttons && !searchBackFocused() &&
+        const float emphasis = i == selected_ && !quick_open_ && !flixIconsFocused() && !(metro && metro_tabs_) && !psfive_buttons && !searchBackFocused() &&
             !(libraryControls() && (library_controls_.focus >= 0 || library_controls_.open() ||
                                     (libraryOverview() && library_controls_.action >= 0))) ? 1.0f : 0.0f; // Przegląd: its panel's buttons.
         // The entrance of a fresh screen (Interfejs → Pojawianie się kafli; arrived_ restarts with a new list).

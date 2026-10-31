@@ -129,7 +129,7 @@ void Renderer::drawContextMenu() {
     const auto& active = (*cards_)[selected_];
     if (!isGame(active.game)) return;
     // Duże menu gry: the home screen's menu as the large dialog (menu_dialog_renderer.cpp).
-    if (context_->menu_dialog && context_->screen == ScreenMode::shelves) { drawContextMenuDialog(); return; }
+    if (context_->menu_dialog) { drawContextMenuDialog(); return; }
     const float alpha = smoothFade(context_->menu_progress);
     const bool beside = context_->menu_beside;
     context_menu::Rows rows{context_->menu_suspend, static_cast<int>(context_->menu_plugins.size()), context_->menu_session,

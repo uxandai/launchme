@@ -1,5 +1,6 @@
 #include "renderer.hpp"
 #include "renderer_internal.hpp"
+#include "quick_menu.hpp"
 #include <cmath>
 
 namespace {
@@ -114,9 +115,12 @@ void Renderer::drawGlanceShortcut() {
         const auto rect = box(context_->glance_spot);
         const float shown = alpha * context_->flix_icons_alpha;
         if (shown <= 0.003f) return;
-        drawWidgetPill(rect,shown,hover);
-        drawGlanceGlyph((rect.left+rect.right)*0.5f,(rect.top+rect.bottom)*0.5f,18,gray(0.95f,shown));
-        if (hover > 0.5f) textLine(L"Glance",(rect.left+rect.right)*0.5f-80,rect.bottom+16,160,friend_status_font_.Get(),gray(0.92f,shown),DWRITE_TEXT_ALIGNMENT_CENTER);
+        // The pad's icon: a white disc with a dark glyph; its name stands left of the row (drawFlixIcons).
+        const bool focused = context_->flix_icon_focus == quick_menu::count(static_cast<int>(context_->plugin_menu.size()));
+        const float cx = (rect.left+rect.right)*0.5f, cy = (rect.top+rect.bottom)*0.5f;
+        if (focused) { brush(gray(0.96f,shown)); target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(cx,cy),(rect.right-rect.left)*0.5f+2,(rect.bottom-rect.top)*0.5f+2),solid_.Get()); }
+        else drawWidgetPill(rect,shown,hover);
+        drawGlanceGlyph(cx,cy,18,focused ? gray(0.06f,shown) : gray(0.95f,shown));
         return;
     }
     if (context_->home_widgets == home_widgets::Placement::pills) {

@@ -351,7 +351,7 @@ struct AppSettings {
     // PSfive: Down from Graj / … scrolls to the game's details, screenshots and similar games.
     bool psfive_details = true;
     // The game menu as a large scrollable dialog with an icon beside each option.
-    bool menu_dialog = false;
+    bool menu_dialog = true;
     // Metro: a white page with dark text (the light theme of Windows Phone).
     bool metro_light = false;
 };

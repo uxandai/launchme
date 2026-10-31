@@ -238,6 +238,14 @@ public:
     int flixIconCount() const;
     bool flixIconClick(float x, float y, bool double_click);
     int flix_icon_hover_ = -1;
+    // The pad on those icons (they replace the quick bar there): Up from the first row or Guide focuses
+    // them, Left/Right walk them, Enter opens one, Down or Back returns to the row (companion.cpp).
+    int flix_icon_focus_ = -1;
+    bool flixIconsFocused() const;
+    void flixFocusIcons();
+    void flixIconMove(int amount);
+    void flixIconAccept();
+    void flixIconsLeave();
     // The TV home without games (src/ui/empty_library.hpp): its reason, its buttons and their focus.
     empty_library::Reason emptyLibraryReason() const;
     bool emptyHomeActive() const;
@@ -650,7 +658,7 @@ public:
     bool keyboardClick(float x, float y); // Logical coordinates; true when the keyboard took it.
     bool menuOpen() const { return menu_open_; }
     // Okna i podpowiedzi → Duże menu gry: the home screen's game menu is the large dialog.
-    bool menuDialog() const { return settings_.menu_dialog && screen_ == ScreenMode::shelves && !desktop_mode_; }
+    bool menuDialog() const { return settings_.menu_dialog && !desktop_mode_; } // Every TV screen's game menu (home, Szczegóły, libraries).
     void menuMove(int amount);
     void menuAccept();
     void openContextMenu();

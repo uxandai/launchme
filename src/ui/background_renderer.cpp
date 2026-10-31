@@ -165,7 +165,10 @@ void Renderer::drawBackground() {
         if (std::abs(home_wallpaper_mix_ - home_wallpaper_target_) <= 0.002f) home_wallpaper_mix_ = home_wallpaper_target_;
     }
     if (home_wallpaper) {
-        const float presence = std::max(hero_shown_.bitmap ? hero_shown_.level : 0.0f, hero_leaving_.bitmap ? hero_leaving_.level : 0.0f);
+        // How much of the screen the backgrounds cover together: a cross-fade between two games keeps it
+        // covered (the larger of the two levels dips to a half mid-way and let the wallpaper through).
+        const float shown = hero_shown_.bitmap ? hero_shown_.level : 0.0f, leaving = hero_leaving_.bitmap ? hero_leaving_.level : 0.0f;
+        const float presence = std::max({shown, leaving, 1.0f - (1.0f - shown) * (1.0f - leaving), leaving > 0.001f && shown > 0.001f ? 1.0f : 0.0f});
         if (presence < 0.999f) drawWallpaperBackdrop((1.0f - presence) * home_wallpaper_mix_);
     } else if (!tinted && menu_screen && wallpaper_places_.menus) menu_wallpaper = drawWallpaperBackdrop(1.0f);
     if (library_backdrop_opacity_ > 0.001f) drawLibraryBackdrop(library_backdrop_opacity_);

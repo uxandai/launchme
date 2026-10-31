@@ -10,6 +10,8 @@
 
 void Launcher::openQuick() {
     if ((category_ != 0 && !metroActive() && !psfiveActive()) || pending_launch_ || friends_open_ || category_menu_open_) return;
+    // Flix with the menu's icons at the top: they are the bar (no second one at the bottom).
+    if (flixIconsShown() && flixActive() && screen_ == ScreenMode::shelves) { flixFocusIcons(); return; }
     dismissMenu();
     metro_tabs_ = false;
     quick_selected_ = 0;

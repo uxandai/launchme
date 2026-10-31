@@ -126,6 +126,7 @@ const Game* Launcher::flixBackdrop(size_t category) {
 
 void Launcher::flixFocus(size_t row, size_t column) {
     if (flix_rows_.empty()) return;
+    flix_icon_focus_ = -1; // A tile takes the focus back from the corner icons.
     row = std::min(row, flix_rows_.size() - 1);
     auto& info = flix_rows_[row];
     column = std::min(column, info.count - 1);
@@ -170,6 +171,7 @@ void Launcher::flixVertical(int amount, bool edge_menu) {
 
 void Launcher::flixClick(size_t index, bool double_click) {
     if (index >= cards_.size()) return;
+    flix_icon_focus_ = -1;
     const bool moved = index != selected_;
     if (moved) { flixFocusCard(index); audio_.navigate(); }
     const auto game = cards_[index].game;

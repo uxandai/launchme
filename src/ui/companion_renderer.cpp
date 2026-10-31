@@ -298,11 +298,14 @@ void Renderer::drawCompanionPill(D2D1_RECT_F rect, float alpha, float hover) {
         if (shown <= 0.003f) return;
         const float cx = (rect.left + rect.right) * 0.5f, cy = (rect.top + rect.bottom) * 0.5f;
         drawCompanionFace(view.look, view.pose, cx, cy, (rect.bottom - rect.top) * 0.5f, shown, view.costume);
-        if (hover > 0.004f) {
+        // The pad's icon (the last one): a white ring; her name stands left of the row (drawFlixIcons).
+        if (context_->flix_icon_focus >= 0 && context_->flix_icon_focus == context_->flix_icon_total - 1) {
+            brush(gray(0.97f, shown));
+            target_->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), (rect.bottom - rect.top) * 0.5f + 2, (rect.bottom - rect.top) * 0.5f + 2), solid_.Get(), 3.0f);
+        } else if (hover > 0.004f) {
             brush(gray(1, 0.55f * hover * shown));
             target_->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), (rect.bottom - rect.top) * 0.5f + 1, (rect.bottom - rect.top) * 0.5f + 1), solid_.Get(), 1.5f);
         }
-        if (hover > 0.5f) textLine(view.name, cx - 80, rect.bottom + 16, 160, friend_status_font_.Get(), gray(0.92f, shown), DWRITE_TEXT_ALIGNMENT_CENTER);
         return;
     }
     drawWidgetPill(rect, alpha, hover);

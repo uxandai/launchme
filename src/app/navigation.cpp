@@ -52,6 +52,7 @@ void Launcher::navigate(int amount, bool edge_menu) {
         InvalidateRect(hwnd_, nullptr, FALSE);
         return;
     }
+    if (flixIconsFocused()) { flixIconMove(amount); return; }
     if (quick_open_) { quickMove(amount); return; }
     if (searchBackFocused() && !friends_open_) { if (edge_menu) navigationBoundary(); return; } // Back stands alone in its row.
     if (categoryRailActive() && category_rail_focus_ && edge_menu && !pending_launch_) {
@@ -251,6 +252,7 @@ void Launcher::back() {
         } else closeArtworkBrowser();
         return;
     }
+    if (flixIconsFocused()) { flixIconsLeave(); return; }
     if (quick_open_) { closeQuick(); return; }
     if (category_menu_open_) { closeCategoryMenu(); return; }
     if (menu_open_) { dismissMenu(); return; }
@@ -500,6 +502,7 @@ void Launcher::changeCategory(int amount) {
     // The quick bar closes towards the tiles: Down on the other layouts, Up on Metro (opened by Down).
     // PSfive opens it from the buttons (Down) and closes it either way; with its details under the
     // row (Opcje układu → Szczegóły pod rzędem) it opens from above the tabs, and Down closes it.
+    if (flixIconsFocused()) { if (amount > 0) flixIconsLeave(); else navigationBoundary(); return; }
     if (quick_open_) {
         if (psfiveActive() && settings_.psfive_details) { if (amount > 0) closeQuick(); else navigationBoundary(); return; }
         if (psfiveActive() || ((metroActive() || snitchActive()) ? amount < 0 : amount > 0)) closeQuick();

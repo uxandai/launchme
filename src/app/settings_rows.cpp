@@ -302,7 +302,7 @@ void Launcher::buildSettingsRows() {
         add({Id::panel_borders, Control::toggle, tr(L"Ramki okien"),
             tr(L"Cienka ramka wokół okien dialogowych, menu kontekstowych i przewodnika."), {}, settings_.panel_borders});
         add({Id::menu_dialog, Control::toggle, tr(L"Duże menu gry"),
-            tr(L"Menu gry na ekranie głównym jako duże przewijane okno z ikoną przy każdej opcji."), {}, settings_.menu_dialog});
+            tr(L"Menu gry (ekran główny, Szczegóły, biblioteki) jako duże przewijane okno z ikoną przy każdej opcji."), {}, settings_.menu_dialog});
         add({Id::screen_transitions, Control::toggle, tr(L"Animacje przejść ekranów"),
             tr(L"Płynne pojawianie się z powiększeniem i lekkim odgięciem brzegów."), {}, settings_.screen_transitions});
         choiceRow(Id::tile_entrance, tr(L"Pojawianie się kafli"),

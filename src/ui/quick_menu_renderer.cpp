@@ -127,25 +127,40 @@ void Renderer::drawFlixIcons() {
     const int quick = quick_menu::count(store), total = std::max(context_->flix_icon_total, quick);
     D2D1_MATRIX_3X2_F saved{};
     target_->GetTransform(&saved);
+    const int focus = context_->flix_icon_focus;
     for (int i = 0; i < quick; ++i) {
         const auto r = home_widgets::icons::at(i, total, viewport_.width);
         const float cx = (r.left + r.right) * 0.5f, cy = (r.top + r.bottom) * 0.5f;
-        const bool hovered = context_->flix_icon_hover == i;
-        drawWidgetPill(D2D1::RectF(r.left, r.top, r.right, r.bottom), alpha, hovered ? 1.0f : 0.0f);
+        const bool hovered = context_->flix_icon_hover == i, focused = focus == i;
+        if (focused) { // The pad's icon: a white disc with a dark glyph, as on the quick bar.
+            brush(color(0.96f, 0.96f, 0.96f, alpha));
+            target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), (r.right - r.left) * 0.5f + 2, (r.bottom - r.top) * 0.5f + 2), solid_.Get());
+        } else drawWidgetPill(D2D1::RectF(r.left, r.top, r.right, r.bottom), alpha, hovered ? 1.0f : 0.0f);
         target_->SetTransform(D2D1::Matrix3x2F::Scale(0.48f, 0.48f, D2D1::Point2F(cx, cy)) * saved);
-        drawQuickGlyph(quick_menu::action(i, store), cx, cy, color(0.95f, 0.95f, 0.95f, alpha), i, false);
+        drawQuickGlyph(quick_menu::action(i, store), cx, cy, focused ? color(0.06f, 0.06f, 0.07f, alpha) : color(0.95f, 0.95f, 0.95f, alpha), i, false);
         target_->SetTransform(saved);
         if (quick_menu::action(i, store) == quick_menu::Action::downloads && context_->downloads_moving > 0) {
             // How many games are transferring: a small accent dot on the icon's corner.
             const float bx = r.right - 4, by = r.top + 4;
             brush(uiAccent(alpha)); target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(bx, by), 7, 7), solid_.Get());
         }
-        if (hovered) {
-            const auto action = quick_menu::action(i, store);
-            const std::wstring caption = action == quick_menu::Action::store && quick_menu::pluginIndex(i) < store ?
-                context_->plugin_menu[static_cast<size_t>(quick_menu::pluginIndex(i))] : std::wstring(quick_menu::caption(action));
-            textLine(caption, cx - 80, r.bottom + 16, 160, friend_status_font_.Get(), color(0.92f, 0.92f, 0.92f, alpha), DWRITE_TEXT_ALIGNMENT_CENTER);
-        }
+    }
+    // The focused (else the hovered) icon's name, to the left of the row.
+    const int named = focus >= 0 ? focus : context_->flix_icon_hover;
+    std::wstring caption;
+    if (named >= 0 && named < quick) {
+        const auto action = quick_menu::action(named, store);
+        caption = action == quick_menu::Action::store && quick_menu::pluginIndex(named) < store ?
+            context_->plugin_menu[static_cast<size_t>(quick_menu::pluginIndex(named))] : std::wstring(quick_menu::caption(action));
+    } else if (named >= quick && named < total) {
+        // Glance's icon right after the quick ones, her avatar last.
+        if (named == quick && context_->flix_icon_glance) caption = L"Glance";
+        else if (context_->companion) caption = context_->companion->name;
+    }
+    if (!caption.empty()) {
+        const auto first = home_widgets::icons::at(0, total, viewport_.width);
+        textLine(caption, first.left - 16 - 360, (first.top + first.bottom) * 0.5f, 360, settings_body_font_.Get(),
+                 color(0.94f, 0.94f, 0.94f, alpha), DWRITE_TEXT_ALIGNMENT_TRAILING);
     }
 }
 

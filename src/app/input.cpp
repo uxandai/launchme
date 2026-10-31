@@ -114,6 +114,7 @@ void Launcher::openGuideMenu() {
     // Modal panels keep their input (and unsaved text) until closed.
     if (exit_prompt_ || pending_launch_ || gogInstallOpen() || customEditorOpen() || fileBrowserOpen()) return;
     if (power_menu_) { closePowerMenu(); return; }
+    if (flixIconsFocused()) { flixIconsLeave(); return; }
     if (quick_open_) { closeQuick(); return; }
     // The desktop window: the pad's Guide button takes the launcher to Tryb TV (like Big Picture).
     if (desktop_mode_) { setDesktopMode(false); return; }
@@ -529,6 +530,7 @@ void Launcher::controllerInput(const PadReading& state) {
     if (pressed(XINPUT_GAMEPAD_A) && !dashboardPress(2, true, now)) {
         noteUserInput();
         if (settingsOpen()) settingsActivate();
+        else if (flixIconsFocused()) flixIconAccept();
         else if (quick_open_) quickAccept();
         else if (friends_open_) friendsAccept();
         else if (category_menu_open_) categoryMenuAccept();
