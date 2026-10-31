@@ -243,7 +243,7 @@ void Renderer::drawDesktopCustomEditor() {
                                       ui.launchOptions() ? tr(L"Opcje uruchamiania") : ui.editing() ? tr(L"Edytuj grę") : tr(L"Dodaj grę"), false);
     const float fields_right = p.right - 22 - (poster ? poster_column : 0.0f);
     const std::array<const wchar_t*, custom_game_ui::field_count> labels{trKey(L"Nazwa"), trKey(L"Plik"), trKey(L"Opcje uruchamiania"), trKey(L"Folder roboczy"),
-                                                                         L"WINEDLLOVERRIDES", trKey(L"Opcje Protona i Wine (jak w Steamie)")};
+                                                                         L"WINEDLLOVERRIDES", trKey(L"Opcje Protona i Wine (jak w Steamie)"), trKey(L"Platforma")};
     const int focused_field = custom_game_ui::field(ui.focus);
     float y = p.top + sheet_header + 14;
     if (poster) {
@@ -272,12 +272,12 @@ void Renderer::drawDesktopCustomEditor() {
     if (ui.launchOptions()) { textLine(ui.title, p.left + 22, y + 6, p.right - p.left - 44, desktop_strong_font_.Get(), palette::text()); y += subtitle; }
     for (int index = 0; index < custom_game_ui::field_count; ++index) {
         if (!ui.shows(index)) continue;
-        textLine(tr(labels[static_cast<size_t>(index)]), p.left + 22, y + 8, fields_right - p.left - 22, desktop_label_font_.Get(), gray(0.62f));
+        textLine(custom_game_ui::emulatedLabel(ui, index, tr(labels[static_cast<size_t>(index)])), p.left + 22, y + 8, fields_right - p.left - 22, desktop_label_font_.Get(), gray(0.62f));
         const bool browse = custom_game_ui::browseRow(index);
         const bool page = index == custom_game_ui::wine_field; // "Proton / Wine…": the game's page.
         const float field_right = fields_right - (browse ? (page ? 170.0f : 120.0f) : 0.0f);
         const Rect f{p.left + 22, y + 20, field_right, y + 60};
-        const wchar_t* placeholder = index == custom_game_ui::directory_field ? tr(L"Domyślnie: folder pliku") :
+        const wchar_t* placeholder = custom_game_ui::emulatedHint(ui, index) ? custom_game_ui::emulatedHint(ui, index) : index == custom_game_ui::directory_field ? tr(L"Domyślnie: folder pliku") :
             index == custom_game_ui::arguments_field && ui.launchOptions() ? tr(L"Np. -windowed -skipintro") :
             index == custom_game_ui::dll_field ? tr(L"Np. dinput8=n,b;winhttp=n,b") :
             page ? tr(L"Np. PROTON_USE_WINED3D=1 gamemoderun %command% -dx11") : L"";

@@ -189,7 +189,9 @@ set(LAUNCHME_APP_SOURCES
     src/app/gog_install.cpp
     src/app/my_games.cpp
     src/app/file_browser.cpp
+    src/app/add_game.cpp
     src/app/drm_free.cpp
+    src/app/emulation_library.cpp
     src/app/installations.cpp
     src/app/screensaver.cpp
     src/store/gog_api.cpp
@@ -300,6 +302,7 @@ set(LAUNCHME_APP_SOURCES
     src/library/steam_accounts.cpp
     src/library/shortcuts.cpp
     src/library/ludusavi.cpp
+    src/library/emulation_scan.cpp
     src/library/esde_gamelist.cpp
     src/library/screenscraper_config.cpp
     src/library/screenscraper.cpp

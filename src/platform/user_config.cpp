@@ -198,6 +198,12 @@ bool parseExtraSetting(AppSettings& settings, std::string_view key, std::string_
     if (key == "psfive_details") return flag(settings.psfive_details);
     if (key == "menu_dialog") return flag(settings.menu_dialog);
     if (key == "metro_light") return flag(settings.metro_light);
+    if (key == "emulation_source") { settings.emulation_source = value == "steam" ? AppSettings::EmulationSource::steam : AppSettings::EmulationSource::roms; return true; }
+    if (key == "emulation_roms") {
+        const auto decoded = text_encoding::wide(value);
+        if (std::filesystem::path(decoded).is_absolute()) settings.emulation_roms = decoded;
+        return true;
+    }
     return false;
 }
 }
@@ -763,6 +769,8 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
     output << "psfive_details=" << settings.psfive_details << '\n';
     output << "menu_dialog=" << settings.menu_dialog << '\n';
     output << "metro_light=" << settings.metro_light << '\n';
+    output << "emulation_source=" << (settings.emulation_source == AppSettings::EmulationSource::steam ? "steam" : "roms") << '\n';
+    output << "emulation_roms=" << text_encoding::utf8Lenient(settings.emulation_roms.wstring()) << '\n';
     output << "language=" << (settings.language == AppSettings::LanguageChoice::pl ? "pl" :
                               settings.language == AppSettings::LanguageChoice::en ? "en" :
                               settings.language == AppSettings::LanguageChoice::pt_br ? "pt-BR" :

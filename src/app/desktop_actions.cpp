@@ -88,7 +88,7 @@ void Launcher::desktopActivate(const desktop_ui::Hit& hit) {
         if (cards_.empty()) return;
         std::vector<std::string> ids;
         for (const auto& c : settings_collections_) {
-            if (favoriteCollection(c) || (settings_.show_emulation && srmCollection(c))) continue;
+            if (favoriteCollection(c) || (srmCollectionsHidden() && srmCollection(c))) continue;
             if (desktopMember(cards_[selected_].game, c)) ids.push_back("collection:" + c.id);
         }
         if (hit.index >= 0 && hit.index < static_cast<int>(ids.size())) desktopShowSection(ids[static_cast<size_t>(hit.index)]);
@@ -322,7 +322,7 @@ std::vector<Game> Launcher::desktopTargets() const {
 // a game bought or installed meanwhile joins the list when its store reports it.
 void Launcher::desktopRefreshLibraries() {
     desktop_refresh_spin_ = 0.75f;
-    steam_rescan_->request(); refreshPcLibraries(); refreshCustomGames();
+    steam_rescan_->request(); refreshPcLibraries(); refreshCustomGames(); startRomScan();
     // DRM-free: a full scan of its folders (a deleted game's folder takes it off the list); the signed-in
     // GOG and Epic accounts sync their libraries.
     startDrmScan(true);

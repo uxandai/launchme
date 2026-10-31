@@ -53,11 +53,11 @@ void Renderer::drawCustomGameEditor() {
               panel.right - panel.left - 2 * Layout::margin, category_font_.Get(), gray(0.96f), settings_body_font_.Get(), gray(0.62f), 1, true);
 
     const std::array<const wchar_t*, field_count> labels{tr(L"Nazwa"), tr(L"Plik"), tr(L"Opcje uruchamiania"), tr(L"Folder roboczy"),
-                                                         L"WINEDLLOVERRIDES", tr(L"Opcje Protona i Wine (jak w Steamie)")};
+                                                         L"WINEDLLOVERRIDES", tr(L"Opcje Protona i Wine (jak w Steamie)"), tr(L"Platforma")};
     for (int index = 0; index < field_count; ++index) {
         if (!ui.shows(index)) continue;
         const auto label = layout.label(index);
-        text(labels[index], label.left + 2, label.top, label.right - label.left, label.bottom - label.top, settings_body_font_.Get(), gray(0.62f));
+        text(emulatedLabel(ui, index, labels[index]), label.left + 2, label.top, label.right - label.left, label.bottom - label.top, settings_body_font_.Get(), gray(0.62f));
         const auto input = layout.input(index);
         const bool focused = field(ui.focus) == index;
         // A pill field; the accent outline only while it takes typing.
@@ -82,7 +82,8 @@ void Renderer::drawCustomGameEditor() {
             shown = L"…" + value.substr(low);
         }
         if (value.empty()) {
-            if (index == directory_field)
+            if (const auto* hint = emulatedHint(ui, index)) textLine(hint, left, y, visible, settings_body_font_.Get(), gray(0.38f));
+            else if (index == directory_field)
                 textLine(tr(L"Domyślnie: folder pliku"), left, y, visible, settings_body_font_.Get(), gray(0.38f));
             else if (index == arguments_field && ui.launchOptions())
                 textLine(tr(L"Np. -windowed -skipintro"), left, y, visible, settings_body_font_.Get(), gray(0.38f));

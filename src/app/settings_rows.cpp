@@ -388,7 +388,7 @@ void Launcher::buildSettingsRows() {
             for (size_t i = 0; i < settings_collections_.size(); ++i) {
                 const auto& collection = settings_collections_[i];
                 // Steam ROM Manager collections stay off while Emulacja shows their games by platform.
-                const bool emulated = settings_.show_emulation && srmCollection(collection);
+                const bool emulated = srmCollectionsHidden() && srmCollection(collection);
                 Row row{Id::collection, Control::collection, collection.name,
                     tr(L"Pozycja ") + std::to_wstring(i + 1) + (emulated ? tr(L" · Steam ROM Manager: gry są w Emulacji") :
                                                                            tr(L" · kolejność na ekranie głównym")), {},
@@ -421,7 +421,7 @@ void Launcher::buildSettingsRows() {
         section(tr(L"Kolekcje"));
         {
             const auto shown = std::count_if(settings_collections_.begin(), settings_collections_.end(), [&](const auto& collection) {
-                return !(settings_.show_emulation && srmCollection(collection)) && !settings_.hidden_collections.contains(collectionKey(account_, collection));
+                return !(srmCollectionsHidden() && srmCollection(collection)) && !settings_.hidden_collections.contains(collectionKey(account_, collection));
             });
             add({Id::collections_open, Control::count, tr(L"Kolekcje"),
                 tr(L"Kolekcje Steam i własne: widoczność i kolejność na ekranie głównym.") +
@@ -430,7 +430,21 @@ void Launcher::buildSettingsRows() {
         }
         section(tr(L"Dodatkowe sekcje"));
         add({Id::emulation, Control::toggle, tr(L"Emulacja"),
-            tr(L"Osobny rząd konsol ze skrótami aktywnego konta Steam, zamiast kolekcji Steam ROM Manager."), {}, settings_.show_emulation});
+            tr(L"Osobny rząd konsol z grami z emulatorów, zamiast kolekcji Steam ROM Manager."), {}, settings_.show_emulation});
+        // Gry emulowane (src/app/emulation_library.cpp): launchme's own parsers over the ROM folder, or
+        // Steam ROM Manager's shortcuts; the folder found by itself or chosen.
+        {
+            static constexpr const wchar_t* sources[] = {L"Folder ROM-ów (własne parsery)", L"Skróty Steam (Steam ROM Manager)"};
+            choiceRow(Id::emulation_source, tr(L"Gry emulowane"),
+                      tr(L"Folder ROM-ów: gry prosto z dysku (EmuDeck, ES-DE), bez skrótów i kolekcji Steam ROM Manager."),
+                      sources, settings_.emulation_source == AppSettings::EmulationSource::steam ? 1 : 0);
+        }
+        if (settings_.emulation_source == AppSettings::EmulationSource::roms) {
+            add({Id::emulation_folder, Control::action, tr(L"Folder ROM-ów"), emulationFolderSummary(), tr(L"Zmień")});
+            if (!settings_.emulation_roms.empty())
+                add({Id::emulation_folder_reset, Control::action, tr(L"Wykryj folder ROM-ów"),
+                    tr(L"Ten, który wskazuje ES-DE lub EmuDeck."), tr(L"Przywróć")});
+        }
         add({Id::studio_libraries, Control::toggle, tr(L"Wydawcy i developerzy"),
             tr(L"Gry wydawców i twórców z logo: rzędy na ekranie głównym i sekcje okna desktopowego."), {}, settings_.studio_libraries});
         if (settings_.studio_libraries && !settings_.hidden_studios.empty())

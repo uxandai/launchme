@@ -190,6 +190,14 @@ void Launcher::launchGame(const Game& original, bool via_steam) {
     if (active.source == GameSource::xbox && !active.installed && xboxConnected() && xboxOwnInstall(active)) { openXboxInstall(active); return; }
     // A Steam game to install: the library picked in Launchme's dialog (src/app/steam_install.cpp).
     if (steamInstallDialogWanted(active) && openSteamInstall(active)) return;
+    // An emulated game whose console has no emulator here: one added by hand can name its own command.
+    if (active.kind == GameKind::nonsteam && active.source == GameSource::custom && active.installed && !active.play_action) {
+        dismissMenu();
+        if (!active.source_id.empty()) openCustomEditor(active.source_id, custom_game_ui::Item::arguments);
+        showNotification(NotificationKind::error, std::wstring(tr(L"Brak emulatora: ")) + active.platform,
+                         tr(L"Zainstaluj go w EmuDecku albo wpisz polecenie emulatora w Edytuj grę."));
+        return;
+    }
     // A game added by hand without its file ("Wskaż plik"): its editor opens at the file.
     if (fileNotChosen(active)) {
         dismissMenu();

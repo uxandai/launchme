@@ -6,6 +6,7 @@
 #include "../library/recent_games.hpp"
 #include "../library/view_options.hpp"
 #include "../platform/text_encoding.hpp"
+#include "../library/emulation_scan.hpp"
 
 #include <algorithm>
 #include <cwctype>
@@ -21,7 +22,8 @@ std::filesystem::path posterPreviewCache() { return coverCacheDirectory().parent
 constexpr uint64_t poster_delay_ms = 500; // The typed name rests this long before its poster is looked up.
 
 constexpr size_t field_limits[custom_game_ui::field_count]{
-    custom_games::max_name, custom_games::max_path, custom_games::max_arguments, custom_games::max_path, custom_games::max_arguments, custom_games::max_arguments};
+    custom_games::max_name, custom_games::max_path, custom_games::max_arguments, custom_games::max_path, custom_games::max_arguments, custom_games::max_arguments,
+    custom_games::max_name};
 
 // Caret steps keep surrogate pairs together.
 size_t previousStop(const std::wstring& text, size_t caret) {
@@ -51,7 +53,9 @@ void Launcher::rebuildCustomLibrary() {
     custom_library_.clear();
     for (const auto& entry : custom_games_) {
         const auto found = custom_installed_.find(entry.id);
-        custom_library_.push_back(custom_games::makeGame(entry, found == custom_installed_.end() || found->second)); // No file: never installed.
+        auto game = custom_games::makeGame(entry, found == custom_installed_.end() || found->second); // No file: never installed.
+        if (game.kind == GameKind::nonsteam && game.installed) game.play_action = emulationAction(entry.platform, entry.path, entry.arguments);
+        custom_library_.push_back(std::move(game));
     }
 }
 
@@ -90,7 +94,7 @@ void Launcher::applyCustomGames() {
     rebuildCustomLibrary();
     const auto selected_key = cards_.empty() ? std::string{} : library_view::selectionKey(cards_[selected_].game);
     const auto category_id = categories_.empty() ? std::string{} : categories_[category_].id;
-    const auto custom = [](const Game& game) { return game.source == GameSource::custom && isGame(game); };
+    const auto custom = [](const Game& game) { return game.source == GameSource::custom && !game.source_id.empty() && isGame(game); };
     const auto current = [&](const Game& game) -> const Game* {
         const auto key = gameKey(game);
         const auto found = std::find_if(custom_library_.begin(), custom_library_.end(), [&](const Game& item) { return gameKey(item) == key; });
@@ -138,6 +142,7 @@ void Launcher::openCustomEditor(const std::string& id, std::optional<Item> focus
         if (found == custom_games_.end()) return;
         ui.id = id;
         ui.fields = {found->name, found->path.wstring(), found->arguments, found->directory.wstring()};
+        ui.fields[custom_game_ui::platform_field] = found->platform;
         ui.art_name = found->name; // Its artwork was matched by this name.
         compatEditorFill(ui, custom_games::makeGame(*found, true)); // Linux, a Windows game: its Wine/Proton fields.
     } else ui.pending_id = custom_games::newId(custom_games_); // Zidentyfikuj grę keys a new game by it before it is saved.
@@ -169,6 +174,7 @@ Game Launcher::customEditorGame() const {
     entry.path = custom_games::cleanPath(ui.fields[file_field]);
     entry.arguments = custom_games::trim(ui.fields[arguments_field]);
     entry.directory = custom_games::cleanPath(ui.fields[directory_field]);
+    entry.platform = ui.fields[platform_field];
     return custom_games::makeGame(entry, false); // Never resolves a shortcut here (makeGame does that only for found files).
 }
 
@@ -263,7 +269,7 @@ void Launcher::customEditorIdentified(const std::string& key) {
 // through steam.exe -applaunch, see finishLaunch). Other stores start through their clients'
 // links, which take no options.
 bool Launcher::launchEditable(const Game& game) const {
-    if (game.source == GameSource::custom) return game.kind == GameKind::store && !game.source_id.empty();
+    if (game.source == GameSource::custom) return !game.source_id.empty(); // A user-added game, PC or emulated (not one from the ROM folder).
     if (game.source == GameSource::drmfree)
         return std::any_of(drm_catalog_.games.begin(), drm_catalog_.games.end(), [&](const auto& entry) { return entry.id == game.source_id; });
     return game.source == GameSource::steam && game.kind == GameKind::steam && game.app_id;
@@ -357,13 +363,14 @@ void Launcher::customEditorMove(int horizontal, int vertical) {
         case 3: next = right ? Item::directory_browse : Item::directory; break;
         case 4: next = Item::dll; break;
         case 5: next = right ? Item::wine_page : Item::wine; break;
+        case 6: next = Item::platform; break;
         default: if (custom_game_ui::row(focus) != custom_game_ui::buttons_row) next = Item::save; break;
         }
     } else if (horizontal) {
         const bool forward = horizontal > 0;
         // The rightmost item of a field row continues to "Zidentyfikuj grę" under the poster.
         switch (focus) {
-        case Item::name: case Item::arguments: case Item::dll: if (forward && poster) next = Item::identify; break;
+        case Item::name: case Item::arguments: case Item::dll: case Item::platform: if (forward && poster) next = Item::identify; break;
         case Item::file: if (forward) next = Item::file_browse; break;
         case Item::file_browse: next = forward ? (poster ? Item::identify : focus) : Item::file; break;
         case Item::directory: if (forward) next = Item::directory_browse; break;
@@ -388,7 +395,11 @@ void Launcher::customEditorKey(WPARAM key, bool repeated) {
     // AltGr reports Ctrl+Alt: AltGr+A types "ą" and must not select the field.
     const bool control = (GetKeyState(VK_CONTROL) & 0x8000) && !(GetKeyState(VK_MENU) & 0x8000);
     const int index = custom_game_ui::field(ui.focus);
-    if (index >= 0) {
+    // The platform is picked, never typed: Left/Right walk the consoles.
+    if (index == custom_game_ui::platform_field) {
+        if (key == VK_LEFT || key == VK_RIGHT) { customEditorCyclePlatform(key == VK_LEFT ? -1 : 1); return; }
+        if (key == VK_BACK || key == VK_DELETE || key == 'V' || key == 'A') return;
+    } else if (index >= 0) {
         auto& text = ui.fields[index];
         ui.caret = std::min(ui.caret, text.size());
         const auto edited = [&] { ui.error.clear(); InvalidateRect(hwnd_, nullptr, FALSE); };
@@ -428,7 +439,7 @@ void Launcher::customEditorKey(WPARAM key, bool repeated) {
     case VK_TAB: {
         std::vector<Item> order;
         for (const auto item : {Item::name, Item::file, Item::file_browse, Item::arguments, Item::directory, Item::directory_browse,
-                                Item::dll, Item::wine, Item::wine_page})
+                                Item::dll, Item::wine, Item::wine_page, Item::platform})
             if (ui.shows(custom_game_ui::row(item))) order.push_back(item);
         if (ui.posterShown()) order.push_back(Item::identify);
         if (ui.editing()) order.push_back(Item::remove);
@@ -460,6 +471,7 @@ void Launcher::customEditorAccept() {
                 if (gameKey(game) == key) { openGameCompatSettings(game); return; }
         break;
     }
+    case Item::platform: customEditorCyclePlatform(1); break;
     case Item::save: customEditorSave(); break;
     case Item::cancel: closeCustomEditor(); break;
     case Item::identify: customEditorIdentify(); break;
@@ -476,7 +488,7 @@ void Launcher::customEditorAccept() {
 void Launcher::customEditorInsert(std::wstring_view text) {
     auto& ui = custom_editor_;
     const int index = custom_game_ui::field(ui.focus);
-    if (!ui.open || index < 0) return;
+    if (!ui.open || index < 0 || index == custom_game_ui::platform_field) return;
     auto& value = ui.fields[index];
     if (ui.selected) { value.clear(); ui.caret = 0; ui.selected = false; }
     std::wstring clean; // One line: tabs become spaces, other control characters are dropped.
@@ -517,20 +529,12 @@ void Launcher::customEditorBrowse(bool folder) {
     const std::filesystem::path directory = custom_games::cleanPath(ui.fields[directory_field]);
     auto initial = folder && !directory.empty() ? directory : file.parent_path();
     if (!initial.is_absolute()) initial.clear();
-    const auto apply = [this, folder, file, directory](const std::filesystem::path& picked) {
+    const auto apply = [this, folder](const std::filesystem::path& picked) {
         auto& ui = custom_editor_;
         if (!ui.open || picked.empty()) { InvalidateRect(hwnd_, nullptr, FALSE); return; }
         ui.error.clear();
-        if (folder) ui.fields[directory_field] = picked.wstring();
-        else {
-            ui.fields[file_field] = picked.wstring();
-            if (custom_games::trim(ui.fields[name_field]).empty())
-                ui.fields[name_field] = picked.stem().wstring().substr(0, custom_games::max_name);
-            // A working directory the user chose stays; the default follows the file.
-            if (directory.empty() || directory == file.parent_path()) ui.fields[directory_field] = picked.parent_path().wstring();
-            if (!custom_games::trim(ui.fields[name_field]).empty()) customEditorFocus(Item::save);
-        }
-        InvalidateRect(hwnd_, nullptr, FALSE);
+        if (folder) { ui.fields[directory_field] = picked.wstring(); InvalidateRect(hwnd_, nullptr, FALSE); }
+        else customEditorApplyFile(picked); // A program, a ROM or a game's folder: it decides what the game is (add_game.cpp).
     };
     if (pick_path_) { // Tests: an injected picker answers at once.
         const auto picked = pick_path_(hwnd_, folder, initial);
@@ -543,12 +547,17 @@ void Launcher::customEditorBrowse(bool folder) {
     request.mode = folder ? file_browser::Mode::folder : file_browser::Mode::file;
     request.title = folder ? tr(L"Wybierz folder roboczy") : tr(L"Wybierz plik gry");
     if (!folder) {
+        // Programs and shortcuts (PC games), disc images and ROMs (emulated ones), or a game's folder.
         request.extensions = {L".exe", L".lnk", L".bat", L".cmd", L".url"};
-        request.filter_label = tr(L"Programy i skróty");
+        for (auto& extension : emulation_scan::romExtensions()) request.extensions.push_back(std::move(extension));
+        request.folder_option = true;
+        request.filter_label = tr(L"Programy, skróty, obrazy płyt i ROM-y");
         request.all_files_option = true;
     }
     request.initial = folder || file.empty() || !file.is_absolute() ? initial : file;
-    request.native = [this, folder, initial] { return pickGamePath(hwnd_, folder, initial); };
+    request.native = folder ? std::function<std::filesystem::path()>([this, initial] { return pickGamePath(hwnd_, true, initial); }) :
+        std::function<std::filesystem::path()>([this, initial, extensions = request.extensions, label = request.filter_label] {
+            return pickPath(hwnd_, false, tr(L"Wybierz plik gry"), extensions, label, true, initial); });
     openFileBrowser(std::move(request), apply);
 }
 
@@ -578,6 +587,8 @@ void Launcher::customEditorSave() {
     entry.path = custom_games::cleanPath(ui.fields[file_field]);
     entry.arguments = custom_games::trim(ui.fields[arguments_field]);
     entry.directory = custom_games::cleanPath(ui.fields[directory_field]);
+    entry.platform = ui.fields[platform_field];
+    if (!entry.platform.empty()) entry.directory.clear(); // An emulated game: its emulator's own folder.
     if (entry.id.empty()) { fail(tr(L"Nie udało się utworzyć identyfikatora gry."), Item::save); return; }
     switch (custom_games::validate(entry)) {
     case custom_games::Problem::name: fail(tr(L"Wpisz nazwę gry (do 200 znaków)."), Item::name); return;
@@ -718,7 +729,7 @@ std::string Launcher::addCustomGame(custom_games::Entry entry) {
 // "Usuń z biblioteki" in the game's menu (Tryb TV, its Details' "…" and the desktop window): only the
 // entry goes, never the game's file; while it runs or is suspended it stays.
 bool Launcher::canRemoveFromLibrary(const Game& game) const {
-    return game.source == GameSource::custom && game.kind == GameKind::store && !game.source_id.empty() &&
+    return game.source == GameSource::custom && !game.source_id.empty() &&
            std::any_of(custom_games_.begin(), custom_games_.end(), [&](const auto& entry) { return entry.id == game.source_id; });
 }
 
@@ -736,6 +747,7 @@ void Launcher::customEditorClick(float x, float y) {
     const auto view = renderer_.viewport();
     const auto hit = custom_game_ui::Layout::of(custom_editor_, view.width, view.height).hit(x, y, custom_editor_.editing());
     if (!hit) return;
+    if (*hit == custom_game_ui::Item::platform && custom_editor_.focus == custom_game_ui::Item::platform) { customEditorCyclePlatform(1); return; }
     customEditorFocus(*hit);
     if (custom_game_ui::field(*hit) < 0) customEditorAccept();
     InvalidateRect(hwnd_, nullptr, FALSE);

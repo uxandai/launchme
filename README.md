@@ -125,10 +125,21 @@ Settings → System → Help → **Open folder** (the version row) opens it.
   EA and Battle.net libraries imported from their store pages (no EA app needed: sign in on ea.com,
   paste the token page), Ubisoft from the signed-in client, DRM-free folders, and MultiMC / Prism Launcher
   instances as games. Every platform, Steam included, can be switched off.
-- **Games added by hand** (Settings → Library → *Manually added games* → **Add game**): any program, shortcut or
-  script, or no file at all, for a game to play next or one played elsewhere; such a game reads **Choose file** and
-  opens its editor at the file. The editor shows the poster its name finds as you type, with **Identify game** under it;
-  **Remove from library** (the game's menu, in red, after a question) removes the entry, never the game's files.
+- **Emulated games from the ROM folder** (Settings → Library → *Emulated games*): an EmuDeck / ES-DE ROM folder
+  read with launchme's own parsers (the systems, file types and emulators of EmuDeck's Steam ROM Manager parsers,
+  built in: no Steam ROM Manager or Steam shortcuts needed). The folder is found by itself or chosen; playlists and
+  cue sheets hide their discs, Steam ROM Manager's exclusions and ES-DE's hidden games apply when they exist, and
+  games start through EmuDeck's launchers or the emulator itself (RetroArch with the system's core). The Emulation
+  row has tiles for about 30 consoles, from NES and Game Boy to PS Vita, Dreamcast, Xbox 360, Arcade and DOS.
+  *Steam shortcuts (Steam ROM Manager)* keeps the shortcut-based library instead.
+- **Games added by hand** (Settings → Library → *Manually added games* → **Add game**, the "+" tile, or a file or
+  folder dropped on the desktop window): a program, shortcut or script is a PC game; a disc image or ROM is an
+  emulated game with its console guessed and changeable (*Platform*), started by the console's parser or by an
+  *Emulator command* of its own (`%ROM%` for the file); a folder is a PS3 or Wii U game, one game's ROM folder or a PC
+  game's folder with its program found. A game can also have no file at all, for one to play next or played
+  elsewhere; such a game reads **Choose file** and opens its editor at the file. The editor shows the poster its name
+  finds as you type, with **Identify game** under it; **Remove from library** (the game's menu, in red, after a
+  question) removes the entry, never the game's files.
 - **Shortcuts** (the desktop window's game menu → *Shortcuts*; TV mode: the game's details → … → *Shortcuts*): a
   desktop shortcut, a Start menu entry (on Linux the applications menu) and a Steam shortcut with the game's artwork
   for any game, starting it through Launchme with its launch options; Settings → Library → *Game shortcuts* adds

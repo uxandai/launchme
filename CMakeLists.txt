@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(launchme VERSION 0.4.9 LANGUAGES C CXX)
+project(launchme VERSION 0.5.0 LANGUAGES C CXX)
 
 if(NOT WIN32)
     # Linux (highly experimental, docs/linux-port.md): the shared core, its tests and the launcher on SDL3 + Skia.
@@ -500,6 +500,8 @@ add_test(NAME low_memory_mode COMMAND launcher_ui_tests --low-memory)
         SOURCES tests/brand_icons_tests.cpp src/ui/brand_icons.cpp LIBS d2d1)
     launchme_executable(shortcuts_tests TEST steam_nonsteam_shortcuts
         SOURCES tests/shortcuts_tests.cpp src/library/shortcuts.cpp src/library/visibility.cpp src/library/esde_gamelist.cpp)
+    launchme_executable(emulation_scan_tests TEST emulation_rom_folder
+        SOURCES tests/emulation_scan_tests.cpp)
     launchme_executable(category_menu_tests TEST long_collection_menu
         SOURCES tests/category_menu_tests.cpp)
     launchme_executable(search_tests TEST live_library_search

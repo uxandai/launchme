@@ -291,6 +291,7 @@ bool Launcher::initialize(HWND hwnd) {
     initializeXbox();
     loadCustomGames(); // Before the first shelves; file checks run on a worker.
     loadDrmFree();     // Likewise; folder scans start after the first library scans.
+    startRomScan();    // Gry emulowane: the ROM folder read on a worker (emulation_library.cpp).
     startLibraryWorker();
     startPcWatcher();
     startSteamSync();

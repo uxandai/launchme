@@ -869,7 +869,7 @@ constexpr Entry entries[] = {
     {L"Pokazuj je w kolekcjach i bibliotekach sklepów.", L"Mostrarlos en las colecciones y bibliotecas de las tiendas."},
     {L"Pokaż ukryte/prywatne gry", L"Mostrar juegos ocultos/privados"},
     {L"Gry oznaczone w Steam jako ukryte lub prywatne pojawią się w kolekcjach i bibliotece.", L"Los juegos marcados como ocultos o privados en Steam aparecen en las colecciones y la biblioteca."},
-    {L"Osobny rząd konsol ze skrótami aktywnego konta Steam, zamiast kolekcji Steam ROM Manager.", L"Una fila aparte de consolas con los accesos directos de la cuenta de Steam activa, en lugar de las colecciones de Steam ROM Manager."},
+    {L"Osobny rząd konsol z grami z emulatorów, zamiast kolekcji Steam ROM Manager.", L"Una fila aparte de consolas con tus juegos emulados, en lugar de las colecciones de Steam ROM Manager."},
     {L" · Steam ROM Manager: gry są w Emulacji", L" · Steam ROM Manager: sus juegos están en Emulación"},
     {L"Pozycja ", L"Posición "},
     {L" · kolejność na ekranie głównym", L" · orden en la pantalla de inicio"},

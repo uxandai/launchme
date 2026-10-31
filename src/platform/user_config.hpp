@@ -352,6 +352,12 @@ struct AppSettings {
     bool psfive_details = true;
     // The game menu as a large scrollable dialog with an icon beside each option.
     bool menu_dialog = true;
+    // Ustawienia > Biblioteka > Gry emulowane: the ROM folder read by launchme's own parsers
+    // (src/library/emulation_scan.hpp; Steam ROM Manager's shortcuts of emulated platforms and its
+    // collections are then left out; with no ROM folder found the shortcuts stay), or those shortcuts.
+    enum class EmulationSource { roms, steam };
+    EmulationSource emulation_source = EmulationSource::roms;
+    std::filesystem::path emulation_roms; // Empty: the one ES-DE or EmuDeck names.
     // Metro: a white page with dark text (the light theme of Windows Phone).
     bool metro_light = false;
 };

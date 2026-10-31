@@ -129,7 +129,7 @@ void Launcher::buildDesktopSidebar() {
     // Every collection (also those hidden on the TV home); Ulubione stands above, Emulacja covers SRM's.
     std::vector<SteamCollection> collections;
     for (const auto& c : settings_collections_) {
-        if (favoriteCollection(c) || (settings_.show_emulation && srmCollection(c))) continue;
+        if (favoriteCollection(c) || (srmCollectionsHidden() && srmCollection(c))) continue;
         collections.push_back(c);
     }
     std::unordered_map<std::string, size_t> counts;
@@ -806,7 +806,7 @@ void Launcher::desktopView(desktop_ui::View& view) {
     pane.rating = ratingLabel();
     pane.protondb = protonDbLabel(game); // Linux only.
     for (const auto& c : settings_collections_) {
-        if (favoriteCollection(c) || (settings_.show_emulation && srmCollection(c))) continue;
+        if (favoriteCollection(c) || (srmCollectionsHidden() && srmCollection(c))) continue;
         if (desktopMember(game, c)) pane.collections.emplace_back(c.name, "collection:" + c.id);
     }
     pane.folder = !gameFolder(game).empty();

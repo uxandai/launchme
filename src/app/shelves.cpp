@@ -5,6 +5,7 @@
 #include "../artwork/cover_cache.hpp"
 #include "../library/owned_games.hpp"
 #include "../library/emulation_platforms.hpp"
+#include "../library/emulation_scan.hpp"
 #include "../library/search.hpp"
 #include "../ui/grid_layout.hpp"
 #include "../ui/psfive_layout.hpp"
@@ -204,11 +205,27 @@ void Launcher::buildShelves() {
     if (drm_enabled) for (const auto& game : drm_library_)
         if (!user_hidden(game) && (game.installed || settings_.show_uninstalled)) { public_library_.push_back(game); ++drm_games; }
     // User-added games stay listed while their file is missing ("Brak pliku"): the user put them there.
+    // An emulated one (a ROM with its platform) stands on its console's shelf, not under Moje gry.
     for (const auto& game : custom_library_)
-        if (!user_hidden(game)) { public_library_.push_back(game); ++custom_games; }
+        if (!user_hidden(game)) { public_library_.push_back(game); if (game.kind != GameKind::nonsteam) ++custom_games; }
     if (steam) for (const auto& game : uninstalled_library_)
         if (!user_hidden(game) && settings_.show_uninstalled) public_library_.push_back(game);
-    if (steam) public_library_.insert(public_library_.end(), shortcut_library_.begin(), shortcut_library_.end());
+    // Emulated games: with launchme's own parsers (Ustawienia → Biblioteka → Gry emulowane) the ROM
+    // folder replaces Steam ROM Manager's shortcuts of emulated platforms; a ROM a user-added entry
+    // (or a kept shortcut) already lists stays once.
+    const bool roms = romLibraryActive();
+    std::unordered_set<std::wstring> listed_roms;
+    for (const auto& game : custom_library_) if (!game.rom.empty()) listed_roms.insert(emulation_scan::romKey(game.rom));
+    std::vector<const Game*> emulated;
+    if (steam) for (const auto& shortcut : shortcut_library_) {
+        if (roms && shortcut.platform != L"PC") continue;
+        public_library_.push_back(shortcut);
+        emulated.push_back(&shortcut);
+        if (!shortcut.rom.empty()) listed_roms.insert(emulation_scan::romKey(shortcut.rom));
+    }
+    if (roms) for (const auto& game : rom_library_)
+        if (!user_hidden(game) && listed_roms.insert(emulation_scan::romKey(game.rom)).second) { public_library_.push_back(game); emulated.push_back(&game); }
+    for (const auto& game : custom_library_) if (game.kind == GameKind::nonsteam && !user_hidden(game)) emulated.push_back(&game);
     if (private_shelf_ && private_category_.games.empty()) private_shelf_ = false;
     // Ctrl+H: hidden and private games join the shelves, grids and search for this session. They
     // keep their visibility, so play history, the bookmark and the screensaver still skip them.
@@ -304,8 +321,7 @@ void Launcher::buildShelves() {
         categories_.push_back(std::move(pcs));
     }
     platform_games_.clear();
-    if (steam) for (const auto& shortcut : shortcut_library_)
-        platform_games_[shortcut.platform].push_back(shortcut);
+    for (const auto* game : emulated) platform_games_[game->platform].push_back(*game);
     if (private_shelf_)
         for (const auto& game : private_category_.games)
             if (game.kind == GameKind::nonsteam) platform_games_[game.platform].push_back(game);
@@ -346,7 +362,7 @@ void Launcher::buildShelves() {
     std::vector<SteamCollection> shown; // One call indexes the library once for every shelf.
     for (const auto& collection : settings_collections_) {
         if (settings_.hidden_collections.contains(collectionKey(account_, collection))) continue;
-        if (settings_.show_emulation && srmCollection(collection)) continue; // Emulacja lists them by platform.
+        if (srmCollectionsHidden() && srmCollection(collection)) continue; // Emulacja (or the ROM folder) lists them by platform.
         shown.push_back(collection);
     }
     for (auto& shelf : managedShelves(account_, shown, library_state_.collections, public_library_, private_shelf_))

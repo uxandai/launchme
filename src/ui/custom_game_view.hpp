@@ -1,5 +1,6 @@
 #pragma once
 #include "settings_view.hpp"
+#include "../i18n/i18n.hpp"
 
 #include <algorithm>
 #include <array>
@@ -16,8 +17,10 @@
 // Linux, a Windows game (State::compat): also its WINEDLLOVERRIDES and its Wine/Proton launch options
 // as Steam writes them (VAR=value wrapper %command% arguments), with "Proton / Wine…" to its page.
 namespace custom_game_ui {
-enum class Item { name, file, file_browse, arguments, directory, directory_browse, dll, wine, wine_page, identify, remove, cancel, save };
-enum Field { name_field, file_field, arguments_field, directory_field, dll_field, wine_field, field_count };
+enum class Item { name, file, file_browse, arguments, directory, directory_browse, dll, wine, wine_page, platform, identify, remove, cancel, save };
+// platform_field: an emulated game's console (Left/Right or Enter pick another; never typed). With it the
+// file is the ROM, the options an emulator command of its own and the working directory has no use.
+enum Field { name_field, file_field, arguments_field, directory_field, dll_field, wine_field, platform_field, field_count };
 enum class Target { custom, drm_free, steam };
 // The poster beside the fields: nothing to look for (no name), being looked for, shown, none found.
 enum class Poster { none, loading, shown, missing };
@@ -51,8 +54,11 @@ struct State {
     bool launchOptions() const { return target != Target::custom; }
     bool posterShown() const { return target == Target::custom; }
     const std::string& gameId() const { return editing() ? id : pending_id; }
+    bool emulated() const { return target == Target::custom && !fields[platform_field].empty(); }
     bool shows(int index) const {
         if (index == dll_field || index == wine_field) return compat;
+        if (index == platform_field) return emulated();
+        if (index == directory_field && emulated()) return false;
         return target == Target::custom || (target == Target::drm_free ? index != name_field : index == arguments_field);
     }
     unsigned hidden() const { // Bit per field the panel leaves out.
@@ -61,6 +67,20 @@ struct State {
         return mask;
     }
 };
+
+// An emulated game's file is its ROM and its options an emulator command of its own.
+inline const wchar_t* emulatedLabel(const State& state, int index, const wchar_t* label) {
+    if (!state.emulated()) return label;
+    if (index == file_field) return tr(L"Plik ROM lub obraz płyty");
+    if (index == arguments_field) return tr(L"Polecenie emulatora");
+    return label;
+}
+inline const wchar_t* emulatedHint(const State& state, int index) {
+    if (!state.emulated()) return nullptr;
+    if (index == arguments_field) return tr(L"Puste: emulator z EmuDecka. Np. \"C:\\Emu\\pcsx2.exe\" %ROM%");
+    if (index == platform_field) return tr(L"Strzałki lub Enter: inna platforma");
+    return nullptr;
+}
 
 // Text field behind an item, -1 for buttons.
 inline int field(Item item) {
@@ -71,10 +91,11 @@ inline int field(Item item) {
     case Item::directory: return directory_field;
     case Item::dll: return dll_field;
     case Item::wine: return wine_field;
+    case Item::platform: return platform_field;
     default: return -1;
     }
 }
-// Rows 0-5 hold the fields (1 and 3 with a browse button, 5 with "Proton / Wine…"), row 6 the
+// Rows 0-6 hold the fields (1 and 3 with a browse button, 5 with "Proton / Wine…"), row 6 the
 // buttons; "Zidentyfikuj grę" stands apart in the poster's column (7).
 inline constexpr int buttons_row = field_count, identify_row = field_count + 1;
 inline int row(Item item) {
@@ -85,6 +106,7 @@ inline int row(Item item) {
     case Item::directory: case Item::directory_browse: return 3;
     case Item::dll: return 4;
     case Item::wine: case Item::wine_page: return 5;
+    case Item::platform: return 6;
     case Item::identify: return identify_row;
     default: return buttons_row;
     }
@@ -141,7 +163,7 @@ struct Layout {
         return {right - button_width, top, right, bottom};
     }
     std::optional<Item> hit(float x, float y, bool editing) const {
-        for (const auto item : {Item::name, Item::file, Item::arguments, Item::directory, Item::dll, Item::wine})
+        for (const auto item : {Item::name, Item::file, Item::arguments, Item::directory, Item::dll, Item::wine, Item::platform})
             if (shown(row(item)) && input(row(item)).contains(x, y)) return item;
         for (const int index : {static_cast<int>(file_field), static_cast<int>(directory_field), static_cast<int>(wine_field)})
             if (shown(index) && browse(index).contains(x, y)) return browseItem(index);

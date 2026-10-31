@@ -255,7 +255,6 @@ bool Launcher::windowStripClick(float mouse_x, float mouse_y) {
 // A program, shortcut, script or Internet shortcut dropped on the window: "Dodaj grę" with it filled in.
 void Launcher::dropFiles(HDROP drop) {
     std::filesystem::path picked;
-    bool folder = false; // A game's folder: its program guessed below.
     const UINT count = DragQueryFileW(drop, 0xFFFFFFFF, nullptr, 0);
     for (UINT i = 0; i < count && picked.empty(); ++i) {
         const UINT length = DragQueryFileW(drop, i, nullptr, 0);
@@ -263,49 +262,25 @@ void Launcher::dropFiles(HDROP drop) {
         std::wstring path(length + 1, L'\0');
         if (!DragQueryFileW(drop, i, path.data(), length + 1)) continue;
         path.resize(length);
-        std::filesystem::path file(path);
-        auto extension = file.extension().wstring();
-        std::transform(extension.begin(), extension.end(), extension.begin(), [](wchar_t c) { return static_cast<wchar_t>(std::towlower(c)); });
-        if (extension == L".exe" || extension == L".lnk" || extension == L".bat" || extension == L".cmd" || extension == L".url") picked = file;
-        else if (std::error_code error; std::filesystem::is_directory(file, error)) { picked = file; folder = true; }
+        // A program or shortcut (PC game), a disc image or ROM (emulated game), or a game's folder.
+        if (addableFile(path)) picked = path;
     }
     DragFinish(drop);
     if (closing_ || pending_launch_ || launchAnimationActive() || topModal() != Modal::none) return;
     if (picked.empty()) {
-        if (count) showNotification(NotificationKind::error, tr(L"Nie można dodać tego pliku"), tr(L"Upuść program (.exe), skrót (.lnk, .url), skrypt (.bat, .cmd) albo folder gry."));
+        if (count) showNotification(NotificationKind::error, tr(L"Nie można dodać tego pliku"),
+                                    tr(L"Upuść program (.exe, .lnk, .url, .bat), obraz płyty lub ROM albo folder gry."));
         return;
     }
     SetForegroundWindow(hwnd_);
     closeFriends(); desktopCloseMenu(); desktop_downloads_open_ = false;
     openCustomEditor({});
+    if (!custom_editor_.open) return;
+    customEditorApplyFile(picked); // What it is decides the game: PC or emulated with its console (add_game.cpp).
     auto& ui = custom_editor_;
-    if (!ui.open) return;
-    if (folder) {
-        // The folder's own program: its largest .exe, not an installer, uninstaller or crash reporter.
-        std::filesystem::path program;
-        uintmax_t largest = 0;
-        std::error_code error;
-        for (const auto& entry : std::filesystem::directory_iterator(picked, std::filesystem::directory_options::skip_permission_denied, error)) {
-            std::error_code file_error;
-            if (!entry.is_regular_file(file_error)) continue;
-            auto name = entry.path().filename().wstring();
-            std::transform(name.begin(), name.end(), name.begin(), [](wchar_t c) { return static_cast<wchar_t>(std::towlower(c)); });
-            if (!name.ends_with(L".exe") || name.starts_with(L"unins") || name.find(L"setup") != std::wstring::npos ||
-                name.find(L"crash") != std::wstring::npos || name.find(L"redist") != std::wstring::npos || name.find(L"install") != std::wstring::npos) continue;
-            const auto size = entry.file_size(file_error);
-            if (!file_error && size > largest) { largest = size; program = entry.path(); }
-        }
-        ui.fields[custom_game_ui::file_field] = program.wstring();
-        ui.fields[custom_game_ui::name_field] = picked.filename().wstring().substr(0, custom_games::max_name);
-        ui.fields[custom_game_ui::directory_field] = picked.wstring();
-    } else {
-        ui.fields[custom_game_ui::file_field] = picked.wstring();
-        ui.fields[custom_game_ui::name_field] = picked.stem().wstring().substr(0, custom_games::max_name);
-        ui.fields[custom_game_ui::directory_field] = picked.parent_path().wstring();
-    }
     ui.focus = custom_game_ui::Item::name;
     ui.caret = ui.fields[custom_game_ui::name_field].size();
-    ui.selected = true; // Typing replaces the file's name with the game's.
+    ui.selected = true; // Typing replaces the guessed name.
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 

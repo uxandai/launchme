@@ -785,4 +785,5 @@ void Launcher::focusRegained() {
     // registry keys they read (ChangeWatch) and rescan exactly when those change.
     pokeRunningScan(); // A game may have been started (or closed) while the launcher was in the background.
     refreshCustomGames(); // A drive with user-added games may have been (dis)connected.
+    if (settings_.emulation_source == AppSettings::EmulationSource::roms && !rom_scanning_) startRomScan(); // ROMs added meanwhile.
 }

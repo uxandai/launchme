@@ -34,7 +34,7 @@ Launcher::DesktopText Launcher::desktopText() {
         }
     } else if (desktop_quick_.open) target = {&desktop_quick_.query, &desktop_quick_.caret, nullptr, 80, false, 2};
     else if (topModal() == Modal::custom_editor) {
-        if (const int field = custom_game_ui::field(custom_editor_.focus); field >= 0)
+        if (const int field = custom_game_ui::field(custom_editor_.focus); field >= 0 && field != custom_game_ui::platform_field)
             target = {&custom_editor_.fields[static_cast<size_t>(field)], &custom_editor_.caret, &custom_editor_.selected, 1024, false, 3};
     } else if (topModal() == Modal::none && desktopActive() && desktop_search_focus_)
         target = {&desktop_query_, &desktop_caret_, nullptr, 70, false, 4};

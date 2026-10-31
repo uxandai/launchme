@@ -22,6 +22,7 @@
 #include "../library/store_adapter.hpp"
 #include "../library/pc_platforms.hpp"
 #include "../library/custom_games.hpp"
+#include "../library/emulation_scan.hpp"
 #include "../library/metadata_overrides.hpp"
 #include "../library/drm_free.hpp"
 #include "../library/steam_achievements.hpp"
@@ -1516,6 +1517,11 @@ private:
     void forgetCustomArtwork(const Game& game, bool selections);
     // `focus`: where the panel opens (a new game: "Wybierz…"; an existing one: its name).
     void openCustomEditor(const std::string& id, std::optional<custom_game_ui::Item> focus = std::nullopt);
+    // Dodaj grę deciding by itself: a program (PC), a ROM or disc image (emulated, its console guessed) or a
+    // folder (PS3/Wii U, one game's ROM, a PC game's program) (add_game.cpp).
+    bool addableFile(const std::filesystem::path& path) const;
+    void customEditorApplyFile(const std::filesystem::path& picked);
+    void customEditorCyclePlatform(int step);
     // The edited game as the library would hold it (its key: the saved ID or, while adding, the one
     // it will be saved under), named as typed: the poster preview and "Zidentyfikuj grę" use it.
     Game customEditorGame() const;
@@ -2331,6 +2337,20 @@ private:
     std::vector<custom_games::Entry> custom_games_;
     std::unordered_map<std::string, bool> custom_installed_;
     std::vector<Game> custom_library_;
+    // Gry emulowane from the ROM folder (src/app/emulation_library.cpp): its games, launchme's own parsers
+    // as the last scan found the setup, and the scan in flight.
+    std::vector<Game> rom_library_;
+    std::shared_ptr<const emulation_scan::Setup> emulation_setup_;
+    uint64_t rom_scan_generation_ = 0;
+    bool rom_scanning_ = false;
+    bool romLibraryActive() const;     // The ROM folder's games replace SRM's emulated shortcuts.
+    bool srmCollectionsHidden() const; // SRM's collections stay off the shelves (Emulacja or the ROM folder lists them).
+    void startRomScan();
+    void onRomScan(uint64_t generation, std::shared_ptr<const emulation_scan::Setup> setup, std::vector<Game> games);
+    std::wstring emulationFolderSummary() const;
+    GameAction emulationAction(const std::wstring& platform, const std::filesystem::path& rom, const std::wstring& command = {}) const;
+    bool emulationSettingsChoose(const settings_ui::Row& row);
+    bool emulationSettingsActivate(const settings_ui::Row& row);
     std::shared_ptr<std::atomic_uint32_t> custom_token_ = std::make_shared<std::atomic_uint32_t>(0);
     custom_game_ui::State custom_editor_;
     // The editor's poster: the name it was asked for, when to ask (debounce; 0: nothing pending),

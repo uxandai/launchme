@@ -145,6 +145,7 @@ Gamelist parseGamelist(std::string_view xml) {
             if (ec != std::errc{} || score < 0 || score > 1) score = -1;
         }
         entry.rating = score;
+        entry.hidden = element(game, "hidden") == "true";
         entry.details.players = entry.players;
         if (score > 0) entry.details.score = std::to_wstring(static_cast<int>(score * 20 + 0.5)) + L"/20";
         result.push_back(std::move(entry));

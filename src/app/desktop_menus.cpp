@@ -14,7 +14,7 @@ using library_manager_ui::Page;
 std::vector<desktop_ui::MenuItem> Launcher::desktopCollectionItems(const std::vector<Game>& games) const {
     std::vector<MenuItem> items;
     for (const auto& c : settings_collections_) {
-        if (favoriteCollection(c) || (settings_.show_emulation && srmCollection(c))) continue;
+        if (favoriteCollection(c) || (srmCollectionsHidden() && srmCollection(c))) continue;
         MenuItem item{Action::collection_toggle, c.name, {}, glyph::folder};
         item.key = c.id;
         item.checked = !games.empty() && std::all_of(games.begin(), games.end(), [&](const Game& game) { return desktopMember(game, c); });

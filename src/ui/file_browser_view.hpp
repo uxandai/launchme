@@ -25,6 +25,7 @@ struct Request {
     std::wstring filter_label;  // The type button's label while `extensions` apply.
     bool all_files_option = false; // The type button switches to every file.
     bool images = false;           // Preview of the highlighted PNG/JPEG on the right.
+    bool folder_option = false;    // A file picker that also takes the open folder ("Wybierz ten folder": Dodaj grę).
     std::filesystem::path initial; // Opened first when it exists; else the last folder.
     // "Okno systemowe…": the Windows dialog for the same request; empty = no such button.
     std::function<std::filesystem::path()> native;
@@ -68,7 +69,7 @@ struct State {
     bool folderMode() const { return request.mode == Mode::folder; }
     std::vector<Button> buttons() const {
         std::vector<Button> result;
-        if (folderMode()) result.push_back(Button::choose_folder);
+        if (folderMode() || request.folder_option) result.push_back(Button::choose_folder);
         if (!folderMode() && request.all_files_option && !request.extensions.empty()) result.push_back(Button::file_type);
         result.push_back(Button::hidden);
         if (request.native) result.push_back(Button::system_dialog);

@@ -43,6 +43,7 @@ bool Launcher::settingsExtraToggle(const Row& row) {
 
 // A choice picked from these rows' lists; false: not one of them.
 bool Launcher::settingsExtraChoose(const Row& row) {
+    if (emulationSettingsChoose(row)) return true; // Gry emulowane (emulation_library.cpp).
     if (row.id != Id::home_tiles) return false;
     settings_.home_tiles = static_cast<AppSettings::HomeTiles>(std::clamp(settings_state_.choice, 0, static_cast<int>(home_tile_places.size()) - 1));
     settings_state_.editing = false;
@@ -52,6 +53,7 @@ bool Launcher::settingsExtraChoose(const Row& row) {
 
 // The action rows: the wallpaper picker and "Bez tapety"; false: not one of them.
 bool Launcher::settingsExtraActivate(const Row& row) {
+    if (emulationSettingsActivate(row)) return true; // Folder ROM-ów (emulation_library.cpp).
     if (row.id == Id::wallpaper_pick) { openWallpaperBrowser(); return true; }
     if (row.id == Id::wallpaper_clear) {
         settings_.wallpaper = AppSettings::WallpaperKind::none;

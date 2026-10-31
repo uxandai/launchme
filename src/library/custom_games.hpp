@@ -23,6 +23,10 @@ struct Entry {
     std::filesystem::path path;      // Anything ShellExecute opens: .exe, .lnk, .bat/.cmd, .url...; empty: no file chosen yet.
     std::wstring arguments;
     std::filesystem::path directory; // Working directory; empty = the file's folder.
+    // An emulated game: its console (an emulation_platforms name); path is then its ROM or disc image
+    // and rguments an emulator command of its own (%ROM% for the file; empty: launchme's parser for the
+    // platform, src/library/emulation_scan.hpp). Empty: a PC game.
+    std::wstring platform;
     bool operator==(const Entry&) const = default;
 };
 

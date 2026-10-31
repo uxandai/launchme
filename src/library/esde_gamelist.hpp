@@ -19,6 +19,7 @@ struct Entry {
     GameDetails details; // desc, releasedate (YYYY-MM-DD), developer, publisher, genre.
     std::wstring players;
     double rating = -1; // ScreenScraper score as ES-DE stores it, 0..1; -1 = none.
+    bool hidden = false; // <hidden>true</hidden>: ES-DE leaves it out of its lists.
     std::wstring stem() const; // Media file name: the ROM file name without its extension.
 };
 using Gamelist = std::vector<Entry>;

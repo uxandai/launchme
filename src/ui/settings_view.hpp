@@ -117,7 +117,7 @@ enum class Id { font, home_layout, ui_accent, accent, uninstalled, emulation, co
                    // Interfejs → Tryb TV: the special tiles in the first row; the "+" tile (Dodaj grę).
                    home_tiles, add_game_tile,
                    // Opcje układu: PSfive's details under the row; Metro's light theme. Okna: the game menu as a dialog.
-                   psfive_details, metro_light, menu_dialog };
+                   psfive_details, metro_light, menu_dialog, emulation_source, emulation_folder, emulation_folder_reset };
 inline bool hasOptionsButton(Id id) { return id == Id::plugin_enabled || id == Id::pc_platform; }
 // layout: drawn preview tiles in the row (one per home layout); Row::choice is the active one.
 // count: Row::value as a large number with a chevron; activating opens a sub-list.

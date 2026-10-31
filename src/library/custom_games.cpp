@@ -1,4 +1,6 @@
 #include "custom_games.hpp"
+#include "emulation_platforms.hpp"
+#include "emulation_scan.hpp"
 #include "../platform/system.hpp"
 #include "../net/json.hpp"
 #include "../platform/atomic_file.hpp"
@@ -73,6 +75,7 @@ Problem validate(const Entry& entry) {
     if (!entry.path.empty() && !validPath(entry.path, true)) return Problem::path;
     if (entry.arguments.size() > max_arguments || !plainText(entry.arguments)) return Problem::arguments;
     if (!entry.directory.empty() && !validPath(entry.directory, false)) return Problem::directory;
+    if (!entry.platform.empty() && (!findEmulationPlatform(entry.platform) || entry.platform == L"PC")) return Problem::path;
     return Problem::none;
 }
 
@@ -95,6 +98,7 @@ List parse(std::string_view bytes) {
         entry.path = cleanPath(text_encoding::wide(field(item, "path")));
         entry.arguments = text_encoding::wide(field(item, "arguments"));
         entry.directory = cleanPath(text_encoding::wide(field(item, "directory")));
+        entry.platform = text_encoding::wide(field(item, "platform"));
         if (item.type != json::Value::Type::object || !validId(entry.id) || validate(entry) != Problem::none ||
             result.games.size() >= max_games || !ids.insert(entry.id).second) { ++result.skipped; continue; }
         result.games.push_back(std::move(entry));
@@ -112,6 +116,7 @@ std::string format(const std::vector<Entry>& games) {
         output += ", \"path\": "; appendString(output, entry.path.wstring());
         output += ", \"arguments\": "; appendString(output, entry.arguments);
         output += ", \"directory\": "; appendString(output, entry.directory.wstring());
+        if (!entry.platform.empty()) { output += ", \"platform\": "; appendString(output, entry.platform); }
         output += '}';
     }
     output += games.empty() ? "]\n}\n" : "\n  ]\n}\n";
@@ -169,6 +174,14 @@ std::filesystem::path shortcutTarget(const std::filesystem::path& link) {
 }
 
 Game makeGame(const Entry& entry, bool installed) {
+    if (!entry.platform.empty()) {
+        // Emulated: on its console's shelf, keyed by its ROM; the launcher fills in how it starts
+        // (Launcher::emulationAction: its own command, else the platform's parser).
+        auto game = emulation_scan::makeGame(entry.name, entry.platform, entry.path, {});
+        game.source_id = entry.id;
+        game.installed = installed && !entry.path.empty();
+        return game;
+    }
     Game game;
     game.kind = GameKind::store;
     game.source = GameSource::custom;
