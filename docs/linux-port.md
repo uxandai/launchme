@@ -23,6 +23,9 @@ it has been tested far less than on Windows: expect bugs and missing pieces.
 | Packaging | An AppImage (`tools/linux/make-appimage.sh`), published with each release and used by the updater |
 | Tests | About 64 CTest suites (`cmake/Linux.cmake`, `cmake/linux/*.cmake`); `webkit_browser_lifecycle` needs a display with EGL |
 
+An optional hybrid Impeller backend and its on/off setting are available in SDK-enabled builds:
+[Impeller build and verification](IMPELLER.md). The initial assessment is in [Renderer decision](RENDERER_DECISION.md).
+
 ## Building on Linux
 
 Packages (Arch names): `cmake ninja gcc pkgconf icu openssl libsecret curl sdl3 ffmpeg libpulse libpng

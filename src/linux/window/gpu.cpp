@@ -38,6 +38,7 @@
 #include "window_internal.hpp"
 #include "gpu.hpp"
 #include "../gfx/gfx_internal.hpp"
+#include "../impeller/backend.hpp"
 
 #include <SDL3/SDL_vulkan.h>
 
@@ -154,6 +155,7 @@ struct Vulkan {
 
 struct State {
     Backend backend = Backend::none;
+    bool impeller = false;
     bool decided = false;
     std::thread::id thread;
     Vulkan vulkan;
@@ -310,12 +312,13 @@ void destroyVulkan(Vulkan& vk) {
 bool createGl(SDL_Window* window) {
     auto& s = gpuState();
     s.gl = SDL_GL_CreateContext(window);
-    if (!s.gl) { note("no OpenGL context", SDL_GetError()); return false; }
+    if (!s.gl) { s.impeller = false; note("no OpenGL context", SDL_GetError()); return false; }
     const auto fail = [&](const char* why) {
         note(why, SDL_GetError());
         SDL_GL_DestroyContext(s.gl);
         s.gl = nullptr;
         s.context.reset();
+        s.impeller = false;
         return false;
     };
     if (!SDL_GL_MakeCurrent(window, s.gl)) return fail("the OpenGL context cannot be made current");
@@ -326,6 +329,11 @@ bool createGl(SDL_Window* window) {
     if (!version || !renderer) return fail("the OpenGL context has no driver");
     if (!environment("LAUNCHME_GPU_DEBUG").empty()) note("OpenGL probe", std::string(renderer) + " (" + version + ")");
     SDL_GL_SetSwapInterval(s.vsync ? 1 : 0);
+    if (s.impeller) {
+        if (lm_impeller::tryOpenGl()) return true;
+        s.impeller = false;
+        note("Impeller initialization failed; falling back to Skia OpenGL");
+    }
     // EGL entry points are not asked of the GL loader: GLX hands out a stub for any name, and
     // Skia would call "eglQueryString" through it.
     auto interface = GrGLMakeAssembledInterface(nullptr, [](void*, const char name[]) -> GrGLFuncPtr {
@@ -346,8 +354,13 @@ void decide() {
     s.vsync = environment("LAUNCHME_VSYNC") == "1";
     const std::string wanted = environment("LAUNCHME_RENDERER");
     if (wanted == "cpu") { s.backend = Backend::none; note("drawing on the CPU (LAUNCHME_RENDERER=cpu)"); return; }
-    if (wanted != "gl" && createVulkan(s.vulkan, wanted == "vulkan")) { s.backend = Backend::vulkan; return; }
-    destroyVulkan(s.vulkan);
+    s.impeller = lm_impeller::requested();
+    if (s.impeller) {
+        if (wanted != "gl" && lm_impeller::tryVulkan(wanted == "vulkan")) { s.backend = Backend::vulkan; return; }
+    } else {
+        if (wanted != "gl" && createVulkan(s.vulkan, wanted == "vulkan")) { s.backend = Backend::vulkan; return; }
+        destroyVulkan(s.vulkan);
+    }
     // OpenGL needs a window for its context: created with the first one.
     s.backend = Backend::gl;
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
@@ -622,6 +635,7 @@ void created(Window* target) {
 }
 
 void release(Window* target) {
+    if (target) lm_impeller::releaseWindow(target->sdl);
     if (!target || !target->gpu) return;
     auto& s = gpuState();
     GpuWindow& w = *target->gpu;
@@ -637,6 +651,7 @@ void release(Window* target) {
 
 void shutdown() {
     auto& s = gpuState();
+    lm_impeller::shutdown();
     if (s.context) s.context->flushAndSubmit(GrSyncCpu::kYes);
     if (s.backend == Backend::vulkan) destroyVulkan(s.vulkan);
     s.context.reset();
@@ -654,6 +669,7 @@ GrDirectContext* gpu() {
 }
 
 sk_sp<SkSurface> windowSurface(HWND handle, int width, int height) {
+    if (gpuState().impeller) return nullptr;
     Window* target = window(handle);
     if (!target || width <= 0 || height <= 0) return nullptr;
     if (!target->gpu) target->gpu = new GpuWindow;
@@ -675,6 +691,10 @@ sk_sp<SkSurface> windowSurface(HWND handle, int width, int height) {
 
 bool presentWindow(HWND handle) {
     Window* target = window(handle);
+    if (target && gpuState().impeller) {
+        if (gpuState().gl && !SDL_GL_MakeCurrent(target->sdl, gpuState().gl)) return false;
+        return lm_impeller::present(target->sdl);
+    }
     if (!target || !target->gpu || !target->gpu->frame) return false;
     // LAUNCHME_GPU_DEBUG=1: frames shown per second and the time a present takes, every five seconds.
     static const bool debug = !environment("LAUNCHME_GPU_DEBUG").empty();
@@ -728,5 +748,12 @@ void windowPixelSize(HWND handle, UINT32& width, UINT32& height) {
     SDL_GetWindowSizeInPixels(target->sdl, &w, &h);
     width = static_cast<UINT32>(std::max(0, w));
     height = static_cast<UINT32>(std::max(0, h));
+}
+
+std::shared_ptr<SkCanvas> windowCanvas(HWND handle, int width, int height) {
+    Window* target = window(handle);
+    if (!target || !gpuState().impeller) return nullptr;
+    if (gpuState().gl && !SDL_GL_MakeCurrent(target->sdl, gpuState().gl)) return nullptr;
+    return lm_impeller::beginFrame(target->sdl, width, height);
 }
 } // namespace lm_gfx

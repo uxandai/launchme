@@ -68,6 +68,12 @@ renderer files (`color`, `box`, `smoothFade`, `upper`) are in `renderer_internal
 (`render_detail`); desktop mode's in `desktop_render_internal.hpp`. On Linux the same calls reach Skia
 through `src/linux/gfx`.
 
+Linux can also build the experimental Impeller backend (`cmake/Impeller.cmake`,
+`src/linux/impeller`). The `impeller` setting selects it at the next startup. It records GPU
+display lists behind the same Direct2D surface, retaining Skia's CPU geometry, text and effects.
+The pinned standalone SDK is extended through a small C ABI for BC1/BC3 uploads and readback;
+engine-private C++/Skia objects stay inside its shared library. See [IMPELLER.md](IMPELLER.md).
+
 ## Shared helpers
 
 Before writing a small helper, use the shared one:

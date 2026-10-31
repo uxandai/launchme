@@ -3,6 +3,7 @@
 // Skia canvas (on the GPU for window targets and their offscreen targets, in memory for WIC
 // targets and other threads); geometry is SkPath, brushes are shaders, bitmaps are SkImages.
 #include "gfx_internal.hpp"
+#include "../impeller/backend.hpp"
 #include "../win32/d2d1_2.h"
 #include "../win32/wrl/client.h"
 
@@ -107,7 +108,7 @@ public:
     // BC1 blocks straight into a GPU texture of `gpu` (blockCompressionSupported): an eighth of BGRA's
     // memory. Fails without such a GPU, or for another format.
     static HRESULT createCompressed(D2D1_SIZE_U size, const void* data, UINT32 pitch, D2D1_PIXEL_FORMAT format, float dpiX, float dpiY,
-                                    GrDirectContext* gpu, ComPtr<Bitmap>& out);
+                                    GrDirectContext* gpu, ComPtr<Bitmap>& out, bool impeller = false);
     static Bitmap* from(ID2D1Image* image);
 
     D2D1_SIZE_F STDMETHODCALLTYPE GetSize() const override;
@@ -197,6 +198,7 @@ public:
     sk_sp<SkImage> snapshot();
     // The GPU context the target draws with (null: in memory).
     GrDirectContext* gpu() const { return gpu_; }
+    bool usesImpeller() const { return impeller_; }
 
     HRESULT createBitmap(D2D1_SIZE_U size, const void* data, UINT32 pitch, const D2D1_BITMAP_PROPERTIES* properties, ID2D1Bitmap** bitmap);
     HRESULT createBitmap1(D2D1_SIZE_U size, const void* data, UINT32 pitch, const D2D1_BITMAP_PROPERTIES1* properties, ID2D1Bitmap1** bitmap);
@@ -252,6 +254,7 @@ protected:
     Canvas(D2D1_PIXEL_FORMAT format, float dpi);
     // The surface drawn into until the next attach (null: nothing to draw into).
     void attach(sk_sp<SkSurface> surface, int width, int height);
+    void attachCommands(std::shared_ptr<SkCanvas> canvas, int width, int height);
     void setSize(int width, int height) { width_ = width; height_ = height; }
     SkSurface* surface() const { return surface_.get(); }
     // BeginDraw (before `prepareFrame`) and EndDraw: the target's pixels change.
@@ -277,7 +280,9 @@ private:
 
     sk_sp<SkSurface> surface_;
     SkCanvas* canvas_ = nullptr;
+    std::shared_ptr<SkCanvas> commands_; // May outlive the HWND; never leave a dangling command canvas.
     GrDirectContext* gpu_ = nullptr;
+    bool impeller_ = false;
     int width_ = 0, height_ = 0;
     D2D1_PIXEL_FORMAT format_;
     float dpi_;
@@ -407,7 +412,8 @@ public:
     BOOL STDMETHODCALLTYPE IsDxgiFormatSupported(DXGI_FORMAT format) const override {
         return format == DXGI_FORMAT_B8G8R8A8_UNORM || format == DXGI_FORMAT_B8G8R8A8_UNORM_SRGB || format == DXGI_FORMAT_B8G8R8X8_UNORM ||
                format == DXGI_FORMAT_R8G8B8A8_UNORM || format == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB || format == DXGI_FORMAT_A8_UNORM ||
-               blockCompressionSupported(gpu(), format);
+                blockCompressionSupported(gpu(), format) ||
+                (usesImpeller() && lm_impeller::supportsCompression(format == DXGI_FORMAT_BC1_UNORM ? 1 : format == DXGI_FORMAT_BC3_UNORM ? 3 : 0));
     }
     void STDMETHODCALLTYPE SetPrimitiveBlend(D2D1_PRIMITIVE_BLEND blend) override { setPrimitiveBlend(blend); }
     D2D1_PRIMITIVE_BLEND STDMETHODCALLTYPE GetPrimitiveBlend() const override { return primitiveBlend(); }

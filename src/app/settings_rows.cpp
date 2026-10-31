@@ -11,6 +11,9 @@
 #include "../artwork/artwork_sources.hpp"
 #include <algorithm>
 #include <cmath>
+#ifndef _WIN32
+#include "../linux/impeller/selection.hpp"
+#endif
 
 using namespace settings_ui;
 namespace {
@@ -978,6 +981,13 @@ void Launcher::buildSettingsRows() {
         add({Id::texture_compression, Control::toggle, tr(L"Kompresja grafik (BC1)"),
             tr(L"Okładki i plakaty w pamięci karty graficznej 8 razy mniejsze, loga 4 razy, kosztem odrobiny jakości. W trybie niskiego zużycia RAM także tła."),
             {}, settings_.texture_compression});
+#ifndef _WIN32
+        if (lm_impeller::compiled()) {
+            add({Id::impeller, Control::toggle, tr(L"Impeller (eksperymentalny)"),
+                tr(L"Alternatywny silnik graficzny. Wyłączony: Skia. Zmiana wymaga ponownego uruchomienia Launchme."),
+                {}, settings_.impeller});
+        }
+#endif
         section(tr(L"Pomoc"));
         // The version, and the folder with launchme.log and crash reports a user can send.
         add({Id::about, Control::action, L"Launchme " + diagnostics::version(),

@@ -31,6 +31,7 @@ launchme_target_defaults(launchme_gfx)
 target_include_directories(launchme_gfx PUBLIC ${LAUNCHME_WIN32_INCLUDES})
 # Skia's headers stay in the ports; its libraries still reach every program linking them.
 target_link_libraries(launchme_gfx PUBLIC launchme_core PRIVATE launchme_skia)
+include(cmake/Impeller.cmake)
 
 # The window manager, input, clipboard, timers and the shell calls, on SDL3.
 file(GLOB LAUNCHME_WINDOW_SOURCES CONFIGURE_DEPENDS src/linux/window/*.cpp)
@@ -77,6 +78,7 @@ launchme_ui_library(launchme_ui)
 add_executable(launchme src/main.cpp)
 launchme_target_defaults(launchme)
 target_link_libraries(launchme PRIVATE launchme_ui)
+launchme_impeller_assets(launchme)
 # Companion: ONNX Runtime and the model next to it ($ORIGIN), her pictures inside (as companion.rc on Windows).
 companion_embedding_assets(launchme)
 target_link_libraries(launchme PRIVATE launchme_companion_resources)

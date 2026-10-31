@@ -83,16 +83,31 @@ Canvas::~Canvas() = default;
 Canvas* Canvas::from(ID2D1RenderTarget* target) { return dynamic_cast<Canvas*>(target); }
 
 void Canvas::attach(sk_sp<SkSurface> surface, int width, int height) {
-    if (surface == surface_) { width_ = width; height_ = height; return; }
+    if (surface == surface_ && !impeller_) { width_ = width; height_ = height; return; }
     unwind();
+    commands_.reset();
     surface_ = std::move(surface);
     canvas_ = surface_ ? surface_->getCanvas() : nullptr;
     gpu_ = directOf(surface_.get());
+    impeller_ = false;
     width_ = width;
     height_ = height;
 }
 
-sk_sp<SkImage> Canvas::snapshot() { return surface_ ? surface_->makeImageSnapshot() : nullptr; }
+void Canvas::attachCommands(std::shared_ptr<SkCanvas> canvas, int width, int height) {
+    unwind();
+    surface_.reset();
+    gpu_ = nullptr;
+    commands_ = std::move(canvas);
+    canvas_ = commands_.get();
+    impeller_ = canvas_ != nullptr;
+    width_ = width;
+    height_ = height;
+}
+
+sk_sp<SkImage> Canvas::snapshot() {
+    return impeller_ ? lm_impeller::snapshot(canvas_) : surface_ ? surface_->makeImageSnapshot() : nullptr;
+}
 
 SkMatrix Canvas::world() const {
     SkMatrix m = toSk(transform_);
@@ -141,8 +156,9 @@ HRESULT Canvas::createBitmap(D2D1_SIZE_U size, const void* data, UINT32 pitch, c
     const auto format = properties ? properties->pixelFormat : format_;
     ComPtr<Bitmap> created;
     const float dpi_x = properties ? properties->dpiX : dpi_, dpi_y = properties ? properties->dpiY : dpi_;
-    const HRESULT result = format.format == DXGI_FORMAT_BC1_UNORM ? Bitmap::createCompressed(size, data, pitch, format, dpi_x, dpi_y, gpu_, created)
-                                                                  : Bitmap::create(size, data, pitch, format, dpi_x, dpi_y, created);
+    const HRESULT result = (format.format == DXGI_FORMAT_BC1_UNORM || format.format == DXGI_FORMAT_BC3_UNORM) ?
+        Bitmap::createCompressed(size, data, pitch, format, dpi_x, dpi_y, gpu_, created, impeller_) :
+        Bitmap::create(size, data, pitch, format, dpi_x, dpi_y, created);
     if (SUCCEEDED(result)) *bitmap = created.Detach();
     return result;
 }
@@ -152,9 +168,9 @@ HRESULT Canvas::createBitmap1(D2D1_SIZE_U size, const void* data, UINT32 pitch, 
     *bitmap = nullptr;
     if (!properties) return E_INVALIDARG;
     ComPtr<Bitmap> created;
-    // BC1 (the renderer's Kompresja grafik) into a compressed texture where the GPU samples it.
-    const HRESULT result = properties->pixelFormat.format == DXGI_FORMAT_BC1_UNORM ?
-        Bitmap::createCompressed(size, data, pitch, properties->pixelFormat, properties->dpiX, properties->dpiY, gpu_, created) :
+    // Compressed artwork into native GPU textures (BC1 on Skia, BC1/BC3 on Impeller).
+    const HRESULT result = (properties->pixelFormat.format == DXGI_FORMAT_BC1_UNORM || properties->pixelFormat.format == DXGI_FORMAT_BC3_UNORM) ?
+        Bitmap::createCompressed(size, data, pitch, properties->pixelFormat, properties->dpiX, properties->dpiY, gpu_, created, impeller_) :
         Bitmap::create(size, data, pitch, properties->pixelFormat, properties->dpiX, properties->dpiY, created);
     if (SUCCEEDED(result)) *bitmap = created.Detach();
     return result;
@@ -486,14 +502,17 @@ public:
     }
     HRESULT STDMETHODCALLTYPE EndDraw(D2D1_TAG* tag1, D2D1_TAG* tag2) override {
         const HRESULT result = RenderTarget::EndDraw(tag1, tag2);
-        if (!surface()) return result;
+        if (FAILED(result)) return result;
         return lm_gfx::presentWindow(window_) ? result : D2DERR_RECREATE_TARGET;
     }
 protected:
     void prepareFrame() override {
         const D2D1_SIZE_U size = pixelSize();
         const int width = static_cast<int>(size.width), height = static_cast<int>(size.height);
-        attach(lm_gfx::windowSurface(window_, width, height), width, height);
+        // Detach before beginFrame replaces the previous command canvas.
+        attach(sk_sp<SkSurface>{}, width, height);
+        if (auto commands = lm_gfx::windowCanvas(window_, width, height)) attachCommands(std::move(commands), width, height);
+        else attach(lm_gfx::windowSurface(window_, width, height), width, height);
     }
 private:
     HWND window_;

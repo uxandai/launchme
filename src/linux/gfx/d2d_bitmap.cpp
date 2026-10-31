@@ -117,7 +117,19 @@ bool blockCompressionSupported(GrDirectContext* gpu, DXGI_FORMAT format) {
 }
 
 HRESULT Bitmap::createCompressed(D2D1_SIZE_U size, const void* data, UINT32 pitch, D2D1_PIXEL_FORMAT format, float dpiX, float dpiY,
-                                 GrDirectContext* gpu, ComPtr<Bitmap>& out) {
+                                 GrDirectContext* gpu, ComPtr<Bitmap>& out, bool impeller) {
+    if (impeller) {
+        const unsigned compression = format.format == DXGI_FORMAT_BC1_UNORM ? 1 : format.format == DXGI_FORMAT_BC3_UNORM ? 3 : 0;
+        if (!lm_impeller::supportsCompression(compression)) return D2DERR_UNSUPPORTED_PIXEL_FORMAT;
+        if (!data || !size.width || !size.height || size.width % 4 || size.height % 4 || size.width > 16384 || size.height > 16384 ||
+            pitch != size.width / 4 * (compression == 1 ? 8u : 16u)) return E_INVALIDARG;
+        auto image = lm_impeller::compressedImage(compression, static_cast<int>(size.width), static_cast<int>(size.height),
+            static_cast<const uint8_t*>(data), static_cast<size_t>(pitch) * (size.height / 4));
+        if (!image) return E_FAIL;
+        out.Attach(new Bitmap(static_cast<int>(size.width), static_cast<int>(size.height), {format.format, D2D1_ALPHA_MODE_PREMULTIPLIED}, dpiX, dpiY));
+        out->image_ = std::move(image);
+        return S_OK;
+    }
     if (!blockCompressionSupported(gpu, format.format)) return D2DERR_UNSUPPORTED_PIXEL_FORMAT;
     if (!data || !size.width || !size.height || size.width % 4 || size.height % 4 || size.width > 16384 || size.height > 16384 ||
         pitch != size.width / 4 * 8) return E_INVALIDARG;

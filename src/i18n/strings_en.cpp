@@ -5,6 +5,8 @@
 namespace i18n {
 namespace {
 constexpr Entry entries[] = {
+    {L"Impeller (eksperymentalny)", L"Impeller (experimental)"},
+    {L"Alternatywny silnik graficzny. Wyłączony: Skia. Zmiana wymaga ponownego uruchomienia Launchme.", L"Alternative graphics engine. Off: Skia. Restart Launchme to apply the change."},
     // Manually added games: their covers; Steam preloads.
     {L"Wyszukaj i pobierz brakujące okładki tych gier (SteamGridDB, sklep Steam).", L"Find and download the missing covers of these games (SteamGridDB, Steam store)."},
     {L"Wstępnie pobrana", L"Preloaded"},

@@ -804,6 +804,12 @@ void Launcher::settingsToggle(const Row& row) {
         applyLowMemory();
         settingsChanged(); audio_.context(); return;
     }
+#ifndef _WIN32
+    else if (row.id == Id::impeller) {
+        settings_.impeller = !settings_.impeller;
+        settingsChanged(); audio_.context(); return; // Device and windows keep their backend until restart.
+    }
+#endif
     else if (row.id == Id::collection && !row.key.empty()) {
         if (row.locked) { navigationBoundary(); return; } // SRM collection covered by Emulacja.
         // The row's key is the collection's (the page starts with "Zarządzaj kolekcjami").

@@ -8,6 +8,7 @@
 #include "include/core/SkRefCnt.h"
 
 #include <cstdint>
+#include <memory>
 
 class GrDirectContext;
 class SkCanvas;
@@ -29,6 +30,8 @@ GrDirectContext* gpu();
 sk_sp<SkSurface> windowSurface(HWND window, int width, int height);
 // Shows what was drawn into the window's surface. False when the window is gone.
 bool presentWindow(HWND window);
+// An optional Impeller command canvas; null when this process selected Skia.
+std::shared_ptr<SkCanvas> windowCanvas(HWND window, int width, int height);
 
 // ---- DirectWrite → Direct2D (implemented in dwrite_*.cpp) --------------------------------
 // Draws `layout` with its box's top-left corner at (x, y) in the canvas's current space, in
