@@ -117,7 +117,12 @@ enum class Id { font, home_layout, ui_accent, accent, uninstalled, emulation, co
                    // Interfejs → Tryb TV: the special tiles in the first row; the "+" tile (Dodaj grę).
                    home_tiles, add_game_tile,
                    // Opcje układu: PSfive's details under the row; Metro's light theme. Okna: the game menu as a dialog.
-                   psfive_details, metro_light, menu_dialog, emulation_source, emulation_folder, emulation_folder_reset };
+                   psfive_details, metro_light, menu_dialog, emulation_source, emulation_folder, emulation_folder_reset,
+                   // Biblioteka → Emulacja (src/app/emulation_settings.cpp): a system's row (Row::key its folder),
+                   // the other systems' fold; a system's page: its emulator, how it was found, the program
+                   // chosen by hand and its reset, the launch arguments and the command they make.
+                   emulation_system, emulation_more, emulation_emulator, emulation_detected, emulation_program,
+                   emulation_program_reset, emulation_arguments, emulation_preview };
 inline bool hasOptionsButton(Id id) { return id == Id::plugin_enabled || id == Id::pc_platform; }
 // layout: drawn preview tiles in the row (one per home layout); Row::choice is the active one.
 // count: Row::value as a large number with a chevron; activating opens a sub-list.
@@ -140,7 +145,9 @@ enum class Page {
     compat, compat_source, prefixes, prefix, launch_options,
     compat_stores, // Linux: store launchers installed in a prefix of their own (Battle.net, EA app...).
     game_shortcuts, // One game's shortcuts outside Launchme (key: its game key); Tryb TV's way to them.
-    artwork_sources // Media i dane → Źródła grafik: the galleries of "Zmień grafikę", each on or off.
+    artwork_sources, // Media i dane → Źródła grafik: the galleries of "Zmień grafikę", each on or off.
+    // Biblioteka → Emulacja: the ROM folder, the emulators and the console row; one system (key: its folder).
+    emulation, emulation_system
 };
 // A row drawn as tiles, with State::tile picking one of them.
 inline bool tiled(Control control) { return control == Control::sources || control == Control::pads; }

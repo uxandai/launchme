@@ -60,6 +60,8 @@ std::wstring Launcher::settingsPageTitle() const {
     case Page::compat_stores: return tr(L"Sklepy i launchery");
     case Page::game_shortcuts: return tr(L"Skróty: ") + shortcuts_game_.name;
     case Page::artwork_sources: return tr(L"Źródła grafik");
+    case Page::emulation: return tr(L"Emulacja");
+    case Page::emulation_system: return tr(L"Emulacja: ") + emulationSystemTitle(text_encoding::wideLenient(frame->key));
     case Page::prefix: {
 #ifndef _WIN32
         const auto path = std::filesystem::path(text_encoding::wideLenient(frame->key)).lexically_normal();
@@ -344,6 +346,8 @@ void Launcher::buildSettingsRows() {
     case settings_ui::Category::compat: compatSettingsRows(); break; // Proton i Wine, its pages, a game's options.
 #endif
     case settings_ui::Category::library:
+        if (settings_state_.in(Page::emulation)) { emulationSettingsRows(); break; } // Emulacja and its systems (emulation_settings.cpp).
+        if (settings_state_.at(Page::custom_games)) { customGamesSettingsRows(); break; } // Under DRM-free: the games added by hand.
         if (settings_state_.platform()) { pcSettingsRows(); break; } // A platform's page (DRM-free: its folders and games).
         if (settings_state_.at(Page::game_shortcuts)) { // One game's shortcuts (its menu → Skróty in Tryb TV).
             for (const auto place : {ShortcutPlace::desktop, ShortcutPlace::menu, ShortcutPlace::steam}) {
@@ -354,30 +358,6 @@ void Launcher::buildSettingsRows() {
                         place == ShortcutPlace::steam ? std::wstring(tr(L"Skrót w bibliotece Steam (także w trybie gry na Steam Decku), z grafikami; gra startuje przez Launchme."))
                                                       : std::wstring(tr(L"Uruchamia grę przez Launchme, z jej opcjami uruchamiania.")),
                         {}, there};
-                add(std::move(row));
-            }
-            break;
-        }
-        if (settings_state_.at(Page::custom_games)) {
-            // "Gry dodane ręcznie" page: adding first, then each game with its editor (which also removes it).
-            add({Id::custom_add, Control::action, tr(L"Dodaj grę"),
-                tr(L"Program, skrót lub skrypt spoza sklepów."), tr(L"Dodaj")});
-#ifndef _WIN32
-            // A Windows game from its installer: installed into a prefix of its own (compat_workers.cpp).
-            add({Id::compat_install_game, Control::action, tr(L"Dodaj grę z instalatora"),
-                tr(L"Instalator Windows (.exe, .msi) w nowym prefiksie; potem wskazujesz plik gry."), tr(L"Wybierz…")});
-#endif
-            // Their covers in one go: each title matched (SteamGridDB, else the Steam store) and only missing art fetched.
-            if (!custom_games_.empty())
-                add({Id::custom_covers, Control::action, tr(L"Okładki"),
-                    tr(L"Wyszukaj i pobierz brakujące okładki tych gier (SteamGridDB, sklep Steam)."), tr(L"Szukaj")});
-            for (const auto& entry : custom_games_) {
-                std::wstring description = entry.path.empty() ? std::wstring(tr(L"Bez pliku gry")) : entry.path.filename().wstring();
-                if (!entry.arguments.empty()) description += L"  " + entry.arguments;
-                if (const auto found = custom_installed_.find(entry.id); !entry.path.empty() && found != custom_installed_.end() && !found->second)
-                    description = tr(L"Brak pliku") + (L" · " + description);
-                Row row{Id::custom_game, Control::action, entry.name, std::move(description), tr(L"Edytuj")};
-                row.key = entry.id;
                 add(std::move(row));
             }
             break;
@@ -401,22 +381,14 @@ void Launcher::buildSettingsRows() {
             break;
         }
         {
-            // Overview: the platforms first (Steam, the DRM-free catalogue, then the others by name,
-            // each with its page behind the cog), and the games added by hand.
+            // Overview: the platforms first (the DRM-free catalogue with the games added by hand,
+            // Emulacja, Steam, then the others by name, each with its page behind the cog).
             section(tr(L"Platformy"));
             const size_t first_platform = settings_rows_.size();
             pcSettingsRows();
             if (settings_rows_.size() > first_platform && !next_section.empty()) {
                 settings_rows_[first_platform].section = std::move(next_section); next_section.clear();
             }
-            // User-added games as one total, like "Znalezione gry" of DRM-free: the list is its own page.
-            const auto missing = std::count_if(custom_games_.begin(), custom_games_.end(), [&](const auto& entry) {
-                const auto found = custom_installed_.find(entry.id);
-                return !entry.path.empty() && found != custom_installed_.end() && !found->second; // No file chosen is not missing.
-            });
-            std::wstring description = tr(L"Program, skrót lub skrypt spoza sklepów.");
-            if (missing) description += L" · " + (tr(L"Brak pliku: ") + std::to_wstring(missing));
-            add({Id::custom_games, Control::count, tr(L"Gry dodane ręcznie"), std::move(description), std::to_wstring(custom_games_.size())});
         }
         section(tr(L"Kolekcje"));
         {
@@ -428,23 +400,7 @@ void Launcher::buildSettingsRows() {
                     (settings_collections_.empty() ? std::wstring{} : L" · " + (tr(L"Widoczne: ") + std::to_wstring(shown))),
                 std::to_wstring(settings_collections_.size())});
         }
-        section(tr(L"Dodatkowe sekcje"));
-        add({Id::emulation, Control::toggle, tr(L"Emulacja"),
-            tr(L"Osobny rząd konsol z grami z emulatorów, zamiast kolekcji Steam ROM Manager."), {}, settings_.show_emulation});
-        // Gry emulowane (src/app/emulation_library.cpp): launchme's own parsers over the ROM folder, or
-        // Steam ROM Manager's shortcuts; the folder found by itself or chosen.
-        {
-            static constexpr const wchar_t* sources[] = {L"Folder ROM-ów (własne parsery)", L"Skróty Steam (Steam ROM Manager)"};
-            choiceRow(Id::emulation_source, tr(L"Gry emulowane"),
-                      tr(L"Folder ROM-ów: gry prosto z dysku (EmuDeck, ES-DE), bez skrótów i kolekcji Steam ROM Manager."),
-                      sources, settings_.emulation_source == AppSettings::EmulationSource::steam ? 1 : 0);
-        }
-        if (settings_.emulation_source == AppSettings::EmulationSource::roms) {
-            add({Id::emulation_folder, Control::action, tr(L"Folder ROM-ów"), emulationFolderSummary(), tr(L"Zmień")});
-            if (!settings_.emulation_roms.empty())
-                add({Id::emulation_folder_reset, Control::action, tr(L"Wykryj folder ROM-ów"),
-                    tr(L"Ten, który wskazuje ES-DE lub EmuDeck."), tr(L"Przywróć")});
-        }
+        // Wydawcy i developerzy: their libraries are collections of a kind.
         add({Id::studio_libraries, Control::toggle, tr(L"Wydawcy i developerzy"),
             tr(L"Gry wydawców i twórców z logo: rzędy na ekranie głównym i sekcje okna desktopowego."), {}, settings_.studio_libraries});
         if (settings_.studio_libraries && !settings_.hidden_studios.empty())
@@ -598,11 +554,7 @@ void Launcher::buildSettingsRows() {
         pageRow(Page::videos, tr(L"Opcje filmów"),
                 settings_.steam_trailers ? std::wstring(tr(L"Opóźnienie, miejsce na zwiastuny i folder filmów.")) : std::wstring(tr(L"Opóźnienie i folder filmów.")),
                 std::to_wstring(video_delays[delay_index]) + L" s");
-        section(tr(L"Emulacja"));
-        add({Id::emulation_names, Control::toggle, tr(L"Nazwy gier z ES-DE / ScreenScraper"),
-            tr(L"Gry z emulatorów pod nazwą dopasowaną do pliku ROM zamiast nazwy skrótu Steam."), {}, settings_.emulation_names});
-        add({Id::emulation_rom_art, Control::toggle, tr(L"Grafiki emulacji dopasowane po ROM-ie"),
-            tr(L"Okładki i logo z ES-DE i ScreenScraper przed SteamGridDB (szukającym po tytule)."), {}, settings_.emulation_rom_art});
+        // Names and artwork of emulated games: Biblioteka → Emulacja (emulation_settings.cpp).
         break;
     }
     case settings_ui::Category::audio: {

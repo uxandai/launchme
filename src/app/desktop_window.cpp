@@ -276,7 +276,12 @@ void Launcher::dropFiles(HDROP drop) {
     closeFriends(); desktopCloseMenu(); desktop_downloads_open_ = false;
     openCustomEditor({});
     if (!custom_editor_.open) return;
-    customEditorApplyFile(picked); // What it is decides the game: PC or emulated with its console (add_game.cpp).
+    // What it is decides the game: PC or emulated with its console; a folder may also be a ROM folder
+    // or a folder of games for DRM-free (add_game.cpp).
+    std::error_code error;
+    if (std::filesystem::is_directory(picked, error)) addFolder(picked);
+    else customEditorApplyFile(picked);
+    if (!custom_editor_.open) return; // A ROM folder or DRM-free's new folder: nothing to edit.
     auto& ui = custom_editor_;
     ui.focus = custom_game_ui::Item::name;
     ui.caret = ui.fields[custom_game_ui::name_field].size();

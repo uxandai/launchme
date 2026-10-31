@@ -147,8 +147,9 @@ void Launcher::openCustomEditor(const std::string& id, std::optional<Item> focus
         compatEditorFill(ui, custom_games::makeGame(*found, true)); // Linux, a Windows game: its Wine/Proton fields.
     } else ui.pending_id = custom_games::newId(custom_games_); // Zidentyfikuj grę keys a new game by it before it is saved.
     ui.open = true;
-    // A new game starts at "Wybierz…": one press picks the file, the next one saves it.
-    ui.focus = focus ? *focus : id.empty() ? Item::file_browse : Item::name;
+    // A new game starts at "Wskaż plik": one press picks the file, the next one saves it.
+    ui.focus = focus ? *focus : id.empty() ? Item::pick_file : Item::name;
+    if (ui.focus == Item::file_browse && !ui.browses(custom_game_ui::file_field)) ui.focus = Item::pick_file;
     const int index = custom_game_ui::field(ui.focus);
     ui.caret = ui.fields[index >= 0 ? index : custom_game_ui::name_field].size();
     // The poster: at once for the name the panel opens with, then a moment after typing stops.
@@ -331,6 +332,8 @@ void Launcher::closeCustomEditor() {
 void Launcher::customEditorFocus(Item item) {
     auto& ui = custom_editor_;
     if (!ui.open || ui.focus == item || (item == Item::remove && !ui.editing()) || (item == Item::identify && !ui.posterShown())) return;
+    if ((item == Item::pick_file || item == Item::pick_folder) && !ui.pills()) return;
+    if (item == Item::file_browse && !ui.browses(custom_game_ui::file_field)) return;
     if (item == Item::identify) ui.identify_from = ui.focus;
     if (const int row = custom_game_ui::row(item); row < custom_game_ui::field_count && !ui.shows(row)) return;
     ui.focus = item;
@@ -344,7 +347,18 @@ void Launcher::customEditorMove(int horizontal, int vertical) {
     const auto focus = custom_editor_.focus;
     auto next = focus;
     const bool poster = custom_editor_.posterShown();
-    if (focus == Item::identify) {
+    const bool pills = custom_editor_.pills();
+    const bool file_browse = custom_editor_.browses(custom_game_ui::file_field);
+    if (focus == Item::pick_file || focus == Item::pick_folder) {
+        // The pills' row above the fields: Left/Right between them (then the poster's column), Down to the first field.
+        if (vertical > 0) {
+            int row = 0;
+            while (row < custom_game_ui::field_count && !custom_editor_.shows(row)) ++row;
+            next = row == 0 ? Item::name : row == 1 ? Item::file : Item::save;
+        } else if (vertical < 0) { navigationBoundary(); return; }
+        else if (horizontal > 0) next = focus == Item::pick_file ? Item::pick_folder : poster ? Item::identify : focus;
+        else if (horizontal < 0) next = focus == Item::pick_folder ? Item::pick_file : focus;
+    } else if (focus == Item::identify) {
         // The poster's column: Left back to the row it was reached from, Down to the bottom buttons.
         if (horizontal < 0) next = custom_editor_.identify_from == Item::identify ? Item::name : custom_editor_.identify_from;
         else if (vertical > 0) next = Item::save;
@@ -353,12 +367,16 @@ void Launcher::customEditorMove(int horizontal, int vertical) {
         // Rows the panel leaves out (launch options) are passed over.
         int row = custom_game_ui::row(focus);
         do row += vertical; while (row >= 0 && row < custom_game_ui::field_count && !custom_editor_.shows(row));
-        if (row < 0) return;
+        if (row < 0) {
+            if (!pills) return;
+            customEditorFocus(Item::pick_file); // Up from the first field: the pills.
+            return;
+        }
         row = std::min(row, custom_game_ui::buttons_row);
         const bool right = focus == Item::file_browse || focus == Item::directory_browse || focus == Item::wine_page || focus == Item::save;
         switch (row) {
         case 0: next = Item::name; break;
-        case 1: next = right ? Item::file_browse : Item::file; break;
+        case 1: next = right && file_browse ? Item::file_browse : Item::file; break;
         case 2: next = Item::arguments; break;
         case 3: next = right ? Item::directory_browse : Item::directory; break;
         case 4: next = Item::dll; break;
@@ -371,7 +389,7 @@ void Launcher::customEditorMove(int horizontal, int vertical) {
         // The rightmost item of a field row continues to "Zidentyfikuj grę" under the poster.
         switch (focus) {
         case Item::name: case Item::arguments: case Item::dll: case Item::platform: if (forward && poster) next = Item::identify; break;
-        case Item::file: if (forward) next = Item::file_browse; break;
+        case Item::file: if (forward) next = file_browse ? Item::file_browse : poster ? Item::identify : focus; break;
         case Item::file_browse: next = forward ? (poster ? Item::identify : focus) : Item::file; break;
         case Item::directory: if (forward) next = Item::directory_browse; break;
         case Item::directory_browse: next = forward ? (poster ? Item::identify : focus) : Item::directory; break;
@@ -438,9 +456,10 @@ void Launcher::customEditorKey(WPARAM key, bool repeated) {
     case VK_RIGHT: customEditorMove(1, 0); break;
     case VK_TAB: {
         std::vector<Item> order;
+        if (ui.pills()) { order.push_back(Item::pick_file); order.push_back(Item::pick_folder); }
         for (const auto item : {Item::name, Item::file, Item::file_browse, Item::arguments, Item::directory, Item::directory_browse,
                                 Item::dll, Item::wine, Item::wine_page, Item::platform})
-            if (ui.shows(custom_game_ui::row(item))) order.push_back(item);
+            if (ui.shows(custom_game_ui::row(item)) && (item != Item::file_browse || ui.browses(custom_game_ui::file_field))) order.push_back(item);
         if (ui.posterShown()) order.push_back(Item::identify);
         if (ui.editing()) order.push_back(Item::remove);
         order.push_back(Item::cancel); order.push_back(Item::save);
@@ -459,6 +478,8 @@ void Launcher::customEditorAccept() {
     auto& ui = custom_editor_;
     if (!ui.open) return;
     switch (ui.focus) {
+    case Item::pick_file: customEditorBrowse(false); break;
+    case Item::pick_folder: customEditorPickFolder(); break; // One game, a ROM folder or a folder of games (add_game.cpp).
     case Item::file_browse: customEditorBrowse(false); break;
     case Item::directory_browse: customEditorBrowse(true); break;
     case Item::wine_page: {
@@ -550,7 +571,7 @@ void Launcher::customEditorBrowse(bool folder) {
         // Programs and shortcuts (PC games), disc images and ROMs (emulated ones), or a game's folder.
         request.extensions = {L".exe", L".lnk", L".bat", L".cmd", L".url"};
         for (auto& extension : emulation_scan::romExtensions()) request.extensions.push_back(std::move(extension));
-        request.folder_option = true;
+        request.folder_option = !ui.pills(); // A new game has "Wskaż folder" of its own.
         request.filter_label = tr(L"Programy, skróty, obrazy płyt i ROM-y");
         request.all_files_option = true;
     }

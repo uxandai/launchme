@@ -335,48 +335,31 @@ std::unordered_map<std::wstring, Exception> loadExceptions(const Paths& paths) {
 }
 // --- Built-in parsers ---------------------------------------------------------------------------
 // EmuDeck's Steam ROM Manager parsers as launchme's own: each system folder, the files it takes and
-// its emulators (EmuDeck launcher, its arguments before the ROM; the program in EmuDeck's Emulators
-// folder with its own). RetroArch systems name their core; one table, no Steam ROM Manager needed.
+// its emulators (emulators::catalog() IDs, preferred first). RetroArch systems name their core (and
+// a standalone emulator's system the core RetroArch may play it with); one table, no Steam ROM Manager.
 struct Builtin {
     std::wstring_view system, extensions, core;
     std::wstring_view glob = {}; // Empty: "**/${title}@(<extensions>)".
-    std::array<std::array<std::wstring_view, 5>, 4> emulators = {}; // launcher, arguments, folder, executable, direct.
+    std::array<std::wstring_view, 5> emulators = {}; // Empty: RetroArch with the core.
 };
-using E = std::array<std::wstring_view, 5>;
-constexpr E duckstation{L"duckstation", L"'-fullscreen'", L"duckstation", L"duckstation-qt-x64-ReleaseLTCG.exe", L"-fullscreen"};
-constexpr E pcsx2{L"pcsx2", L"", L"PCSX2-Qt", L"pcsx2-qtx64.exe", L""};
-constexpr E rpcs3{L"rpcs3", L"'--no-gui'", L"RPCS3", L"rpcs3.exe", L"--no-gui"};
-constexpr E ppsspp{L"ppsspp", L"'-f' '-g'", L"PPSSPP", L"PPSSPPWindows64.exe", L"--fullscreen"};
-constexpr E dolphin{L"dolphin", L"'-b' '-e'", L"Dolphin-x64", L"Dolphin.exe", L"-b -e"};
-constexpr E primehack{L"primehack", L"-b -e", L"primehack", L"Dolphin.exe", L"-b -e"};
-constexpr E cemu{L"cemu", L"'-f' '-g'", L"cemu", L"Cemu.exe", L"-f -g"};
-constexpr E eden{L"eden", L"'-f' '-g'", L"eden", L"eden.exe", L"-f -g"};
-constexpr E citron{L"citron", L"'-f' '-g'", L"citron", L"citron.exe", L"-f -g"};
-constexpr E ryujinx{L"ryujinx", L"'-f'", L"Ryujinx", L"Ryujinx.exe", L"-f"};
-constexpr E yuzu{L"yuzu", L"'-f' '-g'", L"yuzu", L"yuzu.exe", L"-f -g"};
-constexpr E azahar{L"azahar", L"", L"azahar", L"azahar.exe", L""};
-constexpr E melonds{L"melonds", L"'-f'", L"melonDS", L"melonDS.exe", L"-f"};
-constexpr E xemu{L"xemu", L"-full-screen -dvd_path", L"xemu", L"xemu.exe", L"-full-screen -dvd_path"};
-constexpr E xenia{L"xenia", L"", L"xenia", L"xenia_canary.exe", L""};
-constexpr E retroarch{L"retroarch", L"", L"RetroArch", L"retroarch.exe", L""};
 constexpr std::wstring_view disc = L".bin|.chd|.cso|.dump|.gz|.img|.iso|.mdf|.nrg";
 constexpr std::wstring_view dolphin_discs = L".ciso|.dol|.elf|.gcm|.gcz|.iso|.json|.nkit.iso|.nkit.gcz|.rvz|.wad|.wia|.wbfs|.m3u";
 constexpr std::wstring_view amiga = L".adf|.adz|.dms|.fdi|.ipf|.hdf|.hdz|.lha|.slave|.info|.cue|.ccd|.chd|.nrg|.mds|.iso|.uae|.m3u|.zip|.7z";
 const Builtin builtin[] = {
-    {L"psx", L".cue|.img|.chd|.ecm|.iso|.m3u|.mds|.pbp", {}, {}, {duckstation}},
-    {L"ps2", disc, {}, {}, {pcsx2}},
-    {L"ps3", {}, {}, L"**/${title}/PS3_GAME/USRDIR/@(eboot.bin|iso.bin.edat)", {rpcs3}},
-    {L"psp", L".7z|.cso|.elf|.iso|.pbp|.prx", {}, {}, {ppsspp}},
-    {L"gc", dolphin_discs, {}, {}, {dolphin}},
-    {L"wii", dolphin_discs, {}, {}, {dolphin}},
-    {L"primehack", dolphin_discs, {}, {}, {primehack}},
-    {L"wiiu", {}, {}, L"${title}/**/*.rpx", {cemu}},
-    {L"wiiu", L".wux|.wud|.wua|.wad|.iso|.7z|.zip", {}, L"${title}@(.wux|.wud|.wua|.wad|.iso|.7z|.zip)", {cemu}},
-    {L"switch", L".kip|.nca|.nro|.nso|.nsp|.xci", {}, {}, {eden, citron, ryujinx, yuzu}},
-    {L"n3ds", L".3ds|.3dsx|.app|.axf|.cii|.cxi|.elf|.cci|.zcci|.z3dsx|.zcxi", {}, {}, {azahar}},
-    {L"nds", L".nds|.app", {}, {}, {melonds}},
-    {L"xbox", L".iso", {}, {}, {xemu}},
-    {L"xbox360", L".iso|.xex", {}, L"${title}@(.iso|.xex)", {xenia}},
+    {L"psx", L".cue|.img|.chd|.ecm|.iso|.m3u|.mds|.pbp", L"mednafen_psx_hw_libretro", {}, {L"duckstation", L"retroarch"}},
+    {L"ps2", disc, {}, {}, {L"pcsx2"}},
+    {L"ps3", {}, {}, L"**/${title}/PS3_GAME/USRDIR/@(eboot.bin|iso.bin.edat)", {L"rpcs3"}},
+    {L"psp", L".7z|.cso|.elf|.iso|.pbp|.prx", L"ppsspp_libretro", {}, {L"ppsspp", L"retroarch"}},
+    {L"gc", dolphin_discs, L"dolphin_libretro", {}, {L"dolphin", L"retroarch"}},
+    {L"wii", dolphin_discs, L"dolphin_libretro", {}, {L"dolphin", L"retroarch"}},
+    {L"primehack", dolphin_discs, {}, {}, {L"primehack"}},
+    {L"wiiu", {}, {}, L"${title}/**/*.rpx", {L"cemu"}},
+    {L"wiiu", L".wux|.wud|.wua|.wad|.iso|.7z|.zip", {}, L"${title}@(.wux|.wud|.wua|.wad|.iso|.7z|.zip)", {L"cemu"}},
+    {L"switch", L".kip|.nca|.nro|.nso|.nsp|.xci", {}, {}, {L"eden", L"citron", L"ryujinx", L"yuzu"}},
+    {L"n3ds", L".3ds|.3dsx|.app|.axf|.cii|.cxi|.elf|.cci|.zcci|.z3dsx|.zcxi", {}, {}, {L"azahar"}},
+    {L"nds", L".nds|.app", L"melondsds_libretro", {}, {L"melonds", L"retroarch"}},
+    {L"xbox", L".iso", {}, {}, {L"xemu"}},
+    {L"xbox360", L".iso|.xex", {}, L"${title}@(.iso|.xex)", {L"xenia"}},
     {L"gb", L".7z|.gb|.dmg|.zip", L"gambatte_libretro"},
     {L"gbc", L".7z|.gb|.gbc|.zip", L"gambatte_libretro"},
     {L"gba", L".7z|.gba|.zip", L"mgba_libretro"},
@@ -427,12 +410,11 @@ std::wstring builtinGlob(const Builtin& entry) {
     if (!entry.glob.empty()) return std::wstring(entry.glob);
     return L"**/${title}@(" + std::wstring(entry.extensions) + L")";
 }
-// RetroArch's own folder: EmuDeck's, then SRM's core folder's parent, then its usual Windows place.
+// RetroArch's own folder when its program is not known: EmuDeck's, then SRM's core folder's parent.
 std::filesystem::path retroArchFolder(const Paths& paths) {
     for (const auto& folder : {paths.emulators.empty() ? std::filesystem::path{} : paths.emulators / L"RetroArch",
-                               paths.ra_cores.empty() ? std::filesystem::path{} : std::filesystem::path(paths.ra_cores).parent_path(),
-                               std::filesystem::path(L"C:\\RetroArch-Win64")})
-        if (fileExists(folder / L"retroarch.exe")) return folder;
+                               paths.ra_cores.empty() ? std::filesystem::path{} : std::filesystem::path(paths.ra_cores).parent_path()})
+        if (!folder.empty() && fileExists(folder / L"retroarch.exe")) return folder;
     return {};
 }
 std::wstring powershellQuoted(std::wstring_view text) {
@@ -440,24 +422,90 @@ std::wstring powershellQuoted(std::wstring_view text) {
     for (const auto ch : text) { result += ch; if (ch == L'\'') result += L'\''; }
     return result + L'\'';
 }
+std::wstring shellQuoted(std::wstring_view text) {
+    std::wstring result(1, L'\'');
+    for (const auto ch : text) { if (ch == L'\'') result += L"'\\''"; else result += ch; }
+    return result + L'\'';
+}
+void replaceAll(std::wstring& text, std::wstring_view what, std::wstring_view with) {
+    for (size_t at = text.find(what); at != std::wstring::npos; at = text.find(what, at + with.size())) text.replace(at, what.size(), with);
+}
+std::vector<std::filesystem::path> splitPath(std::wstring_view text, wchar_t separator) {
+    std::vector<std::filesystem::path> result;
+    while (!text.empty()) {
+        const auto end = text.find(separator);
+        auto item = trim(text.substr(0, end));
+        if (item.size() >= 2 && item.front() == L'"' && item.back() == L'"') item = item.substr(1, item.size() - 2);
+        if (!item.empty() && std::filesystem::path(item).is_absolute()) result.emplace_back(item);
+        if (result.size() >= 256 || end == std::wstring_view::npos) break;
+        text = text.substr(end + 1);
+    }
+    return result;
+}
 } // namespace
 
 Environment systemEnvironment() {
     Environment environment;
+    const auto variable = [](const wchar_t* name) { return system_info::environment(name, 4095).value_or(std::wstring{}); };
 #ifdef _WIN32
     environment.windows = true;
-    environment.app_data = system_info::environment(L"APPDATA", 4095).value_or(std::wstring{});
-    environment.home = system_info::environment(L"USERPROFILE", 4095).value_or(std::wstring{});
+    environment.app_data = variable(L"APPDATA");
+    environment.home = variable(L"USERPROFILE");
     environment.system_root = system_info::environment(L"SystemRoot", 4095).value_or(std::wstring(L"C:\\Windows"));
+    environment.local_app_data = variable(L"LOCALAPPDATA");
+    if (const auto drive = variable(L"SystemDrive"); !drive.empty()) environment.system_drive = drive + L"\\";
+    for (const auto* name : {L"ProgramFiles", L"ProgramFiles(x86)", L"ProgramW6432"})
+        if (const auto folder = variable(name); !folder.empty() &&
+            std::find(environment.program_dirs.begin(), environment.program_dirs.end(), std::filesystem::path(folder)) == environment.program_dirs.end())
+            environment.program_dirs.emplace_back(folder);
+    if (!environment.local_app_data.empty()) {
+        environment.program_dirs.push_back(environment.local_app_data / L"Programs");
+        environment.program_dirs.push_back(environment.local_app_data);
+    }
+    if (!environment.app_data.empty()) environment.program_dirs.push_back(environment.app_data);
+    environment.search_path = splitPath(system_info::environment(L"PATH").value_or(std::wstring{}), L';');
+    {
+        wchar_t buffer[1024]{};
+        DWORD size = sizeof(buffer) - sizeof(wchar_t);
+        if (RegGetValueW(HKEY_CURRENT_USER, L"Software\\Valve\\Steam", L"SteamPath", RRF_RT_REG_SZ, nullptr, buffer, &size) == ERROR_SUCCESS)
+            environment.steam = std::filesystem::path(buffer).lexically_normal();
+    }
 #else
     environment.windows = false;
-    environment.home = system_info::environment(L"HOME", 4095).value_or(std::wstring{});
-    const auto config = system_info::environment(L"XDG_CONFIG_HOME", 4095).value_or(std::wstring{});
+    environment.home = variable(L"HOME");
+    const auto config = variable(L"XDG_CONFIG_HOME");
     environment.app_data = !config.empty() ? std::filesystem::path(config) : environment.home / L".config";
+    environment.search_path = splitPath(system_info::environment(L"PATH").value_or(std::wstring{}), L':');
+    if (!environment.home.empty()) environment.steam = environment.home / L".local/share/Steam";
 #endif
     environment.esde_root = esde::root();
     if (environment.esde_root.empty() && !environment.home.empty() && folderExists(environment.home / L"ES-DE")) environment.esde_root = environment.home / L"ES-DE";
     return environment;
+}
+
+emulators::Context emulatorContext(const Environment& environment, const Paths& paths) {
+    emulators::Context context;
+    context.windows = environment.windows;
+    context.tools = paths.tools;
+    context.emudeck = paths.emulators;
+    context.home = environment.home;
+    context.app_data = environment.app_data;
+    context.local_app_data = environment.local_app_data;
+    context.system_drive = environment.system_drive;
+    context.steam = environment.steam.empty() && !paths.steam.empty() ? std::filesystem::path(paths.steam) : environment.steam;
+    context.program_dirs = environment.program_dirs;
+    context.search_path = environment.search_path;
+    context.registry = environment.registry;
+    // ES-DE's program folder: the one around its data folder (EmuDeck's, a portable one), else an installed one.
+    const auto rules = [&](const std::filesystem::path& folder) {
+        return !folder.empty() && folderExists(folder / L"resources" / L"systems" / (environment.windows ? L"windows" : L"linux"));
+    };
+    std::vector<std::filesystem::path> candidates;
+    if (!environment.esde_root.empty()) { candidates.push_back(environment.esde_root.parent_path()); candidates.push_back(environment.esde_root); }
+    for (const auto& base : environment.program_dirs) { candidates.push_back(base / L"ES-DE"); candidates.push_back(base / L"EmulationStation-DE"); }
+    if (!environment.windows) candidates.push_back(L"/usr/share/es-de");
+    for (const auto& folder : candidates) if (rules(folder)) { context.esde_install = folder; break; }
+    return context;
 }
 
 std::filesystem::path detectRoms(const Environment& environment, std::wstring* origin) {
@@ -521,74 +569,110 @@ const Rule* Setup::forFile(const std::wstring& platform, const std::filesystem::
     return fallback;
 }
 
-Setup load(const Environment& environment, const std::filesystem::path& roms_override) {
+const Rule* Setup::forSystem(std::wstring_view system) const {
+    for (const auto& rule : rules) if (rule.system == system) return &rule;
+    return nullptr;
+}
+
+const emulators::Found* Setup::found(std::wstring_view id) const {
+    for (const auto& entry : detected) if (entry.id == id) return &entry;
+    return nullptr;
+}
+
+std::wstring Setup::chosen(const Rule& rule) const {
+    const auto found = choices.systems.find(text_encoding::utf8(rule.system));
+    if (found == choices.systems.end() || found->second.empty()) return {};
+    auto id = wide(found->second);
+    return emulators::find(id) ? id : std::wstring{};
+}
+
+const emulators::Found* Setup::emulatorFor(const Rule& rule) const {
+    // Chosen by hand: that one, found or not (its page says it is missing).
+    if (const auto id = chosen(rule); !id.empty()) { const auto* entry = found(id); return entry && entry->found() ? entry : nullptr; }
+    for (const auto& id : rule.emulators)
+        if (const auto* entry = found(id); entry && entry->found()) return entry;
+    return nullptr;
+}
+
+std::wstring Setup::arguments(std::wstring_view id) const {
+    const auto found = choices.overrides.find(text_encoding::utf8(std::wstring(id)));
+    return found == choices.overrides.end() ? std::wstring{} : trim(found->second.arguments);
+}
+
+Setup load(const Environment& environment, const std::filesystem::path& roms_override, emulators::Choices choices) {
     Setup setup;
     setup.environment = environment;
     setup.paths = resolve(environment, roms_override);
+    setup.choices = std::move(choices);
     for (const auto& entry : builtin) {
         Rule rule;
         rule.system = std::wstring(entry.system);
         rule.platform = platformForSystem(rule.system);
         rule.glob = builtinGlob(entry);
         rule.core = std::wstring(entry.core);
-        if (!setup.paths.roms.empty()) rule.folder = setup.paths.roms / rule.system;
-        if (!rule.core.empty()) rule.emulators.push_back({L"retroarch", L"", L"RetroArch", L"retroarch.exe", L""});
-        for (const auto& emulator : entry.emulators)
-            if (!emulator[0].empty())
-                rule.emulators.push_back({std::wstring(emulator[0]), std::wstring(emulator[1]), std::wstring(emulator[2]), std::wstring(emulator[3]), std::wstring(emulator[4])});
-        // The one this setup has (an EmuDeck launcher, else the program) goes first.
-        std::stable_partition(rule.emulators.begin(), rule.emulators.end(), [&](const Emulator& emulator) {
-            const auto script = setup.paths.tools / L"launchers" / (emulator.launcher + (environment.windows ? L".ps1" : L".sh"));
-            return (!setup.paths.tools.empty() && fileExists(script)) ||
-                   (!setup.paths.emulators.empty() && fileExists(setup.paths.emulators / emulator.folder / emulator.executable));
-        });
+        if (!setup.paths.roms.empty()) { rule.folder = setup.paths.roms / rule.system; rule.present = folderExists(rule.folder); }
+        for (const auto id : entry.emulators) if (!id.empty()) rule.emulators.emplace_back(id);
+        if (rule.emulators.empty() && !rule.core.empty()) rule.emulators.emplace_back(L"retroarch");
         setup.rules.push_back(std::move(rule));
     }
+    setup.context = emulatorContext(environment, setup.paths);
+    setup.detected = emulators::detectAll(setup.context, setup.choices.overrides);
     return setup;
 }
 
 GameAction action(const Rule& rule, const Setup& setup, const std::filesystem::path& rom) {
+    const auto* found = setup.emulatorFor(rule);
+    const auto* info = found ? emulators::find(found->id) : nullptr;
+    if (!info) return {};
     const auto& paths = setup.paths;
     const bool windows = setup.environment.windows;
-    const auto core = [&](bool launcher) -> std::wstring {
-        if (rule.core.empty()) return {};
-        if (windows) return launcher ? L"-L " + powershellQuoted(L"cores\\" + rule.core + L".dll") : L"-L \"cores\\" + rule.core + L".dll\"";
-        const auto folder = paths.ra_cores.empty() ? std::wstring(L"cores") : paths.ra_cores;
-        return L"-L '" + folder + L"/" + rule.core + L".so'";
-    };
-    for (const auto& emulator : rule.emulators) {
-        GameAction play;
-        play.kind = ActionKind::play;
-        // EmuDeck's launcher: its cloud sync and emulator choice stay, without SRM's cmd.exe window.
-        const auto script = paths.tools.empty() ? std::filesystem::path{} : paths.tools / L"launchers" / (emulator.launcher + (windows ? L".ps1" : L".sh"));
-        if (fileExists(script)) {
-            std::wstring words = rule.core.empty() ? emulator.arguments : core(true);
+    const bool script = found->via == emulators::Via::emudeck_script;
+    const bool retro = found->id == L"retroarch" && !rule.core.empty();
+    std::wstring words = setup.arguments(found->id);
+    if (words.empty()) words = emulators::defaultArguments(*info, script, retro);
+    // RetroArch's folder: its program (behind EmuDeck's launcher: the one it names).
+    std::filesystem::path retro_folder;
+    if (retro) {
+        if (!found->target.empty() && !script) retro_folder = found->target.parent_path();
+        else if (!found->target.empty() && fileExists(found->target)) retro_folder = found->target.parent_path();
+        if (retro_folder.empty()) retro_folder = retroArchFolder(paths);
+    }
+    if (words.find(L"%CORE%") != std::wstring::npos) {
+        std::wstring core;
+        if (!rule.core.empty()) {
             if (windows) {
-                const auto root = setup.environment.system_root.empty() ? std::filesystem::path(L"C:\\Windows") : setup.environment.system_root;
-                play.target = (root / L"System32" / L"WindowsPowerShell" / L"v1.0" / L"powershell.exe").wstring();
-                play.hidden = true; // EmuDeck's launcher writes to its console (and fails to hide it itself): never shown.
-                play.arguments = L"-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command \"& " + powershellQuoted(script.wstring()) +
-                                 (words.empty() ? std::wstring{} : L" " + words) + L" " + powershellQuoted(rom.wstring()) + L"\"";
+                const auto file = (retro_folder.empty() ? std::filesystem::path(L"cores") : retro_folder / L"cores") / (rule.core + L".dll");
+                core = script ? powershellQuoted(file.wstring()) : L"\"" + file.wstring() + L"\"";
             } else {
-                play.target = script.wstring();
-                play.arguments = (words.empty() ? std::wstring{} : words + L" ") + L"'" + rom.wstring() + L"'";
+                std::filesystem::path folder = paths.ra_cores;
+                if (folder.empty() && found->via == emulators::Via::flatpak) folder = setup.environment.home / L".var/app/org.libretro.RetroArch/config/retroarch/cores";
+                if (folder.empty()) folder = setup.environment.app_data / L"retroarch" / L"cores";
+                core = shellQuoted((folder / (rule.core + L".so")).wstring());
             }
-            const auto retro = retroArchFolder(paths);
-            play.working_directory = !rule.core.empty() && !retro.empty() ? retro : script.parent_path();
-            return play;
         }
-        // The program itself.
-        std::filesystem::path program;
-        if (!rule.core.empty()) { if (const auto retro = retroArchFolder(paths); !retro.empty()) program = retro / L"retroarch.exe"; }
-        else if (!paths.emulators.empty()) program = paths.emulators / emulator.folder / emulator.executable;
-        if (!fileExists(program)) continue;
-        const auto words = rule.core.empty() ? emulator.direct : core(false);
-        play.target = program.wstring();
-        play.arguments = (words.empty() ? std::wstring{} : words + L" ") + L"\"" + rom.wstring() + L"\"";
-        play.working_directory = program.parent_path();
+        replaceAll(words, L"%CORE%", core);
+    }
+    if (windows && script) replaceAll(words, L"\"", L"\\\""); // Inside -Command "…".
+    const auto quoted = windows ? (script ? powershellQuoted(rom.wstring()) : L"\"" + rom.wstring() + L"\"") : shellQuoted(rom.wstring());
+    bool placed = false;
+    for (const std::wstring_view placeholder : {std::wstring_view(L"\"%ROM%\""), std::wstring_view(L"'%ROM%'"), std::wstring_view(L"%ROM%"), std::wstring_view(L"%rom%")})
+        if (words.find(placeholder) != std::wstring::npos) { replaceAll(words, placeholder, quoted); placed = true; }
+    if (!placed) words += (words.empty() ? L"" : L" ") + quoted;
+    GameAction play;
+    play.kind = ActionKind::play;
+    if (script && windows) {
+        // EmuDeck's launcher: its cloud sync stays, without SRM's cmd.exe window.
+        const auto root = setup.environment.system_root.empty() ? std::filesystem::path(L"C:\\Windows") : setup.environment.system_root;
+        play.target = (root / L"System32" / L"WindowsPowerShell" / L"v1.0" / L"powershell.exe").wstring();
+        play.hidden = true; // EmuDeck's launcher writes to its console (and fails to hide it itself): never shown.
+        play.arguments = L"-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command \"& " + powershellQuoted(found->program.wstring()) + L" " + words + L"\"";
+        play.working_directory = !retro_folder.empty() ? retro_folder : found->program.parent_path();
         return play;
     }
-    return {};
+    play.target = found->program.wstring();
+    play.arguments = found->prefix.empty() ? words : found->prefix + L" " + words;
+    play.working_directory = !retro_folder.empty() ? retro_folder : found->program.parent_path();
+    return play;
 }
 
 GameAction commandAction(std::wstring_view command_text, const std::filesystem::path& rom) {
@@ -799,6 +883,33 @@ std::optional<FolderGame> folderGame(const std::filesystem::path& folder) {
             if (lower(rom.extension().wstring()) == lead) return FolderGame{rom, guessPlatform(rom), displayTitle(name)};
     if (roms.size() == 1) return FolderGame{roms.front(), guessPlatform(roms.front()), displayTitle(roms.front().stem().wstring())};
     return std::nullopt;
+}
+
+bool romFolder(const std::filesystem::path& folder) {
+    if (!folderExists(folder)) return false;
+    if (fileExists(folder / L"systems.txt")) return true; // ES-DE's own list of its folders.
+    size_t systems = 0;
+    std::error_code error;
+    size_t seen = 0;
+    for (std::filesystem::directory_iterator it(folder, error), end; !error && it != end && ++seen < 2048; it.increment(error)) {
+        std::error_code kind;
+        if (!it->is_directory(kind)) continue;
+        const auto name = lower(it->path().filename().wstring());
+        const bool known = std::any_of(std::begin(builtin), std::end(builtin), [&](const Builtin& entry) { return entry.system == name; }) ||
+                           platformForSystem(name) != L"Retro";
+        if (!known) continue;
+        // A system folder with something in it (EmuDeck creates every one, empty).
+        std::error_code inner;
+        std::filesystem::directory_iterator files(it->path(), inner);
+        for (size_t checked = 0; !inner && files != std::filesystem::directory_iterator{} && checked < 64; files.increment(inner), ++checked) {
+            std::error_code type;
+            const auto file_name = files->path().filename().wstring();
+            if (file_name.starts_with(L"systeminfo") || file_name.starts_with(L"metadata") || file_name.starts_with(L".")) continue;
+            if (files->is_regular_file(type) ? romFile(files->path()) || lower(files->path().extension().wstring()) == L".m3u" : files->is_directory(type)) { ++systems; break; }
+        }
+        if (systems >= 2) return true;
+    }
+    return false;
 }
 
 std::wstring displayTitle(std::wstring_view raw) {

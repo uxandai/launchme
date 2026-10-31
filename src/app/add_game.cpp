@@ -2,11 +2,14 @@
 // window): a program or shortcut is a PC game; a disc image or ROM an emulated game with its console
 // guessed (its folder under roms\, its extension, what the image holds) and changeable on the
 // Platforma row; a folder is a PS3 or Wii U game kept as a folder, a folder holding one game's ROM, or
-// a PC game's folder whose program is found the way the DRM-free scan finds it.
+// a PC game's folder whose program is found the way the DRM-free scan finds it. "Wskaż folder" (and a
+// dropped folder) also takes a ROM folder or a folder of games (addFolder).
 #include "launcher.hpp"
 #include "../library/drm_free.hpp"
 #include "../library/emulation_platforms.hpp"
 #include "../library/emulation_scan.hpp"
+#include "../platform/file_dialog.hpp"
+#include "../ui/file_browser_view.hpp"
 
 #include <algorithm>
 #include <cwctype>
@@ -16,6 +19,15 @@ bool programFile(const std::filesystem::path& file) {
     auto extension = file.extension().wstring();
     for (auto& ch : extension) ch = static_cast<wchar_t>(std::towlower(ch));
     return extension == L".exe" || extension == L".lnk" || extension == L".bat" || extension == L".cmd" || extension == L".url";
+}
+// A PC game's folder as the DRM-free scan found its program.
+void fillProgram(custom_game_ui::State& ui, const std::filesystem::path& folder, const drm_free::Detection& found, bool unnamed) {
+    using namespace custom_game_ui;
+    ui.fields[platform_field].clear();
+    ui.fields[file_field] = found.executable.wstring();
+    ui.fields[arguments_field] = found.arguments;
+    ui.fields[directory_field] = (found.working_directory.empty() ? folder : found.working_directory).wstring();
+    if (unnamed) ui.fields[name_field] = (found.title.empty() ? drm_free::cleanTitle(folder.filename().wstring()).text : found.title).substr(0, custom_games::max_name);
 }
 // The consoles the Platforma row walks: every emulation platform but the shortcut-only ones.
 std::vector<std::wstring> platformChoices() {
@@ -53,16 +65,13 @@ void Launcher::customEditorApplyFile(const std::filesystem::path& picked) {
         else {
             const auto found = drm_free::detect(picked);
             if (found.executable.empty()) {
-                ui.error = found.container ? tr(L"W tym folderze jest wiele gier: dodaj go w DRM-free (Biblioteka).")
+                ui.error = found.store_owned ? tr(L"Ta gra należy do sklepu (Epic, Xbox) i jest w jego bibliotece.") :
+                           found.container ? tr(L"W tym folderze jest wiele gier: dodaj go w DRM-free (Biblioteka).")
                                            : tr(L"W tym folderze nie ma programu gry ani pliku ROM.");
                 InvalidateRect(hwnd_, nullptr, FALSE);
                 return;
             }
-            ui.fields[platform_field].clear();
-            ui.fields[file_field] = found.executable.wstring();
-            ui.fields[arguments_field] = found.arguments;
-            ui.fields[directory_field] = (found.working_directory.empty() ? picked : found.working_directory).wstring();
-            if (unnamed) ui.fields[name_field] = (found.title.empty() ? drm_free::cleanTitle(picked.filename().wstring()).text : found.title).substr(0, custom_games::max_name);
+            fillProgram(ui, picked, found, unnamed);
         }
     } else if (!programFile(picked) && emulation_scan::romFile(picked)) {
         // A PS3 game's EBOOT.BIN or a Wii U .rpx picked inside the game's folder: the folder is the game.
@@ -95,5 +104,70 @@ void Launcher::customEditorCyclePlatform(int step) {
     ui.fields[platform_field] = choices[static_cast<size_t>(index)];
     ui.error.clear();
     audio_.navigate();
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+// "Wskaż folder": the folder decides what is added (addFolder).
+void Launcher::customEditorPickFolder() {
+    using namespace custom_game_ui;
+    auto& ui = custom_editor_;
+    if (!ui.open) return;
+    auto initial = std::filesystem::path(custom_games::cleanPath(ui.fields[file_field])).parent_path();
+    if (!initial.is_absolute()) initial.clear();
+    const auto apply = [this](const std::filesystem::path& picked) {
+        if (!custom_editor_.open || picked.empty()) { InvalidateRect(hwnd_, nullptr, FALSE); return; }
+        addFolder(picked);
+    };
+    if (pick_path_) { // Tests: an injected picker answers at once.
+        const auto picked = pick_path_(hwnd_, true, initial);
+        mouse_transition_until_ = GetTickCount64() + GetDoubleClickTime();
+        apply(picked);
+        return;
+    }
+    file_browser::Request request;
+    request.mode = file_browser::Mode::folder;
+    request.title = tr(L"Wskaż folder gry, ROM-ów lub gier");
+    request.initial = initial;
+    request.native = [this, initial] { return pickGamePath(hwnd_, true, initial); };
+    openFileBrowser(std::move(request), apply);
+}
+
+// A folder for Dodaj grę (picked, or dropped on the window): one emulated game (PS3, Wii U, a folder
+// with one game's ROM), a ROM folder (its systems become the library's emulated games), one PC game,
+// or a folder of games (watched by the DRM-free catalogue from now on).
+void Launcher::addFolder(const std::filesystem::path& folder) {
+    using namespace custom_game_ui;
+    auto& ui = custom_editor_;
+    if (!ui.open || folder.empty()) return;
+    ui.error.clear();
+    if (emulation_scan::folderGame(folder)) { customEditorApplyFile(folder); return; }
+    if (emulation_scan::romFolder(folder)) {
+        closeCustomEditor();
+        settings_.emulation_roms = folder;
+        settings_.emulation_source = AppSettings::EmulationSource::roms;
+        settingsChanged(true);
+        rom_folder_notice_ = true; // Its games are counted when the scan ends (onRomScan).
+        startRomScan();
+        showNotification(NotificationKind::launch, tr(L"Folder ROM-ów"), tr(L"Skanowanie: ") + folder.wstring());
+        return;
+    }
+    const auto found = drm_free::detect(folder);
+    if (!found.executable.empty()) {
+        fillProgram(ui, folder, found, custom_games::trim(ui.fields[name_field]).empty());
+        if (const int row = custom_game_ui::row(ui.focus); row < field_count && !ui.shows(row)) ui.focus = Item::file;
+        if (!custom_games::trim(ui.fields[name_field]).empty()) customEditorFocus(Item::save);
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        return;
+    }
+    if (found.container) {
+        // Several games below it: the DRM-free catalogue scans it now and keeps watching it.
+        closeCustomEditor();
+        const auto before = drm_catalog_.roots.size();
+        drmAddRoot(folder); // Refusals (already added, nested, the limit) say why.
+        if (drm_catalog_.roots.size() > before)
+            showNotification(NotificationKind::launch, tr(L"Dodano do katalogu DRM-free"), tr(L"Skanowanie: ") + folder.wstring());
+        return;
+    }
+    ui.error = found.store_owned ? tr(L"Ta gra należy do sklepu (Epic, Xbox) i jest w jego bibliotece.") : tr(L"W tym folderze nie ma gry ani ROM-ów.");
     InvalidateRect(hwnd_, nullptr, FALSE);
 }

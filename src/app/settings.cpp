@@ -31,6 +31,7 @@ void Launcher::ensureSettingVisible() {
 
 void Launcher::openSettings() {
     desktopLeaveLibrary(); rememberPlace();
+    stopVideo(); video_key_.clear(); // The focused game's video does not play on under Settings.
     screen_ = ScreenMode::settings;
     color_editor_ = {};
     settings_page_exits_ = false;
@@ -337,7 +338,8 @@ void Launcher::settingsActivate() {
         if (aurelia_ui_.open) aureliaRows();
         audio_.context(); return;
     }
-    if (row.control == Control::page) { openSettingsPage(row.page); return; } // Its settings on a page of their own.
+    // Its settings on a page of their own; a row of one kind (Emulacja's systems) passes which one.
+    if (row.control == Control::page) { openSettingsPage(row.page, row.id == Id::page ? std::string{} : row.key); return; }
     if (row.id == Id::bulk_covers) { openBulkCovers(); return; }
     if (settingsExtraActivate(row)) return; // The wallpaper picker, Bez tapety (settings_extras.cpp).
     if (row.id == Id::steam_sync) { requestSteamSync(true); audio_.context(); return; }

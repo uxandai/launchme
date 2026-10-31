@@ -48,7 +48,16 @@ void Launcher::pcSettingsRows() {
         return library(source);
     };
     if (!settings_state_.platform()) {
-        // Steam first, the DRM-free folders (the user's own library) next, then the stores by name.
+        // The DRM-free catalogue first (the user's own library: its folders and the games added by
+        // hand), Emulacja under it, then Steam and the stores by name.
+        {
+            auto summary = drmSummary();
+            if (!custom_games_.empty()) summary += L" · " + (tr(L"Dodane ręcznie: ") + std::to_wstring(custom_games_.size()));
+            Row drm{Id::pc_platform, Control::platform, tr(L"Katalog DRM-free"), std::move(summary), tr(L"Opcje"),
+                    settings_.enabled_pc_sources.contains(sourceSlug(GameSource::drmfree))};
+            drm.source = GameSource::drmfree; settings_rows_.push_back(std::move(drm));
+        }
+        settings_rows_.push_back(emulationTileRow());
         {
             const auto steam_installed = std::count_if(installed_library_.begin(), installed_library_.end(), [](const auto& game) {
                 return game.source == GameSource::steam && game.kind == GameKind::steam && game.installed;
@@ -58,9 +67,6 @@ void Launcher::pcSettingsRows() {
             Row steam{Id::pc_platform, Control::platform, L"Steam", std::move(summary), tr(L"Opcje"), settings_.steam_enabled};
             steam.source = GameSource::steam; settings_rows_.push_back(std::move(steam));
         }
-        Row drm{Id::pc_platform, Control::platform, tr(L"Katalog DRM-free"), drmSummary(), tr(L"Opcje"),
-                settings_.enabled_pc_sources.contains(sourceSlug(GameSource::drmfree))};
-        drm.source = GameSource::drmfree; settings_rows_.push_back(std::move(drm));
         for (const auto source : platformOrder()) {
             if (source == GameSource::steam || source == GameSource::drmfree) continue;
             auto summary = account(source);
@@ -210,13 +216,14 @@ void Launcher::pcSettingsRows() {
     add({Id::pc_client, Control::action, tr(L"Klient"), {}, client ? tr(L"Otwórz klienta") : tr(L"Pobierz klienta")});
 }
 
-// The overview's order: Steam, the DRM-free folders, then the stores by their (translated) names.
+// The overview's order: the DRM-free folders, Steam, then the stores by their (translated) names
+// (Emulacja's tile sits between the first two rows, outside this list).
 std::vector<GameSource> Launcher::platformOrder() const {
     std::vector<GameSource> stores(pc_sources.begin(), pc_sources.end());
     std::sort(stores.begin(), stores.end(), [](GameSource a, GameSource b) {
         return CompareStringEx(LOCALE_NAME_USER_DEFAULT, LINGUISTIC_IGNORECASE, sourceName(a), -1, sourceName(b), -1, nullptr, nullptr, 0) == CSTR_LESS_THAN;
     });
-    stores.insert(stores.begin(), {GameSource::steam, GameSource::drmfree});
+    stores.insert(stores.begin(), {GameSource::drmfree, GameSource::steam});
     return stores;
 }
 
@@ -224,6 +231,7 @@ void Launcher::openPlatformSettings(GameSource source) {
     const auto order = platformOrder();
     const auto found = std::find(order.begin(), order.end(), source);
     if (found == order.end()) return;
+    const int index = static_cast<int>(found - order.begin()) + (source == GameSource::drmfree ? 0 : 1); // Below Emulacja's tile.
     if (settings_state_.category != static_cast<int>(settings_ui::Category::library))
         settings_state_.selectCategory(static_cast<int>(settings_ui::Category::library));
     settings_state_.closeAll(); // Another platform's page replaces this one; Back leads to the overview.
@@ -232,7 +240,7 @@ void Launcher::openPlatformSettings(GameSource source) {
     opener.source = source;
     settings_state_.open(Page::platform, {}, static_cast<int>(source), RowRef::of(opener));
     // Overview rows in platformOrder (if the row is not found again).
-    settings_state_.pages.back().parent_row = static_cast<int>(found - order.begin());
+    settings_state_.pages.back().parent_row = index;
     clearSecretInput(); settings_motion_.valid = false; settingsPreviewFocus(); buildSettingsRows(); audio_.context();
 }
 

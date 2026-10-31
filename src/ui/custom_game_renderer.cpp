@@ -97,8 +97,13 @@ void Renderer::drawCustomGameEditor() {
             target_->PopAxisAlignedClip();
         }
         if (focused && !ui.selected) line(left + caret - offset, input.top + 14, left + caret - offset, input.bottom - 14, gray(0.93f), 2);
-        if (browseRow(index))
+        if (layout.browses(index))
             button(layout.browse(index), index == wine_field ? std::wstring(L"Proton / Wine…") : std::wstring(tr(L"Wybierz…")), ui.focus == browseItem(index));
+    }
+    if (layout.pills) {
+        // A new game: what to point at, a file or a folder (one game, a ROM folder, a folder of games).
+        button(layout.pill(0), tr(L"Wskaż plik"), ui.focus == Item::pick_file);
+        button(layout.pill(1), tr(L"Wskaż folder"), ui.focus == Item::pick_folder);
     }
     if (ui.posterShown()) {
         // The poster the typed name finds (or the game's own), "Zidentyfikuj grę" under it.

@@ -9,6 +9,7 @@
 #include "../ui/file_browser_view.hpp"
 
 #include <algorithm>
+#include <map>
 
 using namespace settings_ui;
 
@@ -29,13 +30,24 @@ void Launcher::startRomScan() {
     const auto folder = settings_.emulation_roms;
     const bool scan_games = settings_.emulation_source == AppSettings::EmulationSource::roms;
     const bool hidden = settings_.show_private;
-    work_.start([alive = alive_, window = hwnd_, generation, folder, scan_games, hidden] {
-        auto setup = std::make_shared<emulation_scan::Setup>(emulation_scan::load(emulation_scan::systemEnvironment(), folder));
+    // The emulators chosen in Ustawienia → Emulacja: found again with the setup (src/library/emulators.hpp).
+    emulators::Choices choices;
+    for (const auto& [id, chosen] : settings_.emulator_overrides) choices.overrides[id] = {chosen.program, chosen.arguments};
+    choices.systems = settings_.system_emulator;
+    work_.start([alive = alive_, window = hwnd_, generation, folder, scan_games, hidden, choices = std::move(choices)]() mutable {
+        auto setup = std::make_shared<emulation_scan::Setup>(emulation_scan::load(emulation_scan::systemEnvironment(), folder, std::move(choices)));
         auto games = std::make_shared<std::vector<Game>>();
         if (scan_games) *games = emulation_scan::scan(*setup, hidden, [&] { return !alive->load(); }).games;
         if (!alive->load()) return;
+        // Games per system folder, for the Emulacja page.
+        auto counts = std::make_shared<std::map<std::wstring, size_t>>();
+        for (const auto& game : *games)
+            if (const auto system = emulation_scan::systemOf(game.rom, setup->paths.roms); !system.empty()) ++(*counts)[system];
         auto message = std::make_unique<RemoteMessage>();
-        message->run = [generation, setup, games](Launcher& app) mutable { app.onRomScan(generation, std::move(setup), std::move(*games)); };
+        message->run = [generation, setup, games, counts](Launcher& app) mutable {
+            if (generation == app.rom_scan_generation_) app.rom_system_counts_ = std::move(*counts);
+            app.onRomScan(generation, std::move(setup), std::move(*games));
+        };
         if (PostMessageW(window, remote_message, 0, reinterpret_cast<LPARAM>(message.get()))) message.release();
     });
 }
@@ -45,6 +57,12 @@ void Launcher::onRomScan(uint64_t generation, std::shared_ptr<const emulation_sc
     rom_scanning_ = false;
     const bool was_active = romLibraryActive();
     emulation_setup_ = std::move(setup);
+    if (rom_folder_notice_) { // A ROM folder picked in Dodaj grę: what it holds.
+        rom_folder_notice_ = false;
+        if (romLibraryActive())
+            showNotification(NotificationKind::launch, tr(L"Folder ROM-ów"), tr(L"Gry emulowane: ") + std::to_wstring(games.size()));
+        else showNotification(NotificationKind::error, tr(L"Folder ROM-ów"), tr(L"Nie znaleziono w nim gier."));
+    }
     // Games added by hand start through the setup's parsers: their commands as it now finds them.
     rebuildCustomLibrary();
     std::sort(games.begin(), games.end(), [](const Game& a, const Game& b) { return gameKey(a) < gameKey(b); });
@@ -78,38 +96,4 @@ GameAction Launcher::emulationAction(const std::wstring& platform, const std::fi
     if (!emulation_setup_) return {};
     const auto* rule = emulation_setup_->forFile(platform, rom);
     return rule ? emulation_scan::action(*rule, *emulation_setup_, rom) : GameAction{};
-}
-
-bool Launcher::emulationSettingsChoose(const Row& row) {
-    if (row.id != Id::emulation_source) return false;
-    settings_.emulation_source = settings_state_.choice == 1 ? AppSettings::EmulationSource::steam : AppSettings::EmulationSource::roms;
-    settings_state_.editing = false;
-    settingsChanged(true);
-    startRomScan();
-    return true;
-}
-
-bool Launcher::emulationSettingsActivate(const Row& row) {
-    if (row.id == Id::emulation_folder_reset) {
-        settings_.emulation_roms.clear();
-        settingsChanged(); audio_.context();
-        settings_state_.selected[settings_state_.category] = std::max(0, settings_state_.row() - 1); // Its row is gone.
-        startRomScan();
-        return true;
-    }
-    if (row.id != Id::emulation_folder) return false;
-    const auto apply = [this](const std::filesystem::path& picked) {
-        if (!settingsOpen() || picked.empty()) return;
-        settings_.emulation_roms = picked;
-        settingsChanged(); audio_.context();
-        startRomScan();
-    };
-    file_browser::Request request;
-    request.mode = file_browser::Mode::folder;
-    request.title = tr(L"Wybierz folder ROM-ów");
-    request.initial = !settings_.emulation_roms.empty() ? settings_.emulation_roms :
-                      emulation_setup_ && !emulation_setup_->paths.roms.empty() ? emulation_setup_->paths.roms : std::filesystem::path{};
-    request.native = [this, initial = request.initial] { return pickPath(hwnd_, true, tr(L"Wybierz folder ROM-ów"), {}, {}, false, initial); };
-    openFileBrowser(std::move(request), apply);
-    return true;
 }

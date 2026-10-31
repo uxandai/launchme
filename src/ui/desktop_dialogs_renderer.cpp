@@ -237,7 +237,9 @@ void Renderer::drawDesktopCustomEditor() {
     // A user-added game: its poster (matched by the typed name) and "Zidentyfikuj grę" on the right.
     const bool poster = ui.posterShown();
     constexpr float poster_w = 150, poster_column = poster_w + 22;
-    const float height = sheet_header + 16 + subtitle + static_cast<float>(fields) * field_step + (ui.error.empty() ? 0.0f : 26.0f) + 64;
+    // A new game: "Wskaż plik" / "Wskaż folder" above the fields.
+    const float pills = ui.pills() ? 52.0f : 0.0f;
+    const float height = sheet_header + 16 + subtitle + pills + static_cast<float>(fields) * field_step + (ui.error.empty() ? 0.0f : 26.0f) + 64;
     const float width = ui.compat ? 760.0f : 620.0f; // A Windows game on Linux: its Wine/Proton options are long.
     const auto p = desktopDialogFrame(view, poster ? width + poster_column : width, height,
                                       ui.launchOptions() ? tr(L"Opcje uruchamiania") : ui.editing() ? tr(L"Edytuj grę") : tr(L"Dodaj grę"), false);
@@ -270,10 +272,22 @@ void Renderer::drawDesktopCustomEditor() {
         desktopModalHot({Kind::action, static_cast<int>(Item::identify)}, b);
     }
     if (ui.launchOptions()) { textLine(ui.title, p.left + 22, y + 6, p.right - p.left - 44, desktop_strong_font_.Get(), palette::text()); y += subtitle; }
+    if (pills) {
+        const float w = (fields_right - p.left - 22 - 10) * 0.5f;
+        const auto pill = [&](Item item, float left, wchar_t icon, const wchar_t* label) {
+            const Rect r{left, y + 8, left + w, y + 44};
+            desktopButton(r, 1, hover == SheetHit{Kind::action, static_cast<int>(item)} ? 1.0f : 0.0f, false, true, icon, label);
+            if (ui.focus == item) desktopFocusRing(r, 8);
+            desktopModalHot({Kind::action, static_cast<int>(item)}, r);
+        };
+        pill(Item::pick_file, p.left + 22, glyph::folder_open, tr(L"Wskaż plik"));
+        pill(Item::pick_folder, p.left + 22 + w + 10, glyph::folder_open, tr(L"Wskaż folder"));
+        y += pills;
+    }
     for (int index = 0; index < custom_game_ui::field_count; ++index) {
         if (!ui.shows(index)) continue;
         textLine(custom_game_ui::emulatedLabel(ui, index, tr(labels[static_cast<size_t>(index)])), p.left + 22, y + 8, fields_right - p.left - 22, desktop_label_font_.Get(), gray(0.62f));
-        const bool browse = custom_game_ui::browseRow(index);
+        const bool browse = custom_game_ui::browseRow(index) && ui.browses(index);
         const bool page = index == custom_game_ui::wine_field; // "Proton / Wine…": the game's page.
         const float field_right = fields_right - (browse ? (page ? 170.0f : 120.0f) : 0.0f);
         const Rect f{p.left + 22, y + 20, field_right, y + 60};

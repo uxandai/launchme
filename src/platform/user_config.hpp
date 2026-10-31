@@ -358,6 +358,16 @@ struct AppSettings {
     enum class EmulationSource { roms, steam };
     EmulationSource emulation_source = EmulationSource::roms;
     std::filesystem::path emulation_roms; // Empty: the one ES-DE or EmuDeck names.
+    // Ustawienia > Biblioteka > Emulacja (src/library/emulators.hpp): an emulator's program and its
+    // arguments set by hand (emulator ID -> empty fields: found on its own, its default), and the
+    // emulator a system folder starts with (system -> emulator ID; absent: the first one found).
+    struct EmulatorOverride {
+        std::filesystem::path program;
+        std::wstring arguments;
+        bool operator==(const EmulatorOverride&) const = default;
+    };
+    std::map<std::string, EmulatorOverride> emulator_overrides;
+    std::map<std::string, std::string> system_emulator;
     // Metro: a white page with dark text (the light theme of Windows Phone).
     bool metro_light = false;
 };

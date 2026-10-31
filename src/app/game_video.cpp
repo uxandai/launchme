@@ -16,6 +16,8 @@
 const Game* Launcher::videoCandidate() const {
     if ((!settings_.game_videos && !settings_.steam_trailers) || !runtime_started_ || pending_launch_ || launchAnimationActive() ||
         screensaverActive() || gameOverlayOpen()) return nullptr;
+    // Never under Ustawienia (Tryb TV and the desktop sheet) or a dialog over the library.
+    if (settingsOpen() || customEditorOpen() || fileBrowserOpen() || bulkCoversOpen()) return nullptr;
     // The library's views with a picture of the focused game: Kinowy (its focused tile) and Lista+ (its panel).
     const bool library = screen_ == ScreenMode::library && (libraryCinematic() || libraryListPlus());
     if (screen_ != ScreenMode::shelves && screen_ != ScreenMode::platform_games && screen_ != ScreenMode::details && !library) return nullptr;

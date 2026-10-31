@@ -303,6 +303,18 @@ void Launcher::drmSettingsRows() {
         }
         return;
     }
+    // The games added by hand live here too: adding one and their covers first.
+    add({Id::custom_add, Control::action, tr(L"Dodaj grę"),
+        tr(L"Plik programu, skrótu, ROM-u lub folder: gra, folder ROM-ów albo katalog z wieloma grami."), tr(L"Dodaj")});
+#ifndef _WIN32
+    // A Windows game from its installer: installed into a prefix of its own (compat_workers.cpp).
+    add({Id::compat_install_game, Control::action, tr(L"Dodaj grę z instalatora"),
+        tr(L"Instalator Windows (.exe, .msi) w nowym prefiksie; potem wskazujesz plik gry."), tr(L"Wybierz…")});
+#endif
+    // Their covers in one go: each title matched (SteamGridDB, else the Steam store) and only missing art fetched.
+    if (!custom_games_.empty())
+        add({Id::custom_covers, Control::action, tr(L"Okładki"),
+            tr(L"Wyszukaj i pobierz brakujące okładki gier dodanych ręcznie (SteamGridDB, sklep Steam)."), tr(L"Szukaj")});
     std::wstring status;
     if (drm_scanning_ && drm_identifying_) status = tr(L"Rozpoznawanie gier w RAWG…");
     else if (drm_scanning_) status = drm_progress_.total ? tr(L"Skanowanie… ") + std::to_wstring(drm_progress_.done) + L" / " + std::to_wstring(drm_progress_.total) :
@@ -327,6 +339,18 @@ void Launcher::drmSettingsRows() {
         row.value = drm_confirm_ == row.key ? tr(L"Potwierdź") : tr(L"Usuń");
         add(std::move(row));
     }
+    {
+        // The games added by hand as one total; the list is its own page (whether the folders are scanned or not).
+        const auto missing = std::count_if(custom_games_.begin(), custom_games_.end(), [&](const auto& entry) {
+            const auto found = custom_installed_.find(entry.id);
+            return !entry.path.empty() && found != custom_installed_.end() && !found->second; // No file chosen is not missing.
+        });
+        std::wstring description = tr(L"Programy, skróty, skrypty i ROM-y spoza sklepów.");
+        if (missing) description += L" · " + (tr(L"Brak pliku: ") + std::to_wstring(missing));
+        Row custom{Id::custom_games, Control::count, tr(L"Gry dodane ręcznie"), std::move(description), std::to_wstring(custom_games_.size())};
+        custom.section = tr(L"Gry");
+        add(std::move(custom));
+    }
     if (list.empty()) return;
     // One row for all found games: the total, then facts worth a look.
     size_t ignored = 0, unmatched = 0, missing = 0;
@@ -343,6 +367,24 @@ void Launcher::drmSettingsRows() {
     };
     fact(tr(L"Nierozpoznane w RAWG: "), unmatched); fact(tr(L"Brak pliku: "), missing); fact(tr(L"Ignorowane: "), ignored);
     add({Id::drm_games, Control::count, tr(L"Znalezione gry"), std::move(facts), std::to_wstring(games)});
+}
+
+// DRM-free → "Gry dodane ręcznie": each game with its editor (which also removes it); adding one
+// when there is none yet.
+void Launcher::customGamesSettingsRows() {
+    if (custom_games_.empty())
+        settings_rows_.push_back({Id::custom_add, Control::action, tr(L"Dodaj grę"),
+            tr(L"Plik programu, skrótu, ROM-u lub folder: gra, folder ROM-ów albo katalog z wieloma grami."), tr(L"Dodaj")});
+    for (const auto& entry : custom_games_) {
+        std::wstring description = entry.path.empty() ? std::wstring(tr(L"Bez pliku gry")) : entry.path.filename().wstring();
+        if (!entry.platform.empty()) description = entry.platform + L" · " + description;
+        if (!entry.arguments.empty()) description += L"  " + entry.arguments;
+        if (const auto found = custom_installed_.find(entry.id); !entry.path.empty() && found != custom_installed_.end() && !found->second)
+            description = tr(L"Brak pliku") + (L" · " + description);
+        Row row{Id::custom_game, Control::action, entry.name, std::move(description), tr(L"Edytuj")};
+        row.key = entry.id;
+        settings_rows_.push_back(std::move(row));
+    }
 }
 
 void Launcher::drmAddRoot() {

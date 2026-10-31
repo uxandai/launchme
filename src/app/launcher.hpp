@@ -2351,6 +2351,21 @@ private:
     GameAction emulationAction(const std::wstring& platform, const std::filesystem::path& rom, const std::wstring& command = {}) const;
     bool emulationSettingsChoose(const settings_ui::Row& row);
     bool emulationSettingsActivate(const settings_ui::Row& row);
+    // Ustawienia → Biblioteka → Emulacja (src/app/emulation_settings.cpp): its tile, its page and a
+    // system's page; games per system folder of the last scan; the other systems unfolded.
+    settings_ui::Row emulationTileRow() const;
+    void emulationSettingsRows();
+    const emulation_scan::Rule* emulationRule(const std::string& key) const;
+    std::wstring emulationSystemTitle(const std::wstring& system) const;
+    std::wstring emulationFoundText(const emulation_scan::Rule& rule, const emulators::Found& found) const;
+    std::map<std::wstring, size_t> rom_system_counts_;
+    bool emulation_all_systems_ = false;
+    bool rom_folder_notice_ = false; // A ROM folder picked in Dodaj grę: its count when the scan ends.
+    // Biblioteka → DRM-free → Gry dodane ręcznie (drm_free.cpp).
+    void customGamesSettingsRows();
+    // Dodaj grę → Wskaż folder (add_game.cpp): one game, a ROM folder, or a folder of games for DRM-free.
+    void customEditorPickFolder();
+    void addFolder(const std::filesystem::path& folder);
     std::shared_ptr<std::atomic_uint32_t> custom_token_ = std::make_shared<std::atomic_uint32_t>(0);
     custom_game_ui::State custom_editor_;
     // The editor's poster: the name it was asked for, when to ask (debounce; 0: nothing pending),

@@ -17,7 +17,10 @@
 // Linux, a Windows game (State::compat): also its WINEDLLOVERRIDES and its Wine/Proton launch options
 // as Steam writes them (VAR=value wrapper %command% arguments), with "Proton / Wine…" to its page.
 namespace custom_game_ui {
-enum class Item { name, file, file_browse, arguments, directory, directory_browse, dll, wine, wine_page, platform, identify, remove, cancel, save };
+// pick_file / pick_folder: a new game's two pills above the fields ("Wskaż plik", "Wskaż folder"); they
+// take the file row's "Wybierz…" place.
+enum class Item { name, file, file_browse, arguments, directory, directory_browse, dll, wine, wine_page, platform, identify, remove, cancel, save,
+                  pick_file, pick_folder };
 // platform_field: an emulated game's console (Left/Right or Enter pick another; never typed). With it the
 // file is the ROM, the options an emulator command of its own and the working directory has no use.
 enum Field { name_field, file_field, arguments_field, directory_field, dll_field, wine_field, platform_field, field_count };
@@ -52,6 +55,9 @@ struct State {
     std::wstring dll_opened, wine_opened;
     bool editing() const { return !id.empty(); }
     bool launchOptions() const { return target != Target::custom; }
+    bool pills() const { return target == Target::custom && !editing(); } // "Wskaż plik" / "Wskaż folder".
+    // The file row's "Wybierz…" (a game being edited; a new one has the pills).
+    bool browses(int index) const { return index != file_field || !pills(); }
     bool posterShown() const { return target == Target::custom; }
     const std::string& gameId() const { return editing() ? id : pending_id; }
     bool emulated() const { return target == Target::custom && !fields[platform_field].empty(); }
@@ -77,7 +83,7 @@ inline const wchar_t* emulatedLabel(const State& state, int index, const wchar_t
 }
 inline const wchar_t* emulatedHint(const State& state, int index) {
     if (!state.emulated()) return nullptr;
-    if (index == arguments_field) return tr(L"Puste: emulator z EmuDecka. Np. \"C:\\Emu\\pcsx2.exe\" %ROM%");
+    if (index == arguments_field) return tr(L"Puste: emulator systemu (Ustawienia → Emulacja). Np. \"C:\\Emu\\pcsx2.exe\" %ROM%");
     if (index == platform_field) return tr(L"Strzałki lub Enter: inna platforma");
     return nullptr;
 }
@@ -119,27 +125,36 @@ struct Layout {
     float width, height;
     unsigned hidden = 0; // State::hidden(): left-out fields; the others close up.
     bool poster = false; // State::posterShown(): the poster column on the right.
-    static constexpr float margin = 36, button_width = 176, gap = 16, poster_width = 200, poster_gap = 28;
-    static Layout of(const State& state, float width, float height) { return {width, height, state.hidden(), state.posterShown()}; }
+    bool pills = false;  // State::pills(): "Wskaż plik" / "Wskaż folder" above the fields.
+    static constexpr float margin = 36, button_width = 176, gap = 16, poster_width = 200, poster_gap = 28, pills_height = 76;
+    static Layout of(const State& state, float width, float height) { return {width, height, state.hidden(), state.posterShown(), state.pills()}; }
     bool shown(int index) const { return !(hidden & (1u << index)); }
+    bool browses(int index) const { return browseRow(index) && (index != file_field || !pills); }
     int slot(int index) const { // A field's row among the shown ones.
         int result = 0;
         for (int i = 0; i < index; ++i) result += shown(i);
         return result;
     }
+    float pillsSpace() const { return pills ? pills_height : 0.0f; }
     settings_ui::Rect panel() const {
-        const float w = std::min(poster ? 1100.0f : 920.0f, width - 96), half = 118 + slot(field_count) * 52.0f;
+        const float w = std::min(poster ? 1100.0f : 920.0f, width - 96), half = 118 + slot(field_count) * 52.0f + pillsSpace() * 0.5f;
         return {(width - w) * 0.5f, height * 0.5f - half, (width + w) * 0.5f, height * 0.5f + half};
     }
-    float rowTop(int index) const { return panel().top + 96 + slot(index) * 104.0f; }
+    float rowTop(int index) const { return panel().top + 96 + pillsSpace() + slot(index) * 104.0f; }
     float fieldsRight() const { return panel().right - margin - (poster ? poster_width + poster_gap : 0.0f); }
+    // The two pills side by side over the fields' width: 0 "Wskaż plik", 1 "Wskaż folder".
+    settings_ui::Rect pill(int which) const {
+        const auto p = panel(); const float top = p.top + 96, w = (fieldsRight() - p.left - margin - gap) * 0.5f;
+        const float left = p.left + margin + static_cast<float>(which) * (w + gap);
+        return {left, top, left + w, top + 56};
+    }
     settings_ui::Rect label(int index) const {
         const auto p = panel(); const float y = rowTop(index);
         return {p.left + margin, y, fieldsRight(), y + 28};
     }
     settings_ui::Rect input(int index) const {
         const auto p = panel(); const float y = rowTop(index) + 32;
-        return {p.left + margin, y, fieldsRight() - (browseRow(index) ? button_width + gap : 0.0f), y + 56};
+        return {p.left + margin, y, fieldsRight() - (browses(index) ? button_width + gap : 0.0f), y + 56};
     }
     settings_ui::Rect browse(int index) const {
         const float y = rowTop(index) + 32;
@@ -147,7 +162,7 @@ struct Layout {
     }
     // The poster (2:3) at the top of its column, "Zidentyfikuj grę" under it.
     settings_ui::Rect posterBox() const {
-        const auto p = panel(); const float top = rowTop(0) + 4;
+        const auto p = panel(); const float top = panel().top + 96 + 4;
         return {p.right - margin - poster_width, top, p.right - margin, top + poster_width * 1.5f};
     }
     settings_ui::Rect identify() const {
@@ -163,10 +178,14 @@ struct Layout {
         return {right - button_width, top, right, bottom};
     }
     std::optional<Item> hit(float x, float y, bool editing) const {
+        if (pills) {
+            if (pill(0).contains(x, y)) return Item::pick_file;
+            if (pill(1).contains(x, y)) return Item::pick_folder;
+        }
         for (const auto item : {Item::name, Item::file, Item::arguments, Item::directory, Item::dll, Item::wine, Item::platform})
             if (shown(row(item)) && input(row(item)).contains(x, y)) return item;
         for (const int index : {static_cast<int>(file_field), static_cast<int>(directory_field), static_cast<int>(wine_field)})
-            if (shown(index) && browse(index).contains(x, y)) return browseItem(index);
+            if (shown(index) && browses(index) && browse(index).contains(x, y)) return browseItem(index);
         if (poster && (identify().contains(x, y) || posterBox().contains(x, y))) return Item::identify;
         for (const auto item : {Item::remove, Item::cancel, Item::save})
             if ((item != Item::remove || editing) && button(item).contains(x, y)) return item;

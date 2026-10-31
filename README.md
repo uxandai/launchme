@@ -125,18 +125,25 @@ Settings → System → Help → **Open folder** (the version row) opens it.
   EA and Battle.net libraries imported from their store pages (no EA app needed: sign in on ea.com,
   paste the token page), Ubisoft from the signed-in client, DRM-free folders, and MultiMC / Prism Launcher
   instances as games. Every platform, Steam included, can be switched off.
-- **Emulated games from the ROM folder** (Settings → Library → *Emulated games*): an EmuDeck / ES-DE ROM folder
+- **Emulated games from the ROM folder** (Settings → Library → *Emulation*): an EmuDeck / ES-DE ROM folder
   read with launchme's own parsers (the systems, file types and emulators of EmuDeck's Steam ROM Manager parsers,
   built in: no Steam ROM Manager or Steam shortcuts needed). The folder is found by itself or chosen; playlists and
-  cue sheets hide their discs, Steam ROM Manager's exclusions and ES-DE's hidden games apply when they exist, and
-  games start through EmuDeck's launchers or the emulator itself (RetroArch with the system's core). The Emulation
-  row has tiles for about 30 consoles, from NES and Game Boy to PS Vita, Dreamcast, Xbox 360, Arcade and DOS.
-  *Steam shortcuts (Steam ROM Manager)* keeps the shortcut-based library instead.
-- **Games added by hand** (Settings → Library → *Manually added games* → **Add game**, the "+" tile, or a file or
-  folder dropped on the desktop window): a program, shortcut or script is a PC game; a disc image or ROM is an
-  emulated game with its console guessed and changeable (*Platform*), started by the console's parser or by an
-  *Emulator command* of its own (`%ROM%` for the file); a folder is a PS3 or Wii U game, one game's ROM folder or a PC
-  game's folder with its program found. A game can also have no file at all, for one to play next or played
+  cue sheets hide their discs, Steam ROM Manager's exclusions and ES-DE's hidden games apply when they exist. The
+  Emulation row has tiles for about 30 consoles, from NES and Game Boy to PS Vita, Dreamcast, Xbox 360, Arcade and
+  DOS. *Steam shortcuts (Steam ROM Manager)* keeps the shortcut-based library instead.
+- **Emulators visible and set by hand** (Settings → Library → *Emulation* → a system): each system shows the
+  emulator that starts it and how it was found: EmuDeck's launcher script (with the program it runs), EmuDeck's
+  Emulators folder, ES-DE's find rules, the Windows registry, the usual install folders, `PATH`, or on Linux a
+  flatpak or an AppImage, so EmuDeck is optional. Pick another emulator (PS1, PSP, DS, GameCube and Wii can also
+  run on RetroArch), point at its program by hand and replace its launch arguments (`%ROM%`, `%CORE%`); the
+  command a game starts with is shown below.
+- **Games added by hand** (Settings → Library → *DRM-free folders* → **Add game** → **Choose file** or **Choose
+  folder**, the "+" tile, or a file or folder dropped on the desktop window): a program, shortcut or script is a PC
+  game; a disc image or ROM is an emulated game with its console guessed and changeable (*Platform*), started by
+  the system's emulator or by an *Emulator command* of its own (`%ROM%` for the file); a folder is a PS3 or Wii U
+  game, one game's ROM folder or a PC game's folder with its program found; a whole ROM folder becomes the emulated
+  games' ROM folder, and a folder of many games joins the DRM-free folders. The list of these games is under
+  *DRM-free folders* → *Manually added games*. A game can also have no file at all, for one to play next or played
   elsewhere; such a game reads **Choose file** and opens its editor at the file. The editor shows the poster its name
   finds as you type, with **Identify game** under it; **Remove from library** (the game's menu, in red, after a
   question) removes the entry, never the game's files.
@@ -161,7 +168,7 @@ Settings → System → Help → **Open folder** (the version row) opens it.
   data → *Artwork sources*) and *Adjust crop* for covers and backgrounds; where SteamGridDB has nothing, the store's own
   art (Epic, Ubisoft Connect, GOG, EA, Battle.net, Amazon Games). Epic account games use Epic's box art as their poster.
   Games added by hand (and DRM-free folders) fall back to the same game's Steam store art; Settings → Library →
-  *Manually added games* → **Covers** fetches all their missing covers at once. Missing art downloads in the background, covers and
+  *DRM-free folders* → **Covers** fetches all their missing covers at once. Missing art downloads in the background, covers and
   posters first. To fetch it now: Settings → Media & data → *Download missing covers*, or in the desktop
   window select several games and pick *Download artwork again* or *Download missing covers…*.
 - **Details**: Steam metadata, playtime (also for non-Steam games, Epic's and Prism's counts, or your own value from

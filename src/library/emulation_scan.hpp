@@ -1,5 +1,6 @@
 #pragma once
 #include "../model/game.hpp"
+#include "emulators.hpp"
 
 #include <cstdint>
 #include <filesystem>
@@ -18,9 +19,11 @@
 //                    !(…), {a,b} and ${title}, as SRM's glob parser); .m3u playlists hide their discs and
 //                    .cue/.gdi sheets their tracks; SRM's userExceptions.json (exclude, newTitle) and
 //                    ES-DE's <hidden> apply when they exist;
-//   the command      EmuDeck's launcher (<tools>\launchers\<emulator>.ps1) run directly and hidden, else the
-//                    emulator itself (EmuDeck's Emulators folder, RetroArch with the system's core).
-// Pure file reading (no Win32): src/app/emulation_library.cpp runs it on a worker.
+//   the command      the system's emulator (chosen in Settings, else the first one found, see
+//                    src/library/emulators.hpp): EmuDeck's launcher (<tools>\launchers\<emulator>.ps1) run
+//                    directly and hidden, else the program itself (RetroArch with the system's core), with
+//                    the arguments typed in Settings or its own.
+// Pure file reading (the registry on Windows): src/app/emulation_library.cpp runs it on a worker.
 namespace emulation_scan {
 
 struct Environment {
@@ -28,7 +31,12 @@ struct Environment {
     std::filesystem::path home;      // %USERPROFILE% or $HOME.
     std::filesystem::path esde_root; // ES-DE's own folder (es_settings.xml, gamelists); empty: none.
     std::filesystem::path system_root; // %SystemRoot% (Windows PowerShell); empty elsewhere.
+    // Where emulators are looked for (emulators::Context): %LOCALAPPDATA%, the system drive, Steam,
+    // the program folders installers use and PATH.
+    std::filesystem::path local_app_data, system_drive, steam;
+    std::vector<std::filesystem::path> program_dirs, search_path;
     bool windows = true;
+    bool registry = true; // Windows' registry for emulators (tests: off).
 };
 Environment systemEnvironment();
 
@@ -44,26 +52,32 @@ struct Paths {
 std::filesystem::path detectRoms(const Environment& environment, std::wstring* origin = nullptr);
 Paths resolve(const Environment& environment, const std::filesystem::path& roms_override);
 
-// One emulator a system can start: EmuDeck's launcher script (<tools>\launchers\<launcher>.ps1) with
-// its arguments before the ROM, else the program itself in EmuDeck's Emulators\<folder>.
-struct Emulator {
-    std::wstring launcher, arguments;  // "pcsx2", "'-f' '-g'" (PowerShell words).
-    std::wstring folder, executable;   // "PCSX2-Qt", "pcsx2-qtx64.exe".
-    std::wstring direct;               // Its own arguments before the ROM when started directly.
-};
-// A system folder ("ps2") with its platform, the glob its games match and its emulators, best first.
+// A system folder ("ps2") with its platform, the glob its games match and its emulators (IDs of
+// emulators::catalog()), preferred first.
 struct Rule {
-    std::wstring system, platform, glob, core; // core: RetroArch's ("snes9x_libretro"); empty for standalone ones.
+    std::wstring system, platform, glob, core; // core: RetroArch's ("snes9x_libretro"); empty: no RetroArch.
     std::filesystem::path folder;              // <roms>\<system>
-    std::vector<Emulator> emulators;
+    std::vector<std::wstring> emulators;
+    bool present = false;                      // Its folder exists.
 };
 struct Setup {
     Environment environment;
     Paths paths;
     std::vector<Rule> rules; // Every built-in system (also those without a folder: a ROM added by hand).
+    emulators::Context context;
+    std::vector<emulators::Found> detected; // One per emulators::catalog() entry.
+    emulators::Choices choices;
     const Rule* forFile(const std::wstring& platform, const std::filesystem::path& file) const;
+    const Rule* forSystem(std::wstring_view system) const; // The first rule of that folder.
+    const emulators::Found* found(std::wstring_view id) const;
+    // The emulator chosen for the system (its ID even when it is not found), else empty.
+    std::wstring chosen(const Rule& rule) const;
+    // What starts the system's games: the chosen emulator when it is found, else the first one found.
+    const emulators::Found* emulatorFor(const Rule& rule) const;
+    std::wstring arguments(std::wstring_view id) const; // Typed in Settings; empty: its default.
 };
-Setup load(const Environment& environment, const std::filesystem::path& roms_override);
+emulators::Context emulatorContext(const Environment& environment, const Paths& paths);
+Setup load(const Environment& environment, const std::filesystem::path& roms_override, emulators::Choices choices = {});
 // An SRM glob tried on a path relative to the system folder ('/' separated, any case): the ${title}
 // it captures (the file stem when the glob has none), nullopt when it does not match.
 std::optional<std::wstring> match(std::wstring_view glob, std::wstring_view relative);
@@ -92,6 +106,8 @@ struct FolderGame {
 // A game kept as a folder (PS3: PS3_GAME\USRDIR\EBOOT.BIN, Wii U: code\*.rpx) or a folder holding
 // one game's ROM (or its .m3u/.cue); nullopt for anything else.
 std::optional<FolderGame> folderGame(const std::filesystem::path& folder);
+// A ROM folder (EmuDeck's or ES-DE's roms): two or more system folders with files, or ES-DE's systems.txt.
+bool romFolder(const std::filesystem::path& folder);
 std::wstring displayTitle(std::wstring_view raw); // "Legend of Zelda, The (Europe) [!]" -> "The Legend of Zelda".
 std::wstring romKey(const std::filesystem::path& rom); // Lower case, backslashes: compares ROM paths.
 uint32_t romAppId(const std::filesystem::path& rom);

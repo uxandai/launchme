@@ -158,6 +158,38 @@ bool parseLookSetting(AppSettings& settings, std::string_view key, std::string_v
     }
     return false;
 }
+// An emulator's or a system folder's ID: lower-case letters, digits, '-' and '_'.
+bool emulatorKey(std::string_view value) {
+    return !value.empty() && value.size() <= 32 && std::all_of(value.begin(), value.end(), [](char ch) {
+        return (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_' || ch == '-'; });
+}
+// 0.5.1: emulator.<id>.program / emulator.<id>.arguments and system_emulator.<system>.
+bool parseEmulatorSetting(AppSettings& settings, std::string_view key, std::string_view value) {
+    if (key.starts_with("system_emulator.")) {
+        const auto system = key.substr(16);
+        if (emulatorKey(system) && (value.empty() || emulatorKey(value))) {
+            if (value.empty()) settings.system_emulator.erase(std::string(system));
+            else settings.system_emulator[std::string(system)] = std::string(value);
+        }
+        return true;
+    }
+    if (!key.starts_with("emulator.")) return false;
+    const auto rest = key.substr(9);
+    const auto dot = rest.find('.');
+    if (dot == std::string_view::npos) return true;
+    const auto id = rest.substr(0, dot), field = rest.substr(dot + 1);
+    if (!emulatorKey(id)) return true;
+    const auto text = text_encoding::wideLenient(value);
+    if (field == "program") {
+        if (text.empty() || std::filesystem::path(text).is_absolute()) settings.emulator_overrides[std::string(id)].program = text;
+    } else if (field == "arguments" && text.size() <= 2000 && text.find_first_of(L"\r\n") == std::wstring::npos) {
+        settings.emulator_overrides[std::string(id)].arguments = text;
+    }
+    if (const auto found = settings.emulator_overrides.find(std::string(id));
+        found != settings.emulator_overrides.end() && found->second.program.empty() && found->second.arguments.empty())
+        settings.emulator_overrides.erase(found);
+    return true;
+}
 // 0.4.9: artwork sources, the wallpaper, home tiles, PSfive's details, the menu dialog, Metro's light theme.
 bool parseExtraSetting(AppSettings& settings, std::string_view key, std::string_view value) {
     const auto flag = [&](bool& target) { if (value == "0" || value == "1") target = value == "1"; return true; };
@@ -204,7 +236,7 @@ bool parseExtraSetting(AppSettings& settings, std::string_view key, std::string_
         if (std::filesystem::path(decoded).is_absolute()) settings.emulation_roms = decoded;
         return true;
     }
-    return false;
+    return parseEmulatorSetting(settings, key, value);
 }
 }
 
@@ -771,6 +803,13 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
     output << "metro_light=" << settings.metro_light << '\n';
     output << "emulation_source=" << (settings.emulation_source == AppSettings::EmulationSource::steam ? "steam" : "roms") << '\n';
     output << "emulation_roms=" << text_encoding::utf8Lenient(settings.emulation_roms.wstring()) << '\n';
+    for (const auto& [id, chosen] : settings.emulator_overrides) {
+        if (!emulatorKey(id) || (chosen.program.empty() && chosen.arguments.empty())) continue;
+        if (!chosen.program.empty()) output << "emulator." << id << ".program=" << text_encoding::utf8Lenient(chosen.program.wstring()) << '\n';
+        if (!chosen.arguments.empty()) output << "emulator." << id << ".arguments=" << text_encoding::utf8Lenient(chosen.arguments) << '\n';
+    }
+    for (const auto& [system, id] : settings.system_emulator)
+        if (emulatorKey(system) && emulatorKey(id)) output << "system_emulator." << system << '=' << id << '\n';
     output << "language=" << (settings.language == AppSettings::LanguageChoice::pl ? "pl" :
                               settings.language == AppSettings::LanguageChoice::en ? "en" :
                               settings.language == AppSettings::LanguageChoice::pt_br ? "pt-BR" :

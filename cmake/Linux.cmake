@@ -54,6 +54,7 @@ set(LAUNCHME_CORE_SOURCES
     src/library/collections.cpp
     src/library/drm_free_titles.cpp
     src/library/emulation_scan.cpp
+    src/library/emulators.cpp
     src/library/esde_gamelist.cpp
     src/library/game_index.cpp
     src/library/game_index_service.cpp
