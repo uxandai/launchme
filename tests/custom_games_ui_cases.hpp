@@ -52,19 +52,21 @@ int LauncherUiTest::customGames(HWND window) {
         });
         return row == app.settings_rows_.end() ? -1 : static_cast<int>(row - app.settings_rows_.begin());
     };
-    // Settings → Library lists one "Moje gry" total; its page holds "Dodaj grę" and the games.
+    // Settings → Library → DRM-free: "Dodaj grę" on top, one "Gry dodane ręcznie" total; its page holds the games.
     const auto settingsRow = [&](settings_ui::Id id, const std::string& key = {}) {
         app.openSettings();
         app.settings_state_.selectCategory(static_cast<int>(settings_ui::Category::library));
         app.buildSettingsRows();
+        app.openPlatformSettings(GameSource::drmfree);
         const int total = findRow(settings_ui::Id::custom_games);
         if (total < 0 || app.settings_rows_[total].control != settings_ui::Control::count ||
             app.settings_rows_[total].value != std::to_wstring(app.custom_games_.size()) ||
-            findRow(settings_ui::Id::custom_add) >= 0 || findRow(settings_ui::Id::custom_game) >= 0) return false;
+            findRow(settings_ui::Id::custom_add) != 0 || findRow(settings_ui::Id::custom_game) >= 0) return false;
         app.settings_state_.enter(static_cast<int>(app.settings_rows_.size()));
+        if (id == settings_ui::Id::custom_add) { app.settings_state_.selected[app.settings_state_.category] = 0; return true; }
         app.settings_state_.selected[app.settings_state_.category] = total;
         app.settingsActivate();
-        if (!app.settings_state_.at(settings_ui::Page::custom_games) || app.settings_state_.row() != 0 || findRow(settings_ui::Id::custom_add) != 0) return false;
+        if (!app.settings_state_.at(settings_ui::Page::custom_games) || app.settings_state_.row() != 0) return false;
         const int row = findRow(id, key);
         if (row < 0) return false;
         app.settings_state_.selected[app.settings_state_.category] = row;
@@ -76,19 +78,19 @@ int LauncherUiTest::customGames(HWND window) {
     // No store enabled and no user-added game: no "Platformy PC" shelf yet.
     if (category("pc-platforms") != app.categories_.end()) return 601;
 
-    // Settings → Library → "Dodaj grę" opens the panel at "Wybierz…" of the file.
+    // Settings → Library → DRM-free → "Dodaj grę" opens the panel at "Wskaż plik".
     if (!settingsRow(settings_ui::Id::custom_add)) return 602;
     app.settingsActivate();
     auto& editor = app.custom_editor_;
-    if (!app.customEditorOpen() || editor.editing() || editor.focus != Item::file_browse) return 603;
+    if (!app.customEditorOpen() || editor.editing() || editor.focus != Item::pick_file) return 603;
     // D-pad/arrows reach Save; saving an empty form shows the inline error at the name.
-    for (int i = 0; i < 3; ++i) app.customEditorKey(VK_DOWN, false);
+    for (int i = 0; i < 5; ++i) app.customEditorKey(VK_DOWN, false);
     if (editor.focus != Item::save) return 604;
     app.customEditorKey(VK_RETURN, false);
     if (!app.customEditorOpen() || editor.error.empty() || editor.focus != Item::name || !app.custom_games_.empty()) return 605;
     if (!capture(L"custom-game-editor-error.png")) return 643;
     // "Wybierz…": the injected picker stands in for IFileOpenDialog. Name and folder follow the file.
-    app.customEditorFocus(Item::file_browse);
+    app.customEditorFocus(Item::pick_file);
     app.customEditorKey(VK_RETURN, false);
     if (picks != std::vector<bool>{false} || editor.fields[ui::file_field] != exe.native() || editor.fields[ui::name_field] != L"Space Pirates" ||
         editor.fields[ui::directory_field] != root.native() || editor.focus != Item::save || !editor.error.empty()) return 606;
@@ -131,7 +133,7 @@ int LauncherUiTest::customGames(HWND window) {
     if (!app.settingsOpen() || app.settings_state_.at(settings_ui::Page::custom_games) || app.settings_state_.row() != findRow(settings_ui::Id::custom_games) ||
         app.settings_rows_[app.settings_state_.row()].value != L"1" || findRow(settings_ui::Id::custom_game, id) >= 0) return 645;
     // "Moje gry" tile after the store tiles in "Platformy PC"; it opens a store-like library.
-    app.back(); app.back();
+    app.back(); app.back(); app.back();
     if (app.settingsOpen()) return 617;
     const auto pcs = category("pc-platforms");
     if (pcs == app.categories_.end() || pcs->games.back().kind != GameKind::pc_platform ||
@@ -186,7 +188,7 @@ int LauncherUiTest::customGames(HWND window) {
     if (app.customEditorOpen() || app.custom_games_.size() != 1 || app.custom_games_[0].id != id ||
         app.custom_games_[0].name != L"Space Pirates II" || app.custom_games_[0].arguments != L"-dx12" ||
         app.art_.contains(key) || !app.library_state_.last_played.contains("local/" + key)) return 627;
-    app.back(); app.back(); app.back();
+    app.back(); app.back(); app.back(); app.back();
     if (app.settingsOpen()) return 646;
     app.openPcLibrary(GameSource::custom);
     // While the first start is still pending, Graj does not start a second copy.
@@ -275,7 +277,7 @@ int LauncherUiTest::customGames(HWND window) {
         listed(app.public_library_)) return 639;
     // The emptied page keeps "Dodaj grę"; Back leaves it, the Library page and Settings.
     if (!app.settings_state_.at(settings_ui::Page::custom_games) || app.settings_rows_.size() != 1 || app.settings_rows_[0].id != settings_ui::Id::custom_add) return 647;
-    app.back(); app.back(); app.back();
+    app.back(); app.back(); app.back(); app.back();
     if (app.settingsOpen()) return 640;
 
     // "Opcje uruchamiania…" of a Steam game: only its options (kept with the library state),

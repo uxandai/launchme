@@ -370,8 +370,6 @@ void Launcher::pluginSettingsRows() {
         for (const auto& p : plugins_.plugins) {
             Row enabled{Id::plugin_enabled, Control::platform, p.manifest.name.localized(), p.error.empty() ?
                 p.manifest.description.localized() : text_encoding::wideLenient(p.error), {}, p.enabled};
-            for (const auto& tag : p.manifest.tags) enabled.tags.push_back(tag == "widget" ? tr(L"widget") : tag == "screen" ? tr(L"ekran") :
-                tag == "integration" ? tr(L"integracja") : tag == "menu" ? tr(L"menu") : tag == "context" ? tr(L"kontekst") : tag == "details" ? tr(L"szczegóły") : tr(L"szuflada"));
             enabled.key = p.manifest.id; settings_rows_.push_back(std::move(enabled));
         }
         return;

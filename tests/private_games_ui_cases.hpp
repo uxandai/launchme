@@ -4,6 +4,7 @@
 
 int LauncherUiTest::privateGames(HWND window) {
     Launcher app;
+    app.settings_.menu_dialog = false; // Clicks land on the anchored menu's rows (the dialog has its own cases).
     app.hwnd_ = window; app.execute_ = fakeExecute;
     if (!app.renderer_.initialize(window)) return 2700;
     constexpr uint32_t shortcut_id = 0x80000101u;

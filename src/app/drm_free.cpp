@@ -283,6 +283,22 @@ void Launcher::drmSettingsRows() {
         return _wcsicmp(a->name.c_str(), b->name.c_str()) < 0;
     });
     if (settings_state_.at(Page::drm_games) && list.empty()) settings_state_.close(); // The last game went away.
+    if (settings_state_.at(Page::drm_roots)) {
+        // "Katalogi": adding one first, then each folder with its games and its removal (a second press confirms).
+        add({Id::drm_add_root, Control::action, tr(L"Dodaj katalog"), tr(L"Każdy podfolder to jedna gra."), tr(L"Dodaj")});
+        for (const auto& root : drm_catalog_.roots) {
+            size_t count = 0, missing = 0;
+            for (const auto& entry : drm_catalog_.games)
+                if (playable(entry) && drm_free::inside(entry.folder, root)) { ++count; missing += entry.missing; }
+            auto description = tr(L"Gry: ") + std::to_wstring(count);
+            if (count && missing == count) description += L" · " + std::wstring(tr(L"Katalog niedostępny"));
+            Row row{Id::drm_root, Control::action, root.wstring(), std::move(description)};
+            row.key = text_encoding::utf8(root.wstring());
+            row.value = drm_confirm_ == row.key ? tr(L"Potwierdź") : tr(L"Usuń");
+            add(std::move(row));
+        }
+        return;
+    }
     if (settings_state_.at(Page::drm_games)) {
         // "Znalezione gry": thin rows, one per game, each with its options.
         for (const auto* entry : list) {
@@ -327,17 +343,16 @@ void Launcher::drmSettingsRows() {
     add({Id::drm_scan, Control::action, tr(L"Skanowanie"), std::move(status), drm_scanning_ ? tr(L"Zatrzymaj") : tr(L"Skanuj teraz")});
     add({Id::drm_background, Control::toggle, tr(L"Skanowanie w tle"),
          tr(L"Po starcie i w bezczynności, z niskim priorytetem dysku. Nigdy podczas gry."), {}, settings_.drm_background});
-    add({Id::drm_add_root, Control::action, tr(L"Dodaj katalog"), tr(L"Każdy podfolder to jedna gra."), tr(L"Dodaj")});
-    for (const auto& root : drm_catalog_.roots) {
-        size_t count = 0, missing = 0;
-        for (const auto& entry : drm_catalog_.games)
-            if (playable(entry) && drm_free::inside(entry.folder, root)) { ++count; missing += entry.missing; }
-        auto description = tr(L"Gry: ") + std::to_wstring(count);
-        if (count && missing == count) description += L" · " + std::wstring(tr(L"Katalog niedostępny"));
-        Row row{Id::drm_root, Control::action, root.wstring(), std::move(description)};
-        row.key = text_encoding::utf8(root.wstring());
-        row.value = drm_confirm_ == row.key ? tr(L"Potwierdź") : tr(L"Usuń");
-        add(std::move(row));
+    {
+        // The scanned folders: one tile, the list (adding and removing them) is its own page.
+        std::wstring folders;
+        for (const auto& root : drm_catalog_.roots) {
+            if (folders.size() > 160) { folders += L" …"; break; }
+            const auto name = root.filename().wstring();
+            folders += (folders.empty() ? L"" : L" · ") + (name.empty() ? root.wstring() : name);
+        }
+        if (folders.empty()) folders = tr(L"Dodaj katalog, w którym każdy podfolder to jedna gra.");
+        add({Id::drm_roots, Control::count, tr(L"Katalogi"), std::move(folders), std::to_wstring(drm_catalog_.roots.size())});
     }
     {
         // The games added by hand as one total; the list is its own page (whether the folders are scanned or not).
@@ -438,6 +453,10 @@ bool Launcher::drmSettingsActivate(const Row& row) {
         return true;
     case Id::drm_games:
         openSettingsPage(Page::drm_games);
+        return true;
+    case Id::drm_roots:
+        drm_confirm_.clear();
+        openSettingsPage(Page::drm_roots);
         return true;
     case Id::drm_root: {
         if (drm_confirm_ != row.key) { drm_confirm_ = row.key; buildSettingsRows(); audio_.context(); return true; }

@@ -60,10 +60,10 @@ void Renderer::drawSettingsTiles(const settings_ui::Layout& layout, const settin
         const auto& tile = row.tiles[which];
         const auto t = layout.tile(index, scroll, row.control, which, count, focus);
         const bool lit = focused && which == focus;
-        // A card: the focused one lighter (accent-tinted while editing), without a focus outline.
-        fill(t, lit ? (state.editing ? uiAccent(0.16f) : gray(1, 0.14f)) : gray(1, 0.042f), 16);
-        outline(t, gray(1, 0.08f), 1.0f, 16);
         if (row.control == Control::sources) {
+            // A card: the focused one lighter (accent-tinted while editing), without a focus outline.
+            fill(t, lit ? (state.editing ? uiAccent(0.16f) : gray(1, 0.14f)) : gray(1, 0.042f), 16);
+            outline(t, gray(1, 0.08f), 1.0f, 16);
             // Left: the direction's icon in a disc; the caption over the default device; its volume below.
             const float cx = t.left + 60, cy = t.top + 66;
             brush(gray(1, 0.07f)); target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), 32, 32), solid_.Get());
@@ -105,12 +105,31 @@ void Renderer::drawSettingsTiles(const settings_ui::Layout& layout, const settin
     }
 }
 
-// One controller tile (Settings → Kontrolery and the Kontrolery screen): the picture (photo or drawn
-// family; a "+" for pairing), battery, name and status, then its action button. The tile's own
-// fill and outline are drawn by the caller; `lit` marks the focused tile's button.
+// One controller tile (Settings → Kontrolery and the Kontrolery screen): no fill, a border in the
+// pad's state (green connected, red not: a light travelling round it, brighter with the focus) and
+// a dot of that colour in the corner; the picture (photo or drawn family; a "+" for pairing), battery,
+// name and status, then its action button. `lit` marks the focused tile.
 void Renderer::drawPadTile(const settings_ui::Tile& tile, settings_ui::Rect t, bool lit) {
     using namespace settings_ui;
     const auto accent = uiAccent();
+    {
+        const auto green = D2D1::ColorF(0.30f, 0.82f, 0.42f), red = D2D1::ColorF(0.93f, 0.33f, 0.30f);
+        const auto state = tile.connected ? green : red;
+        Microsoft::WRL::ComPtr<ID2D1RoundedRectangleGeometry> shape;
+        if (tile.pair) {
+            brush(gray(1, lit ? 0.5f : 0.14f));
+            target_->DrawRoundedRectangle(D2D1::RoundedRect(box(t), 16, 16), solid_.Get(), lit ? 1.6f : 1.0f);
+        } else if (SUCCEEDED(factory_->CreateRoundedRectangleGeometry(D2D1::RoundedRect(box(t), 16, 16), shape.GetAddressOf()))) {
+            brush(D2D1::ColorF(state.r, state.g, state.b, lit ? 0.55f : 0.28f));
+            target_->DrawGeometry(shape.Get(), solid_.Get(), lit ? 1.6f : 1.0f);
+            drawOrbitOutline(shape.Get(), state, lit ? 1.0f : 0.55f, lit ? 3.0f : 2.2f);
+        }
+        if (!tile.pair) {
+            const float dx = t.left + 22, dy = t.top + 22;
+            brush(D2D1::ColorF(state.r, state.g, state.b, 0.25f)); target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(dx, dy), 9, 9), solid_.Get());
+            brush(state); target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(dx, dy), 5, 5), solid_.Get());
+        }
+    }
     // Larger tiles give the picture the extra height; the texts and the button keep their place below it.
     const float picture_bottom = t.top + std::max(106.0f, (t.bottom - t.top) - 130);
     const D2D1_RECT_F picture = D2D1::RectF(t.left + 18, t.top + 16, t.right - 18, picture_bottom);
@@ -123,13 +142,8 @@ void Renderer::drawPadTile(const settings_ui::Tile& tile, settings_ui::Rect t, b
         line(cx - arm, cy, cx + arm, cy, gray(0.92f), 2.6f);
         line(cx, cy - arm, cx, cy + arm, gray(0.92f), 2.6f);
     } else {
-        // Disconnected: the pad itself fades (a dark box over it would show the photo's frame).
-        Microsoft::WRL::ComPtr<ID2D1Layer> fade;
-        const bool faded = !tile.connected && SUCCEEDED(target_->CreateLayer(nullptr, fade.GetAddressOf()));
-        if (faded) target_->PushLayer(D2D1::LayerParameters(D2D1::InfiniteRect(), nullptr, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
-                                                            D2D1::IdentityMatrix(), 0.42f), fade.Get());
+        // Disconnected or not, the pad is shown as it is: the border and the dot tell its state.
         drawControllerPicture(tile.picture, picture);
-        if (faded) target_->PopLayer();
         if (tile.battery) {
             // Battery outline with its level, top-right over the picture.
             const float bx = t.right - 50, by = t.top + 16;
@@ -141,7 +155,7 @@ void Renderer::drawPadTile(const settings_ui::Tile& tile, settings_ui::Rect t, b
         }
     }
     const float text_left = t.left + 18, text_width = t.right - t.left - 36;
-    textLine(tile.title, text_left, picture_bottom + 22, text_width, menu_font_.Get(), gray(tile.connected || tile.pair ? 0.96f : 0.6f));
+    textLine(tile.title, text_left, picture_bottom + 22, text_width, menu_font_.Get(), gray(0.96f));
     const std::wstring status = tile.pair ? tile.value : tile.caption.empty() ? tile.value : tile.caption + L" · " + tile.value;
     if (!status.empty()) textLine(status, text_left, picture_bottom + 48, text_width, toast_sub_font_.Get(), gray(0.55f));
     if (!tile.action.empty()) {

@@ -2879,6 +2879,11 @@ constexpr Entry entries[] = {
     {L"Skanowanie: ", L"Scanning: "},
     {L"Ta gra należy do sklepu (Epic, Xbox) i jest w jego bibliotece.", L"This game belongs to a store (Epic, Xbox) and is in its library."},
     {L"W tym folderze nie ma gry ani ROM-ów.", L"This folder has no game and no ROMs."},
+    // 0.5.2: DRM-free's folders on a page of their own; the stores apart from the user's own library.
+    {L"Sklepy", L"Stores"},
+    {L"nie znaleziono", L"not found"},
+    {L"Katalogi", L"Folders"},
+    {L"Dodaj katalog, w którym każdy podfolder to jedna gra.", L"Add a folder in which each subfolder is one game."},
     // Entries of extras built only on this machine (local/i18n), when present.
 #if __has_include("strings_en_local.inc")
 #include "strings_en_local.inc"

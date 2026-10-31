@@ -42,11 +42,12 @@ int LauncherUiTest::fileBrowserAndColors(HWND window) {
 
     // Settings → Library → "Dodaj grę" → "Wybierz…": the picker opens in the last used folder.
     app.settings_.file_browser_folder = browse;
-    if (!selectRow(Category::library, Id::custom_games)) return 3101;
-    app.settingsActivate(); // The "Moje gry" page: "Dodaj grę" first.
-    if (!app.settings_state_.at(settings_ui::Page::custom_games) || app.settings_rows_.empty() || app.settings_rows_[app.settings_state_.row()].id != Id::custom_add) return 3101;
+    app.settings_state_.selectCategory(static_cast<int>(Category::library)); app.buildSettingsRows();
+    app.openPlatformSettings(GameSource::drmfree); // DRM-free's page: "Dodaj grę" first.
+    if (app.settings_rows_.empty() || app.settings_rows_[0].id != Id::custom_add) return 3101;
+    app.settings_state_.options = true; app.settings_state_.selected[app.settings_state_.category] = 0;
     app.settingsActivate();
-    if (!app.customEditorOpen() || app.custom_editor_.focus != custom_game_ui::Item::file_browse) return 3102;
+    if (!app.customEditorOpen() || app.custom_editor_.focus != custom_game_ui::Item::pick_file) return 3102;
     app.customEditorKey(VK_RETURN, false);
     auto& ui = app.file_browser_;
     if (!app.fileBrowserOpen() || ui.folder != browse || ui.folderMode() || ui.focus != Focus::list) return 3103;
@@ -73,7 +74,7 @@ int LauncherUiTest::fileBrowserAndColors(HWND window) {
         app.custom_editor_.fields[custom_game_ui::directory_field] != browse.native()) return 3110;
 
     // Again: the chosen file is highlighted. "Wszystkie pliki" and hidden files widen the list.
-    app.customEditorFocus(custom_game_ui::Item::file_browse);
+    app.customEditorFocus(custom_game_ui::Item::pick_file);
     app.customEditorKey(VK_RETURN, false);
     if (!app.fileBrowserOpen() || ui.current() == nullptr || ui.current()->name != L"Game 10.exe") return 3111;
     const auto buttons = ui.buttons();
@@ -103,7 +104,7 @@ int LauncherUiTest::fileBrowserAndColors(HWND window) {
 
     // Mouse: a click highlights, a double click opens a folder; Back cancels.
     app.openCustomEditor({});
-    app.customEditorFocus(custom_game_ui::Item::file_browse);
+    app.customEditorFocus(custom_game_ui::Item::pick_file);
     app.customEditorKey(VK_RETURN, false);
     if (!app.fileBrowserOpen() || ui.folder != browse) return 3119;
     {

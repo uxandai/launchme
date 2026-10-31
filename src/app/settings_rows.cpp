@@ -61,6 +61,7 @@ std::wstring Launcher::settingsPageTitle() const {
     case Page::game_shortcuts: return tr(L"Skróty: ") + shortcuts_game_.name;
     case Page::artwork_sources: return tr(L"Źródła grafik");
     case Page::emulation: return tr(L"Emulacja");
+    case Page::drm_roots: return tr(L"Katalogi");
     case Page::emulation_system: return tr(L"Emulacja: ") + emulationSystemTitle(text_encoding::wideLenient(frame->key));
     case Page::prefix: {
 #ifndef _WIN32

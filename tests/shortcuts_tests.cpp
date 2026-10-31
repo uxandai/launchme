@@ -107,7 +107,9 @@ int main(int argc, char** argv) {
     for (const auto& [executable, platform] : inferred)
         if (shortcutPlatform(executable, L"", L"", L"") != platform) { std::wcerr << L"Platform inference: " << executable << L'\n'; return 2; }
     // Tiles by maker, then by release.
-    const wchar_t* order[] = {L"GameCube", L"Wii", L"Wii / GameCube", L"Wii U", L"Switch", L"PS1", L"PS2", L"PS3", L"PS4", L"PS5", L"PSP", L"Amiga", L"Retro", L"PC"};
+    const wchar_t* order[] = {L"NES", L"Game Boy", L"SNES", L"N64", L"Game Boy Color", L"Game Boy Advance", L"GameCube", L"DS", L"Wii",
+        L"Wii / GameCube", L"3DS", L"Wii U", L"Switch", L"PS1", L"PS2", L"PS3", L"PS4", L"PS5", L"PSP", L"PS Vita", L"Master System",
+        L"Mega Drive", L"Saturn", L"Dreamcast", L"Xbox", L"Xbox 360", L"Amiga", L"Arcade", L"DOS", L"Retro", L"PC"};
     if (std::size(order) != emulation_platforms.size()) return 3;
     for (size_t i = 0; i < std::size(order); ++i) {
         const auto* platform = findEmulationPlatform(order[i]);
@@ -123,7 +125,7 @@ int main(int argc, char** argv) {
         {L"Wii / GameCube", L"Wii / GameCube"}, {L"Dolphin", L"Wii / GameCube"},
         {L"Sony PlayStation Portable", L"PSP"}, {L"Switch games", L"Switch"},
         {L"Amiga", L"Amiga"}, {L"Commodore Amiga - PUAE", L"Amiga"},
-        {L"Emulation", L""}, {L"Sony PlayStation Vita", L""}, {L"Microsoft Xbox 360", L""}, {L"  ", L""}};
+        {L"Emulation", L""}, {L"Sony PlayStation Vita", L"PS Vita"}, {L"Microsoft Xbox 360", L"Xbox 360"}, {L"Sega Dreamcast", L"Dreamcast"}, {L"  ", L""}};
     for (const auto& [name, platform] : named)
         if (collectionPlatform(name) != platform) { std::wcerr << L"Collection platform: " << name << L'\n'; return 5; }
     // Only SRM collections move shortcuts, the first one naming a platform wins, Steam games stay.

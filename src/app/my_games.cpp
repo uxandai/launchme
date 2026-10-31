@@ -635,6 +635,16 @@ void Launcher::customEditorSave() {
     closeCustomEditor();
     applyCustomGames();
     if (settingsOpen() && settings_state_.category == static_cast<int>(settings_ui::Category::library)) {
+        // Added from the DRM-free page: its list of games added by hand opens, from its tile.
+        if (settings_state_.platform() == GameSource::drmfree && !settings_state_.in(settings_ui::Page::custom_games) &&
+            !settings_state_.in(settings_ui::Page::drm_games) && !settings_state_.in(settings_ui::Page::drm_roots)) {
+            buildSettingsRows();
+            const auto tile = std::find_if(settings_rows_.begin(), settings_rows_.end(), [](const settings_ui::Row& item) { return item.id == settings_ui::Id::custom_games; });
+            if (tile != settings_rows_.end()) {
+                settings_state_.selected[settings_state_.category] = static_cast<int>(tile - settings_rows_.begin());
+                openSettingsPage(settings_ui::Page::custom_games);
+            }
+        }
         const auto row = std::find_if(settings_rows_.begin(), settings_rows_.end(), [&](const settings_ui::Row& item) {
             return item.id == settings_ui::Id::custom_game && item.key == entry.id;
         });

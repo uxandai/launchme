@@ -502,15 +502,15 @@ public:
         // Czcionka belongs to the "Wygląd" section of Interfejs, opened by the interface accent.
         const auto font_row = std::find_if(app.settings_rows_.begin(), app.settings_rows_.end(),
                                            [](const auto& row) { return row.id == settings_ui::Id::font; });
-        if (font_row == app.settings_rows_.end() || font_row == app.settings_rows_.begin() || app.settings_rows_.front().section.empty()) return 6;
+        if (font_row == app.settings_rows_.end() || font_row == app.settings_rows_.begin() || app.settings_rows_.front().section.empty()) return 6004;
         {
             auto heading = font_row;
             while (heading != app.settings_rows_.begin() && heading->section.empty()) --heading;
-            if (heading->id != settings_ui::Id::ui_accent || heading->section != tr(L"Wygląd")) return 6;
+            if ((heading->id != settings_ui::Id::ui_accent && heading->id != settings_ui::Id::wallpaper_pick) || heading->section != tr(L"Wygląd")) return 6001;
         }
         app.settings_state_.selected[app.settings_state_.category] = static_cast<int>(font_row - app.settings_rows_.begin());
         app.ensureSettingVisible();
-        if (!capture(L"settings-native-sections.png")) return 6;
+        if (!capture(L"settings-native-sections.png")) return 6002;
         app.settingsActivate(); // Open font picker.
         if (!capture(L"settings-native-font.png")) return 91;
         app.settingsMove(3);
@@ -520,7 +520,7 @@ public:
         app.settingsMove(3);
         app.settingsActivate();
         app.saveSettings();
-        if (loadAppSettings().font_family != L"Arial") return 6;
+        if (loadAppSettings().font_family != L"Arial") return 6003;
         // Biblioteka → Kolekcje: the collections' own page.
         app.settings_state_.selectCategory(static_cast<int>(settings_ui::Category::library));
         app.buildSettingsRows();
@@ -838,9 +838,9 @@ public:
         app.settings_state_.selectCategory(static_cast<int>(settings_ui::Category::library));
         app.settings_state_.selected[app.settings_state_.category] = 0; // Biblioteka remembered its Kolekcje row.
         app.buildSettingsRows();
-        // Platforms: Steam, DRM-free, then the stores by name (Launcher::platformOrder).
+        // Platforms: DRM-free, Emulacja's tile, Steam, then the stores by name (Launcher::platformOrder, the tile after its first).
         const auto order = app.platformOrder();
-        const auto at = [&](GameSource source) { return static_cast<int>(std::find(order.begin(), order.end(), source) - order.begin()); };
+        const auto at = [&](GameSource source) { return static_cast<int>(std::find(order.begin(), order.end(), source) - order.begin()) + (source == GameSource::drmfree ? 0 : 1); };
         app.settingsActivate(); app.settingsMove(at(GameSource::gog)); app.settingsActivate(); // Enable GOG.
         app.settingsMove(at(GameSource::epic) - at(GameSource::gog)); app.settingsActivate(); // Enable Epic.
         if (app.categories_[1].title != L"Platformy PC" || app.categories_[2].title != L"Emulacja" || app.categories_[1].games.size() != 3) return 41;

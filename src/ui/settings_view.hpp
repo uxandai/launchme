@@ -122,7 +122,9 @@ enum class Id { font, home_layout, ui_accent, accent, uninstalled, emulation, co
                    // the other systems' fold; a system's page: its emulator, how it was found, the program
                    // chosen by hand and its reset, the launch arguments and the command they make.
                    emulation_system, emulation_more, emulation_emulator, emulation_detected, emulation_program,
-                   emulation_program_reset, emulation_arguments, emulation_preview };
+                   emulation_program_reset, emulation_arguments, emulation_preview,
+                   // DRM-free → Katalogi: the page of the scanned folders.
+                   drm_roots };
 inline bool hasOptionsButton(Id id) { return id == Id::plugin_enabled || id == Id::pc_platform; }
 // layout: drawn preview tiles in the row (one per home layout); Row::choice is the active one.
 // count: Row::value as a large number with a chevron; activating opens a sub-list.
@@ -147,7 +149,8 @@ enum class Page {
     game_shortcuts, // One game's shortcuts outside Launchme (key: its game key); Tryb TV's way to them.
     artwork_sources, // Media i dane → Źródła grafik: the galleries of "Zmień grafikę", each on or off.
     // Biblioteka → Emulacja: the ROM folder, the emulators and the console row; one system (key: its folder).
-    emulation, emulation_system
+    emulation, emulation_system,
+    drm_roots // DRM-free → Katalogi: adding a folder and every folder with its removal.
 };
 // A row drawn as tiles, with State::tile picking one of them.
 inline bool tiled(Control control) { return control == Control::sources || control == Control::pads; }
@@ -332,6 +335,9 @@ struct Row {
     bool picker() const { return control == Control::choice || control == Control::sources; }
 };
 
+// Biblioteka → Emulacja's tile among the platforms: their icon column and a cog (Opcje) in place of a chevron.
+inline bool optionsTile(const Row& row) { return row.control == Control::page && row.id == Id::page && row.page == Page::emulation; }
+
 // A row's identity: rows of one kind (DRM-free folders, collections, plugin settings, page tiles)
 // are told apart by their key, source and plugin setting.
 struct RowRef {
@@ -426,8 +432,8 @@ struct State {
     }
     void move(int amount, int rows) {
         if (options) { selected[category] += amount; clamp(rows); return; }
-        if (back_focused) { if (amount < 0) back_focused = false; return; } // Up returns to the last category.
-        if (amount > 0 && category == static_cast<int>(categories.size()) - 1) { back_focused = true; return; }
+        if (back_focused) { if (amount > 0) back_focused = false; return; } // Down returns to the first category.
+        if (amount < 0 && category == 0) { back_focused = true; return; }  // Up from the first one: Back at the top.
         selectCategory(category + amount);
     }
     void enter(int count) { if (count > 0) { options = true; back_focused = false; subcontrol = 0; clamp(count); } }
@@ -562,7 +568,9 @@ struct Layout {
         const float step = categoryStep(), pill = std::min(64.0f, step - 8);
         return {56, rail_top + index * step, railRight() - 22, rail_top + pill + index * step};
     }
-    Rect backButton() const { return {56, height - 110, railRight() - 22, height - 62}; }
+    // Back: a glass dot level with the heading (the rail's pill glides up onto it); backBar is the line at the bottom the file browser's buttons use.
+    Rect backButton() const { return {56, 86, 92, 122}; }
+    Rect backBar() const { return {56, height - 110, railRight() - 22, height - 62}; }
     Rect saveStatus() const { return {contentRight() - 340, height - 100, contentRight(), height - 58}; }
     Rect row(int index, float scroll) const {
         const float y = listTop() + rowOffset(index) - scroll;

@@ -65,7 +65,9 @@ void Launcher::pcSettingsRows() {
             std::wstring summary = tr(L"Zainstalowane: ") + std::to_wstring(steam_installed);
             if (aurelia_active_) summary += L" · Aurelia";
             Row steam{Id::pc_platform, Control::platform, L"Steam", std::move(summary), tr(L"Opcje"), settings_.steam_enabled};
-            steam.source = GameSource::steam; settings_rows_.push_back(std::move(steam));
+            steam.source = GameSource::steam;
+            steam.section = tr(L"Sklepy"); // A gap after the user's own library (DRM-free, Emulacja).
+            settings_rows_.push_back(std::move(steam));
         }
         for (const auto source : platformOrder()) {
             if (source == GameSource::steam || source == GameSource::drmfree) continue;

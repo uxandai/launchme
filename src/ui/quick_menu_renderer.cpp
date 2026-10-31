@@ -228,11 +228,23 @@ void Renderer::drawQuickGlyph(quick_menu::Action action, float x, float cy, D2D1
             line(x + dx + 8, cy - 6, x + dx + 19, cy + 6, ink, 2.3f);
             line(x + dx + 8, cy + 6, x + dx + 19, cy - 6, ink, 2.3f);
         } else {
+            // Sound waves as round arcs around the speaker's mouth.
+            if (!tarot_stroke_)
+                factory_->CreateStrokeStyle(D2D1::StrokeStyleProperties(D2D1_CAP_STYLE_ROUND, D2D1_CAP_STYLE_ROUND, D2D1_CAP_STYLE_ROUND,
+                                                                        D2D1_LINE_JOIN_ROUND), nullptr, 0, tarot_stroke_.GetAddressOf());
             const int waves = level < 0 ? 1 : level < 0.34f ? 1 : level < 0.67f ? 2 : 3;
+            const float centre = x + dx + 1;
             for (int wave = 0; wave < waves; ++wave) {
-                const float left = x + dx + 8 + wave * 6.0f, reach = 4 + wave * 2.0f, half = 7 + wave * 4.0f;
-                line(left, cy - half, left + reach, cy, ink, 2.3f);
-                line(left + reach, cy, left, cy + half, ink, 2.3f);
+                const float radius = 9.0f + wave * 6.0f, half = 0.82f;
+                ComPtr<ID2D1PathGeometry> path;
+                ComPtr<ID2D1GeometrySink> sink;
+                if (FAILED(factory_->CreatePathGeometry(path.GetAddressOf())) || FAILED(path->Open(sink.GetAddressOf()))) break;
+                sink->BeginFigure(D2D1::Point2F(centre + std::cos(-half) * radius, cy + std::sin(-half) * radius), D2D1_FIGURE_BEGIN_HOLLOW);
+                sink->AddArc(D2D1::ArcSegment(D2D1::Point2F(centre + std::cos(half) * radius, cy + std::sin(half) * radius), D2D1::SizeF(radius, radius), 0,
+                                              D2D1_SWEEP_DIRECTION_CLOCKWISE, D2D1_ARC_SIZE_SMALL));
+                sink->EndFigure(D2D1_FIGURE_END_OPEN);
+                if (FAILED(sink->Close())) break;
+                target_->DrawGeometry(path.Get(), solid_.Get(), 2.3f, tarot_stroke_.Get());
             }
         }
     } else if (action == quick_menu::Action::settings) {

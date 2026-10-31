@@ -38,35 +38,44 @@ int LauncherUiTest::drmFree(HWND window) {
     auto steam = std::make_unique<LibraryMessage>(); steam->account = 1; steam->games = {Game{620, L"Portal 2"}};
     app.onLibrary(std::move(steam));
 
-    // The overview starts with the DRM-free folders, above the six stores.
+    // The overview starts with the DRM-free folders, then Emulacja's tile, Steam and the stores by name.
     app.openSettings(); app.settings_state_.selectCategory(static_cast<int>(Category::library));
     app.pc_scanning_ = false; app.buildSettingsRows();
-    // Steam first, the DRM-free folders second, then the stores by name.
-    if (app.settings_rows_.size() <= pc_sources.size() + 2 || app.settings_rows_[0].source != GameSource::steam || app.settings_rows_[1].id != Id::pc_platform ||
-        app.settings_rows_[1].source != GameSource::drmfree || app.settings_rows_[1].title != L"Katalog DRM-free" ||
-        app.settings_rows_[1].checked || app.settings_rows_[2].source != app.platformOrder()[2]) return 2101;
+    const auto rowOf = [&](Id id) -> const Row* {
+        const auto row = std::find_if(app.settings_rows_.begin(), app.settings_rows_.end(), [&](const Row& r) { return r.id == id; });
+        return row == app.settings_rows_.end() ? nullptr : &*row;
+    };
+    if (app.settings_rows_.size() <= pc_sources.size() + 3 || app.settings_rows_[0].id != Id::pc_platform ||
+        app.settings_rows_[0].source != GameSource::drmfree || app.settings_rows_[0].title != L"Katalog DRM-free" || app.settings_rows_[0].checked ||
+        !optionsTile(app.settings_rows_[1]) || app.settings_rows_[2].source != GameSource::steam || app.settings_rows_[3].source != app.platformOrder()[2]) return 2101;
     if (!capture(L"drm-free-overview.png")) return 2102;
     const auto view = app.renderer_.viewport();
     const auto layout = Layout::of(view.width, view.height, app.settings_state_, app.settings_rows_);
-    const auto cog = layout.pluginCog(1, 0);
+    const auto cog = layout.pluginCog(0, 0);
     app.settingsClick((cog.left + cog.right) * 0.5f, (cog.top + cog.bottom) * 0.5f);
-    if (app.settings_state_.platform() != GameSource::drmfree || app.settings_rows_.size() != 3 || app.settings_rows_[0].id != Id::drm_scan ||
-        app.settings_rows_[1].id != Id::drm_background || !app.settings_rows_[1].checked || app.settings_rows_[2].id != Id::drm_add_root) return 2103;
+    // Its page: Dodaj grę, the scan and its background switch, the folders' tile and the games added by hand.
+    if (app.settings_state_.platform() != GameSource::drmfree || app.settings_rows_.size() != 5 || app.settings_rows_[0].id != Id::custom_add ||
+        app.settings_rows_[1].id != Id::drm_scan || app.settings_rows_[2].id != Id::drm_background || !app.settings_rows_[2].checked ||
+        app.settings_rows_[3].id != Id::drm_roots || app.settings_rows_[4].id != Id::custom_games) return 2103;
     for (const auto& row : app.settings_rows_) if (row.source != GameSource::drmfree) return 2104;
 
-    // "Dodaj katalog": the folder is saved, the source turns on and a full scan starts.
-    if (!select(Id::drm_add_root)) return 2105;
+    // "Katalogi" → "Dodaj katalog": the folder is saved, the source turns on and a full scan starts.
+    if (!select(Id::drm_roots)) return 2105;
+    app.settingsActivate();
+    if (!app.settings_state_.at(Page::drm_roots) || app.settings_rows_.size() != 1 || !select(Id::drm_add_root)) return 2105;
     app.settingsActivate();
     if (app.drm_catalog_.roots != std::vector<std::filesystem::path>{root} || !app.settings_.enabled_pc_sources.contains("drmfree") ||
-        !app.drm_scanning_ || app.settings_rows_.size() != 4 || app.settings_rows_[3].id != Id::drm_root || app.settings_rows_[3].title != root.native() ||
-        app.settings_rows_[0].value != L"Zatrzymaj") return 2106;
-    // The same folder, or one inside it, is refused.
+        !app.drm_scanning_ || app.settings_rows_.size() != 2 || app.settings_rows_[1].id != Id::drm_root || app.settings_rows_[1].title != root.native()) return 2106;
+    if (!capture(L"drm-free-folders.png")) return 2106;
+    app.back();
+    if (app.settings_state_.at(Page::drm_roots) || !rowOf(Id::drm_scan) || rowOf(Id::drm_scan)->value != L"Zatrzymaj" ||
+        rowOf(Id::drm_roots)->value != L"1") return 2106;    // The same folder, or one inside it, is refused.
     app.pick_games_folder_ = [&](HWND) { return root / L"Indie"; };
     app.drmAddRoot();
     if (app.drm_catalog_.roots.size() != 1 || app.notifications_.empty()) return 2107;
     app.notifications_.clear();
     deliver(DrmFreeMessage::Kind::progress, {}, {3, 7});
-    if (app.settings_rows_[0].description.find(L"3 / 7") == std::wstring::npos) return 2108;
+    if (rowOf(Id::drm_scan)->description.find(L"3 / 7") == std::wstring::npos) return 2108;
 
     // The scanned catalog: two games, saved and on the shelves.
     const auto entry = [&](const wchar_t* folder_name, const wchar_t* exe, const wchar_t* name) {
@@ -82,7 +91,7 @@ int LauncherUiTest::drmFree(HWND window) {
     if (app.drm_catalog_.games.size() != 2 || app.drm_library_.size() != 2 || app.notifications_.empty() ||
         drm_free::load(userConfigDirectory() / L"drm-free.json").catalog != app.drm_catalog_) return 2109;
     deliver(DrmFreeMessage::Kind::finished);
-    if (app.drm_scanning_ || app.settings_rows_[0].value != L"Skanuj teraz") return 2110;
+    if (app.drm_scanning_ || rowOf(Id::drm_scan)->value != L"Skanuj teraz") return 2110;
     // A message of an earlier scan never replaces the catalog of a newer one.
     app.startDrmScan(true);
     auto late = std::make_unique<DrmFreeMessage>(); late->generation = stale_generation; late->kind = DrmFreeMessage::Kind::scanned;
@@ -91,8 +100,8 @@ int LauncherUiTest::drmFree(HWND window) {
     deliver(DrmFreeMessage::Kind::finished);
     const auto celeste_id = app.drm_catalog_.games[0].id, hollow_id = app.drm_catalog_.games[1].id;
     // The page shows one "Znalezione gry" row with the total, not the games themselves.
-    if (app.settings_rows_.size() != 5 || app.settings_rows_[4].id != Id::drm_games || app.settings_rows_[4].control != Control::count ||
-        app.settings_rows_[4].value != L"2" || app.settings_rows_[4].title != L"Znalezione gry") return 2112;
+    if (app.settings_rows_.size() != 6 || app.settings_rows_[5].id != Id::drm_games || app.settings_rows_[5].control != Control::count ||
+        app.settings_rows_[5].value != L"2" || app.settings_rows_[5].title != L"Znalezione gry") return 2112;
     if (!capture(L"drm-free-page.png")) return 2113;
     const auto* shelf = pcs();
     if (!shelf || std::none_of(shelf->games.begin(), shelf->games.end(), [](const Game& tile) { return tile.source == GameSource::drmfree; }) ||
@@ -298,9 +307,9 @@ int LauncherUiTest::drmFree(HWND window) {
         // Enter opens the crop editor (on Tło: the background's).
         app.openArtworkBrowser(celeste_game);
         art.category = artwork_ui::category(ArtworkKind::logo);
-        app.artworkMove(1, 0); app.artworkMove(1, 0); // The field; nothing to crop on a logo.
-        if (!art.search_focus || art.crop_focus) return 2179;
-        app.artworkMove(-1, 0);
+        app.artworkMove(1, 0); app.artworkMove(1, 0); // The field, then past it (nothing to crop on a logo): "Źródło" when it has sources.
+        if (art.crop_focus || (!art.search_focus && !art.provider_focus)) return 2179;
+        app.closeArtworkBrowser(); app.openArtworkBrowser(celeste_game);
         art.category = artwork_ui::category(ArtworkKind::hero);
         app.artworkMove(1, 0); app.artworkMove(1, 0);
         if (!art.crop_focus || art.search_focus || art.railFocus()) return 2180;
@@ -365,15 +374,17 @@ int LauncherUiTest::drmFree(HWND window) {
 
     // Removing the folder takes two presses and empties the library.
     app.openSettings(); app.openPlatformSettings(GameSource::drmfree);
+    if (!select(Id::drm_roots)) return 2127;
+    app.settingsActivate();
     if (!select(Id::drm_root)) return 2127;
     app.settingsActivate();
     if (!app.drm_catalog_.roots.size() || app.settings_rows_[app.settings_state_.row()].value != L"Potwierdź") return 2128;
     app.settingsActivate();
-    if (!app.drm_catalog_.roots.empty() || !app.drm_catalog_.games.empty() || !app.drm_library_.empty() || app.settings_rows_.size() != 3) return 2129;
+    if (!app.drm_catalog_.roots.empty() || !app.drm_catalog_.games.empty() || !app.drm_library_.empty() || app.settings_rows_.size() != 1) return 2129;
     const auto* emptied = pcs();
     if (emptied && std::any_of(emptied->games.begin(), emptied->games.end(), [](const Game& tile) { return tile.source == GameSource::drmfree; })) return 2130;
-    app.back();
-    if (app.settings_state_.platform() || app.settings_state_.row() != 1) return 2131; // Its row, after Steam's.
+    app.back(); app.back();
+    if (app.settings_state_.platform() || app.settings_state_.row() != 0) return 2131; // Its row, the first.
     // Media i dane → "ScreenScraper" opens its own page of API settings; Back returns to that row.
     app.settings_state_.selectCategory(static_cast<int>(settings_ui::Category::media)); app.buildSettingsRows();
     // ScreenScraper is one level further, in "Klucze usług" (the services first on the page).

@@ -440,6 +440,18 @@ int main() {
             std::abs(restored.background_grid - 0.35f) > 0.001f || restored.background_grid_style != AppSettings::GridStyle::mesh ||
             !parseAppSettings("file_browser_folder=relative\n").file_browser_folder.empty() || !saveAppSettings(config, file)) return 56;
     }
+    {
+        // Emulacja: an emulator's program and arguments by hand, a system's emulator; odd IDs and relative paths are dropped.
+        AppSettings emulation;
+        emulation.emulator_overrides["pcsx2"] = {L"C:\\Emu\\PCSX2 ą\\pcsx2-qt.exe", L"-batch %ROM%"};
+        emulation.emulator_overrides["retroarch"] = {{}, L"-L %CORE%"};
+        emulation.system_emulator["switch"] = "ryujinx";
+        if (!saveAppSettings(emulation, file)) return 57;
+        const auto restored = loadAppSettings(file);
+        if (restored.emulator_overrides != emulation.emulator_overrides || restored.system_emulator != emulation.system_emulator) return 58;
+        const auto odd = parseAppSettings("emulator.Bad Id.program=C:\\x.exe\nemulator.cemu.program=relative.exe\nsystem_emulator.ps2=PCSX2!\n");
+        if (!odd.emulator_overrides.empty() || !odd.system_emulator.empty() || !saveAppSettings(config, file)) return 59;
+    }
     // Deny replacement while the old file is open: the failed save must preserve it.
     const auto locked = CreateFileW(file.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (locked == INVALID_HANDLE_VALUE) return 5;

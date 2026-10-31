@@ -325,8 +325,17 @@ void Renderer::drawDesktopSettings() {
             break;
         }
         case Control::page: {
-            // A page of its own: its summary, then a chevron.
             const auto a = L.action(i, s);
+            if (settings_ui::optionsTile(item)) {
+                // Emulacja among the platforms: its summary, then the platforms' cog.
+                const auto c = L.cog(i, s);
+                if (hover_row) desktopFill(c, 8, gray(1, 0.08f));
+                desktopStroke(c, 8, gray(1, 0.1f));
+                desktopGlyph(glyph::settings, (c.left + c.right) * 0.5f, middle(c), 14, gray(0.85f));
+                textLine(item.value, a.left - 120, cy, c.left - 12 - (a.left - 120), desktop_font_.Get(), gray(0.78f), DWRITE_TEXT_ALIGNMENT_TRAILING);
+                break;
+            }
+            // A page of its own: its summary, then a chevron.
             desktopGlyph(glyph::chevron_right, a.right - 8, cy, 10, hover_row ? palette::text() : gray(0.6f));
             textLine(item.value, a.left - 60, cy, a.right - a.left + 60 - 24, desktop_font_.Get(), gray(0.78f), DWRITE_TEXT_ALIGNMENT_TRAILING);
             break;

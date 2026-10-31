@@ -27,17 +27,16 @@ int LauncherUiTest::focusMotion(HWND window) {
     const auto view = app.renderer_.viewport();
     const int last_category = static_cast<int>(settings_ui::categories.size()) - 1;
 
-    // Settings: Down past the last category focuses Back, Up returns, Enter/A leaves Settings.
+    // Settings: Up past the first category focuses Back (a dot by the heading), Down returns, Enter/A leaves Settings.
     app.openSettings();
-    for (int i = 0; i < last_category + 3; ++i) app.changeCategory(1);
-    if (!app.settings_state_.backFocused() || app.settings_state_.category != last_category) return 1601;
+    for (int i = 0; i < last_category + 3; ++i) app.changeCategory(-1);
+    if (!app.settings_state_.backFocused() || app.settings_state_.category != 0) return 1601;
     settle();
-    const auto back = settings_ui::Layout::of(view.width, view.height, last_category).backButton();
+    const auto back = settings_ui::Layout::of(view.width, view.height, 0).backButton();
     if (std::abs(app.settings_motion_.pill_top.value - back.top) > 0.5f) return 1602; // The pill sits on Back.
     if (!capture(L"settings-back-focus.png")) return 1603;
-    app.changeCategory(-1);
-    if (app.settings_state_.backFocused() || app.settings_state_.category != last_category) return 1604;
-    app.changeCategory(1); app.settingsAdjust(1); // Right on Back does not enter the rows.
+    app.changeCategory(1);
+    if (app.settings_state_.backFocused() || app.settings_state_.category != 0) return 1604;    app.changeCategory(-1); app.settingsAdjust(1); // Right on Back does not enter the rows.
     if (!app.settings_state_.backFocused()) return 1605;
     app.settingsActivate();
     if (app.settingsOpen()) return 1606;

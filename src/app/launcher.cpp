@@ -881,6 +881,11 @@ void Launcher::tick() {
     tickWallpaper(needs_paint); // A video wallpaper's frames while it is seen (src/app/wallpaper.cpp).
     tickPsfiveDetails(dt, needs_paint); // PSfive's details sliding in under the row (src/app/psfive_details.cpp).
     if (renderer_.marqueeActive() && GetForegroundWindow() == hwnd_) needs_paint = true; // A long focused name glides (fadingLine).
+    // Controller tiles (Kontrolery, Ustawienia → Kontrolery): their state's light travels round the border.
+    if (GetForegroundWindow() == hwnd_ && !IsIconic(hwnd_) &&
+        ((screen_ == ScreenMode::devices && device_state_.panel == devices::Panel::controllers && device_state_.gallery()) ||
+         (settingsOpen() && settings_state_.category == static_cast<int>(settings_ui::Category::controllers) && !settings_state_.subpage())))
+        needs_paint = true;
     if (GetForegroundWindow() == hwnd_) watchEsde(); // Every 20 s: did ES-DE scrape meanwhile?
     if (profiler_.enabled()) profiler_.tick(std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - now).count(),
         std::chrono::duration<double, std::milli>(input_finished - input_started).count(),

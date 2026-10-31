@@ -4,6 +4,7 @@
 #include "../src/library/emulation_scan.hpp"
 #include "../src/platform/text_encoding.hpp"
 
+#include <fstream>
 #include <iostream>
 #include <string_view>
 
@@ -45,6 +46,55 @@ int main(int argc, char** argv) {
     const auto typed = commandAction(L"\"C:\\Emu\\pcsx2.exe\" -fullscreen %ROM%", L"D:\\Games\\a b.iso");
     if (typed.target != L"C:\\Emu\\pcsx2.exe" || typed.arguments != L"-fullscreen \"D:\\Games\\a b.iso\"") return 30;
     if (commandAction(L"\"C:\\Emu\\x.exe\"", L"D:\\r.bin").arguments != L"\"D:\\r.bin\"") return 31;
+    // Emulators found and set by hand (src/library/emulators.hpp), in a fixture folder only.
+    {
+        const auto root = std::filesystem::temp_directory_path() / L"launchme-emulators-fixture";
+        std::error_code error;
+        std::filesystem::remove_all(root, error);
+        const auto write = [](const std::filesystem::path& file, const std::string& text) {
+            std::filesystem::create_directories(file.parent_path());
+            std::ofstream(file, std::ios::binary) << text;
+        };
+        const auto pcsx2 = root / L"Programs" / L"PCSX2" / L"pcsx2-qtx64.exe";
+        write(pcsx2, "exe");
+        write(root / L"Emulation" / L"tools" / L"launchers" / L"pcsx2.ps1",
+              "$emulatorFile = \"" + text_encoding::utf8(pcsx2.generic_wstring()) + "\"\r\nemulatorInit\r\n");
+        write(root / L"Emulation" / L"roms" / L"ps2" / L"Game.iso", "iso");
+        write(root / L"Program Files" / L"Dolphin" / L"Dolphin.exe", "exe");
+        const auto manual = root / L"Elsewhere" / L"duck.exe";
+        write(manual, "exe");
+        Environment environment;
+        environment.windows = true; environment.registry = false;
+        environment.home = root; environment.app_data = root / L"AppData";
+        environment.system_root = L"C:\\Windows";
+        environment.program_dirs = {root / L"Program Files"};
+        const auto roms = root / L"Emulation" / L"roms";
+        auto setup = load(environment, roms);
+        const auto* script = setup.found(L"pcsx2");
+        if (!script || script->via != emulators::Via::emudeck_script || script->target != pcsx2.lexically_normal()) return 40;
+        const auto* dolphin = setup.found(L"dolphin");
+        if (!dolphin || dolphin->via != emulators::Via::known_path) return 41;
+        if (setup.found(L"duckstation") == nullptr || setup.found(L"duckstation")->found()) return 42;
+        const auto play = action(*setup.forSystem(L"ps2"), setup, roms / L"ps2" / L"Game.iso");
+        if (!play.hidden || play.arguments.find(L"pcsx2.ps1") == std::wstring::npos) return 43;
+        // By hand: DuckStation's program and arguments (%ROM% placed), and PS1 started with it.
+        emulators::Choices choices;
+        choices.overrides["duckstation"] = {manual, L"-batch %ROM% -fullscreen"};
+        choices.systems["psx"] = "duckstation";
+        setup = load(environment, roms, choices);
+        const auto* duck = setup.found(L"duckstation");
+        if (!duck || duck->via != emulators::Via::manual) return 44;
+        const auto ps1 = action(*setup.forSystem(L"psx"), setup, L"D:\\r.chd");
+        if (ps1.target != manual.lexically_normal().wstring() || ps1.arguments != L"-batch \"D:\\r.chd\" -fullscreen") return 45;
+        // A system chosen for an emulator that is not found has no command.
+        choices.systems["ps2"] = "retroarch";
+        setup = load(environment, roms, choices);
+        if (!action(*setup.forSystem(L"ps2"), setup, L"D:\\a.iso").target.empty()) return 46;
+        // A ROM folder: two system folders with games.
+        write(roms / L"snes" / L"Mario.sfc", "rom");
+        if (!romFolder(roms) || romFolder(root / L"Programs")) return 47;
+        std::filesystem::remove_all(root, error);
+    }
     std::cout << "emulation_scan passed\n";
     return 0;
 }

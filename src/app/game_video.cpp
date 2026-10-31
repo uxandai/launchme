@@ -20,7 +20,9 @@ const Game* Launcher::videoCandidate() const {
     if (settingsOpen() || customEditorOpen() || fileBrowserOpen() || bulkCoversOpen()) return nullptr;
     // The library's views with a picture of the focused game: Kinowy (its focused tile) and Lista+ (its panel).
     const bool library = screen_ == ScreenMode::library && (libraryCinematic() || libraryListPlus());
-    if (screen_ != ScreenMode::shelves && screen_ != ScreenMode::platform_games && screen_ != ScreenMode::details && !library) return nullptr;
+    // Szukaj in Tryb TV: the focused result's video, dimmed behind the results (background_renderer.cpp).
+    const bool search = screen_ == ScreenMode::search && !desktop_mode_;
+    if (screen_ != ScreenMode::shelves && screen_ != ScreenMode::platform_games && screen_ != ScreenMode::details && !library && !search) return nullptr;
     // The desktop window: in its pane's picture, while nothing covers the library.
     if (desktop_mode_ && (screen_ != ScreenMode::shelves || desktop_menu_)) return nullptr;
     if (menu_open_ || cards_.empty() || IsIconic(hwnd_) || GetForegroundWindow() != hwnd_) return nullptr;

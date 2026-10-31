@@ -1,5 +1,5 @@
-// Renderer: Tarot (src/app/tarot.cpp, geometry in tarot_view.hpp). A night sky over the home with a
-// slowly turning sigil; cards drawn in gold on deep violet, each with its arcana's numeral, symbol,
+// Renderer: Tarot (src/app/tarot.cpp, geometry in tarot_view.hpp). The home dimmed to a quiet grey;
+// plain grey cards in Launchme's own type, each with its arcana's numeral, symbol,
 // name and meaning; their flight from the deck, the turn face up, the chosen card's rise; the
 // shuffling deck while the cards are read; and the reading itself: up to three cards turning over
 // to show the games' posters. Every card is laid out at 240 units wide and scaled, so its type
@@ -18,17 +18,14 @@ constexpr float pi = std::numbers::pi_v<float>;
 constexpr float card_units = 240; // A card's width in its own units.
 
 D2D1_COLOR_F rgba(float r, float g, float b, float a) { return D2D1::ColorF(r, g, b, std::clamp(a, 0.0f, 1.0f)); }
-D2D1_COLOR_F gold(float a) { return rgba(0.89f, 0.73f, 0.44f, a); }
-D2D1_COLOR_F brightGold(float a) { return rgba(1.0f, 0.88f, 0.60f, a); }
-D2D1_COLOR_F parchment(float a) { return rgba(0.96f, 0.91f, 0.81f, a); }
-D2D1_COLOR_F lavender(float a) { return rgba(0.76f, 0.70f, 0.84f, a); }
+// Launchme's own muted greys (Tryb TV's panels), the brightest for what has the focus.
+D2D1_COLOR_F gold(float a) { return rgba(0.78f, 0.78f, 0.80f, a); }
+D2D1_COLOR_F brightGold(float a) { return rgba(0.97f, 0.97f, 0.98f, a); }
+D2D1_COLOR_F parchment(float a) { return rgba(0.92f, 0.92f, 0.93f, a); }
+D2D1_COLOR_F lavender(float a) { return rgba(0.60f, 0.60f, 0.63f, a); }
 using render_detail::box;
 D2D1_RECT_F inflate(D2D1_RECT_F r, float by) { return D2D1::RectF(r.left - by, r.top - by, r.right + by, r.bottom + by); }
 float lerp(float a, float b, float t) { return a + (b - a) * t; }
-float hash(uint32_t i) {
-    i = (i ^ 61u) ^ (i >> 16); i *= 9u; i ^= i >> 4; i *= 0x27d4eb2du; i ^= i >> 15;
-    return static_cast<float>(i & 0xffffffu) / 16777216.0f;
-}
 std::wstring roman(int value) {
     static constexpr const wchar_t* numerals[] = {L"0", L"I", L"II", L"III", L"IV", L"V", L"VI", L"VII", L"VIII", L"IX", L"X", L"XI",
         L"XII", L"XIII", L"XIV", L"XV", L"XVI", L"XVII", L"XVIII", L"XIX", L"XX", L"XXI"};
@@ -112,17 +109,15 @@ bool Renderer::createTarotFonts() {
         }
         return true;
     };
-    // Gabriola's calligraphy for the title; Palatino's old-style capitals on the cards; Constantia
-    // for the questions and the small print. Each falls back to its classic neighbours.
-    const auto serif = {L"Palatino Linotype", L"Book Antiqua", L"Constantia", L"Cambria", L"Georgia"};
-    const auto text = {L"Constantia", L"Palatino Linotype", L"Cambria", L"Georgia"};
-    if (!make(tarot_title_font_, {L"Gabriola", L"Palatino Linotype", L"Constantia", L"Georgia"}, 96, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, false) ||
-        !make(tarot_name_font_, serif, 19, DWRITE_FONT_WEIGHT_SEMI_BOLD, DWRITE_FONT_STYLE_NORMAL, false) ||
-        !make(tarot_numeral_font_, serif, 17, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, false) ||
-        !make(tarot_question_font_, text, 31, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_ITALIC, true) ||
-        !make(tarot_body_font_, text, 16, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_ITALIC, true) ||
-        !make(tarot_small_font_, text, 15, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, false) ||
-        !make(tarot_result_font_, serif, 22, DWRITE_FONT_WEIGHT_SEMI_BOLD, DWRITE_FONT_STYLE_NORMAL, true)) return false;
+    // Launchme's own typeface everywhere (Interfejs → Czcionka), as the rest of Tryb TV.
+    const std::initializer_list<const wchar_t*> own = {};
+    if (!make(tarot_title_font_, own, 56, DWRITE_FONT_WEIGHT_SEMI_LIGHT, DWRITE_FONT_STYLE_NORMAL, false) ||
+        !make(tarot_name_font_, own, 17, DWRITE_FONT_WEIGHT_SEMI_BOLD, DWRITE_FONT_STYLE_NORMAL, false) ||
+        !make(tarot_numeral_font_, own, 15, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, false) ||
+        !make(tarot_question_font_, own, 28, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, true) ||
+        !make(tarot_body_font_, own, 15, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, true) ||
+        !make(tarot_small_font_, own, 15, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, false) ||
+        !make(tarot_result_font_, own, 21, DWRITE_FONT_WEIGHT_SEMI_BOLD, DWRITE_FONT_STYLE_NORMAL, true)) return false;
     if (!tarot_stroke_)
         factory_->CreateStrokeStyle(D2D1::StrokeStyleProperties(D2D1_CAP_STYLE_ROUND, D2D1_CAP_STYLE_ROUND, D2D1_CAP_STYLE_ROUND,
                                                                 D2D1_LINE_JOIN_ROUND), nullptr, 0, tarot_stroke_.GetAddressOf());
@@ -465,7 +460,7 @@ void Renderer::drawTarotSymbol(tarot::Symbol symbol, float cx, float cy, float s
         for (int i = 0; i < 16; ++i) { const float a = i * pi / 8; line(std::cos(a) * 0.72f, std::sin(a) * 0.72f, std::cos(a) * (i % 2 ? 0.86f : 1.0f), std::sin(a) * (i % 2 ? 0.86f : 1.0f), 0.8f); }
         circle(0, 0, 0.58f, 0.45f, 1.2f);
         // The shadow passing over the sun: a dark disc with a gold rim.
-        brush(rgba(0.06f, 0.03f, 0.10f, ink.a));
+        brush(rgba(0.09f, 0.09f, 0.10f, ink.a));
         target_->FillEllipse(D2D1::Ellipse(P(0.2f, -0.12f), 0.5f * s, 0.5f * s), solid_.Get());
         circle(0.2f, -0.12f, 0.5f, 0, 0.8f);
         break;
@@ -519,46 +514,22 @@ void Renderer::drawTarotSymbol(tarot::Symbol symbol, float cx, float cy, float s
 }
 
 void Renderer::drawTarotCardBack(D2D1_RECT_F r, float alpha) {
-    const float w = r.right - r.left, h = r.bottom - r.top, cx = (r.left + r.right) * 0.5f, cy = (r.top + r.bottom) * 0.5f;
+    const float w = r.right - r.left, cx = (r.left + r.right) * 0.5f, cy = (r.top + r.bottom) * 0.5f;
     const float radius = w * 0.07f;
+    // A plain grey card, as Tryb TV's tiles: a soft gradient, one thin frame and a single mark.
     ComPtr<ID2D1GradientStopCollection> stops;
     ComPtr<ID2D1LinearGradientBrush> fill;
-    const D2D1_GRADIENT_STOP colors[] = {{0, rgba(0.25f, 0.09f, 0.30f, alpha)}, {0.55f, rgba(0.14f, 0.05f, 0.20f, alpha)}, {1, rgba(0.07f, 0.03f, 0.12f, alpha)}};
-    if (SUCCEEDED(target_->CreateGradientStopCollection(colors, 3, stops.GetAddressOf())) &&
+    const D2D1_GRADIENT_STOP colors[] = {{0, rgba(0.20f, 0.20f, 0.22f, alpha)}, {1, rgba(0.09f, 0.09f, 0.10f, alpha)}};
+    if (SUCCEEDED(target_->CreateGradientStopCollection(colors, 2, stops.GetAddressOf())) &&
         SUCCEEDED(target_->CreateLinearGradientBrush(D2D1::LinearGradientBrushProperties(D2D1::Point2F(cx, r.top), D2D1::Point2F(cx, r.bottom)),
                                                      stops.Get(), fill.GetAddressOf())))
         target_->FillRoundedRectangle(D2D1::RoundedRect(r, radius, radius), fill.Get());
-    brush(gold(0.95f * alpha));
-    target_->DrawRoundedRectangle(D2D1::RoundedRect(inflate(r, -1.5f), radius, radius), solid_.Get(), 2.0f);
-    const auto inner = inflate(r, -11);
-    brush(gold(0.55f * alpha));
-    target_->DrawRoundedRectangle(D2D1::RoundedRect(inner, radius * 0.5f, radius * 0.5f), solid_.Get(), 1.0f);
-    // A lattice of diagonals, each clipped to the inner frame by hand (the card may be rotated).
-    const auto ink = gold(0.13f * alpha);
-    const float step = 18;
-    for (float c = inner.left - inner.bottom; c <= inner.right - inner.top; c += step) { // y = x - c
-        const float x0 = std::max(inner.left, inner.top + c), x1 = std::min(inner.right, inner.bottom + c);
-        if (x1 > x0) line(x0, x0 - c, x1, x1 - c, ink, 0.8f);
-    }
-    for (float c = inner.left + inner.top; c <= inner.right + inner.bottom; c += step) { // y = c - x
-        const float x0 = std::max(inner.left, c - inner.bottom), x1 = std::min(inner.right, c - inner.top);
-        if (x1 > x0) line(x0, c - x0, x1, c - x1, ink, 0.8f);
-    }
-    // The medallion: a disc, two rings, the star and two moons; dots round the rim.
-    brush(rgba(0.10f, 0.04f, 0.15f, 0.92f * alpha));
-    target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), w * 0.3f, w * 0.3f), solid_.Get());
-    brush(gold(0.85f * alpha));
-    target_->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), w * 0.3f, w * 0.3f), solid_.Get(), 1.6f);
-    target_->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), w * 0.24f, w * 0.24f), solid_.Get(), 0.8f);
-    for (int i = 0; i < 16; ++i) {
-        const float a = i * pi / 8;
-        target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(cx + std::cos(a) * w * 0.27f, cy + std::sin(a) * w * 0.27f), 1.4f, 1.4f), solid_.Get());
-    }
-    drawTarotSymbol(tarot::Symbol::star, cx, cy, w * 0.34f, brightGold(0.95f * alpha), 1.4f);
-    drawTarotSymbol(tarot::Symbol::moon, cx, r.top + h * 0.16f, w * 0.18f, gold(0.8f * alpha), 1.1f);
-    drawTarotSymbol(tarot::Symbol::sun, cx, r.bottom - h * 0.16f, w * 0.18f, gold(0.8f * alpha), 1.1f);
+    brush(rgba(1, 1, 1, 0.16f * alpha));
+    target_->DrawRoundedRectangle(D2D1::RoundedRect(inflate(r, -1), radius, radius), solid_.Get(), 1.2f);
+    brush(rgba(1, 1, 1, 0.10f * alpha));
+    target_->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), w * 0.26f, w * 0.26f), solid_.Get(), 1.0f);
+    drawTarotSymbol(tarot::Symbol::star, cx, cy, w * 0.26f, rgba(0.85f, 0.85f, 0.87f, 0.55f * alpha), 1.3f);
 }
-
 void Renderer::drawTarotCard(const TarotCardLook& look, const tarot::Card* face, Cover* poster, const std::wstring& numeral) {
     if (look.alpha <= 0.003f || look.width <= 1) return;
     D2D1_MATRIX_3X2_F saved{};
@@ -583,7 +554,7 @@ void Renderer::drawTarotCard(const TarotCardLook& look, const tarot::Card* face,
     }
     if (look.glow > 0.01f) {
         for (int i = 1; i <= 7; ++i) {
-            brush(brightGold(0.05f * look.glow * alpha));
+            brush(rgba(1, 1, 1, 0.03f * look.glow * alpha));
             const float spread = static_cast<float>(i) * 3.6f;
             target_->FillRoundedRectangle(D2D1::RoundedRect(inflate(r, spread), radius + spread, radius + spread), solid_.Get());
         }
@@ -595,116 +566,56 @@ void Renderer::drawTarotCard(const TarotCardLook& look, const tarot::Card* face,
         const auto picture = inflate(r, -9);
         const float shown = poster && poster->bitmap ? reveal(*poster) : 0.0f;
         if (shown > 0) {
-            brush(rgba(0.05f, 0.03f, 0.08f, alpha * shown));
+            brush(rgba(0.06f, 0.06f, 0.07f, alpha * shown));
             target_->FillRoundedRectangle(D2D1::RoundedRect(picture, radius * 0.6f, radius * 0.6f), solid_.Get());
             fillImage(*poster, picture, radius * 0.6f, alpha * shown);
         }
-        brush(gold(0.95f * alpha));
-        target_->DrawRoundedRectangle(D2D1::RoundedRect(inflate(r, -1.5f), radius, radius), solid_.Get(), 2.0f);
-        brush(gold(0.6f * alpha));
-        target_->DrawRoundedRectangle(D2D1::RoundedRect(picture, radius * 0.6f, radius * 0.6f), solid_.Get(), 1.2f);
+        brush(rgba(1, 1, 1, 0.18f * alpha));
+        target_->DrawRoundedRectangle(D2D1::RoundedRect(inflate(r, -1), radius, radius), solid_.Get(), 1.2f);
     } else {
+        // The face: a grey card like Tryb TV's panels, the numeral, the symbol, the name and its meaning.
         ComPtr<ID2D1GradientStopCollection> stops;
         ComPtr<ID2D1LinearGradientBrush> fill;
-        const D2D1_GRADIENT_STOP colors[] = {{0, rgba(0.16f, 0.11f, 0.27f, alpha)}, {1, rgba(0.05f, 0.04f, 0.11f, alpha)}};
+        const D2D1_GRADIENT_STOP colors[] = {{0, rgba(0.19f, 0.19f, 0.21f, alpha)}, {1, rgba(0.09f, 0.09f, 0.10f, alpha)}};
         if (SUCCEEDED(target_->CreateGradientStopCollection(colors, 2, stops.GetAddressOf())) &&
             SUCCEEDED(target_->CreateLinearGradientBrush(D2D1::LinearGradientBrushProperties(D2D1::Point2F(0, r.top), D2D1::Point2F(0, r.bottom)),
                                                          stops.Get(), fill.GetAddressOf())))
             target_->FillRoundedRectangle(D2D1::RoundedRect(r, radius, radius), fill.Get());
-        brush(gold(0.95f * alpha));
-        target_->DrawRoundedRectangle(D2D1::RoundedRect(inflate(r, -1.5f), radius, radius), solid_.Get(), 2.0f);
-        const auto inner = inflate(r, -10);
-        brush(gold(0.5f * alpha));
-        target_->DrawRoundedRectangle(D2D1::RoundedRect(inner, radius * 0.5f, radius * 0.5f), solid_.Get(), 1.0f);
-        for (const auto corner : {D2D1::Point2F(inner.left, inner.top), D2D1::Point2F(inner.right, inner.top),
-                                  D2D1::Point2F(inner.left, inner.bottom), D2D1::Point2F(inner.right, inner.bottom)})
-            drawTarotSymbol(tarot::Symbol::star, corner.x, corner.y, 13, gold(0.9f * alpha), 0.9f);
-        // The numeral between two short rules.
+        brush(rgba(1, 1, 1, 0.16f * alpha));
+        target_->DrawRoundedRectangle(D2D1::RoundedRect(inflate(r, -1), radius, radius), solid_.Get(), 1.2f);
         const float numeral_y = r.top + 30;
-        textLine(numeral, r.left, numeral_y, card_units, tarot_numeral_font_.Get(), gold(alpha), DWRITE_TEXT_ALIGNMENT_CENTER);
-        line(-74, numeral_y, -38, numeral_y, gold(0.45f * alpha), 0.8f);
-        line(38, numeral_y, 74, numeral_y, gold(0.45f * alpha), 0.8f);
-        // The symbol in its halo, a ring and twelve short rays.
+        textLine(numeral, r.left, numeral_y, card_units, tarot_numeral_font_.Get(), lavender(alpha), DWRITE_TEXT_ALIGNMENT_CENTER);
+        // The symbol on a faint disc.
         const float symbol_y = r.top + units_h * 0.43f;
-        ComPtr<ID2D1GradientStopCollection> halo_stops;
-        ComPtr<ID2D1RadialGradientBrush> halo;
-        const D2D1_GRADIENT_STOP halo_colors[] = {{0, rgba(1.0f, 0.84f, 0.52f, 0.30f * alpha)}, {0.6f, rgba(0.55f, 0.3f, 0.6f, 0.10f * alpha)}, {1, rgba(0, 0, 0, 0)}};
-        if (SUCCEEDED(target_->CreateGradientStopCollection(halo_colors, 3, halo_stops.GetAddressOf())) &&
-            SUCCEEDED(target_->CreateRadialGradientBrush(D2D1::RadialGradientBrushProperties(D2D1::Point2F(0, symbol_y), {}, 92, 92),
-                                                         halo_stops.Get(), halo.GetAddressOf())))
-            target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(0, symbol_y), 92, 92), halo.Get());
-        brush(gold(0.4f * alpha));
-        target_->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(0, symbol_y), 74, 74), solid_.Get(), 0.8f);
-        for (int i = 0; i < 12; ++i) {
-            const float a = i * pi / 6 + pi / 12;
-            line(std::cos(a) * 80, symbol_y + std::sin(a) * 80, std::cos(a) * 88, symbol_y + std::sin(a) * 88, gold(0.35f * alpha), 0.9f);
-        }
-        drawTarotSymbol(face->symbol, 0, symbol_y, 98, brightGold(alpha), 2.3f);
-        // The name on its band, the meaning under it.
+        brush(rgba(1, 1, 1, 0.05f * alpha));
+        target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(0, symbol_y), 74, 74), solid_.Get());
+        drawTarotSymbol(face->symbol, 0, symbol_y, 96, brightGold(alpha), 2.2f);
+        // The name, the meaning under it.
         const float band_top = r.bottom - units_h * 0.27f;
-        line(r.left + 22, band_top, r.right - 22, band_top, gold(0.55f * alpha), 0.9f);
         textLine(upper(tr(face->name)), r.left + 14, band_top + 24, card_units - 28, tarot_name_font_.Get(), brightGold(alpha), DWRITE_TEXT_ALIGNMENT_CENTER);
         drawGlanceText(tr(face->meaning), D2D1::RectF(r.left + 18, band_top + 42, r.right - 18, r.bottom - 14), tarot_body_font_.Get(), parchment(0.86f * alpha));
     }
     // A sheen sweeping over it as it turns.
     if (turn > 0.02f && turn < 0.98f) {
-        brush(rgba(1, 0.95f, 0.85f, 0.22f * (1 - squeeze) * alpha));
+        brush(rgba(1, 1, 1, 0.16f * (1 - squeeze) * alpha));
         target_->FillRoundedRectangle(D2D1::RoundedRect(r, radius, radius), solid_.Get());
     }
     target_->SetTransform(saved);
 }
 
 void Renderer::drawTarotBackdrop(float alpha, float center_y, float radius) {
-    const auto* state = context_->tarot;
     const float w = viewport_.width, h = viewport_.height, cx = w * 0.5f;
-    const float time = state ? state->time : 0;
-    brush(rgba(0.018f, 0.012f, 0.035f, 0.95f * alpha));
+    // The home dimmed to a quiet grey, a little lighter behind the cards: no sky, no sigil.
+    brush(rgba(0.035f, 0.035f, 0.04f, 0.93f * alpha));
     target_->FillRectangle(D2D1::RectF(0, 0, w, h), solid_.Get());
-    // A violet nebula behind the cards, warmer at its heart.
     ComPtr<ID2D1GradientStopCollection> stops;
-    ComPtr<ID2D1RadialGradientBrush> nebula;
-    const D2D1_GRADIENT_STOP colors[] = {{0, rgba(0.42f, 0.20f, 0.42f, 0.42f * alpha)}, {0.35f, rgba(0.22f, 0.09f, 0.34f, 0.30f * alpha)},
-                                         {0.75f, rgba(0.08f, 0.04f, 0.16f, 0.12f * alpha)}, {1, rgba(0, 0, 0, 0)}};
-    if (SUCCEEDED(target_->CreateGradientStopCollection(colors, 4, stops.GetAddressOf())) &&
-        SUCCEEDED(target_->CreateRadialGradientBrush(D2D1::RadialGradientBrushProperties(D2D1::Point2F(cx, center_y), {}, w * 0.62f, h * 0.7f),
-                                                     stops.Get(), nebula.GetAddressOf())))
-        target_->FillRectangle(D2D1::RectF(0, 0, w, h), nebula.Get());
-    // Stars, each twinkling at its own pace.
-    for (uint32_t i = 0; i < 110; ++i) {
-        const float x = hash(i * 3 + 1) * w, y = hash(i * 3 + 2) * h;
-        const float size = 0.5f + hash(i * 3 + 3) * 1.6f;
-        const float twinkle = 0.35f + 0.65f * (0.5f + 0.5f * std::sin(time * (0.8f + hash(i + 999) * 2.2f) + hash(i + 77) * 6.28f));
-        const bool warm = hash(i + 4242) > 0.7f;
-        brush(warm ? brightGold(0.75f * twinkle * alpha) : rgba(0.92f, 0.9f, 1.0f, 0.7f * twinkle * alpha));
-        target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(x, y), size, size), solid_.Get());
-        if (size > 1.85f && twinkle > 0.85f) {
-            const float ray = size * 3.5f * twinkle;
-            line(x - ray, y, x + ray, y, rgba(1, 0.95f, 0.85f, 0.25f * alpha), 0.7f);
-            line(x, y - ray, x, y + ray, rgba(1, 0.95f, 0.85f, 0.25f * alpha), 0.7f);
-        }
-    }
-    // The sigil: two rings and a heptagram, turning slowly behind the cards.
-    D2D1_MATRIX_3X2_F saved{};
-    target_->GetTransform(&saved);
-    target_->SetTransform(D2D1::Matrix3x2F::Rotation(time * 4.0f, D2D1::Point2F(cx, center_y)) * D2D1::Matrix3x2F::ReinterpretBaseType(&saved)[0]);
-    const float ring = radius * 1.05f;
-    brush(gold(0.10f * alpha));
-    target_->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(cx, center_y), ring, ring), solid_.Get(), 1.2f);
-    target_->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(cx, center_y), ring * 0.93f, ring * 0.93f), solid_.Get(), 0.7f);
-    std::vector<D2D1_POINT_2F> heptagram;
-    for (int i = 0; i < 7; ++i) {
-        const float a = -pi / 2 + i * 3 * 2 * pi / 7;
-        heptagram.push_back(D2D1::Point2F(cx + std::cos(a) * ring * 0.93f, center_y + std::sin(a) * ring * 0.93f));
-    }
-    for (size_t i = 0; i < heptagram.size(); ++i) line(heptagram[i].x, heptagram[i].y, heptagram[(i + 1) % 7].x, heptagram[(i + 1) % 7].y, gold(0.07f * alpha), 0.9f);
-    for (int i = 0; i < 28; ++i) {
-        const float a = i * 2 * pi / 28;
-        const float inner = ring * (i % 4 ? 1.0f : 0.97f), outer = ring * (i % 4 ? 1.03f : 1.07f);
-        line(cx + std::cos(a) * inner, center_y + std::sin(a) * inner, cx + std::cos(a) * outer, center_y + std::sin(a) * outer, gold(0.12f * alpha), 0.9f);
-    }
-    target_->SetTransform(saved);
+    ComPtr<ID2D1RadialGradientBrush> light;
+    const D2D1_GRADIENT_STOP colors[] = {{0, rgba(0.22f, 0.22f, 0.24f, 0.45f * alpha)}, {0.6f, rgba(0.12f, 0.12f, 0.13f, 0.18f * alpha)}, {1, rgba(0, 0, 0, 0)}};
+    if (SUCCEEDED(target_->CreateGradientStopCollection(colors, 3, stops.GetAddressOf())) &&
+        SUCCEEDED(target_->CreateRadialGradientBrush(D2D1::RadialGradientBrushProperties(D2D1::Point2F(cx, center_y), {}, std::max(radius * 2.4f, w * 0.45f), h * 0.62f),
+                                                     stops.Get(), light.GetAddressOf())))
+        target_->FillRectangle(D2D1::RectF(0, 0, w, h), light.Get());
 }
-
 void Renderer::drawTarot() {
     const auto* state = context_ ? context_->tarot : nullptr;
     if (!state || state->alpha <= 0.003f || !createTarotFonts()) return;
@@ -731,8 +642,7 @@ void Renderer::drawTarot() {
     }
 
     // The title and its marks: one diamond per card of the reading, the answered ones filled.
-    textLine(L"Tarot", 0, 84, w, tarot_title_font_.Get(), rgba(0, 0, 0, 0.45f * alpha), DWRITE_TEXT_ALIGNMENT_CENTER);
-    textLine(L"Tarot", 0, 81, w, tarot_title_font_.Get(), gold(alpha), DWRITE_TEXT_ALIGNMENT_CENTER);
+    textLine(L"Tarot", 0, 76, w, tarot_title_font_.Get(), parchment(alpha), DWRITE_TEXT_ALIGNMENT_CENTER);
     const size_t steps = t.steps();
     if (!reading && steps) {
         const float gap = 22, first = cx - gap * static_cast<float>(steps - 1) * 0.5f;

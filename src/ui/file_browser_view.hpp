@@ -139,17 +139,17 @@ struct Layout {
     // Places use the Settings rail rows; as many as fit above Back.
     settings_ui::Rect place(int index) const { return base().rail(index); }
     int placeCapacity() const {
-        const auto back = base().backButton();
+        const auto back = base().backBar();
         return std::max(1, static_cast<int>((back.top - 16 - settings_ui::Layout::rail_top + 10) / 74));
     }
     int hitPlace(float x, float y, int count) const {
         for (int i = 0; i < std::min(count, placeCapacity()); ++i) if (place(i).contains(x, y)) return i;
         return -1;
     }
-    settings_ui::Rect back() const { return base().backButton(); }
+    settings_ui::Rect back() const { return base().backBar(); }
     // Bottom bar, right-aligned: the last button sits at the content's right edge.
     settings_ui::Rect button(int index, int count) const {
-        const auto bar = base().backButton();
+        const auto bar = base().backBar();
         const float right = base().contentRight() - (count - 1 - index) * (button_width + 16);
         return {right - button_width, bar.top, right, bar.bottom};
     }

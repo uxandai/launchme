@@ -191,6 +191,8 @@ Settings → System → Help → **Open folder** (the version row) opens it.
   folded sections in the desktop window, links in the details pane, and search by studio.
   Games with every achievement unlocked have a gold border.
 - **Widgets drawer**: clock, Steam friends, Discord, CPU/GPU temperatures, controllers, audio and Bluetooth.
+- **Controllers** (TV mode and Settings → *Controllers*): every pad with its picture and battery, a green or red
+  dot and a moving border saying whether it is connected; pairing and connecting from the same tiles.
 - **Profile** (the drawer's *Profile* widget): this week's play time, games and launches with a chart, the latest
   achievements, a year of achievement history, the games closest to 100 % and every platform with its hours.
 - **In-game Guide overlay** (experimental): back to the dashboard, close the game, optional FPS from PresentMon.

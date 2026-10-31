@@ -27,33 +27,32 @@ int main() {
     state.options = false;
     state.enter(0);
     if (state.options || state.row() || state.back()) return 5;
-    // Keyboard/pad reach Back: Down past the last category focuses it, Up returns, rows never do.
+    // Keyboard/pad reach Back (a dot at the top): Up past the first category focuses it, Down returns, rows never do.
     const int last_category = static_cast<int>(categories.size()) - 1;
     State rail;
-    rail.selectCategory(last_category);
-    rail.move(1, 3);
-    if (!rail.backFocused() || rail.category != last_category) return 11;
-    rail.move(1, 3);
-    if (!rail.backFocused() || rail.category != last_category) return 12;
+    rail.selectCategory(0);
     rail.move(-1, 3);
-    if (rail.backFocused() || rail.category != last_category) return 13;
+    if (!rail.backFocused() || rail.category != 0) return 11;
+    rail.move(-1, 3);
+    if (!rail.backFocused() || rail.category != 0) return 12;
     rail.move(1, 3);
+    if (rail.backFocused() || rail.category != 0) return 13;
+    rail.move(-1, 3);
     rail.enter(3);
     if (rail.backFocused() || rail.back_focused || !rail.options) return 14;
     rail.move(5, 3);
     if (rail.backFocused() || rail.row() != 2) return 15;
     rail.options = false;
+    rail.selectCategory(last_category);
     rail.move(1, 3);
+    if (rail.backFocused() || rail.category != last_category) return 16; // Down at the last category stays there.
     rail.selectCategory(0);
-    if (rail.backFocused() || rail.category != 0) return 16;
-    rail.move(-1, 3);
-    if (rail.backFocused() || rail.category != 0) return 17;
-    for (const auto size : {std::pair{1600.0f, 900.0f}, {2400.0f, 900.0f}, {1200.0f, 900.0f}}) {
+    if (rail.backFocused() || rail.category != 0) return 17;    for (const auto size : {std::pair{1600.0f, 900.0f}, {2400.0f, 900.0f}, {1200.0f, 900.0f}}) {
         Layout scaled{size.first, size.second};
         for (int i = 0; i < static_cast<int>(categories.size()); ++i) {
             auto r = scaled.rail(i);
             if (scaled.hitRail(r.left + 10, r.top + 10) != i || r.right >= scaled.contentLeft() ||
-                r.bottom + 12 > scaled.backButton().top) return 6;
+                r.top < scaled.backButton().bottom + 12) return 6; // Back sits above the rail.
             // A description line moves the list down; the first row still hits at the list top.
             const auto category = Layout::of(size.first, size.second, i);
             if (category.listTop() != (described(i) ? Layout::described_top : Layout::plain_top) ||

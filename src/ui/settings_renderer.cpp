@@ -76,6 +76,17 @@ void Renderer::drawSettings() {
         line(x - 6, y, x + 6, y, ink, 1.8f);
         if (plus) line(x, y - 6, x, y + 6, ink, 1.8f);
     };
+    // The platforms' and plugins' cog (Opcje) centred in its button.
+    const auto drawCog = [&](Rect cog, D2D1_COLOR_F ink) {
+        const float cx = (cog.left + cog.right) * 0.5f, cy = middle(cog);
+        brush(ink);
+        target_->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), 10, 10), solid_.Get(), 2);
+        target_->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), 3.5f, 3.5f), solid_.Get(), 1.7f);
+        for (int spoke = 0; spoke < 8; ++spoke) {
+            const float a = spoke * std::numbers::pi_v<float> / 4;
+            line(cx + std::cos(a) * 12, cy + std::sin(a) * 12, cx + std::cos(a) * 16, cy + std::sin(a) * 16, ink, 2.4f);
+        }
+    };
     const auto arrow = [&](Rect r, bool down, D2D1_COLOR_F ink) {
         const float x = (r.left + r.right) * 0.5f, y = middle(r), d = down ? 1.0f : -1.0f;
         line(x, y - 7 * d, x, y + 7 * d, ink, 1.8f);
@@ -89,7 +100,8 @@ void Renderer::drawSettings() {
         textLine(on ? tr(L"Włączone") : tr(L"Wyłączone"), label_right - 148, y, 148, body, palette::stateLabel(locked),
                  DWRITE_TEXT_ALIGNMENT_TRAILING);
     };
-    textGroup(tr(L"Ustawienia"), {}, 62, Layout::heading_cap_top, layout.railRight() - 68, heading, gray(0.96f), body, gray(0.55f), 1, true);
+    // The heading beside Back (a dot at the top, as on the other screens).
+    textGroup(tr(L"Ustawienia"), {}, 108, Layout::heading_cap_top, layout.railRight() - 114, heading, gray(0.96f), body, gray(0.55f), 1, true);
     // Rail pill: solid white while the rail has focus, a faint fill while the rows do. It glides
     // between categories and down to Back (context_->settings_motion, src/app/focus_motion.cpp);
     // labels under it turn dark as it passes.
@@ -179,6 +191,9 @@ void Renderer::drawSettings() {
         if (item.control == Control::platform && item.id == Id::pc_platform) {
             desktopBrand(brand_icons::sourceKey(item.source), text_left + 18, y, 34, gray(item.locked ? 0.5f : 0.9f));
             text_left += 60;
+        } else if (optionsTile(item)) {
+            desktopBrand("retroarch", text_left + 18, y, 34, gray(0.9f)); // Emulacja among the platforms.
+            text_left += 60;
         }
         const int size_steps = sizeSteps(item.id);
         const bool stepped_size = size_steps > 1;
@@ -249,6 +264,11 @@ void Renderer::drawSettings() {
             const float chevron_x = r.right - 34;
             textLine(item.value, r.right - 220, y, 160, settings_heading_font_.Get(), gray(0.96f), DWRITE_TEXT_ALIGNMENT_TRAILING);
             chevron(chevron_x, y, 1, selected ? accent : gray(0.68f));
+        } else if (item.control == Control::page && optionsTile(item)) {
+            // Emulacja among the platforms: its summary, then the platforms' cog.
+            const auto cog = layout.pluginCog(i, scroll);
+            textLine(item.value, controls_left - 40, y, cog.left - 16 - (controls_left - 40), body, gray(0.78f), DWRITE_TEXT_ALIGNMENT_TRAILING);
+            drawCog(cog, faint(button(cog, selected, hovered), 0.85f));
         } else if (item.control == Control::page) {
             // A page of its own: its summary, then a chevron.
             textLine(item.value, controls_left, y, r.right - 58 - controls_left, body, gray(0.78f), DWRITE_TEXT_ALIGNMENT_TRAILING);
@@ -283,15 +303,7 @@ void Renderer::drawSettings() {
                 stateLabel(item.checked, false, r.right - 184, y);
                 toggle(r.right - 114, y, toggle_on);
                 const auto cog = layout.pluginCog(i, scroll);
-                const float cx = (cog.left + cog.right) * 0.5f;
-                const auto ink = faint(button(cog, selected && state.editing, hovered), 0.85f);
-                brush(ink);
-                target_->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(cx, y), 10, 10), solid_.Get(), 2);
-                target_->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(cx, y), 3.5f, 3.5f), solid_.Get(), 1.7f);
-                for (int spoke = 0; spoke < 8; ++spoke) {
-                    const float a = spoke * std::numbers::pi_v<float> / 4;
-                    line(cx + std::cos(a) * 12, y + std::sin(a) * 12, cx + std::cos(a) * 16, y + std::sin(a) * 16, ink, 2.4f);
-                }
+                drawCog(cog, faint(button(cog, selected && state.editing, hovered), 0.85f));
                 continue;
             }
             stateLabel(item.checked, false, r.right - 292, y);
@@ -357,7 +369,7 @@ void Renderer::drawSettings() {
     }
     // System signs off with the logo at the very bottom, level with Back.
     if (state.category == static_cast<int>(Category::system) && !state.subpage())
-        drawLaunchmeLogo(left + 4, middle(back), Layout::footer_logo, gray(0.96f, 0.5f));
+        drawLaunchmeLogo(left + 4, middle(layout.backBar()), Layout::footer_logo, gray(0.96f, 0.5f));
 
     if (const auto* editor = context_->color_editor) {
         // "Inny…": the swatch with its hex, three gradient sliders, then Cancel and Save.
@@ -551,13 +563,14 @@ void Renderer::fitSettingsDescriptions(std::vector<settings_ui::Row>& rows, cons
     const auto body = settings_body_font_.Get();
     const float line = typeMetrics(body).line;
     for (auto& row : rows) {
-        if (row.tags.empty()) continue;
+        if (row.tags.empty() && row.id != Id::plugin_enabled) continue; // Plugins: a long description grows the row.
         if (desktop || layout.compact || row.description.empty() || line <= 0) { row.lines = 0; continue; }
         // The text width drawSettings gives the row (its title and description end before the controls).
         const float text_left = layout.contentLeft() + 24;
         const float controls_left = hasOptionsButton(row.id) ? layout.contentRight() - 324 : layout.controlsLeft(row.control);
         const int wrapped = static_cast<int>(std::lround(paragraph(row.description, 0, 0, controls_left - 24 - text_left, body, {}, 8, false) / line));
         // A standard row holds the title, one line of description and the tags; up to three lines grow it.
-        row.lines = wrapped >= 2 ? std::min(wrapped, 3) + 1 : 0;
+        if (row.tags.empty()) row.lines = wrapped > 2 ? std::min(wrapped, 4) : 0; // Two lines fit a standard row.
+        else row.lines = wrapped >= 2 ? std::min(wrapped, 3) + 1 : 0;
     }
 }

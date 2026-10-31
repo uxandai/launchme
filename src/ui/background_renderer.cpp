@@ -238,13 +238,15 @@ void Renderer::drawBackground() {
         // behind a full library grid of covers it stays quieter than behind a shelf.
         const bool grid = (context_->screen == ScreenMode::library || context_->screen == ScreenMode::search) &&
                           context_->library_mode == library_view::View::grid;
+        // Szukaj (Tryb TV): the focused result's picture and video at half strength behind the results.
+        const bool search = context_->screen == ScreenMode::search;
         const auto alpha = [&](const HeroLayer& layer) {
             return layer.tone == HeroTone::logo ? 0.13f : layer.tone == HeroTone::dimmed ? 0.32f :
-                   grid ? 0.5f : std::lerp(0.75f, 0.96f, full_screen_mix_);
+                   grid || search ? 0.5f : std::lerp(0.75f, 0.96f, full_screen_mix_);
         };
         drawWallpapers({hero_leaving_.bitmap.Get(), alpha(hero_leaving_) * hero_leaving_.level * picture_share, hero_leaving_.focus},
                        {hero_shown_.bitmap.Get(), alpha(hero_shown_) * hero_shown_.level * picture_share, hero_shown_.focus});
-        drawVideo(std::lerp(0.8f, 0.96f, full_screen_mix_) * video);
+        drawVideo((search ? 0.5f : std::lerp(0.8f, 0.96f, full_screen_mix_)) * video);
         art = video_bitmap_ ? video : 0.0f;
     } else if (hero_shown_.bitmap && !menu_wallpaper && (context_->screen == ScreenMode::settings || context_->screen == ScreenMode::downloads || context_->screen == ScreenMode::devices || context_->screen == ScreenMode::glance ||
                                      context_->screen == ScreenMode::companion)) {

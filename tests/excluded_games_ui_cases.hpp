@@ -2,6 +2,7 @@
 int LauncherUiTest::excludedGames(HWND window) {
     using context_menu::Item;
     Launcher app; app.hwnd_ = window; app.execute_ = fakeExecute;
+    app.settings_.menu_dialog = false; // Clicks land on the anchored menu's rows.
     if (!app.renderer_.initialize(window)) return 3100;
     app.settings_.enabled_pc_sources = {"gog", "epic", "ea"}; app.settings_.show_uninstalled = true;
     Game gog; gog.kind = GameKind::store; gog.source = GameSource::gog; gog.source_id = "exclude-fixture";

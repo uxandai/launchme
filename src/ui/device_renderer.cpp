@@ -139,7 +139,6 @@ void Renderer::drawDevices() {
 void Renderer::drawControllerGallery() {
     const auto& state = *context_->device_panel;
     const device_ui::Layout layout{viewport_.width, viewport_.height, state.panel};
-    const bool frame = context_->device_glide.has_value();
     const int count = static_cast<int>(state.rows.size()), focus = layout.focusTile(state);
     const int first = layout.firstTile(count, focus), end = std::min(count, first + layout.visibleTiles());
     for (int which = first; which < end; ++which) {
@@ -147,10 +146,7 @@ void Renderer::drawControllerGallery() {
         const auto& row = state.rows[index];
         const auto t = layout.tile(which, count, focus);
         const bool focused = state.selected == index;
-        const auto shape = D2D1::RoundedRect(box(t), 16, 16);
-        // Without the gliding frame the focused tile is lighter still (no focus outline).
-        brush(gray(1, focused ? (frame ? 0.085f : 0.14f) : 0.042f)); target_->FillRoundedRectangle(shape, solid_.Get());
-        brush(gray(1, 0.08f)); target_->DrawRoundedRectangle(shape, solid_.Get(), 1.0f);
+        // No fill: the tile's border (its state's colour, moving) and its focus are drawPadTile's.
         settings_ui::Tile tile;
         if (row.kind == device_ui::Kind::bluetooth) {
             tile.pair = true; tile.title = row.title; tile.caption = L"Bluetooth"; tile.action = tr(L"Sparuj");
@@ -184,6 +180,8 @@ void Renderer::drawControllerGallery() {
 void Renderer::drawDeviceFocus(bool editing) {
     if (!context_->device_glide || !context_->device_panel) return;
     const auto& glide = *context_->device_glide;
+    // The controller tiles show their focus themselves (a brighter border): no grey fill under them.
+    if (context_->device_panel->gallery() && context_->device_panel->selected >= 0) return;
     if (glide.right - glide.left < 2 || glide.bottom - glide.top < 2) return;
     const auto button = focusedButton(*context_->device_panel, viewport_.width, viewport_.height);
     const float alpha = (editing ? 0.05f : 0.12f) * (button ? 1 - arrival(context_->device_glide, *button) : 1.0f);

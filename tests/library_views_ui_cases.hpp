@@ -10,6 +10,7 @@
 
 int LauncherUiTest::libraryViews(HWND window) {
     Launcher app;
+    app.settings_.menu_dialog = false; // The anchored menu's geometry is checked here (the dialog has its own cases).
     app.settings_.launch_animation = false; // Cancelled synthetic launches must not leave the cosmetic overlay running.
     app.settings_.accept_action = AppSettings::AcceptAction::launch; // Picking a card launches here; Szczegóły is checked on its own below.
     app.hwnd_ = window; app.execute_ = fakeExecute;

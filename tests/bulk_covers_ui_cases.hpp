@@ -102,7 +102,7 @@ int LauncherUiTest::bulkCovers(HWND window) {
             [](const Game&, ArtworkKind) -> bulk_covers::Attempt { return {bulk_covers::Result::saved}; }
         };
         app.openSettings(); app.settings_state_.selectCategory(static_cast<int>(settings_ui::Category::library));
-        app.settings_state_.open(settings_ui::Page::custom_games); app.buildSettingsRows();
+        app.openPlatformSettings(GameSource::drmfree); // Okładki: on DRM-free's page, after Dodaj grę.
         const auto covers = std::find_if(app.settings_rows_.begin(), app.settings_rows_.end(), [](const auto& r) { return r.id == settings_ui::Id::custom_covers; });
         if (covers == app.settings_rows_.end() || covers - app.settings_rows_.begin() != 1) return 2818;
         app.settings_state_.options = true; app.settings_state_.selected[app.settings_state_.category] = 1;
