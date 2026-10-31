@@ -16,7 +16,7 @@ using Microsoft::WRL::ComPtr;
 using namespace render_detail;
 
 D2D1_COLOR_F Renderer::platformTileFill(const Game& game, float alpha) const {
-    if (game.kind == GameKind::platform && console_colors_) return platformColor(game.platform, alpha);
+    if (game.kind == GameKind::platform && console_colors_ && !studioPlatform(game.platform)) return platformColor(game.platform, alpha);
     return color(0.045f, 0.05f, 0.06f, alpha);
 }
 
@@ -198,7 +198,7 @@ void Renderer::drawCard(const GameCard& card, size_t index) {
               ((cover_accent_ >> 8) & 255) / 255.0f,
               (cover_accent_ & 255) / 255.0f) :
         perfectGame(card.game) ? perfect_gold :
-        card.game.kind == GameKind::platform ?
+        card.game.kind == GameKind::platform && !studioPlatform(card.game.platform) ?
         (card.game.platform == L"PS3" ? color(0.66f, 0.66f, 0.70f) :
          platformColor(card.game.platform)) :
         color(std::lerp(0.94f, cover.accent.r, color_reveal),

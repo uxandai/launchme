@@ -332,7 +332,7 @@ void Renderer::discardTarget() {
     screen_frame_.Reset(); screen_bow_target_.Reset(); screen_ui_target_.Reset(); desktop_backdrop_.Reset();
     main_target_.Reset(); main_realizer_.Reset();
     kept_hero_.bitmap.Reset(); kept_hero_.brush.Reset();
-    hero_shown_.bitmap.Reset(); hero_leaving_ = {}; // The shown picture comes back from its slot.
+    hero_shown_.bitmap.Reset(); hero_leaving_ = {}; hero_mix_ = 1; // The shown picture comes back from its slot.
     video_bitmap_.Reset(); video_blur_.Reset(); // The next video frame creates them again.
     cinematic_hero_.Reset(); cinematic_previous_hero_.Reset();
     desktop_hero_.Reset(); desktop_hero_previous_.Reset(); // Bitmaps of the old device: the pane picks its picture again.

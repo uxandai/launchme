@@ -131,6 +131,7 @@ public:
     static int amazonGames(HWND window);
     static int xboxAccount(HWND window);
     static int studioLibraries(HWND window);
+    static int studioTiles(HWND window); // studio_tiles_ui_cases.hpp
     static int updates(HWND window);
     static int gameLengths(HWND window);
     static int companionChat(HWND window);
@@ -1421,6 +1422,7 @@ public:
 #include "amazon_ui_cases.hpp"
 #include "xbox_ui_cases.hpp"
 #include "studios_ui_cases.hpp"
+#include "studio_tiles_ui_cases.hpp"
 #include "update_ui_cases.hpp"
 #include "companion_ui_cases.hpp"
 #include "companion_semantic_ui_cases.hpp"
@@ -2226,6 +2228,15 @@ int main(int argc, char** argv) {
         CoUninitialize();
         if (code) std::cerr << "Studios regression failed at checkpoint " << code << '\n';
         else std::cout << "Studios: logo rows, board, studio libraries, hide/move/switch, desktop sections, pane link, search, Ctrl+K, gold edge and TV metadata passed\n";
+        return code;
+    }
+    if (argc == 2 && std::string_view(argv[1]) == "--studio-tiles") {
+        std::filesystem::create_directories(root);
+        const auto code = window ? LauncherUiTest::studioTiles(window) : 99;
+        if (window) DestroyWindow(window);
+        CoUninitialize();
+        if (code) std::cerr << "Studio tiles regression failed at checkpoint " << code << '\n';
+        else std::cout << "Logo rows: every logo on Metro, studio logos fitted, no names under the default home's rows, dark studio tiles passed\n";
         return code;
     }
     if (argc == 2 && std::string_view(argv[1]) == "--tray") {

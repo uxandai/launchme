@@ -742,19 +742,9 @@ void Renderer::drawLibraryAmbient(float opacity) {
     auto* candidate = selected_ < heroes_.size() ? heroes_[selected_].bitmap.Get() : nullptr;
     if (!candidate && selected_ < posters_.size()) candidate = posters_[selected_].bitmap.Get();
     if (!candidate && library_view::media(context_->library_mode) && selected_ < covers_.size()) candidate = covers_[selected_].bitmap.Get();
-    if (screen_changed_ && candidate && candidate == hero_shown_.bitmap.Get() && hero_shown_.level >= 0.999f) {
-        cinematic_hero_ = candidate;
-        cinematic_previous_hero_.Reset();
-        cinematic_changed_ = std::chrono::steady_clock::now() - std::chrono::seconds(1);
-    } else if (detail_ >= 0.30f && candidate != cinematic_hero_.Get()) {
-        cinematic_previous_hero_ = cinematic_hero_; cinematic_hero_ = candidate;
-        cinematic_changed_ = std::chrono::steady_clock::now();
-    }
-    const float fade = smoothFade(std::chrono::duration<float>(std::chrono::steady_clock::now() - cinematic_changed_).count() / 0.35f);
+    const float fade = stepCinematicFade(candidate);
     const CropFocus focus = selected_ < heroes_.size() && heroes_[selected_].bitmap.Get() == cinematic_hero_.Get() ? heroes_[selected_].focus : CropFocus{};
-    drawWallpaper(cinematic_previous_hero_.Get(), opacity * (1 - fade));
-    drawWallpaper(cinematic_hero_.Get(), opacity * fade, 0, focus);
-    if (fade >= 1) cinematic_previous_hero_.Reset();
+    drawWallpapers({cinematic_previous_hero_.Get(), opacity * (1 - fade)}, {cinematic_hero_.Get(), opacity * fade, focus});
 }
 
 void Renderer::drawLibraryDetailed() {

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(launchme VERSION 0.4.7 LANGUAGES C CXX)
+project(launchme VERSION 0.4.8 LANGUAGES C CXX)
 
 if(NOT WIN32)
     # Linux (highly experimental, docs/linux-port.md): the shared core, its tests and the launcher on SDL3 + Skia.
@@ -413,6 +413,7 @@ add_test(NAME low_memory_mode COMMAND launcher_ui_tests --low-memory)
     add_test(NAME tarot_reading_cards_and_results COMMAND launcher_ui_tests --tarot)
     add_test(NAME profile_page_widget_week_achievements COMMAND launcher_ui_tests --profile)
     add_test(NAME publisher_developer_libraries_and_tv_metadata COMMAND launcher_ui_tests --studios)
+    add_test(NAME logo_rows_metro_pages_and_studio_tiles COMMAND launcher_ui_tests --studio-tiles)
     add_dependencies(launcher_ui_tests launchme_studios) # The logos beside the test, as beside the program.
     add_test(NAME launchme_updates_and_whats_new COMMAND launcher_ui_tests --updates)
     add_test(NAME tray_while_playing_and_background_crop COMMAND launcher_ui_tests --tray)

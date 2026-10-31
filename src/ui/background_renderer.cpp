@@ -30,9 +30,98 @@ void Renderer::drawWallpaper(ID2D1Bitmap* image, float opacity, float offset, Cr
     target_->DrawBitmap(image, D2D1::RectF(x, y, x + width, y + height), opacity, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
 }
 
+void Renderer::drawWallpapers(const Wallpaper& under, const Wallpaper& over) {
+    const bool lower = under.image && under.opacity > 0.001f, upper = over.image && over.opacity > 0.001f;
+    ComPtr<ID2D1DeviceContext> context;
+    if (lower && upper) target_.As(&context);
+    if (!context) {
+        if (lower) drawWallpaper(under.image, under.opacity, 0, under.focus);
+        if (upper) drawWallpaper(over.image, over.opacity, 0, over.focus);
+        return;
+    }
+    // In a layer of their own, added together: (1 - f)·A + f·B, then laid over the screen once.
+    target_->PushLayer(D2D1::LayerParameters(), nullptr);
+    context->SetPrimitiveBlend(D2D1_PRIMITIVE_BLEND_ADD);
+    drawWallpaper(under.image, under.opacity, 0, under.focus);
+    drawWallpaper(over.image, over.opacity, 0, over.focus);
+    context->SetPrimitiveBlend(D2D1_PRIMITIVE_BLEND_SOURCE_OVER);
+    target_->PopLayer();
+}
+
+void Renderer::stepHeroFade(const Cover* slot, const ImageBytes& picture) {
+    // The frame's time: the clock, or detail_'s growth since the last frame when that is more.
+    const auto now = std::chrono::steady_clock::now();
+    const float wall = hero_frame_ == std::chrono::steady_clock::time_point{} ? 0.0f :
+        std::clamp(std::chrono::duration<float>(now - hero_frame_).count(), 0.0f, 0.05f);
+    hero_frame_ = now;
+    const float grown = detail_ >= hero_detail_seen_ ? detail_ - hero_detail_seen_ : detail_; // Lower: it started again.
+    hero_detail_seen_ = detail_;
+    const float advance = std::max(wall, grown / 1.7f) / hero_fade_seconds;
+    const bool ready = !picture || (slot && slot->bitmap);
+    const auto bind = [&](HeroLayer& layer) {
+        layer.pixels = picture; // Equal bytes from another load: compared by pointer from now on.
+        if (slot && slot->bitmap) { layer.bitmap = slot->bitmap; layer.tone = slot->tone; layer.focus = slot->focus; }
+    };
+    if (hero_leaving_.pixels && !hero_leaving_.bitmap) { hero_leaving_ = {}; hero_mix_ = 1; } // Its bitmap is gone (a new target).
+    hero_waiting_ = false;
+    if (picture && samePicture(picture, hero_shown_.pixels)) bind(hero_shown_);
+    else if (!picture && !hero_shown_.pixels) {}
+    else if (hero_mix_ < 1 && picture && samePicture(picture, hero_leaving_.pixels)) {
+        // Back to the picture fading out: the same cross-fade runs backwards from where it is.
+        std::swap(hero_shown_, hero_leaving_);
+        hero_mix_ = 1 - hero_mix_;
+        bind(hero_shown_);
+    } else if (hero_mix_ < 1 || !ready || detail_ < (picture ? hero_settle_detail : 0.999f)) {
+        // A cross-fade under way finishes first; a picture still decoding, or a focus that only
+        // passes through, waits. Without a picture the last one stays a little longer: a game's
+        // background usually arrives a moment after its tile is focused.
+        hero_waiting_ = ready;
+    } else {
+        hero_leaving_ = hero_shown_.pixels && hero_shown_.bitmap ? std::move(hero_shown_) : HeroLayer{};
+        hero_shown_ = {};
+        if (picture) bind(hero_shown_);
+        hero_mix_ = 0;
+    }
+    hero_mix_ = std::min(1.0f, hero_mix_ + advance);
+    if (!hero_leaving_.pixels && !hero_shown_.pixels) hero_mix_ = 1;
+    const float level = smoothFade(hero_mix_);
+    hero_shown_.level = hero_shown_.pixels ? level : 0.0f;
+    hero_leaving_.level = 1.0f - level;
+    if (hero_mix_ >= 1) hero_leaving_ = {};
+}
+
+float Renderer::stepCinematicFade(ID2D1Bitmap* candidate) {
+    const auto now = std::chrono::steady_clock::now();
+    const auto progress = [&] { return std::clamp(std::chrono::duration<float>(now - cinematic_changed_).count() / cinematic_fade_seconds, 0.0f, 1.0f); };
+    cinematic_waiting_ = false;
+    if (screen_changed_ && candidate && candidate == hero_shown_.bitmap.Get() && hero_shown_.level >= 0.999f) {
+        // The same picture as the screen before: no fade at all.
+        cinematic_hero_ = candidate;
+        cinematic_previous_hero_.Reset();
+        cinematic_changed_ = now - std::chrono::seconds(1);
+    } else if (candidate != cinematic_hero_.Get()) {
+        const float t = progress();
+        if (t < 1 && candidate && candidate == cinematic_previous_hero_.Get()) {
+            // Back to the picture fading out: the cross-fade runs backwards from where it is.
+            std::swap(cinematic_hero_, cinematic_previous_hero_);
+            cinematic_changed_ = now - std::chrono::duration_cast<std::chrono::steady_clock::duration>(std::chrono::duration<float>((1 - t) * cinematic_fade_seconds));
+        } else if (t < 1 || detail_ < 0.30f) cinematic_waiting_ = t < 1 && detail_ >= 0.30f; // Held: the fade under way or a passing focus.
+        else {
+            cinematic_previous_hero_ = cinematic_hero_;
+            cinematic_hero_ = candidate;
+            cinematic_changed_ = now;
+        }
+    }
+    const float fade = smoothFade(progress());
+    if (fade >= 1) cinematic_previous_hero_.Reset();
+    return fade;
+}
+
 void Renderer::drawBackground() {
     const float width = viewport_.width, height = viewport_.height;
-    if (!context_->platform.empty()) {
+    // A console's colour behind it; a store's or a studio's library stays neutral.
+    const bool tinted = !context_->platform.empty() && !studioPlatform(context_->platform);
+    if (tinted) {
         const auto tint = platformColor(context_->platform);
         brush(color(0.015f + tint.r * 0.18f, 0.018f + tint.g * 0.18f,
                     0.025f + tint.b * 0.18f));
@@ -109,42 +198,13 @@ void Renderer::drawBackground() {
     if (cards_ && !cards_->empty() && context_->library_mode == library_view::View::cinematic) {
         // Hold the last settled image during fast navigation; then cross-fade over 350 ms.
         auto* candidate = selected_ < heroes_.size() ? heroes_[selected_].bitmap.Get() : nullptr;
-        if (screen_changed_ && candidate && candidate == hero_shown_.bitmap.Get() && hero_shown_.level >= 0.999f) {
-            cinematic_hero_ = candidate;
-            cinematic_previous_hero_.Reset();
-            cinematic_changed_ = std::chrono::steady_clock::now() - std::chrono::seconds(1);
-        } else if (detail_ >= 0.30f && candidate != cinematic_hero_.Get()) {
-            cinematic_previous_hero_ = cinematic_hero_;
-            cinematic_hero_ = candidate;
-            cinematic_changed_ = std::chrono::steady_clock::now();
-        }
-        const float fade = smoothFade(std::chrono::duration<float>(std::chrono::steady_clock::now() - cinematic_changed_).count() / 0.35f);
+        const float fade = stepCinematicFade(candidate);
         // Kinowy plays the video in its focused tile (drawRectangularCard): the wallpaper stays.
         const CropFocus focus = candidate == cinematic_hero_.Get() && selected_ < heroes_.size() ? heroes_[selected_].focus : CropFocus{};
-        drawWallpaper(cinematic_previous_hero_.Get(), 0.85f * (1 - fade));
-        drawWallpaper(cinematic_hero_.Get(), 0.85f * fade, 0, focus);
-        if (fade >= 1) cinematic_previous_hero_.Reset();
+        drawWallpapers({cinematic_previous_hero_.Get(), 0.85f * (1 - fade)}, {cinematic_hero_.Get(), 0.85f * fade, focus});
     } else if (cards_ && !cards_->empty()) {
-        const float fade = smoothFade(detail_);
         const Cover* slot = selected_ < heroes_.size() ? &heroes_[selected_] : nullptr;
-        const ImageBytes picture = slot && slot->loaded() ? slot->pixels : nullptr;
-        if (!samePicture(picture, hero_shown_.pixels)) {
-            // Back to the picture still fading out: it returns from where it is, not from zero.
-            if (picture && samePicture(picture, hero_leaving_.pixels)) std::swap(hero_shown_, hero_leaving_);
-            else {
-                // The more visible of the two goes on fading out; an empty background has nothing to fade.
-                if (hero_shown_.pixels && (!hero_leaving_.pixels || hero_shown_.level >= hero_leaving_.level))
-                    hero_leaving_ = std::move(hero_shown_);
-                hero_shown_ = {};
-                hero_shown_.arriving = picture != nullptr;
-            }
-        }
-        hero_shown_.pixels = picture; // Equal bytes from another load: compared by pointer from now on.
-        if (slot && slot->bitmap && picture) { hero_shown_.bitmap = slot->bitmap; hero_shown_.tone = slot->tone; hero_shown_.focus = slot->focus; }
-        if (hero_shown_.bitmap || !picture) hero_shown_.level = std::max(hero_shown_.level, fade);
-        hero_leaving_.level = std::min(hero_leaving_.level, 1.0f - fade);
-        if (hero_leaving_.level <= 0.001f || !hero_leaving_.bitmap) hero_leaving_ = {};
-        if (hero_shown_.level >= 0.999f) hero_shown_.arriving = false;
+        stepHeroFade(slot, slot && slot->loaded() ? slot->pixels : nullptr);
         // A console logo standing in is faint; a game's art behind a console tile is dimmed, and
         // behind a full library grid of covers it stays quieter than behind a shelf.
         const bool grid = (context_->screen == ScreenMode::library || context_->screen == ScreenMode::search) &&
@@ -153,14 +213,8 @@ void Renderer::drawBackground() {
             return layer.tone == HeroTone::logo ? 0.13f : layer.tone == HeroTone::dimmed ? 0.32f :
                    grid ? 0.5f : std::lerp(0.75f, 0.96f, full_screen_mix_);
         };
-        drawWallpaper(hero_leaving_.bitmap.Get(), alpha(hero_leaving_) * hero_leaving_.level * picture_share, -11.0f * (1.0f - hero_leaving_.level), hero_leaving_.focus);
-        const float level = hero_shown_.level;
-        drawWallpaper(hero_shown_.bitmap.Get(), alpha(hero_shown_) * level * picture_share, 13.0f * (1.0f - level), hero_shown_.focus);
-        if (hero_shown_.arriving) {
-            const float echo = (hero_shown_.tone == HeroTone::logo ? 0.015f : hero_shown_.tone == HeroTone::dimmed ? 0.025f : 0.06f) * std::sin(std::numbers::pi_v<float> * level);
-            drawWallpaper(hero_shown_.bitmap.Get(), echo * picture_share, 19.0f * (1.0f - level), hero_shown_.focus);
-            drawWallpaper(hero_shown_.bitmap.Get(), echo * 0.65f * picture_share, -15.0f * (1.0f - level), hero_shown_.focus);
-        }
+        drawWallpapers({hero_leaving_.bitmap.Get(), alpha(hero_leaving_) * hero_leaving_.level * picture_share, hero_leaving_.focus},
+                       {hero_shown_.bitmap.Get(), alpha(hero_shown_) * hero_shown_.level * picture_share, hero_shown_.focus});
         drawVideo(std::lerp(0.8f, 0.96f, full_screen_mix_) * video);
         art = video_bitmap_ ? video : 0.0f;
     } else if (hero_shown_.bitmap && (context_->screen == ScreenMode::settings || context_->screen == ScreenMode::downloads || context_->screen == ScreenMode::devices || context_->screen == ScreenMode::glance ||
@@ -177,7 +231,7 @@ void Renderer::drawBackground() {
         target_->FillRectangle(D2D1::RectF(0, 0, width, height), backdrop_fade_.Get());
         backdrop_fade_->SetOpacity(1.0f);
     }
-    if (aura_ && context_->platform.empty() && shelf_shade > 0.002f) {
+    if (aura_ && !tinted && shelf_shade > 0.002f) {
         aura_->SetCenter(D2D1::Point2F(200, focusY() + 170));
         aura_->SetOpacity((heroes_.empty() || !heroes_[selected_].bitmap ? 1.0f : 0.22f) * shelf_shade);
         target_->FillRectangle(D2D1::RectF(0, 50, width, height), aura_.Get());
@@ -239,6 +293,9 @@ void Renderer::drawBackgroundGrid(float art) {
 void Renderer::drawHero() {
     if (cards_->empty()) return;
     if (gameKey((*cards_)[selected_].game).empty()) return;
+    // A store's, console's or studio's tile is its own logo: no name over the row as well.
+    const auto kind = (*cards_)[selected_].game.kind;
+    if (kind == GameKind::platform || kind == GameKind::pc_platform) return;
     const float fade = smoothFade(detail_) * (1.0f - smoothFade(context_->category_menu_progress));
     const float inset = context_->category_rail ? category_rail::Layout{viewport_.width, viewport_.height}.right() : 0;
     const auto& logo = logos_[selected_];

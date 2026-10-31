@@ -167,7 +167,9 @@ void Renderer::drawPlatformBadge() {
                       grid || context_->flix || context_->metro ? 42.0f : viewport_.height - 68.0f - (context_->hints.empty() ? 0.0f : 22.0f);
     const float right = viewport_.width - 57.0f;
     if (found == platform_badges_.end() || !found->second.bitmap) {
-        text(name, right - 110, top + 7, 110, 32, button_font_.Get(), color(0.87f, 0.87f, 0.87f));
+        // A studio's mark until its logo arrives: its name, never its key ("publisher:capcom").
+        text(render_detail::studioPlatform(name) ? (*cards_)[selected_].game.name : name, right - 110, top + 7, 110, 32,
+             button_font_.Get(), color(0.87f, 0.87f, 0.87f));
         return;
     }
     const auto& badge = found->second;

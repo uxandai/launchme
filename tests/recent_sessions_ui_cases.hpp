@@ -120,11 +120,32 @@ int LauncherUiTest::recentSessions(HWND window) {
     app.rebuildCards(); // Detail restarts at 0; a new decode of the same bytes in a new buffer.
     app.renderer_.setHero(app.selected_, pngFixture(90, 64, 36));
     if (app.detail_ != 0 || !paint(L"hero-rebound.png") || app.renderer_.heroLevelForTest() < 0.999f || app.renderer_.heroLeavingForTest()) return 3716;
-    // Another picture half-way in, then back: the first returns from its visible level, not from zero.
-    app.focusCard(1); app.renderer_.setHero(1, pngFixture(200, 64, 36)); app.detail_ = 0.5f;
-    if (!paint(L"hero-crossing.png") || !app.renderer_.heroLeavingForTest() || std::abs(app.renderer_.heroLevelForTest() - 0.5f) > 0.01f) return 3717;
+    // Another picture: nothing moves while the focus only passes through, then it cross-fades in.
+    auto* first = app.renderer_.heroBitmapForTest(0);
+    app.focusCard(1); app.renderer_.setHero(1, pngFixture(200, 64, 36)); app.detail_ = 0.2f;
+    auto* second = app.renderer_.heroBitmapForTest(1);
+    if (!paint(L"hero-passing.png") || !second || app.renderer_.heroLeavingForTest() || app.renderer_.heroShownBitmapForTest() != first ||
+        app.renderer_.heroLevelForTest() < 0.999f) return 3717;
+    app.detail_ = 0.5f;
+    if (!paint(L"hero-crossing.png") || !app.renderer_.heroLeavingForTest() || app.renderer_.heroShownBitmapForTest() != second) return 3760;
+    const float crossing = app.renderer_.heroLevelForTest();
+    if (crossing < 0.2f || crossing > 0.95f) return 3761;
+    // Back: the same cross-fade runs backwards, the first picture from its visible level, not from zero.
     app.focusCard(0); app.detail_ = 0;
-    if (!paint(L"hero-returning.png") || app.renderer_.heroLevelForTest() < 0.45f || !app.renderer_.heroLeavingForTest()) return 3718;
+    if (!paint(L"hero-returning.png") || app.renderer_.heroShownBitmapForTest() != first || app.renderer_.heroLeavingBitmapForTest() != second ||
+        app.renderer_.heroLevelForTest() < 1 - crossing - 0.05f || app.renderer_.heroLevelForTest() > 0.999f) return 3718;
+    app.detail_ = 1; paint(L"hero-settled.png");
+    if (app.renderer_.heroShownBitmapForTest() != first || app.renderer_.heroLeavingForTest()) return 3762;
+    // A third picture, settled, while the second one's cross-fade runs: that fade finishes first,
+    // then the third follows; the second is never dropped half-shown.
+    app.focusCard(1); app.detail_ = 0.345f;
+    if (!paint(L"hero-crossing.png") || app.renderer_.heroShownBitmapForTest() != second || app.renderer_.heroLeavingBitmapForTest() != first ||
+        app.renderer_.heroLevelForTest() > 0.99f) return 3763;
+    app.focusCard(2); app.renderer_.setHero(2, pngFixture(30, 64, 36)); app.detail_ = 0.6f;
+    auto* third = app.renderer_.heroBitmapForTest(2);
+    if (!paint(L"hero-queued.png") || !third || app.renderer_.heroShownBitmapForTest() != second || app.renderer_.heroLeavingForTest() ||
+        app.renderer_.heroLevelForTest() < 0.999f) return 3764;
+    if (!paint(L"hero-following.png") || app.renderer_.heroShownBitmapForTest() != third || app.renderer_.heroLeavingBitmapForTest() != second) return 3765;
 
     // Pad: A held on a game opens its menu, as a held Enter; a short press still starts the game.
     app.showCategory(0); app.focusCard(0);

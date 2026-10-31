@@ -338,6 +338,9 @@ public:
     void settleVideoForTest() { video_started_ -= std::chrono::seconds(2); } // Past its fade-in.
     bool heroLeavingForTest() const { return hero_leaving_.pixels != nullptr; }
     ID2D1Bitmap* heroBitmapForTest(size_t index) const { return index < heroes_.size() ? heroes_[index].bitmap.Get() : nullptr; }
+    ID2D1Bitmap* heroShownBitmapForTest() const { return hero_shown_.bitmap.Get(); }
+    ID2D1Bitmap* heroLeavingBitmapForTest() const { return hero_leaving_.bitmap.Get(); }
+    D2D1_COLOR_F platformTileFillForTest(const Game& game) const { return platformTileFill(game, 1); }
     HRESULT draw_result_for_test = S_OK;
     float psfiveClockAdvanceForTest(const std::wstring& value) { return psfive_clock_font_ ? textAdvance(value, psfive_clock_font_.Get()) : 0; }
 #endif
@@ -474,6 +477,20 @@ private:
                     D2D1_COLOR_F body_ink, int max_lines = 2, bool top_aligned = false, float gap = text_group_gap);
     void drawBackground();
     void drawWallpaper(ID2D1Bitmap* image, float opacity, float offset = 0, CropFocus focus = {});
+    // Two wallpapers mixed as one picture (a cross-fade): their opacities add up instead of the
+    // upper one covering the lower, so half-way the screen never dims through to the background.
+    struct Wallpaper { ID2D1Bitmap* image = nullptr; float opacity = 0; CropFocus focus{}; };
+    void drawWallpapers(const Wallpaper& under, const Wallpaper& over);
+    // The focused game's background (src/ui/background_renderer.cpp): a new picture waits until
+    // the focus has stayed on it for hero_settle_detail and its bitmap is ready, then cross-fades
+    // in over hero_fade_seconds. A cross-fade under way always finishes (or runs backwards to the
+    // picture it left) before the next one starts: quick steps never leave two pictures half-shown.
+    void stepHeroFade(const Cover* slot, const ImageBytes& picture);
+    // Kinowy's wallpaper: the same rule, on the bitmaps it shows. Returns the cross-fade's level.
+    float stepCinematicFade(ID2D1Bitmap* candidate);
+    static constexpr float hero_fade_seconds = 0.3f;
+    static constexpr float hero_settle_detail = 0.34f;  // About 0.2 s of detail_ (1.7 per second).
+    static constexpr float cinematic_fade_seconds = 0.35f;
     void drawBackgroundGrid(float art);
     void drawLaunchAnimation();
     void drawLibraryBackdrop(float opacity);
@@ -1033,11 +1050,16 @@ private:
         ImageBytes pixels;
         Microsoft::WRL::ComPtr<ID2D1Bitmap> bitmap;
         HeroTone tone = HeroTone::full;
-        bool arriving = false; // A new picture: its entrance echoes.
         float level = 0;       // Visible share, 0..1.
         CropFocus focus;       // Its slot's focus (Cover::focus).
     };
     HeroLayer hero_shown_, hero_leaving_;
+    // The cross-fade from hero_leaving_ to hero_shown_, linear 0..1 (1: settled). It advances with
+    // the frame clock or with detail_'s growth, whichever is more (a test sets detail_ directly).
+    float hero_mix_ = 1;
+    float hero_detail_seen_ = 0;
+    std::chrono::steady_clock::time_point hero_frame_{};
+    bool hero_waiting_ = false; // A ready picture waits for the focus to settle or a fade to finish.
     Cover kept_hero_; // One selected hero (including an in-flight decode) across a card rebuild.
     ScreenMode painted_screen_ = ScreenMode::shelves;
     bool screen_changed_ = false;
@@ -1051,6 +1073,7 @@ private:
     std::chrono::steady_clock::time_point video_started_{};
     Microsoft::WRL::ComPtr<ID2D1Bitmap> cinematic_hero_, cinematic_previous_hero_;
     std::chrono::steady_clock::time_point cinematic_changed_{};
+    bool cinematic_waiting_ = false; // A settled picture waits for the cross-fade under way.
     std::wstring platform_aura_name_;
     Microsoft::WRL::ComPtr<ID2D1RadialGradientBrush> platform_aura_;
     Microsoft::WRL::ComPtr<ID2D1LinearGradientBrush> steelbook_edge_;

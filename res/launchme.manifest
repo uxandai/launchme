@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0" xmlns:asmv3="urn:schemas-microsoft-com:asm.v3">
-  <assemblyIdentity type="win32" name="Launchme" version="0.4.7.0" processorArchitecture="amd64"/>
+  <assemblyIdentity type="win32" name="Launchme" version="0.4.8.0" processorArchitecture="amd64"/>
   <!-- requestedExecutionLevel asInvoker comes from the linker default (/MANIFESTUAC). -->
   <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
     <application>

@@ -1,6 +1,6 @@
 // Metro home layout, after the 2011 Xbox 360 dashboard: a start page with the most recently
-// played games and shortcuts, then one page per home category (stores and consoles as logo
-// tiles, other categories as posters after a "Wszystkie" tile). cards_ holds every page's
+// played games and shortcuts, then one page per home category (stores, consoles and studios as
+// logo tiles, other categories as posters after a "Wszystkie" tile). cards_ holds every page's
 // tiles back to back (metro_pages_, metro_tiles_), so renderer slots, art binding and hit
 // testing keep working per card index. category_ follows the focused page and each
 // category's `selected` is the tile on it, so bookmarks, the category menu and returning from
@@ -136,7 +136,9 @@ void Launcher::rebuildMetro(bool preserve_background) {
         const float origin = pages.back().right + metro_layout::page_gap;
         pages.push_back({index, cards_.size(), 0, origin, origin, category.id});
         page = &pages.back();
-        if (category.id == "pc-platforms" || category.id == "emulation") {
+        // Logo pages: stores, consoles, publishers and developers, every one of them (columns of
+        // three, the page as wide as it needs; its scroll follows the focus).
+        if (category.id == "pc-platforms" || category.id == "emulation" || studioCategory(category.id)) {
             for (size_t i = 0; i < category.games.size(); ++i) add(category.games[i], Role::logo, metro_layout::logo(origin, i));
             continue;
         }

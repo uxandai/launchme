@@ -138,13 +138,13 @@ void Renderer::resetCovers(size_t count, bool preserve_background) {
         if (painted_screen_ == ScreenMode::library && kept_hero_.bitmap &&
             cinematic_hero_ == kept_hero_.bitmap && !samePicture(hero_shown_.pixels, kept_hero_.pixels)) {
             hero_leaving_ = hero_shown_;
-            const float level = smoothFade(std::chrono::duration<float>(std::chrono::steady_clock::now() - cinematic_changed_).count() / 0.35f);
-            hero_shown_ = {kept_hero_.pixels, kept_hero_.bitmap, kept_hero_.tone, false, level, kept_hero_.focus};
-            if (level >= 0.999f) hero_leaving_ = {};
+            hero_mix_ = std::clamp(std::chrono::duration<float>(std::chrono::steady_clock::now() - cinematic_changed_).count() / cinematic_fade_seconds, 0.0f, 1.0f);
+            hero_shown_ = {kept_hero_.pixels, kept_hero_.bitmap, kept_hero_.tone, smoothFade(hero_mix_), kept_hero_.focus};
+            if (hero_mix_ >= 1) hero_leaving_ = {};
         }
     } else if (!preserve_background) {
         kept_hero_ = {};
-        hero_shown_ = {}; hero_leaving_ = {};
+        hero_shown_ = {}; hero_leaving_ = {}; hero_mix_ = 1; hero_detail_seen_ = 0;
         cinematic_hero_.Reset(); cinematic_previous_hero_.Reset();
         library_backdrop_active_ = false;
         library_backdrop_from_ = library_backdrop_opacity_ = 0;
@@ -158,7 +158,7 @@ void Renderer::resetCovers(size_t count, bool preserve_background) {
 }
 
 void Renderer::remapCovers(const std::vector<size_t>& from, bool preserve_background) {
-    if (!preserve_background) { hero_shown_ = {}; hero_leaving_ = {}; kept_hero_ = {}; }
+    if (!preserve_background) { hero_shown_ = {}; hero_leaving_ = {}; kept_hero_ = {}; hero_mix_ = 1; hero_detail_seen_ = 0; }
     const auto remap = [&](auto& list) {
         std::remove_reference_t<decltype(list)> next(from.size());
         for (size_t i = 0; i < from.size(); ++i) if (from[i] < list.size()) next[i] = std::move(list[from[i]]);
@@ -727,7 +727,8 @@ void Renderer::clearVideo() {
 
 bool Renderer::animating() const {
     return decoder_.pending() > 0 || decoder_.completed() != decoded_seen_ || uploads_left_ ||
-           std::chrono::steady_clock::now() - cinematic_changed_ < std::chrono::milliseconds(350) ||
+           std::chrono::steady_clock::now() - cinematic_changed_ < std::chrono::milliseconds(350) || cinematic_waiting_ ||
+           hero_mix_ < 1 || hero_waiting_ ||
            (desktop_viewport_ && std::chrono::steady_clock::now() - desktop_hero_changed_ < std::chrono::milliseconds(320)) ||
            std::chrono::steady_clock::now() - last_reveal_ < reveal_duration ||
            std::chrono::steady_clock::now() - skeleton_at_ < std::chrono::milliseconds(150);

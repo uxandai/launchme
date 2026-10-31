@@ -9,9 +9,12 @@
 
 #include <algorithm>
 #include <string>
+#include <string_view>
 
 namespace render_detail {
 inline D2D1_COLOR_F color(float r, float g, float b, float a = 1.0f) { return D2D1::ColorF(r, g, b, a); }
+// A publisher's or developer's tile ("publisher:capcom"): a logo on the stores' dark fill.
+inline bool studioPlatform(std::wstring_view platform) { return platform.starts_with(L"publisher:") || platform.starts_with(L"developer:"); }
 inline D2D1_COLOR_F platformColor(const std::wstring& platform, float alpha = 1.0f) {
     if (const auto* found = findEmulationPlatform(platform)) return color(found->red, found->green, found->blue, alpha);
     return color(0.18f, 0.25f, 0.33f, alpha);
