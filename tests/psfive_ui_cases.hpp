@@ -28,6 +28,7 @@ int LauncherUiTest::psfive(HWND window) {
     app.settings_.home_layout = AppSettings::HomeLayout::psfive;
     app.settings_.psfive_size = AppSettings::XmbSize::normal;
     app.settings_.psfive_clock = true;
+    app.settings_.psfive_details = false; // The quick bar under the buttons; the sheet under the row has its own block.
     app.local_time_ = [] { SYSTEMTIME now{}; now.wYear = 2026; now.wMonth = 10; now.wDay = 7; now.wHour = 12; return now; };
     auto library = std::make_unique<LibraryMessage>();
     library->account = 1;
@@ -132,6 +133,34 @@ int LauncherUiTest::psfive(HWND window) {
     settle();
     if (app.cards_[2].emphasis > 0.01f || std::abs(app.cards_[2].size - layout::focus_tile) > 1 || !app.psfive_action_glide_.valid) return 4911;
     if (!capture(L"psfive-play.png")) return 4912;
+    { // Down from "Graj": the sheet as on Szczegóły (frosted cards, no title line), the screenshots
+      // focused with the tiles' outline; Down to the similar games, Up back, Up again to "Graj".
+        app.psfive_details_key_ = gameKey(app.cards_[app.selected_].game);
+        app.psfive_shots_loading_ = false;
+        app.psfive_shot_full_urls_.assign(5, L"https://example.invalid/shot.jpg");
+        app.psfive_similar_games_.assign(app.public_library_.begin() + 12, app.public_library_.begin() + 18);
+        app.renderer_.resetPsfiveDetails(5, app.psfive_similar_games_.size());
+        for (size_t i = 0; i < 5; ++i) app.renderer_.setPsfiveShot(i, shareImage(pngFixture(static_cast<uint8_t>(60 + i * 30), 192, 108)));
+        // Its details known (as read with the description): the facts and the achievements card.
+        app.desktop_details_key_ = app.psfive_details_key_; app.desktop_details_preview_ = false; app.desktop_details_revision_ = app.game_index_revision_;
+        app.desktop_details_ = {};
+        app.desktop_details_.description = L"A fixture game about tiles, rows and sheets. Its description runs over several lines so the card shows how the text wraps and where it stops, the way Szczegóły does with its own Opis card.";
+        app.desktop_details_.developer = L"Fixture Studio"; app.desktop_details_.genres = L"Akcja, RPG"; app.desktop_details_.players = L"1-2";
+        app.desktop_details_.achievements_unlocked = 17; app.desktop_details_.achievements_total = 42;
+        app.settings_.psfive_details = true;
+        app.psfiveVertical(1); // Down from "Graj".
+        if (app.psfive_details_ != 1 || app.psfiveActions()) return 5130;
+        settle();
+        if (!app.psfive_focus_glide_ || !capture(L"psfive-details.png")) return 5131;
+        app.psfiveDetailsVertical(1);
+        if (app.psfive_details_ != 2) return 5132;
+        settle();
+        if (!capture(L"psfive-details-similar.png")) return 5133;
+        app.psfiveDetailsVertical(-1); app.psfiveDetailsVertical(-1);
+        if (app.psfive_details_ != -1 || app.psfive_action_ != 0) return 5134;
+        app.settings_.psfive_details = false;
+        settle();
+    }
     // Right to "…", Left back to "Graj", Left again a boundary.
     app.navigate(1);
     if (app.psfive_action_ != 1) return 4913;

@@ -1783,6 +1783,8 @@ private:
     std::vector<std::wstring> psfive_shot_full_urls_; // "<cache file>|<URL>" of each shown screenshot's full picture.
     std::vector<Game> psfive_similar_games_;
     std::array<bool, 10> psfive_similar_bound_{};
+    bool psfive_focus_glide_ = false;              // The strips' focus frame, gliding (tickPsfiveDetails).
+    std::array<float, 4> psfive_focus_box_{};
     void openStore();
     void searchStore();
     void openDetails(const Game& game);
@@ -1938,7 +1940,8 @@ private:
     // "Wszystkie" tile opening the category's library.
     bool psfiveAllTile() const;
     bool psfiveButtons() const; // The focused tile is a game with buttons.
-    bool psfiveActions() const { return psfive_action_ >= 0 && psfiveActive() && psfiveButtons(); }
+    // The buttons have the focus (not while the details under them are shown: the sheet has it).
+    bool psfiveActions() const { return psfive_action_ >= 0 && psfive_details_ < 0 && psfiveActive() && psfiveButtons(); }
     void psfiveFocusAction(int action);
     // The top bar (Up from the row): three category tabs, optional "Więcej...", Widgets (drawer)
     // and Menu (the quick bar). psfive_top_ counts them in that

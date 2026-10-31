@@ -517,6 +517,12 @@ void Launcher::onArtworkBrowser(std::unique_ptr<ArtworkBrowserMessage> message) 
         state.provider = message->page.provider;
         if (message->page.provider == ArtworkProvider::steamgriddb) state.source = message->page.source;
         state.more = message->page.more;
+        // A focused page arrow that has no page now: the other one, else "Z dysku…".
+        if (state.page_focus) {
+            if (state.page_focus > 0 && !state.more) state.page_focus = state.page > 0 ? -1 : 0;
+            else if (state.page_focus < 0 && state.page == 0) state.page_focus = state.more ? 1 : 0;
+            if (!state.page_focus) state.local_focus = true;
+        }
         state.applied_id = state.wallpaper ? settings_.wallpaper_id : message->applied_id;
         state.status = message->page.error;
         if (state.status.empty() && state.assets.empty()) state.status = tr(L"Brak grafik.");
@@ -753,6 +759,16 @@ void Launcher::artworkMove(int horizontal, int vertical) {
         } else navigationBoundary();
         InvalidateRect(hwnd_, nullptr, FALSE); return;
     }
+    // The page arrows under "Z dysku…": Left/Right between them (only an enabled one), Up back to "Z dysku…".
+    if (state.page_focus && !state.gallery && !state.search_focus) {
+        const bool previous = state.page > 0, next = state.more;
+        if (vertical < 0) { state.page_focus = 0; state.local_focus = true; audio_.navigate(); }
+        else if (horizontal < 0 && state.page_focus > 0 && previous) { state.page_focus = -1; audio_.navigate(); }
+        else if (horizontal > 0 && state.page_focus < 0 && next) { state.page_focus = 1; audio_.navigate(); }
+        else if (horizontal > 0) { state.page_focus = 0; state.search_focus = state.query_selected = true; audio_.navigate(); }
+        else navigationBoundary();
+        InvalidateRect(hwnd_, nullptr, FALSE); return;
+    }
     // Right from any rail entry reaches the search field even while the gallery is loading/empty.
     // Keep the selected rail entry so Left returns there; Down enters the results or gallery.
     if (horizontal > 0 && !state.gallery && !state.search_focus) {
@@ -767,6 +783,9 @@ void Launcher::artworkMove(int horizontal, int vertical) {
     }
     if (state.local_focus && !state.gallery && !state.search_focus) {
         if (vertical < 0) { state.local_focus = false; audio_.navigate(); } // Back to the last type.
+        else if (vertical > 0 && !state.results_mode && (state.more || state.page > 0)) { // Down: the page arrows, the next one first.
+            state.local_focus = false; state.page_focus = state.more ? 1 : -1; audio_.navigate();
+        }
         else { navigationBoundary(); return; }
         InvalidateRect(hwnd_, nullptr, FALSE); return;
     }
@@ -829,6 +848,7 @@ void Launcher::artworkAccept() {
         else { state.local_kind = state.local_row; state.local_row = artwork_ui::State::local_pick_row; audio_.context(); InvalidateRect(hwnd_, nullptr, FALSE); }
         return;
     }
+    if (state.page_focus && !state.gallery && !state.search_focus) { artworkPage(state.page_focus); return; } // The focused page arrow.
     if (state.local_focus && !state.gallery && !state.search_focus) { openLocalArtwork(); return; }
     if (state.provider_open) { chooseArtworkProvider(state.provider_row); return; }
     if (state.provider_focus && !state.gallery && !state.search_focus) { openArtworkProviders(); return; }
@@ -905,6 +925,7 @@ void Launcher::artworkClick(float x, float y, bool double_click) {
     if (state.providerChoice() && layout.providerButton().contains(x, y)) { openArtworkProviders(); return; }
     if (state.croppable() && layout.cropButton().contains(x, y)) { openArtworkCrop(); return; }
     state.local_focus = state.provider_focus = state.crop_focus = state.back_focus = false;
+    state.page_focus = 0;
     if (!state.query.empty() && layout.clearButton().contains(x, y)) { clearArtworkQuery(); return; }
     if (layout.searchBox().contains(x, y)) { state.search_focus = true; state.gallery = false; state.query_selected = true; InvalidateRect(hwnd_, nullptr, FALSE); return; }
     if (layout.searchButton().contains(x, y)) { searchArtwork(); return; }

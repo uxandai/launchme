@@ -104,7 +104,7 @@ void Renderer::drawArtworkBrowser() {
     }
     if (!type_focus) fillPill(base.rail(state.category), shade(1, 0.07f)); // The type in view.
     drawButtonGlass(box(layout.localButton()), 1, false);
-    if (rail_focus && !state.back_focus) {
+    if (rail_focus && !state.back_focus && !state.page_focus) {
         const auto target = state.local_focus ? layout.localButton() : base.rail(state.category);
         auto r = box(target);
         if (context_->artwork_glide) { const auto& g = *context_->artwork_glide; r = D2D1::RectF(g.left, g.top, g.right, g.bottom); }
@@ -125,7 +125,8 @@ void Renderer::drawArtworkBrowser() {
         for (bool next : {false, true}) {
             const auto r = layout.pageButton(next);
             const bool enabled = next ? state.more : state.page > 0;
-            const auto glyph = drawButton(box(r), 0, 1, false, false, enabled);
+            const bool focused = rail_focus && state.page_focus == (next ? 1 : -1); // The pad/keyboard focus.
+            const auto glyph = drawButton(box(r), focused ? 1.0f : 0.0f, 1, false, false, enabled);
             const float cx = (r.left + r.right) * 0.5f, cy = (r.top + r.bottom) * 0.5f;
             const float d = next ? 1.0f : -1.0f;
             line(cx - 4 * d, cy - 6, cx + 3 * d, cy, glyph, 1.8f);

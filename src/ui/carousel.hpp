@@ -17,6 +17,13 @@ inline float smallSize(size_t count, float width, bool fixed_row) {
                             static_cast<float>(count + 1));
 }
 
+// Ostatnio grane as one fixed line: up to its usual 9 tiles (8 games and Wszystkie), or more while
+// they keep that row's size; past it the row scrolls instead of every tile shrinking.
+inline constexpr size_t fixed_row_cards = 9;
+inline bool fitsFixedRow(size_t count, float width) {
+    return count <= fixed_row_cards || smallSize(count, width, true) >= smallSize(fixed_row_cards, width, true) - 0.5f;
+}
+
 inline float left(size_t index, size_t selected, size_t count, float width, bool fixed_row) {
     constexpr float inset = 56.0f, gap = 12.0f;
     const float compact_size = smallSize(count, width, fixed_row);

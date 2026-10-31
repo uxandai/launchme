@@ -528,17 +528,22 @@ void Launcher::paint(bool overlay) {
             details_sheet.shot = psfive_shot_; details_sheet.similar = psfive_similar_;
             details_sheet.shots = psfive_shot_full_urls_.size();
             details_sheet.viewer = psfive_shot_view_ && psfiveDetailsShown();
-            details_sheet.title = game.name;
-            details_sheet.platform = activePlatformName(game);
             bool loading = false;
             const auto& info = desktopDetails(game, loading);
             details_sheet.loading = loading || psfive_shots_loading_;
             details_sheet.description = info.description;
+            details_sheet.achievements_unlocked = info.achievements_unlocked;
+            details_sheet.achievements_total = info.achievements_total;
+            details_sheet.focus_glide = psfive_focus_glide_;
+            details_sheet.focus_left = psfive_focus_box_[0]; details_sheet.focus_top = psfive_focus_box_[1];
+            details_sheet.focus_right = psfive_focus_box_[2]; details_sheet.focus_bottom = psfive_focus_box_[3];
+            // As on Szczegóły: the four main facts always (a dash when unknown), the others when known.
             const auto fact = [&](const wchar_t* label, const std::wstring& value) { if (!value.empty()) details_sheet.facts.push_back({tr(label), value}); };
-            fact(L"Developer", info.developer);
-            fact(L"Wydawca", info.publisher);
-            if (!info.release_date.empty()) fact(L"Premiera", game_index::releaseLabel(info.release_date, i18n::english()));
-            fact(L"Gatunek", info.genres);
+            const auto main_fact = [&](const wchar_t* label, const std::wstring& value) { details_sheet.facts.push_back({tr(label), value.empty() ? L"\u2014" : value}); };
+            main_fact(L"Developer", info.developer);
+            main_fact(L"Wydawca", info.publisher);
+            main_fact(L"Premiera", info.release_date.empty() ? std::wstring{} : game_index::releaseLabel(info.release_date, i18n::english()));
+            main_fact(L"Gatunek", info.genres);
             fact(L"Gracze", info.players);
             if (info.playtime_minutes && *info.playtime_minutes) fact(L"Czas gry", formatPlaytime(*info.playtime_minutes));
             fact(L"Ocena", info.score);

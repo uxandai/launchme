@@ -51,8 +51,10 @@ struct State {
     bool crop_focus = false, back_focus = false;
     // Interfejs → Tapeta: the same screen picks the wallpaper; its rail holds Zdjęcia and Animowane.
     bool wallpaper = false;
+    // The page arrows under "Z dysku…" with the pad/keyboard focus: -1 the previous page, 1 the next; 0 none.
+    int page_focus = 0;
     // The rail has the focus on one of its buttons rather than on a type.
-    bool railButton() const { return local_focus || back_focus; }
+    bool railButton() const { return local_focus || back_focus || page_focus != 0; }
     // Neither the gallery nor the search row (field, "Kadruj" or "Źródło") has the focus: the rail has it.
     bool railFocus() const { return !gallery && !search_focus && !provider_focus && !crop_focus; }
     bool emulated() const { return game.kind == GameKind::nonsteam && game.platform != L"PC"; }

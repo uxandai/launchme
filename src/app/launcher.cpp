@@ -408,7 +408,9 @@ void Launcher::snapCardsForTransition() {
     const bool grid = gridScreen(screen_);
     const bool rail = categoryRailActive();
     const float shelf_inset = rail ? category_rail::Layout{view.width, view.height}.right() : 0;
-    const bool fixed_row = !rail && category_ == 0 && !grid;
+    // Ostatnio grane fits on one line while its tiles keep their size (8 games and Wszystkie); with more
+    // (Glance, Tarot, Towarzyszka, Dodaj grę as tiles) it scrolls sideways like the other rows instead of shrinking.
+    const bool fixed_row = !rail && category_ == 0 && !grid && carousel::fitsFixedRow(cards_.size(), view.width - shelf_inset);
     const bool xmb = xmbActive(), flix = flixActive(), metro = metroActive(), psfive = psfiveActive(), list = libraryList();
     const bool psfive_buttons = psfive && (psfiveActions() || psfiveTopFocused());
     const float shelf_aspect = shelfPosters() ? 2.0f / 3.0f : 1.0f;
@@ -568,7 +570,9 @@ void Launcher::tick() {
     const bool grid = gridScreen(screen_);
     const bool rail = categoryRailActive();
     const float shelf_inset = rail ? category_rail::Layout{view.width, view.height}.right() : 0;
-    const bool fixed_row = !rail && category_ == 0 && !grid;
+    // Ostatnio grane fits on one line while its tiles keep their size (8 games and Wszystkie); with more
+    // (Glance, Tarot, Towarzyszka, Dodaj grę as tiles) it scrolls sideways like the other rows instead of shrinking.
+    const bool fixed_row = !rail && category_ == 0 && !grid && carousel::fitsFixedRow(cards_.size(), view.width - shelf_inset);
     const bool glance_motion = tickGlance(dt);
     const bool companion_motion = tickCompanion(dt);
     const bool tarot_motion = tickTarot(dt);

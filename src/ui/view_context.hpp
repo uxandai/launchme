@@ -444,9 +444,13 @@ struct ViewContext {
         size_t shot = 0, similar = 0;   // The focused screenshot and similar game.
         size_t shots = 0;               // Screenshots known (their pictures in the renderer's slots).
         bool loading = false, viewer = false; // Still asking; a screenshot shown full screen.
-        std::wstring title, description, platform;
+        std::wstring description;
         std::vector<std::pair<std::wstring, std::wstring>> facts; // Label, value.
+        uint32_t achievements_unlocked = 0, achievements_total = 0;
         std::vector<std::wstring> similar_names;
+        // The focus frame gliding between screenshots and similar games (absolute rectangle).
+        bool focus_glide = false;
+        float focus_left = 0, focus_top = 0, focus_right = 0, focus_bottom = 0;
     };
     std::optional<PsfiveDetails> psfive_details;
     // Metro's light theme (Opcje układu → Jasny motyw).

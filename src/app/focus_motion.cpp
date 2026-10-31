@@ -193,7 +193,7 @@ void Launcher::animateFocus(float dt, float target_x, float target_y, float targ
     } else details_glide_.valid = false;
     // Zmień grafikę: the rail's types, its buttons and Back (not while the gallery or the search has the focus).
     // Back is its own circle at the top left (drawn white when focused): the pill does not glide there.
-    if (artworkOpen() && artwork_state_.railFocus() && !artwork_state_.back_focus) {
+    if (artworkOpen() && artwork_state_.railFocus() && !artwork_state_.back_focus && !artwork_state_.page_focus) {
         const auto& state = artwork_state_;
         const auto layout = state.layout(view.width, view.height);
         const auto r = state.local_focus ? layout.localButton() : layout.base().rail(state.category);

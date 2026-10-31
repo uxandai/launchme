@@ -35,6 +35,7 @@ void Launcher::enterDown(bool repeated) {
     if (enter_held_) return; // Ignore Windows auto-repeat while holding Enter.
     if (menu_open_) { menuAccept(); return; }
     if (categoryRailActive() && category_rail_focus_) { focusCategoryRail(false); return; }
+    if (psfiveDetailsShown()) { psfiveDetailsAccept(); return; } // The details under the row: their screenshot or game.
     if (psfiveActions()) { psfiveActivate(); return; } // "Graj" / "…" act at once, no hold.
     if (psfiveTopFocused()) { psfiveTopActivate(); return; } // The top bar acts immediately too.
     if (cards_.empty()) return;
@@ -64,7 +65,7 @@ void Launcher::cancelEnterHold() { enter_held_ = pad_enter_hold_ = false; dashbo
 bool Launcher::acceptHoldsForMenu() const {
     if (glanceOpen() || companionOpen()) return false;
     if (pending_launch_ || menu_open_ || identifyOpen() || screen_ == ScreenMode::plugin_page || screen_ == ScreenMode::details || downloadsOpen() ||
-        cropOpen() || devicesOpen() || artworkOpen() || (categoryRailActive() && category_rail_focus_) || metroTabsFocused() || psfiveActions() || psfiveTopFocused() ||
+        cropOpen() || devicesOpen() || artworkOpen() || (categoryRailActive() && category_rail_focus_) || metroTabsFocused() || psfiveActions() || psfiveTopFocused() || psfiveDetailsShown() ||
         (libraryControls() && (library_controls_.focus >= 0 || library_controls_.open() || library_controls_.action >= 0)) ||
         searchBackFocused() || cards_.empty() || selected_ >= cards_.size()) return false;
     const auto& game = cards_[selected_].game;
