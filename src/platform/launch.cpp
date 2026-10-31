@@ -193,7 +193,7 @@ INT_PTR executeGameAction(HWND window, const GameAction& action) {
     info.lpParameters = arguments.empty() ? nullptr : arguments.c_str();
     const auto directory = action.working_directory.wstring();
     info.lpDirectory = directory.empty() ? nullptr : directory.c_str();
-    info.nShow = SW_SHOWNORMAL;
+    info.nShow = action.hidden ? SW_HIDE : SW_SHOWNORMAL;
     // The action's own variables: set for the synchronous ShellExecuteEx (SEE_MASK_NOASYNC), the
     // started process inherits them, then Launchme's environment is restored.
     std::vector<std::pair<std::wstring, std::optional<std::wstring>>> previous;

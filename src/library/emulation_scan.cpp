@@ -566,6 +566,7 @@ GameAction action(const Rule& rule, const Setup& setup, const std::filesystem::p
             if (windows) {
                 const auto root = setup.environment.system_root.empty() ? std::filesystem::path(L"C:\\Windows") : setup.environment.system_root;
                 play.target = (root / L"System32" / L"WindowsPowerShell" / L"v1.0" / L"powershell.exe").wstring();
+                play.hidden = true; // EmuDeck's launcher writes to its console (and fails to hide it itself): never shown.
                 play.arguments = L"-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command \"& " + powershellQuoted(script.wstring()) +
                                  (words.empty() ? std::wstring{} : L" " + words) + L" " + powershellQuoted(rom.wstring()) + L"\"";
             } else {

@@ -43,6 +43,8 @@ struct GameAction {
     // options (launch_options_store::compatLaunch); null runs it with the defaults in the shared
     // "default" prefix. Ignored for every other target and on Windows.
     std::shared_ptr<const CompatLaunch> compat;
+    // A helper's console starts hidden (EmuDeck's PowerShell launcher): only the program it opens shows.
+    bool hidden = false;
     explicit operator bool() const { return !target.empty(); }
 };
 
