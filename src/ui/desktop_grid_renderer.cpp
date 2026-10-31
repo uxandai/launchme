@@ -135,7 +135,7 @@ void Renderer::drawDesktopPoster(const Layout& layout, const View& view, size_t 
     const Rect poster{rect.left, rect.top, rect.right, rect.bottom};
     const float previous_corner = squircle_corner_, previous_reference = corner_reference_;
     squircle_corner_ = 0.4f; corner_reference_ = 64;
-    const auto ring_shape = selected || marked ? tileShape(box(inflate(poster, 3.5f + (focus_gap_ != AppSettings::FocusGap::none ? 2.5f : 0.0f))), tile_shape_) : ComPtr<ID2D1Geometry>{};
+    const auto ring_shape = selected ? tileShape(box(inflate(poster, 3.5f + (focus_gap_ != AppSettings::FocusGap::none ? 2.5f : 0.0f))), tile_shape_) : ComPtr<ID2D1Geometry>{};
     // The poster's own shape, shadow and outline: tessellated once for this size, drawn at its place.
     const auto* shaped = posterShape(rect.right - rect.left, rect.bottom - rect.top);
     squircle_corner_ = previous_corner; corner_reference_ = previous_reference;
@@ -183,6 +183,9 @@ void Renderer::drawDesktopPoster(const Layout& layout, const View& view, size_t 
     if (frozen) fill(rgb(0.015f, 0.018f, 0.022f, 0.34f * alpha));
     if (installing || session != SessionState::none) drawCardStatusShade(0, 0, local.right, local.bottom, alpha, shape);
     if (selected && view.launch > 0.01f) fill(gray(1, 0.18f * std::sin(smoothFade(view.launch) * std::numbers::pi_v<float>) * alpha));
+    // Marked for a group action: a tint over the poster and its check (top left), not the
+    // selection's ring, so marked, selected and keyboard focus stay three different things.
+    if (marked && !selected) { const auto tint = uiAccent(); fill(rgb(tint.r, tint.g, tint.b, 0.16f * alpha)); }
     if (perfectGame(game)) { // Every achievement unlocked: a gold edge.
         brush(rgb(perfect_gold.r, perfect_gold.g, perfect_gold.b, 0.95f * alpha));
         target_->DrawGeometry(shape, solid_.Get(), 2.2f);
@@ -192,9 +195,13 @@ void Renderer::drawDesktopPoster(const Layout& layout, const View& view, size_t 
         else target_->DrawGeometry(shape, solid_.Get(), 1);
     }
     target_->SetTransform(base);
-    if (ring_shape) {
-        brush(uiAccent((selected ? (view.keyboard && view.zone == 1 ? 1.0f : 0.92f) : 0.6f) * alpha));
-        target_->DrawGeometry(ring_shape.Get(), solid_.Get(), selected && view.keyboard && view.zone == 1 ? 2.5f : 2.0f);
+    if (ring_shape && selected) {
+        // The selection: a thin ring while the keyboard works elsewhere (sidebar, pane, search), a
+        // thick one when the grid has the keyboard's focus.
+        const bool keyboard_here = view.keyboard && view.zone == 1;
+        const bool keyboard_away = view.keyboard && view.zone != 1;
+        brush(uiAccent((keyboard_here ? 1.0f : keyboard_away ? 0.55f : 0.92f) * alpha));
+        target_->DrawGeometry(ring_shape.Get(), solid_.Get(), keyboard_here ? 3.0f : keyboard_away ? 1.5f : 2.0f);
     }
     // Badges: in play, suspended, downloading, to install.
     if (session != SessionState::none) {

@@ -1872,6 +1872,10 @@ private:
     const Game* metroInstallGame() const; // An active installation, else the newest installed game.
     void metroFocusTabs(bool focus);
     bool metroTabsFocused() const { return metroActive() && metro_tabs_; }
+    // The default shelves, XMB and Flix: LB/RB and Page Up/Down change the category (homePage).
+    bool homeShoulderCategories() const {
+        return screen_ == ScreenMode::shelves && !desktopActive() && !metroActive() && !psfiveActive() && !snitchActive();
+    }
     // PSfive home (src/app/psfive.cpp): the default shelf (Recent: psfive_layout::row_games games,
     // then "Wszystkie gry") as one row of tiles at the top, the focused tile pinned to the fixed
     // left margin shared with the tabs. Enter/A or a click on a game moves the focus down to its buttons

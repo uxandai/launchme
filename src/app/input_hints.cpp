@@ -41,9 +41,10 @@ void Launcher::inputHints(ViewContext& context) const {
     if (friends_open_ || menu_open_ || category_menu_open_) { selectAndClose(); return; }
     if (libraryControls() && library_controls_.open()) {
         const bool views = library_controls_.panel == library_ui::Panel::views;
-        add(HintButton::accept, views && library_controls_.view_row == library_ui::views::closeRow(libraryView()) ? tr(L"Zamknij") :
+        const bool close = views && library_controls_.view_row == library_ui::views::closeRow(libraryView());
+        add(HintButton::accept, close ? tr(L"Zamknij") :
             views && !library_controls_.view_dropdown && library_controls_.view_row > 0 ? tr(L"Zmień") : tr(L"Wybierz"));
-        add(HintButton::back, library_controls_.view_dropdown ? tr(L"Wstecz") : tr(L"Zamknij"));
+        if (!close) add(HintButton::back, library_controls_.view_dropdown ? tr(L"Wstecz") : tr(L"Zamknij")); // Not "Zamknij" twice.
         return;
     }
     const Game* game = selected_ < cards_.size() ? &cards_[selected_].game : nullptr;
@@ -161,11 +162,19 @@ void Launcher::inputHints(ViewContext& context) const {
         return;
     case ScreenMode::shelves:
         if (scanning_ || (cards_.empty() && libraryLoading())) return;
+        // Enter / A as the focus target takes it: a category of the rail or a tab returns to its
+        // tiles, PSfive's buttons and top bar act themselves; a tile its game's action.
         if (cards_.empty()) add(HintButton::accept, empty_library::label(empty_focus_)); // Empty library: its focused button.
-        play();
+        else if ((categoryRailActive() && category_rail_focus_) || metroTabsFocused()) add(HintButton::accept, tr(L"Wybierz"));
+        else if (psfiveTopFocused()) add(HintButton::accept, psfive_top_ < static_cast<int>(psfiveTabs().size()) ? tr(L"Wybierz") : tr(L"Otwórz"));
+        else if (psfiveActions()) {
+            if (psfive_action_ == 0) { add(HintButton::accept, actionLabel(cards_[selected_].game)); if (pad) add(HintButton::menu, tr(L"Menu gry")); }
+            else add(HintButton::accept, tr(L"Menu gry"));
+        } else play();
         if (pad) add(HintButton::search, tr(L"Szukaj"));
+        // LB/RB, Page Up/Down: Metro's pages, the categories everywhere else (Snitch has none).
         if (metroActive()) add(HintButton::shoulders, tr(L"Strony"));
-        else if (psfiveActive()) add(HintButton::shoulders, tr(L"Kategorie"));
+        else if (!snitchActive() && categories_.size() > 1 && !cards_.empty()) add(HintButton::shoulders, tr(L"Kategorie"));
         add(HintButton::drawer, tr(L"Pulpit"));
         add(HintButton::home, tr(L"Menu"));
         return;

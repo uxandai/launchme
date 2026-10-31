@@ -31,6 +31,9 @@ Date parseDate(std::wstring_view text);
 Date dateFromUnix(uint64_t seconds);
 // For people: "1 listopada 1998" / "Nov 1, 1998", "listopad 1998" / "Nov 1998", "1998".
 std::wstring dateLabel(const Date& date, bool english);
+// A source's release date as shown: a full day ("2023-09-17", "12 Nov, 2020") in one format,
+// dateLabel's; anything less precise or not a date ("Q4 2024", "Wkrótce") as written.
+std::wstring releaseLabel(std::wstring_view text, bool english);
 
 // Sources in no particular order; priorities are per field (game_index.cpp).
 // achievements: counts from an achievements plugin (games outside Steam, src/app/plugin_achievements.cpp).

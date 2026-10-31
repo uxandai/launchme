@@ -60,7 +60,7 @@ void Renderer::drawPsfive() {
 float Renderer::drawPsfiveBadge(const std::wstring& platform, float x, float center_y, float alpha) {
     constexpr float pad = 10, ink_height = 16, ink_width = 84;
     const auto found = platform_badges_.find(platform);
-    const Cover* logo = found != platform_badges_.end() && found->second.bitmap ? &found->second : nullptr;
+    const Cover* logo = found != platform_badges_.end() && found->second.bitmap && !render_detail::wordOnlyBadge(platform) ? &found->second : nullptr;
     D2D1_RECT_F source{};
     float w = 0, h = 0;
     if (logo) {
@@ -110,6 +110,8 @@ void Renderer::drawPsfiveLabel() {
         if (!platform.empty()) x += drawPsfiveBadge(platform, x, center, alpha) + 14;
     }
     const std::wstring name = game.kind == GameKind::all ? std::wstring(tr(L"Biblioteka")) : game.name;
+    // A soft dark copy under the light name keeps it legible over a bright full-screen picture.
+    textLine(name, x + 1, center + 1.5f, std::max(40.0f, right - x), psfive_name_font_.Get(), D2D1::ColorF(0, 0, 0, 0.6f * alpha));
     textLine(name, x, center, std::max(40.0f, right - x), psfive_name_font_.Get(), gray(0.98f, alpha));
     if (isGame(game) || context_->psfive_caption.empty()) return; // Library, categories, consoles: how many games.
     const float after = x + textAdvance(name, psfive_name_font_.Get()) + 16;

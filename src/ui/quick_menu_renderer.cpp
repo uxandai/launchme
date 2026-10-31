@@ -108,9 +108,12 @@ void Renderer::drawQuickPanel() {
     }
     const float lit = std::clamp(1.0f - std::abs(target_x - circle_x) / 116.0f, 0.0f, 1.0f);
     const auto action = quick_menu::action(context_->quick_selected, store, home);
-    const float caption_width = action == quick_menu::Action::dashboard ? 180.0f : 136.0f;
-    text(action == quick_menu::Action::store ? context_->plugin_menu[quick_menu::pluginIndex(context_->quick_selected, home)].c_str() : quick_menu::caption(action), target_x - caption_width * 0.5f, cy + (snitch ? 57 : 40), caption_width, 24, button_font_.Get(),
-         color(0.9f, 0.9f, 0.9f, focus_alpha * smoothFade(lit)));
+    // Readable from the sofa: 17 px under the bar; the dock is drawn scaled down, so a larger face
+    // there lands at about the same size on screen.
+    const float caption_width = (action == quick_menu::Action::dashboard ? 180.0f : 150.0f) * (snitch ? 1.3f : 1.0f);
+    textLine(action == quick_menu::Action::store ? context_->plugin_menu[quick_menu::pluginIndex(context_->quick_selected, home)] : std::wstring(quick_menu::caption(action)),
+             target_x - caption_width * 0.5f, cy + (snitch ? 70 : 51), caption_width, snitch ? category_font_.Get() : toast_font_.Get(),
+             color(0.9f, 0.9f, 0.9f, focus_alpha * smoothFade(lit)), DWRITE_TEXT_ALIGNMENT_CENTER);
     target_->SetTransform(screen);
 }
 

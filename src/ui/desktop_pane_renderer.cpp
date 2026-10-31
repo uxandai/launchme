@@ -254,8 +254,9 @@ void Renderer::drawDesktopPane(const Layout& layout, const View& view) {
         y += 36;
     }
     std::vector<std::pair<const wchar_t*, const std::wstring*>> facts;
+    const auto released = render_detail::releaseText(details.release_date);
     const std::pair<const wchar_t*, const std::wstring*> all_facts[] = {
-        {trKey(L"Developer"), &details.developer}, {trKey(L"Wydawca"), &details.publisher}, {trKey(L"Premiera"), &details.release_date},
+        {trKey(L"Developer"), &details.developer}, {trKey(L"Wydawca"), &details.publisher}, {trKey(L"Premiera"), &released},
         {trKey(L"Gatunek"), &details.genres}, {trKey(L"Gracze"), &details.players}};
     for (const auto& row : all_facts) if (!row.second->empty()) facts.push_back(row);
     if (!facts.empty()) {

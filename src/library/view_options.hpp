@@ -39,8 +39,8 @@ inline View drawerView(int row) { return drawer_order[row < 0 ? 0 : row >= view_
 inline bool media(View view) { return view == View::floppy || view == View::cartridge_switch; }
 inline bool carousel(View view) { return view == View::coverflow || view == View::bookshelf || media(view); }
 inline bool posterArt(View view) { return view == View::list_plus || view == View::coverflow || view == View::bookshelf || view == View::cartridge_switch; }
-// Półka shows the focused game's year and developer under its cover.
-inline bool metadata(View view) { return view == View::list || view == View::list_plus || view == View::detailed || view == View::overview || view == View::bookshelf; }
+// Półka, Coverflow and the media carousels show the focused game's year, developer and playtime under its cover.
+inline bool metadata(View view) { return view == View::list || view == View::list_plus || view == View::detailed || view == View::overview || carousel(view); }
 inline bool rows(View view) { return view == View::list || view == View::list_plus || view == View::detailed; }
 inline bool landscape(View view) { return view == View::cinematic || view == View::overview; } // 920:430 capsules.
 inline bool tabs(View view) { return view == View::cinematic || view == View::overview; }    // Category strip, LB/RB.

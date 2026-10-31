@@ -2,6 +2,9 @@
 #include "renderer_internal.hpp"
 #include "snitch_layout.hpp"
 
+#include <algorithm>
+#include <cmath>
+
 using namespace render_detail;
 
 void Renderer::drawSnitch() {
@@ -38,6 +41,12 @@ void Renderer::drawSnitch() {
     auto tint = selected_ < covers_.size() && covers_[selected_].loaded() ? covers_[selected_].accent : gray(0.96f);
     if (cover_accent_) tint = color(((cover_accent_ >> 16) & 255) / 255.0f, ((cover_accent_ >> 8) & 255) / 255.0f, (cover_accent_ & 255) / 255.0f);
     tint.a = smoothFade(detail_ * 2.5f) * focused.opacity;
+    // A dark cover accent would sink into the grey: the title keeps a readable brightness.
+    const float luma = 0.2126f * tint.r + 0.7152f * tint.g + 0.0722f * tint.b;
+    if (luma < 0.55f) {
+        const float t = std::clamp((0.55f - luma) / 0.55f, 0.0f, 1.0f) * 0.85f;
+        tint.r = std::lerp(tint.r, 1.0f, t); tint.g = std::lerp(tint.g, 1.0f, t); tint.b = std::lerp(tint.b, 1.0f, t);
+    }
     const float title_y = snitch_layout::rowTop(height) - 42;
     if (isGame(focused.game)) {
         // Like the reference's cartridge before the title: solid when installed, otherwise its outline.
@@ -53,6 +62,20 @@ void Renderer::drawSnitch() {
     }
     textLine(focused.game.name, snitch_layout::left, title_y, width - snitch_layout::left - 80,
              psfive_name_font_.Get(), tint);
+    if (isGame(focused.game)) {
+        // Beside the title, in words: its state (the cartridge glyph alone was easy to miss) and platform.
+        const auto& game = focused.game;
+        const auto session = sessionOf(game);
+        std::wstring status = session == SessionState::frozen ? std::wstring(tr(L"Wstrzymana")) :
+            session == SessionState::running ? std::wstring(tr(L"W grze")) :
+            game.installation.active() ? installationText(game.installation) :
+            !game.installed && game.kind != GameKind::catalog ? std::wstring(localFileGame(game.source) ? missingFileLabel(game) : tr(L"Do instalacji")) : std::wstring();
+        if (const auto platform = activePlatformName(game); !platform.empty() && !studioPlatform(platform))
+            status += (status.empty() ? L"" : L"   ·   ") + platform;
+        const float after = snitch_layout::left + textAdvance(game.name, psfive_name_font_.Get()) + 24;
+        if (!status.empty() && after < width - 200)
+            textLine(status, after, title_y, width - after - 80, menu_font_.Get(), gray(0.66f, tint.a));
+    }
     const auto clip = D2D1::RectF(snitch_layout::clip_left, snitch_layout::rowTop(height) - 28, width, snitch_layout::dockY(height) - 90);
     target_->PushAxisAlignedClip(clip, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
     for (size_t i = 0; i < cards_->size(); ++i) if (i != selected_) drawCard((*cards_)[i], i);

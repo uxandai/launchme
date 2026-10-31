@@ -209,6 +209,14 @@ void Launcher::buildSettingsRows() {
                 (settings_.drawer.fade_fraction - 0.06f) / 0.69f});
             break;
         }
+        // In the desktop window its own options come first; the console layouts (Tryb TV) follow.
+        if (desktop_mode_) {
+            section(tr(L"Okno desktopowe"));
+            add({Id::desktop_platform_badges, Control::toggle, tr(L"Ikona platformy na okładkach"),
+                tr(L"Mały znak sklepu lub konsoli w prawym górnym rogu każdej okładki."), {}, settings_.desktop_platform_badges});
+            add({Id::desktop_gray_uninstalled, Control::toggle, tr(L"Niezainstalowane w czerni i bieli"),
+                tr(L"Okładki gier, których nie ma na dysku, bez kolorów - zainstalowane od razu się wyróżniają."), {}, settings_.desktop_gray_uninstalled});
+        }
         // The console layouts are Tryb TV; the desktop window is the other mode (src/app/desktop*.cpp).
         section(tr(L"Tryb TV"));
         Row layout{Id::home_layout, Control::layout, tr(L"Układ trybu TV"), tr(L"Półki, XMB, Flix, Metro, PSfive lub snitch z rzędem okładek i białymi ikonami.")};
@@ -231,13 +239,6 @@ void Launcher::buildSettingsRows() {
         choiceRow(Id::search_art, tr(L"Grafiki w wyszukiwarce"),
                   tr(L"Wyniki wyszukiwania jako kwadratowe okładki, pionowe plakaty albo poziome kafle."),
                   search_arts, static_cast<int>(settings_.search_art));
-        if (desktop_mode_) {
-            section(tr(L"Okno desktopowe"));
-            add({Id::desktop_platform_badges, Control::toggle, tr(L"Ikona platformy na okładkach"),
-                tr(L"Mały znak sklepu lub konsoli w prawym górnym rogu każdej okładki."), {}, settings_.desktop_platform_badges});
-            add({Id::desktop_gray_uninstalled, Control::toggle, tr(L"Niezainstalowane w czerni i bieli"),
-                tr(L"Okładki gier, których nie ma na dysku, bez kolorów - zainstalowane od razu się wyróżniają."), {}, settings_.desktop_gray_uninstalled});
-        }
         section(tr(L"Wygląd"));
         accentRow(Id::ui_accent, tr(L"Kolor akcentu interfejsu"), tr(L"Przełączniki, suwaki, zaznaczenia i powiadomienia."),
                   settings_.ui_accent_rgb, ui_accents, ui_accent_names);

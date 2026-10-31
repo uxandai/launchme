@@ -32,7 +32,8 @@ bool Renderer::desktopDialogs() const {
 // The dim, the panel centred in the window, its title and close button (and Back on inner pages).
 Rect Renderer::desktopDialogFrame(const Viewport& view, float width, float height, const std::wstring& title, bool back) {
     desktop_modal_hotspots_.clear(); // Only the topmost dialog answers the pointer.
-    brush(rgb(0.01f, 0.012f, 0.016f, 0.12f)); // Barely dimmed: the window behind stays readable.
+    // Dimmed as Windows dialogs are: the window behind stays recognisable but no longer competes.
+    brush(rgb(0.01f, 0.012f, 0.016f, 0.36f));
     target_->FillRectangle(D2D1::RectF(0, 0, view.width, view.height), solid_.Get());
     width = std::min(width, view.width - 48);
     height = std::min(height, view.height - 48);
@@ -403,11 +404,24 @@ void Renderer::drawDesktopPrompts() {
     } else if (context_->exit_prompt >= 0) {
         // The question, then its answers side by side; the first is the suggested one.
         const std::wstring question = context_->prompt_question.empty() ? std::wstring(tr(exit_prompt::question)) : context_->prompt_question;
-        const auto p = desktopDialogFrame(view, 560, sheet_header + 110, question, false);
-        const float bw = (p.right - p.left - 40 - 2 * 10) / 3, by = p.bottom - 24 - 38;
+        const bool body = !context_->prompt_body.empty();
+        const auto p = desktopDialogFrame(view, 600, sheet_header + (body ? 150.0f : 110.0f), question, false);
+        if (body) paragraph(context_->prompt_body, p.left + 22, p.top + sheet_header + 18, p.right - p.left - 44, desktop_font_.Get(), palette::muted(), 2);
+        // Buttons as wide as their labels (equal thirds cut "Ukryj na ekranie gło…"), right-aligned
+        // as Windows dialogs; equal widths again only when they would not fit.
+        const auto labelOf = [&](int i) {
+            return context_->prompt_question.empty() ? std::wstring(tr(exit_prompt::labels[static_cast<size_t>(i)])) : context_->prompt_labels[static_cast<size_t>(i)];
+        };
+        float widths[exit_prompt::count]{}, total = 10.0f * (exit_prompt::count - 1);
+        for (int i = 0; i < exit_prompt::count; ++i) total += widths[i] = std::max(104.0f, textAdvance(labelOf(i), desktop_button_font_.Get()) + 40);
+        const float available = p.right - p.left - 40;
+        if (total > available) for (auto& w : widths) w = (available - 10.0f * (exit_prompt::count - 1)) / exit_prompt::count;
+        float bx = total > available ? p.left + 20 : p.right - 20 - total;
+        const float by = p.bottom - 24 - 38;
         for (int i = 0; i < exit_prompt::count; ++i) {
-            const Rect r{p.left + 20 + static_cast<float>(i) * (bw + 10), by, p.left + 20 + static_cast<float>(i) * (bw + 10) + bw, by + 38};
-            const auto label = context_->prompt_question.empty() ? std::wstring(tr(exit_prompt::labels[static_cast<size_t>(i)])) : context_->prompt_labels[static_cast<size_t>(i)];
+            const Rect r{bx, by, bx + widths[i], by + 38};
+            bx += widths[i] + 10;
+            const auto label = labelOf(i);
             if (context_->prompt_danger && i == 0) {
                 // A destructive first answer (Usuń kolekcję): an outlined button with red text, never the primary one.
                 desktopButton(r, 1, hover == SheetHit{Kind::row, i} ? 1.0f : 0.0f, false, true, 0, {});

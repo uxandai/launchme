@@ -180,10 +180,10 @@ void Renderer::drawDesktopSidebar(const Layout& layout, const View& view) {
             const float collapse_t = view.collapse_progress[static_cast<size_t>(row.group)];
             textLine(upper(tr(groups[static_cast<int>(row.group)])), r.left + 10, cy + 2, r.right - r.left - 60, desktop_label_font_.Get(),
                      gray(hover ? 0.78f : 0.55f));
-            if (hover || collapsed || collapse_t > 0.01f)
-                desktopGlyph(glyph::chevron_down,
-                             r.right - (row.group == Group::collections ? 40 : row.group == Group::library ? 68 : 14), cy + 2, 9, gray(0.6f),
-                             -90.0f * collapse_t);
+            // Always shown (faint at rest), so a group visibly folds; brighter under the pointer.
+            desktopGlyph(glyph::chevron_down,
+                         r.right - (row.group == Group::collections ? 40 : row.group == Group::library ? 68 : 14), cy + 2, 9,
+                         gray(0.6f, hover || collapsed || collapse_t > 0.01f ? 1.0f : 0.45f), -90.0f * collapse_t);
             if (row.group == Group::library) {
                 // "+": a game from disk; the arrows: read the libraries again.
                 const auto add = layout.headingAdd(row, view.sidebar_scroll), refresh = layout.headingRefresh(row, view.sidebar_scroll);

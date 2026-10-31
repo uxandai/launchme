@@ -107,27 +107,47 @@ void Renderer::drawGrid() {
         }
         return;
     }
-    if (context_->library_mode == library_view::View::cinematic) { drawLibraryCinematic(); drawScrollLetter(); return; }
-    if (context_->library_mode == library_view::View::overview) { drawLibraryOverview(); drawScrollLetter(); return; }
-    if (library_view::carousel(context_->library_mode)) { drawLibraryCoverflow(); return; }
-    if (context_->library_list) { drawLibraryList(); drawScrollLetter(); return; }
-    // Under the pinned header (from the search field's foot): the first row's focused tile grows a
-    // little and keeps its whole outline.
-    if (pinned)
-        target_->PushAxisAlignedClip(D2D1::RectF(0, 174, width, viewport_.height), D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
-    for (size_t i = 0; i < cards_->size(); ++i) {
-        if (i == selected_) continue;
-        drawCard((*cards_)[i], i);
+    // The Widok drawer covers the left of the screen, where most views keep their focused game: the
+    // view makes way beside it (scaled into the remaining width, centred vertically), so the options
+    // it changes live stay in sight. The header above stays put; pointer input goes to the drawer.
+    const float drawer = context_->library_panel == library_ui::Panel::views && context_->library_controls ?
+        std::max(0.0f, library_ui::views::offset(context_->library_views_progress) + library_ui::views::width) : 0.0f;
+    D2D1_MATRIX_3X2_F frame{};
+    target_->GetTransform(&frame);
+    if (drawer > 0.5f && width > drawer + 200) {
+        const float scale = (width - drawer - 16 * drawer / library_ui::views::width) / width;
+        target_->SetTransform(D2D1::Matrix3x2F::Scale(scale, scale) *
+            D2D1::Matrix3x2F::Translation(width - width * scale, viewport_.height * (1 - scale) * 0.5f) * frame);
     }
-    drawCard((*cards_)[selected_], selected_);
-    for (size_t i = 0; i < cards_->size(); ++i) {
-        const auto& card = (*cards_)[i];
-        if (card.y < -180 || card.y > viewport_.height - 30) continue;
-        text(card.game.name, card.x, card.y + card.size + 8, card.width(), 45,
-             button_font_.Get(), color(0.92f, 0.92f, 0.92f, (i == selected_ ? 1.0f : 0.68f) * card.opacity));
+    const bool carousel = library_view::carousel(context_->library_mode);
+    if (context_->library_mode == library_view::View::cinematic) drawLibraryCinematic();
+    else if (context_->library_mode == library_view::View::overview) drawLibraryOverview();
+    else if (carousel) drawLibraryCoverflow();
+    else if (context_->library_list) drawLibraryList();
+    else {
+        // Under the pinned header (from the search field's foot): the first row's focused tile grows a
+        // little and keeps its whole outline.
+        if (pinned)
+            target_->PushAxisAlignedClip(D2D1::RectF(0, 174, width, viewport_.height), D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
+        for (size_t i = 0; i < cards_->size(); ++i) {
+            if (i == selected_) continue;
+            drawCard((*cards_)[i], i);
+        }
+        drawCard((*cards_)[selected_], selected_);
+        // Captions (17 px, readable from the sofa): a square fallback tile that already prints its
+        // name does not repeat it under itself.
+        const bool squares = !context_->library_options.grid_posters && !context_->library_options.grid_landscape;
+        for (size_t i = 0; i < cards_->size(); ++i) {
+            const auto& card = (*cards_)[i];
+            if (card.y < -180 || card.y > viewport_.height - 30) continue;
+            if (squares && i < covers_.size() && !covers_[i].bitmap && !covers_[i].decoding && isGame(card.game)) continue;
+            textLine(card.game.name, card.x, card.y + card.size + 20, card.width(), toast_font_.Get(),
+                     color(0.92f, 0.92f, 0.92f, (i == selected_ ? 1.0f : 0.74f) * card.opacity), DWRITE_TEXT_ALIGNMENT_CENTER);
+        }
+        if (pinned) target_->PopAxisAlignedClip();
     }
-    if (pinned) target_->PopAxisAlignedClip();
-    drawScrollLetter();
+    target_->SetTransform(frame);
+    if (!carousel) drawScrollLetter();
 }
 
 // Quick scrolling: the screen dims and the focused game's initial stands in the middle.

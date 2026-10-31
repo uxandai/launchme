@@ -427,6 +427,10 @@ bool Launcher::tickCompanion(float dt) {
         auto& bubble = companion_.bubble;
         speaking = speak(companion_.rig, bubble.text, bubble.emotions, bubble.reveal, bubble.reveal_clock);
         if (!speaking && !bubble.text.empty()) bubble.shown += dt;
+        // XMB and Metro: her bubble lies over tiles of the layout; moving through them sends it away
+        // (a remark is not worth covering what the player is looking for).
+        if ((xmbActive() || metroActive()) && !bubble.waiting && !bubble.text.empty() && bubble.alpha > 0 &&
+            GetTickCount64() - nav_direction_at_ < 400) bubble.shown = std::max(bubble.shown, 14.0f);
         const float target = bubble.waiting || (!bubble.text.empty() && bubble.shown < 14.0f) ? 1.0f : 0.0f;
         const float previous = bubble.alpha;
         bubble.alpha = target > bubble.alpha ? std::min(1.0f, bubble.alpha + dt / 0.2f) : std::max(0.0f, bubble.alpha - dt / 0.6f);

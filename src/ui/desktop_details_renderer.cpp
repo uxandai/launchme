@@ -176,8 +176,9 @@ void Renderer::drawDesktopDetails() {
         }
     }
     if (details) {
+        const auto released = render_detail::releaseText(details->release_date);
         const std::pair<const wchar_t*, const std::wstring*> facts[] = {
-            {trKey(L"Developer"), &details->developer}, {trKey(L"Wydawca"), &details->publisher}, {trKey(L"Premiera"), &details->release_date},
+            {trKey(L"Developer"), &details->developer}, {trKey(L"Wydawca"), &details->publisher}, {trKey(L"Premiera"), &released},
             {trKey(L"Gatunek"), &details->genres}, {trKey(L"Gracze"), &details->players}, {trKey(L"Ocena"), &details->score}};
         bool heading = false;
         for (const auto& [label, value] : facts) {

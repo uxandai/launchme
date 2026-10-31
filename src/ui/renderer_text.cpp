@@ -97,7 +97,7 @@ bool Renderer::createDesktopFonts() {
     return font(desktop_font_, 13.5f, DWRITE_FONT_WEIGHT_NORMAL) &&
            font(desktop_strong_font_, 13.5f, DWRITE_FONT_WEIGHT_SEMI_BOLD) &&
            font(desktop_small_font_, 12, DWRITE_FONT_WEIGHT_NORMAL) &&
-           font(desktop_label_font_, 11, DWRITE_FONT_WEIGHT_SEMI_BOLD) &&
+           font(desktop_label_font_, 12, DWRITE_FONT_WEIGHT_SEMI_BOLD) &&
            font(desktop_title_font_, 20, DWRITE_FONT_WEIGHT_SEMI_BOLD) &&
            font(desktop_heading_font_, 24, DWRITE_FONT_WEIGHT_SEMI_BOLD) &&
            font(desktop_button_font_, 14, DWRITE_FONT_WEIGHT_SEMI_BOLD);

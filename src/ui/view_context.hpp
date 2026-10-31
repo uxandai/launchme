@@ -355,6 +355,7 @@ struct ViewContext {
     std::wstring prompt_question;
     std::array<std::wstring, 3> prompt_labels;
     bool prompt_danger = false; // Its first answer destroys something (Usuń kolekcję): drawn red.
+    std::wstring prompt_body;   // What the answer changes, under the question (the desktop window's dialog).
     float exit_progress = -1; // -1 inactive, 0..1 one-shot fade to black.
     size_t frozen_games = 0;
     int power_menu = -1; // Selected row of power_labels; -1 = closed.
@@ -401,6 +402,7 @@ struct ViewContext {
     float flix_unfold = 0;
     std::wstring flix_unfold_action;
     bool flix_unfold_play = true;
+    bool flix_unfold_details = false; // Enter/A opens the details: their ring is the filled (primary) one.
     std::wstring flix_unfold_rating;
     std::vector<std::wstring> flix_unfold_facts;
     std::wstring flix_unfold_genres;
@@ -409,6 +411,7 @@ struct ViewContext {
     struct MetroTile {
         metro_layout::Role role = metro_layout::Role::game;
         std::wstring caption, sub;
+        size_t page = 0; // Its page: tiles of the other pages are dimmed, the current one stands out.
     };
     bool metro = false;
     std::vector<MetroTile> metro_tiles;

@@ -246,6 +246,26 @@ void Launcher::homePage(int amount) {
         psfiveSelectTab(next, psfive_top_ >= 0 && psfive_top_ < static_cast<int>(tabs.size()));
         return;
     }
+    if (homeShoulderCategories() && amount && !pending_launch_ && !friends_open_ && !category_menu_open_ && !quick_open_ && !menu_open_ &&
+        topModal() == Modal::none && !categories_.empty() && !cards_.empty()) {
+        // The default shelves, XMB and Flix: LB/RB, Page Up/Down step through the categories, as
+        // Metro's pages and PSfive's tabs do; never past the first one into the quick bar.
+        if (xmbActive()) { xmbHorizontal(amount); return; }
+        if (flixActive()) {
+            if (amount < 0 && flix_row_ == 0) { navigationBoundary(); return; }
+            dismissMenu();
+            flixVertical(amount, false);
+            return;
+        }
+        const int next = std::clamp(static_cast<int>(category_) + amount, 0, static_cast<int>(categories_.size()) - 1);
+        if (next == static_cast<int>(category_)) { navigationBoundary(); return; }
+        dismissMenu();
+        audio_.navigate();
+        const bool rail_focus = categoryRailActive() && category_rail_focus_;
+        showCategory(static_cast<size_t>(next));
+        category_rail_focus_ = rail_focus;
+        return;
+    }
     if (!metroActive() || metro_pages_.empty() || !amount || pending_launch_ || friends_open_ || category_menu_open_ || quick_open_) return;
     const int next = std::clamp(static_cast<int>(metro_page_) + amount, 0, static_cast<int>(metro_pages_.size()) - 1);
     if (next == static_cast<int>(metro_page_)) { navigationBoundary(); return; }

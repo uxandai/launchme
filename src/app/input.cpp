@@ -486,7 +486,10 @@ void Launcher::controllerInput(const PadReading& state) {
     }
     // Y: the focused game's menu on every screen (as a held A); the library bar is above the first row.
     if (pressed(XINPUT_GAMEPAD_Y)) { noteUserInput(); openContextMenu(); }
-    const bool shoulders_page = settingsOpen() || artworkOpen() || cropOpen() || devicesOpen() || ((metroActive() || psfiveActive()) && !menu_open_) ||
+    // The drawers, the quick bar and the category menu keep LB/RB as Left/Right on the other layouts.
+    const bool home_shoulders = ((metroActive() || psfiveActive()) && !menu_open_) ||
+        (homeShoulderCategories() && !menu_open_ && !friends_open_ && !quick_open_ && !category_menu_open_);
+    const bool shoulders_page = settingsOpen() || artworkOpen() || cropOpen() || devicesOpen() || home_shoulders ||
                                 (libraryTabsShown() && !menu_open_);
     const int shoulder = pressed(XINPUT_GAMEPAD_LEFT_SHOULDER) ? -1 : pressed(XINPUT_GAMEPAD_RIGHT_SHOULDER) ? 1 : 0;
     if (cropOpen()) {
@@ -497,7 +500,7 @@ void Launcher::controllerInput(const PadReading& state) {
     if (shoulder && artworkOpen()) artworkPage(shoulder);
     if (shoulder && devicesOpen()) deviceColumn(shoulder);
     if (shoulder && libraryTabsShown() && !menu_open_) { noteUserInput(); switchLibraryTab(shoulder); } // Kinowy / Przegląd categories.
-    if (shoulder && (metroActive() || psfiveActive()) && !menu_open_) { noteUserInput(); homePage(shoulder); } // Metro pages, PSfive tabs.
+    if (shoulder && home_shoulders) { noteUserInput(); homePage(shoulder); } // Metro pages, PSfive tabs, the other layouts' categories.
     int direction = 0;
     if (buttons & XINPUT_GAMEPAD_DPAD_LEFT || (!shoulders_page && (buttons & XINPUT_GAMEPAD_LEFT_SHOULDER)) || state.x < -16000) direction = -1;
     if (buttons & XINPUT_GAMEPAD_DPAD_RIGHT || (!shoulders_page && (buttons & XINPUT_GAMEPAD_RIGHT_SHOULDER)) || state.x > 16000) direction = 1;

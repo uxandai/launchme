@@ -37,6 +37,9 @@ bool Launcher::desktopKey(WPARAM key, bool repeated) {
         return true;
     }
     if (control && key == 'F') { desktopSearchFocus(true); return true; }
+    // The title bar's tools from the keyboard: Ctrl+, Ustawienia, Ctrl+J Pobierania.
+    if (control && key == VK_OEM_COMMA) { if (!repeated) openSettings(); return true; }
+    if (control && key == 'J') { if (!repeated) desktopToggleDownloads(); return true; }
     if (control && key == 'H') { if (!repeated) togglePrivateCategory(); return true; }
     if (control && (key == VK_OEM_PLUS || key == VK_ADD)) { desktopSetPoster(static_cast<float>(settings_.desktop_poster) + 16); return true; }
     if (control && (key == VK_OEM_MINUS || key == VK_SUBTRACT)) { desktopSetPoster(static_cast<float>(settings_.desktop_poster) - 16); return true; }
@@ -110,7 +113,18 @@ bool Launcher::desktopKey(WPARAM key, bool repeated) {
             desktopMove(0, key == VK_PRIOR ? -rows : rows, shift);
         }
         return true;
-    case VK_RETURN: if (!repeated) desktopAccept(); return true;
+    case VK_RETURN:
+        // Ctrl+Enter plays (or installs) the focused game at once, whatever Enter's default action.
+        if (!repeated && control && desktop_zone_ == 1 && !cards_.empty() && selected_ < cards_.size() && isGame(cards_[selected_].game)) desktopLaunchSelected();
+        else if (!repeated) desktopAccept();
+        return true;
+    case VK_DELETE:
+        // Del hides the focused game (as the menu's Ukryj; again shows it).
+        if (!repeated && desktop_zone_ == 1 && !cards_.empty() && selected_ < cards_.size() && !hideableCopies(cards_[selected_].game).empty()) {
+            const auto game = cards_[selected_].game; // A copy: hiding rebuilds the cards.
+            toggleHidden(game);
+        }
+        return true;
     case VK_SPACE:
         if (!repeated) {
             if (control && desktop_zone_ == 1 && !cards_.empty()) desktopToggleMark(selected_);

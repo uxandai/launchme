@@ -196,6 +196,12 @@ std::wstring dateLabel(const Date& date, bool english) {
                    : std::to_wstring(date.day) + L" " + of[month] + L" " + year;
 }
 
+std::wstring releaseLabel(std::wstring_view text, bool english) {
+    const auto date = parseDate(text);
+    if (!date.known() || !date.month || !date.day) return std::wstring(text);
+    return dateLabel(date, english);
+}
+
 Date dateFromUnix(uint64_t value) {
     if (!value) return {};
     const auto time = static_cast<std::time_t>(seconds(value));

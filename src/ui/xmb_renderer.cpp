@@ -25,12 +25,24 @@ void Renderer::drawXmb() {
         tiles.push_back(tileShape(D2D1::RectF(card.x - dx, card.y - dy, card.x + card.width() + dx, card.y + card.size + dy), tile_shape_));
     }
     const auto mask = occlusionMask(factory_.Get(), bounds, tiles);
+    // The column fades out towards the bottom edge (and the hints there) instead of being cut by it.
+    Microsoft::WRL::ComPtr<ID2D1LinearGradientBrush> bottom_fade;
+    {
+        Microsoft::WRL::ComPtr<ID2D1GradientStopCollection> stops;
+        const D2D1_GRADIENT_STOP fade_stops[] = {{0, D2D1::ColorF(0, 0, 0, 1)}, {1, D2D1::ColorF(0, 0, 0, 0)}};
+        if (SUCCEEDED(target_->CreateGradientStopCollection(fade_stops, 2, stops.GetAddressOf())))
+            target_->CreateLinearGradientBrush(D2D1::LinearGradientBrushProperties(D2D1::Point2F(0, viewport_.height - 140),
+                D2D1::Point2F(0, viewport_.height - 36)), stops.Get(), bottom_fade.GetAddressOf());
+    }
+    if (bottom_fade) target_->PushLayer(D2D1::LayerParameters(bounds, nullptr, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
+        D2D1::IdentityMatrix(), 1.0f, bottom_fade.Get()), nullptr);
     // Column cards, labels and the moving focus outline travel behind the whole top row.
     // Its translucent tile fills must not let the scrolling artwork bleed through.
     if (mask) target_->PushLayer(D2D1::LayerParameters(bounds, mask.Get()), nullptr);
     for (size_t i = top; i < cards.size(); ++i) if (i != selected_) drawCard(cards[i], i);
     drawXmbLabels();
     if (mask) target_->PopLayer();
+    if (bottom_fade) target_->PopLayer();
     for (size_t i = 0; i < top; ++i) if (i != selected_) drawCard(cards[i], i);
     drawXmbCaption();
     drawXmbLogo();
@@ -144,9 +156,10 @@ void Renderer::drawXmbCaption() {
     const float center = column_tile.x + column_tile.width() * 0.5f;
     const float caption_alpha = context_->xmb_row < 0 ? 1.0f : 0.72f;
     const float caption_y = column_tile.y + column_tile.size + 10;
-    text(context_->xmb_caption, center - 180, caption_y, 360, 24, button_font_.Get(), gray(0.96f, caption_alpha));
+    // 17 px over 16 px (15 px was too small from the sofa); the band to the column holds both.
+    textLine(context_->xmb_caption, center - 180, caption_y + 11, 360, toast_font_.Get(), gray(0.96f, caption_alpha), DWRITE_TEXT_ALIGNMENT_CENTER);
     if (!context_->xmb_subcaption.empty())
-        text(context_->xmb_subcaption, center - 180, caption_y + 21, 360, 22, button_font_.Get(), gray(0.56f, caption_alpha));
+        textLine(context_->xmb_subcaption, center - 180, caption_y + 33, 360, settings_body_font_.Get(), gray(0.64f, caption_alpha), DWRITE_TEXT_ALIGNMENT_CENTER);
 }
 
 void Renderer::drawXmbLabels() {
@@ -197,7 +210,7 @@ std::optional<D2D1_RECT_F> Renderer::xmbLogoRect() const {
     const float scale = context_->xmb_scale;
     // Button hints along the bottom edge lift the logo with the platform badge under it.
     return cornerLogoRect(std::min(400.0f * scale, viewport_.width * 0.3f), 118.0f * scale, viewport_.width - 57,
-                          viewport_.height - 82 - (context_->hints.empty() ? 0.0f : 22.0f));
+                          viewport_.height - 82 - (context_->hints.empty() ? 0.0f : 30.0f));
 }
 
 void Renderer::drawCornerLogo(std::optional<D2D1_RECT_F> box) {

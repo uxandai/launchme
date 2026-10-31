@@ -88,7 +88,7 @@ void Renderer::drawFooter() {
         return;
     }
     if (context_->main_row) {
-        if (cards_ && selected_ < cards_->size() && (*cards_)[selected_].game.kind != GameKind::all)
+        if (cards_ && selected_ < cards_->size()) // "Wszystkie gry" too: its tile is only a glyph.
             text((*cards_)[selected_].game.name, 57, y, viewport_.width - 224, 48,
                  category_font_.Get(), color(0.96f, 0.96f, 0.96f));
         return;
@@ -113,12 +113,14 @@ void Renderer::drawFooter() {
 }
 
 bool Renderer::hasPlatformMark(const std::wstring& platform) const {
+    if (wordOnlyBadge(platform)) return false;
     const auto found = platform_badges_.find(platform);
     return found != platform_badges_.end() && found->second.bitmap;
 }
 
 // The width drawPlatformMark gives a logo at this height (0 without one).
 float Renderer::platformMarkWidth(const std::wstring& platform, float height, float max_width) const {
+    if (wordOnlyBadge(platform)) return 0;
     const auto found = platform_badges_.find(platform);
     if (found == platform_badges_.end() || !found->second.bitmap) return 0;
     const auto& badge = found->second;
@@ -133,7 +135,7 @@ float Renderer::drawPlatformMark(const std::wstring& platform, float x, float ce
                                  IDWriteTextFormat* fallback) {
     if (platform.empty() || max_width < 4) return 0;
     const auto found = platform_badges_.find(platform);
-    if (found == platform_badges_.end() || !found->second.bitmap) {
+    if (found == platform_badges_.end() || !found->second.bitmap || wordOnlyBadge(platform)) {
         // No logo (yet): the name, as before.
         textLine(platform, x, center_y, max_width, fallback, color(0.66f, 0.68f, 0.70f, alpha));
         return std::min(max_width, textAdvance(platform, fallback));
@@ -164,12 +166,13 @@ void Renderer::drawPlatformBadge() {
     const auto found = platform_badges_.find(name);
     const bool grid = gridScreen(context_->screen);
     const float top = context_->screen == ScreenMode::library ? 106.0f :
-                      grid || context_->flix || context_->metro ? 42.0f : viewport_.height - 68.0f - (context_->hints.empty() ? 0.0f : 22.0f);
+                      grid || context_->flix || context_->metro ? 42.0f : viewport_.height - 68.0f - (context_->hints.empty() ? 0.0f : 30.0f);
     const float right = viewport_.width - 57.0f;
-    if (found == platform_badges_.end() || !found->second.bitmap) {
+    if (found == platform_badges_.end() || !found->second.bitmap || wordOnlyBadge(name)) {
         // A studio's mark until its logo arrives: its name, never its key ("publisher:capcom").
-        text(render_detail::studioPlatform(name) ? (*cards_)[selected_].game.name : name, right - 110, top + 7, 110, 32,
-             button_font_.Get(), color(0.87f, 0.87f, 0.87f));
+        // Right-aligned and wide enough for "Gry dodane ręcznie" (110 px cut it).
+        textLine(render_detail::studioPlatform(name) ? (*cards_)[selected_].game.name : name, right - 240, top + 20, 240,
+                 toast_font_.Get(), color(0.87f, 0.87f, 0.87f), DWRITE_TEXT_ALIGNMENT_TRAILING);
         return;
     }
     const auto& badge = found->second;
@@ -189,13 +192,21 @@ void Renderer::drawCategoryRail() {
     for (size_t i = layout.first(); i < layout.first() + layout.visible(); ++i) {
         const bool active = i == context_->active_category;
         const float center = layout.rowTop(i) + category_rail::Layout::row_height * 0.5f;
-        const float light = active ? 0.97f : 0.52f;
-        textLine((*context_->categories)[i], layout.left, center, layout.right() - layout.left,
-                 active ? category_active_font_.Get() : sidebar_font_.Get(), color(light, light, light, alpha), DWRITE_TEXT_ALIGNMENT_TRAILING);
-        if (active && context_->category_rail_focus) {
-            brush(uiAccent(alpha));
-            target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(layout.right() + 12, center), 3, 3), solid_.Get());
+        const bool focused = active && context_->category_rail_focus;
+        const auto& name = (*context_->categories)[i];
+        if (focused) {
+            // The list has the focus: a light pill behind the active category, readable from the
+            // sofa (a 6 px dot was not), with dark text on it.
+            const float width = std::min(layout.right() - layout.left + 24, textAdvance(name, category_active_font_.Get()) + 40);
+            const float half = category_rail::Layout::row_height * 0.5f - 4;
+            const auto pill = D2D1::RoundedRect(D2D1::RectF(layout.right() + 20 - width, center - half, layout.right() + 20, center + half), half, half);
+            brush(color(0.95f, 0.95f, 0.95f, 0.94f * alpha));
+            target_->FillRoundedRectangle(pill, solid_.Get());
         }
+        const float light = active ? 0.97f : 0.52f;
+        textLine(name, layout.left, center, layout.right() - layout.left,
+                 active ? category_active_font_.Get() : sidebar_font_.Get(),
+                 focused ? color(0.06f, 0.065f, 0.075f, alpha) : color(light, light, light, alpha), DWRITE_TEXT_ALIGNMENT_TRAILING);
     }
     // More categories above/below: the active item always remains fully visible.
     const float x = layout.right() - 10;

@@ -302,10 +302,14 @@ void Launcher::paint(bool overlay) {
     if (exit_prompt_ && prompt_kind_ == PromptKind::uninstall) {
         context.prompt_question = std::wstring(tr(L"Odinstalować grę?")) + L" " + uninstall_game_.name;
         context.prompt_labels = {std::wstring(tr(L"Odinstaluj")), std::wstring(tr(L"Otwórz folder gry")), std::wstring(tr(L"Anuluj"))};
+        context.prompt_body = tr(L"Gra zostanie odinstalowana z tego komputera; jej wpis w bibliotece zostaje.");
+        context.prompt_danger = true; // Never the primary-looking answer.
     }
     if (exit_prompt_ && prompt_kind_ == PromptKind::remove) {
         context.prompt_question = std::wstring(tr(L"Usunąć z biblioteki?")) + L" " + remove_game_.name;
         context.prompt_labels = {std::wstring(tr(L"Usuń z biblioteki")), std::wstring(tr(L"Edytuj grę…")), std::wstring(tr(L"Anuluj"))};
+        context.prompt_body = tr(L"Zniknie tylko wpis w launcherze; plik gry na dysku zostaje.");
+        context.prompt_danger = true;
     }
     if (exit_prompt_ && prompt_kind_ == PromptKind::delete_collection) {
         // An own collection's trash: delete it, or only hide (show) it on the home screen; Anuluj has the focus.
@@ -315,6 +319,7 @@ void Launcher::paint(bool overlay) {
         context.prompt_labels = {std::wstring(tr(L"Usuń kolekcję")),
                                  std::wstring(settings_.hidden_collections.contains(delete_collection_key_) ? tr(L"Pokaż na ekranie głównym") : tr(L"Ukryj na ekranie głównym")),
                                  std::wstring(tr(L"Anuluj"))};
+        context.prompt_body = tr(L"Gry zostają w bibliotece; znika tylko kolekcja.");
         context.prompt_danger = true;
     }
     if (exit_prompt_ && prompt_kind_ == PromptKind::restore_saves) {
@@ -345,15 +350,15 @@ void Launcher::paint(bool overlay) {
         const auto& game = cards_[selected_].game;
         const auto* info = preview_.find(game);
         if (!info) info = localDetails(game);
+        // A fact the game does not have is left out rather than shown as a dash.
         const auto minutes = gamePlaytime(game, info ? info->playtime_minutes : std::nullopt);
-        const std::wstring none = L"—";
-        context.hero_facts.push_back({tr(L"CZAS GRY"), minutes && *minutes ? formatPlaytime(*minutes) : none});
+        if (minutes && *minutes) context.hero_facts.push_back({tr(L"CZAS GRY"), formatPlaytime(*minutes)});
         context.hero_facts.push_back({tr(L"OSTATNIO GRANE"), desktopPlayedWhen(game.last_played)});
         std::wstring released = info ? info->release_date : std::wstring{};
         if (const auto* own = metadataOverride(game); own && !own->release_date.empty()) released = own->release_date;
-        context.hero_facts.push_back({tr(L"DATA WYDANIA"), released.empty() ? none : released});
+        if (!released.empty()) context.hero_facts.push_back({tr(L"DATA WYDANIA"), game_index::releaseLabel(released, i18n::english())});
         context.hero_platform = activePlatformName(game);
-        context.hero_facts.push_back({tr(L"PLATFORMA"), context.hero_platform.empty() ? none : context.hero_platform});
+        if (!context.hero_platform.empty()) context.hero_facts.push_back({tr(L"PLATFORMA"), context.hero_platform});
     }
     if (libraryCinematic() && (context.library_options.cinematic_horizontal || context.library_options.cinematic_column) && !cards_.empty()) {
         // Kinowy's synopsis: the optional platform, last played and playtime beside year and genres.
@@ -376,7 +381,14 @@ void Launcher::paint(bool overlay) {
         context.xmb_caption = tile.name;
         if (const auto* column = xmbColumn(tile)) context.xmb_subcaption = gamesLabel(column->size());
         else if (tile.kind == GameKind::all) context.xmb_subcaption = gamesLabel(public_library_.size());
-        else if (isGame(tile)) context.xmb_subcaption = tr(L"Ostatnio grane");
+        else if (isGame(tile)) {
+            // What the column's focused game says: its state, else its platform (the row is Ostatnio grane already).
+            const auto session = sessionState(tile);
+            context.xmb_subcaption = session == SessionState::frozen ? std::wstring(tr(L"Wstrzymana")) :
+                session == SessionState::running ? std::wstring(tr(L"W grze")) :
+                tile.installation.active() ? installationText(tile.installation) :
+                !tile.installed ? std::wstring(localFileGame(tile.source) ? missingFileLabel(tile) : tr(L"Do instalacji")) : activePlatformName(tile);
+        }
         else if (tile.kind == GameKind::glance) context.xmb_subcaption = tr(L"Nowości i premiery");
         else if (tile.kind == GameKind::companion && context.companion) {
             context.xmb_caption = context.companion->name;
@@ -398,6 +410,7 @@ void Launcher::paint(bool overlay) {
             context.flix_unfold = flix_unfold_;
             context.flix_unfold_action = actionLabel(game);
             context.flix_unfold_play = game.installed || sessionState(game) != SessionState::none;
+            context.flix_unfold_details = settings_.accept_action == AppSettings::AcceptAction::details;
             if (flix_unfold_index_ == selected_) context.flix_unfold_rating = ratingLabel();
             const auto* info = preview_.find(game);
             if (!info) info = localDetails(game);
@@ -447,7 +460,7 @@ void Launcher::paint(bool overlay) {
         for (size_t i = 0; i < cards_.size(); ++i) {
             const auto role = metro_tiles_[i].role;
             const auto& game = cards_[i].game;
-            ViewContext::MetroTile tile{role, game.name, {}};
+            ViewContext::MetroTile tile{role, game.name, {}, metro_tiles_[i].page};
             const auto games = [&](size_t category) {
                 return category < categories_.size() ? static_cast<size_t>(std::count_if(categories_[category].games.begin(),
                     categories_[category].games.end(), [](const Game& item) { return isGame(item); })) : size_t{0};

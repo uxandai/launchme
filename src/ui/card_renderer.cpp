@@ -166,15 +166,15 @@ void Renderer::drawCard(const GameCard& card, size_t index) {
         // Decoding takes a frame or two: keep the plain tile instead of flashing the title text.
     } else {
         // A missing cover is still a usable game, not a permanent loading skeleton.
+        // "Wszystkie gry" shows its 2x2 glyph in every layout (a lone dot read as a loading tile).
         if (card.game.kind == GameKind::category || card.game.kind == GameKind::settings ||
-            card.game.kind == GameKind::glance || card.game.kind == GameKind::companion ||
-             ((context_->xmb || context_->psfive || context_->snitch) && card.game.kind == GameKind::all)) {
+            card.game.kind == GameKind::glance || card.game.kind == GameKind::companion || card.game.kind == GameKind::all) {
             drawXmbTileIcon(card, index, x, y, size, transparency);
             target_->SetTransform(D2D1::Matrix3x2F::Scale(size, size) * D2D1::Matrix3x2F::Translation(x, y) * base);
-        } else if (card.game.kind == GameKind::all || card.game.kind == GameKind::back) {
+        } else if (card.game.kind == GameKind::back) {
+            // Back: the launcher's back dot (as the glass Back buttons).
             brush(color(0.96f, 0.96f, 0.96f, transparency * 0.88f));
-            target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(0.5f, 0.5f), 0.033f, 0.033f),
-                                 solid_.Get());
+            target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(0.5f, 0.5f), 0.033f, 0.033f), solid_.Get());
         } else {
             target_->SetTransform(base);
             text(card.game.name, x + 10, y + size * (card.game.kind == GameKind::platform ? 0.34f : 0.42f),
@@ -253,8 +253,8 @@ void Renderer::drawCard(const GameCard& card, size_t index) {
         drawCardBadge(x, y, size, size, transparency, frozen);
         drawCardStatus(x, y, size, size, transparency, frozen ? tr(L"Wstrzymana") : tr(L"W grze"));
     } else if (selected && !card.game.installed && card.game.kind != GameKind::catalog && !context_->snitch)
-        text(localFileGame(card.game.source) ? missingFileBadge(card.game) : tr(L"DO INSTALACJI"), x + 8, y + size - 33, size - 16, 28,
-             button_font_.Get(), color(0.95f, 0.95f, 0.95f, transparency));
+        textLine(localFileGame(card.game.source) ? missingFileBadge(card.game) : tr(L"DO INSTALACJI"), x + 8, y + size - 21, size - 16,
+                 toast_font_.Get(), color(0.95f, 0.95f, 0.95f, transparency), DWRITE_TEXT_ALIGNMENT_CENTER); // 17 px: readable from the sofa.
     if (rail_layer) target_->PopLayer();
 }
 
@@ -452,7 +452,8 @@ void Renderer::drawCardStatusShade(float x, float y, float width, float height, 
 void Renderer::drawCardStatus(float x, float y, float width, float height, float transparency, const std::wstring& label,
                               std::optional<float> fraction, D2D1_COLOR_F bar) {
     const float left = x + 17, right = x + width - 17, bottom = y + height - 17;
-    text(label, left, bottom - (fraction ? 45.0f : 31.0f), right - left, 32, button_font_.Get(), color(0.96f, 0.96f, 0.96f, transparency));
+    textLine(label, left, bottom - (fraction ? 33.0f : 19.0f), right - left, toast_font_.Get(), color(0.96f, 0.96f, 0.96f, transparency),
+             DWRITE_TEXT_ALIGNMENT_CENTER);
     if (!fraction) return;
     line(left, bottom - 3, right, bottom - 3, color(1, 1, 1, 0.20f * transparency), 4);
     if (*fraction > 0) line(left, bottom - 3, left + (right - left) * std::min(*fraction, 1.0f), bottom - 3, bar, 4);
@@ -463,9 +464,9 @@ bool Renderer::drawInstallProgress(const Game& game, D2D1_RECT_F button, D2D1_CO
     if (!game.installation.active() || session == SessionState::running || session == SessionState::frozen) return false;
     const auto& install = game.installation;
     const auto percent = install.percent();
-    std::wstring status = installationLabel(install.phase);
-    if (percent) status += L" " + std::to_wstring(*percent) + L"%";
-    else if (install.moving()) status += L"...";
+    // The same words as on the tiles ("Pobieranie · 37%").
+    std::wstring status = installationText(install);
+    if (!percent && install.moving()) status += L"...";
     const float h = button.bottom - button.top;
     const float pad = std::clamp(h * 0.37f, 14.0f, 22.0f);
     const float left = button.left + pad, right = button.right - pad;

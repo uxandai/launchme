@@ -265,7 +265,7 @@ void Renderer::drawDetails() {
         card(r, tr(L"Informacje"));
         std::vector<std::pair<const wchar_t*, std::wstring>> rows;
         if (info) {
-            rows = {{tr(L"Developer"), info->developer}, {tr(L"Wydawca"), info->publisher}, {tr(L"Premiera"), info->release_date},
+            rows = {{tr(L"Developer"), info->developer}, {tr(L"Wydawca"), info->publisher}, {tr(L"Premiera"), render_detail::releaseText(info->release_date)},
                     {tr(L"Gatunek"), info->genres}};
             if (!info->players.empty()) rows.push_back({tr(L"Gracze"), info->players});
             if (!info->score.empty()) rows.push_back({tr(L"Ocena"), info->score});

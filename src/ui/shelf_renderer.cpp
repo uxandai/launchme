@@ -458,10 +458,13 @@ void Renderer::drawLibraryShelf() {
     const auto body = settings_body_font_.Get();
     const float y = layout.factsY() + rise * 1.4f, gap = facts.empty() ? 0.0f : 16.0f;
     float facts_width = facts.empty() ? 0.0f : std::min(textAdvance(facts, body), text_width);
-    // The badge's width, measured by drawing it fully transparent (logo or name pill).
-    const float badge = platform.empty() ? 0.0f : drawPsfiveBadge(platform, -10000, y, 0);
+    // The platform as its plain mark (logo, or its name until one arrives), as in Coverflow: a white
+    // pill here read as a focused button.
+    constexpr float mark_height = 24, mark_width = 200;
+    const float badge = platform.empty() ? 0.0f : hasPlatformMark(platform) ? platformMarkWidth(platform, mark_height, mark_width) :
+        std::min(mark_width, textAdvance(platform, body));
     facts_width = std::min(facts_width, std::max(0.0f, text_width - badge - gap));
     const float left = (viewport_.width - (badge + gap + facts_width)) * 0.5f;
-    if (badge > 0) drawPsfiveBadge(platform, left, y, fade);
-    if (!facts.empty()) textLine(facts, left + badge + gap, y, facts_width + 2, body, gray(0.62f, fade));
+    if (badge > 0) drawPlatformMark(platform, left, y, mark_height, mark_width, fade, body);
+    if (!facts.empty()) textLine(facts, left + badge + gap, y, facts_width + 2, body, gray(0.72f, fade));
 }

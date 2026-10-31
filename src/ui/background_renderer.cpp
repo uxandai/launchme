@@ -332,7 +332,7 @@ void Renderer::drawHeroFacts(float center, float top, float min_left, float alph
     // The platform's mark: its badge's fitted width, or its name.
     const auto markWidth = [&](const std::wstring& platform) {
         const auto found = platform_badges_.find(platform);
-        if (found == platform_badges_.end() || !found->second.bitmap) return std::min(mark_width, textAdvance(platform, menu_font_.Get()));
+        if (found == platform_badges_.end() || !found->second.bitmap || wordOnlyBadge(platform)) return std::min(mark_width, textAdvance(platform, menu_font_.Get()));
         const auto& badge = found->second;
         const auto size = badge.bitmap->GetPixelSize();
         const auto source = badge.has_ink_bounds ? badge.ink_bounds : D2D1::RectF(0, 0, static_cast<float>(size.width), static_cast<float>(size.height));

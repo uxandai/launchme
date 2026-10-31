@@ -3,6 +3,7 @@
 #include "media_layout.hpp"
 #include "occlusion_mask.hpp"
 #include "steelbook_material.hpp"
+#include "../library/steam_stats.hpp"
 #include <d2d1effects.h>
 #include <cmath>
 #include <initializer_list>
@@ -88,11 +89,33 @@ void Renderer::drawLibraryCoverflow() {
     target_->PopAxisAlignedClip();
     const float fade = std::clamp(detail_ * 2, 0.0f, 1.0f);
     const float bottom = std::min(viewport_.height - 88, layout.top() + layout.coverHeight() + 50);
-    textLine((*cards_)[selected_].game.name, layout.left(), bottom + 12 * (1 - fade), viewport_.width - layout.left() - 68,
+    const auto& game = (*cards_)[selected_].game;
+    const float right = viewport_.width - 68;
+    // Where the focus is in the row ("12 / 140"), right-aligned with the title.
+    const auto position = std::to_wstring(selected_ + 1) + L" / " + std::to_wstring(cards_->size());
+    const float position_width = textAdvance(position, settings_body_font_.Get());
+    textLine(game.name, layout.left(), bottom + 12 * (1 - fade), right - layout.left() - position_width - 24,
              settings_heading_font_.Get(), gray(0.97f, fade));
-    // The platform's logo under the title (its name while there is none).
-    drawPlatformMark(activePlatformName((*cards_)[selected_].game), layout.left(), bottom + 46 + 12 * (1 - fade), 26,
-                     std::min(260.0f, viewport_.width - layout.left() - 68), fade, settings_body_font_.Get());
+    textLine(position, right - position_width, bottom + 12 * (1 - fade), position_width + 1, settings_body_font_.Get(), gray(0.6f, fade),
+             DWRITE_TEXT_ALIGNMENT_TRAILING);
+    // The platform's logo under the title (its name while there is none), then what Półka and
+    // the lists say about the game: year · developer · playtime, and whether it needs installing.
+    const float facts_y = bottom + 46 + 12 * (1 - fade);
+    const float mark = drawPlatformMark(activePlatformName(game), layout.left(), facts_y, 26,
+                                        std::min(260.0f, right - layout.left()), fade, settings_body_font_.Get());
+    std::wstring facts;
+    const auto add = [&](const std::wstring& value) { if (!value.empty()) facts += (facts.empty() ? L"" : L"   ·   ") + value; };
+    if (const auto* info = context_->preview; info && !context_->preview_waiting) {
+        add(gameReleaseYear(info->release_date));
+        add(info->developer);
+        if (info->playtime_minutes && *info->playtime_minutes) add(formatPlaytime(*info->playtime_minutes));
+    }
+    if (game.installation.active()) add(installationText(game.installation));
+    else if (!game.installed && game.kind != GameKind::catalog && sessionOf(game) == SessionState::none)
+        add(localFileGame(game.source) ? std::wstring(missingFileLabel(game)) : std::wstring(tr(L"Do instalacji")));
+    const float facts_left = layout.left() + (mark > 0 ? mark + 20 : 0);
+    if (!facts.empty() && right - facts_left > 80)
+        textLine(facts, facts_left, facts_y, right - facts_left, settings_body_font_.Get(), gray(0.78f, fade));
 }
 
 void Renderer::createMediaMaterials() {

@@ -61,14 +61,16 @@ void Renderer::drawMetroTabs() {
     const auto below = static_cast<size_t>(std::floor(position));
     const auto above = std::min(below + 1, tabs.size() - 1);
     const float offset = std::lerp(lefts[below], lefts[above], position - static_cast<float>(below));
-    const float quiet = 1.0f - 0.6f * smoothFade(context_->quick_progress);
+    // The quick bar lifts the tiles into the strip's band: the tabs give way completely.
+    const float quiet = 1.0f - smoothFade(context_->quick_progress);
     metro_tab_rects_.assign(tabs.size(), {});
     for (size_t i = 0; i < tabs.size(); ++i) {
         const float left = metro_layout::left + lefts[i] - offset;
         metro_tab_rects_[i] = {left - 8, metro_layout::tabs_center - 34, left + widths[i] + 8, metro_layout::tabs_center + 30};
         if (left > viewport_.width || left + widths[i] < 0) continue;
         const float active = std::max(0.0f, 1.0f - std::abs(static_cast<float>(i) - position));
-        const float alpha = (left < metro_layout::left ? smoothFade((left + widths[i]) / (metro_layout::left + 60)) : 1.0f) * quiet;
+        // Previous tabs fade out before the screen's edge could cut them ("ny pc").
+        const float alpha = (left < metro_layout::left ? smoothFade(left / std::max(1.0f, metro_layout::left)) : 1.0f) * quiet;
         if (alpha < 0.01f) continue;
         textLine(tabs[i], left, metro_layout::tabs_center, widths[i] + 8, metro_tab_font_.Get(), gray(std::lerp(0.42f, 0.97f, active), alpha));
         // The strip has the focus: an accent bar under the current tab, gliding with it.
@@ -142,7 +144,10 @@ void Renderer::drawMetroTile(const GameCard& card, size_t index) {
     const auto rect = inner > 0.05f ? D2D1::RectF(x + inner, y + inner, x + tile_w - inner, y + tile_h - inner) : frame_rect;
     auto shape = frame_shape;
     if (inner > 0.05f) if (auto inside = tileShape(rect, tile_shape_)) shape = inside;
-    const float transparency = card.opacity * (0.9f + 0.1f * emphasis);
+    // The pages beside the current one recede (dimmed with the eased page position), so it is clear
+    // which page the arrows act on even without the 3D effect.
+    const float away = std::clamp(std::abs(static_cast<float>(info.page) - context_->metro_tab), 0.0f, 1.0f);
+    const float transparency = card.opacity * (0.9f + 0.1f * emphasis) * (1.0f - 0.55f * away);
     for (int layer = 3; layer >= 1; --layer) {
         const float spread = layer * (3.0f + 2.0f * emphasis);
         brush(D2D1::ColorF(0, 0, 0, (0.045f + 0.025f * emphasis) * transparency));

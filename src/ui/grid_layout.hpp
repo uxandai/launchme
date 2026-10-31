@@ -28,7 +28,7 @@ inline float top(size_t index, float width, float scroll, bool posters = false) 
 inline float maxScroll(size_t count, float width, float height, bool posters = false) {
     if (!count) return 0;
     const size_t rows = (count + columns(width) - 1) / columns(width);
-    return std::max(0.0f, 190.0f + rows * (cell(width) * (posters ? 1.5f : 1) + 64.0f) - height + 30.0f);
+    return std::max(0.0f, 190.0f + rows * (cell(width) * (posters ? 1.5f : 1) + 64.0f) - height + 56.0f); // Clear of the button hints.
 }
 inline std::pair<size_t, size_t> visibleRange(size_t count, float width, float height, float scroll, bool posters = false) {
     const auto cols = static_cast<size_t>(columns(width));
@@ -149,7 +149,7 @@ inline float top(size_t index, float width, float scroll) { return list_top + (i
 inline float maxScroll(size_t count, float width, float height) {
     if (!count) return 0;
     const size_t rows = (count + columns(width) - 1) / columns(width);
-    return std::max(0.0f, list_top + rows * step(width) - height + 30.0f);
+    return std::max(0.0f, list_top + rows * step(width) - height + 56.0f); // Clear of the button hints.
 }
 inline std::pair<size_t, size_t> visibleRange(size_t count, float width, float height, float scroll) {
     const auto cols = static_cast<size_t>(columns(width));
@@ -249,7 +249,7 @@ struct Layout {
 // Shared drawing/hit-test geometry of the larger inline detail panel and its actions.
 namespace library_presentation {
 constexpr int action_count = 2; // Primary action and the compact game menu.
-inline float listRight(float width) { return std::clamp(width * 0.30f, 400.0f, 570.0f); }
+inline float listRight(float width) { return std::clamp(width * 0.33f, 420.0f, 600.0f); } // Room for longer titles.
 struct Layout {
     float width, height;
     float left() const { return listRight(width) + 44; }
@@ -350,10 +350,23 @@ inline float reveal(View view, size_t index, size_t count, float width, float he
     }
     if (cinematicColumn(view, options)) return cinematic_column::reveal(index, count, width, height);
     if (library_view::carousel(view)) return 0;
+    if (library_view::rows(view)) {
+        // Rows scroll by whole rows (no half row cut under the column headings) and keep one row of
+        // look-ahead above and below the focused one, so the list shows what comes next.
+        const float view_height = height - list_layout::bottom_margin - list_layout::list_top;
+        const int visible = std::max(1, static_cast<int>(std::floor((view_height - list_layout::row_height) / list_layout::step)) + 1);
+        const int at = static_cast<int>(index);
+        int first = static_cast<int>(std::lround(std::max(0.0f, scroll) / list_layout::step));
+        const int margin = visible > 2 ? 1 : 0;
+        if (at < first + margin) first = at - margin;
+        if (at > first + visible - 1 - margin) first = at - visible + 1 + margin;
+        first = std::clamp(first, 0, std::max(0, static_cast<int>(count) - visible));
+        return static_cast<float>(first) * list_layout::step;
+    }
     const float item = top(view, index, width, scroll, options), size = extent(view, width, options);
-    const float edge = view == View::cinematic ? cinematic_layout::list_top : view == View::overview ? overview_layout::list_top :
-                       library_view::rows(view) ? list_layout::list_top : 155;
-    const float bottom = height - (view == View::overview ? overview_layout::bottom_margin : library_view::rows(view) ? list_layout::bottom_margin : 30);
+    const float edge = view == View::cinematic ? cinematic_layout::list_top : view == View::overview ? overview_layout::list_top : 155;
+    // Clear of the button hints along the bottom edge, as the lists.
+    const float bottom = height - (view == View::overview ? overview_layout::bottom_margin : view == View::cinematic ? 30 : list_layout::bottom_margin);
     if (item < edge) scroll = std::max(0.0f, scroll + item - edge);
     else if (item + size > bottom) {
         scroll += item + size - bottom;

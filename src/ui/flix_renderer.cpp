@@ -332,8 +332,13 @@ void Renderer::drawFlixUnfolded(const GameCard& card, size_t index, float alpha)
     if (content > 0.01f) {
         const float row1 = y + image_h + 26, row2 = row1 + 34, row3 = row2 + 26;
         const float r = 15, cx = x + pad + r;
-        brush(gray(0.97f, content));
-        target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(cx, row1), r, r), solid_.Get());
+        // What Enter / A does is the filled circle: the action (left) or the details (right),
+        // so the card agrees with the button hint.
+        const bool details = context_->flix_unfold_details;
+        const D2D1_COLOR_F dark = D2D1::ColorF(0.05f, 0.055f, 0.06f, content);
+        const D2D1_COLOR_F glyph_ink = details ? gray(0.95f, content) : dark;
+        if (details) { brush(gray(1, 0.55f * content)); target_->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(cx, row1), r, r), solid_.Get(), 1.6f); }
+        else { brush(gray(0.97f, content)); target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(cx, row1), r, r), solid_.Get()); }
         ComPtr<ID2D1PathGeometry> glyph;
         ComPtr<ID2D1GeometrySink> sink;
         if (SUCCEEDED(factory_->CreatePathGeometry(glyph.GetAddressOf())) && SUCCEEDED(glyph->Open(sink.GetAddressOf()))) {
@@ -346,18 +351,19 @@ void Renderer::drawFlixUnfolded(const GameCard& card, size_t index, float alpha)
             }
             sink->EndFigure(D2D1_FIGURE_END_CLOSED);
             if (SUCCEEDED(sink->Close())) {
-                brush(D2D1::ColorF(0.05f, 0.055f, 0.06f, content));
+                brush(glyph_ink);
                 target_->FillGeometry(glyph.Get(), solid_.Get());
-                if (!context_->flix_unfold_play) line(cx, row1 - 8, cx, row1 + 2, D2D1::ColorF(0.05f, 0.055f, 0.06f, content), 3.0f);
+                if (!context_->flix_unfold_play) line(cx, row1 - 8, cx, row1 + 2, glyph_ink, 3.0f);
             }
         }
-        textLine(context_->flix_unfold_action, cx + r + 12, row1, w * 0.5f, button_font_.Get(), gray(0.95f, content), DWRITE_TEXT_ALIGNMENT_LEADING);
+        textLine(context_->flix_unfold_action, cx + r + 12, row1, w * 0.5f, toast_font_.Get(), gray(0.95f, content), DWRITE_TEXT_ALIGNMENT_LEADING);
         // Right: a ring with a chevron, the way to its details.
         const float dx = x + w - pad - r;
-        brush(gray(1, 0.55f * content));
-        target_->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(dx, row1), r, r), solid_.Get(), 1.6f);
-        line(dx - 6, row1 - 2.5f, dx, row1 + 3.5f, gray(0.95f, content), 2.0f);
-        line(dx, row1 + 3.5f, dx + 6, row1 - 2.5f, gray(0.95f, content), 2.0f);
+        const D2D1_COLOR_F chevron = details ? dark : gray(0.95f, content);
+        if (details) { brush(gray(0.97f, content)); target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(dx, row1), r, r), solid_.Get()); }
+        else { brush(gray(1, 0.55f * content)); target_->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(dx, row1), r, r), solid_.Get(), 1.6f); }
+        line(dx - 6, row1 - 2.5f, dx, row1 + 3.5f, chevron, 2.0f);
+        line(dx, row1 + 3.5f, dx + 6, row1 - 2.5f, chevron, 2.0f);
         // Rating (in green), then year, playtime and platform.
         float fx = x + pad;
         if (!context_->flix_unfold_rating.empty()) {

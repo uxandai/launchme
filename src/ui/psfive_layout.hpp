@@ -90,7 +90,8 @@ struct MoreMenu {
     MoreMenu(float width, float height, size_t categories, float anchor) : count(categories > visible_tabs ? categories - visible_tabs : 0) {
         const float left = std::clamp(anchor, 24.0f, std::max(24.0f, width - menu_width - 24));
         const float top = top_center + 34;
-        panel = {left, top, left + menu_width, top + 2 * padding + std::min(static_cast<float>(count) * row_height, std::max(row_height, height - top - 40))};
+        // Clear of the button hints along the bottom edge (Wybierz / Zamknij while it is open).
+        panel = {left, top, left + menu_width, top + 2 * padding + std::min(static_cast<float>(count) * row_height, std::max(row_height, height - top - 72))};
     }
     float top() const { return panel.top + padding; }
     float bottom() const { return panel.bottom - padding; }

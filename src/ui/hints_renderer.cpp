@@ -7,7 +7,9 @@
 
 namespace {
 using palette::gray;
-constexpr float glyph_size = 24, gap = 8, spacing = 22, margin = 44, pill_height = 38;
+// The pill keeps clear of the screen's edges (TVs crop a few percent with overscan): its bottom
+// 15 px above the lower edge, its right 42 px from the right one.
+constexpr float glyph_size = 24, gap = 8, spacing = 22, margin = 56, pill_height = 38, center_from_bottom = 34;
 }
 
 // Keycap captions for the keyboard; empty: the hint is drawn as a pad glyph.
@@ -104,7 +106,7 @@ void Renderer::drawHints() {
         total += glyph + gap + label;
     }
     total += spacing * static_cast<float>(context_->hints.size() - 1);
-    const float cy = viewport_.height - 26;
+    const float cy = viewport_.height - center_from_bottom;
     const float right = viewport_.width - margin, left = right - total;
     const auto shape = D2D1::RoundedRect(D2D1::RectF(left - 14, cy - pill_height * 0.5f, right + 14, cy + pill_height * 0.5f),
                                          pill_height * 0.5f, pill_height * 0.5f);

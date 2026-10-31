@@ -136,7 +136,8 @@ inline Rect menuRect(const Menu& menu, float width, float height) {
     float x = menu.align_right ? menu.x - w : menu.x, y = menu.y;
     if (x + w > width - 8) x = std::max(8.0f, (menu.align_right ? width - 8 : menu.x) - w);
     x = std::clamp(x, 8.0f, std::max(8.0f, width - w - 8));
-    if (y + h > height - 8) y = std::max(8.0f, menu.y - h);
+    // Below the pointer, else above it; fitting neither way it moves up just enough (not to the top).
+    if (y + h > height - 8) { y = menu.y - h; if (y < 8) y = std::max(8.0f, height - 8 - h); }
     return {x, y, x + w, y + h};
 }
 inline Rect itemRect(Rect panel, const std::vector<MenuItem>& items, int index) {
@@ -467,13 +468,14 @@ struct Layout {
     Rect sortButton() const { const auto c = installedChip(); return {c.left - 8 - 176, c.top, c.left - 8, c.bottom}; }
     float titleRight() const { return compactHeader() ? main().right - grid_pad : sortButton().left - 16; }
 
-    // The poster grid: as many columns of at least `poster` as fit, stretched to the row.
+    // The poster grid: columns around `poster` wide (down to 88% of it), stretched to the row; a
+    // strict minimum left narrow windows with a few oversized posters.
     float gridTop() const { return title_h + headerHeight(); }
     float gridLeft() const { return main().left + grid_pad; }
     float gridRight() const { return main().right - grid_pad; }
     int columns() const {
         const float w = gridRight() - gridLeft();
-        return std::max(1, static_cast<int>(std::floor((w + gap_x) / (poster_width + gap_x))));
+        return std::max(1, static_cast<int>(std::floor((w + gap_x) / (poster_width * 0.88f + gap_x))));
     }
     float cellWidth() const { const int c = columns(); return (gridRight() - gridLeft() - gap_x * (c - 1)) / c; }
     float posterHeight() const { return std::round(cellWidth() * 1.5f); }
@@ -568,9 +570,13 @@ struct Layout {
     float paneTop(float scroll) const { return title_h - scroll; }
     Rect banner(float scroll) const { const float t = paneTop(scroll); return {paneLeft(), t, width, t + bannerHeight()}; }
     float paneY(float offset, float scroll) const { return paneTop(scroll) + bannerHeight() + offset; }
-    Rect panePrimary(float scroll) const { const float y = paneY(74, scroll); return {paneLeft() + 20, y, width - 20 - 2 * 48, y + 42}; }
-    Rect paneFavorite(float scroll) const { const float y = paneY(74, scroll); return {width - 20 - 2 * 48 + 6, y, width - 20 - 48, y + 42}; }
-    Rect paneMore(float scroll) const { const float y = paneY(74, scroll); return {width - 20 - 42, y, width - 20, y + 42}; }
+    // Graj at most 320 wide (a dragged-wide pane stretched it over 600), the star and "…" beside it.
+    Rect panePrimary(float scroll) const {
+        const float y = paneY(74, scroll), left = paneLeft() + 20;
+        return {left, y, left + std::min(320.0f, width - 20 - 2 * 48 - left), y + 42};
+    }
+    Rect paneFavorite(float scroll) const { const auto p = panePrimary(scroll); return {p.right + 6, p.top, p.right + 48, p.bottom}; }
+    Rect paneMore(float scroll) const { const auto f = paneFavorite(scroll); return {f.right + 6, f.top, f.right + 48, f.bottom}; }
     Rect paneStats(float scroll) const { const float y = paneY(132, scroll); return {paneLeft() + 20, y, width - 20, y + 66}; }
     static constexpr int quick_count = 4; // Szczegóły, Grafika, Folder, Ukryj.
     Rect paneQuick(int i, float scroll) const {

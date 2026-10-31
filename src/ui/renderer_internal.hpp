@@ -3,7 +3,9 @@
 // and text case. One definition each; a file uses them through `using render_detail::name;` (or
 // `using namespace render_detail;`).
 #include "renderer.hpp"
+#include "../i18n/i18n.hpp"
 #include "../library/emulation_platforms.hpp"
+#include "../library/game_index.hpp"
 
 #include <d2d1helper.h>
 
@@ -15,6 +17,9 @@ namespace render_detail {
 inline D2D1_COLOR_F color(float r, float g, float b, float a = 1.0f) { return D2D1::ColorF(r, g, b, a); }
 // A publisher's or developer's tile ("publisher:capcom"): a logo on the stores' dark fill.
 inline bool studioPlatform(std::wstring_view platform) { return platform.starts_with(L"publisher:") || platform.starts_with(L"developer:"); }
+// A mark that is mostly a word (the generated padlock + "DRM-FREE"): at a badge's height the word
+// shrinks to a few pixels, so badges and fact lines write the name instead (tiles keep the logo).
+inline bool wordOnlyBadge(std::wstring_view platform) { return platform == L"DRM-free"; }
 inline D2D1_COLOR_F platformColor(const std::wstring& platform, float alpha = 1.0f) {
     if (const auto* found = findEmulationPlatform(platform)) return color(found->red, found->green, found->blue, alpha);
     return color(0.18f, 0.25f, 0.33f, alpha);
@@ -31,6 +36,9 @@ inline std::wstring upper(std::wstring value) {
     if (!value.empty()) CharUpperBuffW(value.data(), static_cast<DWORD>(value.size()));
     return value;
 }
+// A release date in the interface's one format ("17 września 2023" / "Sep 17, 2023"); see
+// game_index::releaseLabel.
+inline std::wstring releaseText(std::wstring_view raw) { return game_index::releaseLabel(raw, i18n::english()); }
 // The same picture, also from another load of the same file (a new shared buffer).
 inline bool samePicture(const ImageBytes& a, const ImageBytes& b) {
     return a == b || (a && b && a->size() == b->size() && *a == *b);

@@ -2696,6 +2696,10 @@ constexpr Entry entries[] = {
     {L"Usunąć kolekcję?", L"Delete the collection?"},
     {L"Ukryj na ekranie głównym", L"Hide on the home screen"},
     {L"Usunięto kolekcję", L"Collection deleted"},
+    // What a destructive answer changes, under the question (the desktop window's dialog).
+    {L"Gry zostają w bibliotece; znika tylko kolekcja.", L"The games stay in the library; only the collection goes."},
+    {L"Gra zostanie odinstalowana z tego komputera; jej wpis w bibliotece zostaje.", L"The game will be uninstalled from this PC; it stays in the library."},
+    {L"Zniknie tylko wpis w launcherze; plik gry na dysku zostaje.", L"Only the launcher's entry goes; the game's file stays on the disk."},
     // Entries of extras built only on this machine (local/i18n), when present.
 #if __has_include("strings_en_local.inc")
 #include "strings_en_local.inc"
