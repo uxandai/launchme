@@ -127,6 +127,25 @@ void Renderer::drawXmbTileIcon(const GameCard& card, size_t index, float x, floa
         drawGlanceGlyph(cx, cy, size * 0.36f, ink);
         return;
     }
+    if (card.game.kind == GameKind::tarot) {
+        // Tarot: its card glyph over a violet tint.
+        if (const auto shape = tileShape(D2D1::RectF(x, y, x + size, y + size), tile_shape_)) {
+            brush(D2D1::ColorF(0.55f, 0.36f, 0.86f, 0.24f * transparency)); target_->FillGeometry(shape.Get(), solid_.Get());
+        }
+        drawTarotGlyph(cx, cy, size * 0.40f, ink);
+        return;
+    }
+    if (card.game.kind == GameKind::add) {
+        // Dodaj grę: a plus in a ring.
+        if (const auto shape = tileShape(D2D1::RectF(x, y, x + size, y + size), tile_shape_)) {
+            brush(gray(1, 0.06f * transparency)); target_->FillGeometry(shape.Get(), solid_.Get());
+        }
+        brush(ink);
+        target_->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), size * 0.2f, size * 0.2f), solid_.Get(), stroke);
+        line(cx - size * 0.09f, cy, cx + size * 0.09f, cy, ink, stroke * 1.3f);
+        line(cx, cy - size * 0.09f, cx, cy + size * 0.09f, ink, stroke * 1.3f);
+        return;
+    }
     brush(ink);
     if (card.game.kind == GameKind::settings) {
         target_->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), size * 0.13f, size * 0.13f), solid_.Get(), stroke);

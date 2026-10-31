@@ -55,6 +55,7 @@ void Renderer::drawPsfive() {
     target_->PushAxisAlignedClip(row_clip, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
     if (selected_ < cards.size()) drawCard(cards[selected_], selected_);
     target_->PopAxisAlignedClip();
+    drawPsfiveDetails(); // Szczegóły pod rzędem: the sheet over the row (psfive_details_renderer.cpp).
 }
 
 float Renderer::drawPsfiveBadge(const std::wstring& platform, float x, float center_y, float alpha) {

@@ -12,6 +12,11 @@ void Renderer::drawSnitch() {
     const float width = viewport_.width, height = viewport_.height;
     brush(gray(0.175f));
     target_->FillRectangle(D2D1::RectF(0, 0, width, height), solid_.Get());
+    // Tapeta in place of the plain grey, darkened enough for the white icons and the title.
+    if (wallpaper_places_.snitch && drawWallpaperBackdrop(1.0f)) {
+        brush(gray(0.05f, 0.42f));
+        target_->FillRectangle(D2D1::RectF(0, 0, width, height), solid_.Get());
+    }
     beginScreenForeground();
 
     // Profile shortcut: the same Widgets destination as the dock, available without downloaded art.

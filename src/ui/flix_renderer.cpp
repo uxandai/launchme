@@ -177,6 +177,11 @@ void Renderer::drawRectangularCard(const GameCard& card, size_t index, float alp
             target_->DrawRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(left, top, left + cell, top + cell), cell * 0.25f, cell * 0.25f), solid_.Get(), 2.2f);
         }
         text(game.name, x + 12, cy + cell + 18, tile_w - 24, 30, button_font_.Get(), gray(0.9f, transparency));
+    } else if (game.kind == GameKind::glance || game.kind == GameKind::companion || game.kind == GameKind::tarot || game.kind == GameKind::add) {
+        // Glance, Towarzyszka, Tarot and Dodaj grę as tiles of the first row: their glyph and name.
+        const float side = std::min(tile_w, tile_h) * 0.72f;
+        drawXmbTileIcon(card, index, x + (tile_w - side) * 0.5f, y + (tile_h - side) * 0.38f, side, transparency);
+        text(game.name, x + 12, y + tile_h - 42, tile_w - 24, 30, button_font_.Get(), gray(0.9f, transparency));
     } else if (poster || cover) {
         // A stand-in cover of another shape (square, or a wide header) would lose its sides and often
         // its title to the tile's crop: shown whole over a dimmed fill of itself instead.

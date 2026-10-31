@@ -44,8 +44,10 @@ void Renderer::drawLayoutScene(int option, D2D1_RECT_F picture, float time, floa
     const float top = (picture.top + picture.bottom - scene_height * scale) * 0.5f;
     const float horizontal = transition(time, 0.15f, 0.85f) - transition(time, 1.6f, 2.0f);
     const float vertical = transition(time, 0.85f, 1.5f) - transition(time, 1.6f, 2.0f);
-    const auto background = D2D1::ColorF(0.035f, 0.045f, 0.055f);
-    const auto white = [&](float amount) { return mix(background, D2D1::ColorF(1, 1, 1), amount); };
+    // Metro's light theme (Jasny motyw): its miniature on a white page, the tiles darker than it.
+    const bool light_page = option == 3 && metro_light_;
+    const auto background = light_page ? D2D1::ColorF(0.93f, 0.935f, 0.94f) : D2D1::ColorF(0.035f, 0.045f, 0.055f);
+    const auto white = [&](float amount) { return mix(background, light_page ? D2D1::ColorF(0, 0, 0) : D2D1::ColorF(1, 1, 1), amount); };
     const auto muted = white(0.16f), dim = white(0.08f), label = white(0.34f), light = white(0.44f);
     auto ink = uiAccent();
     ink.r *= 0.72f; ink.g *= 0.72f; ink.b *= 0.72f;

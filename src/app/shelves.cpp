@@ -278,12 +278,11 @@ void Launcher::buildShelves() {
                           [](const auto& a, const auto& b) { return a.first > b.first; });
         for (size_t i = 0; i < count; ++i) pick(*added[i].second);
     }
-    if (!public_library_.empty()) {
-        Game all;
-        all.name = snitch ? tr(L"Wszystkie") : tr(L"Wszystkie gry");
-        all.kind = GameKind::all;
-        recent.games.push_back(std::move(all));
-    }
+    // Wszystkie gry last; with Kafle Wszystkie, Glance… also Glance, Tarot and Towarzyszka, first or
+    // last (homeSpecialTiles); Dodaj grę's "+" with them when it is on.
+    auto specials = homeSpecialTiles();
+    if (settings_.home_tiles == AppSettings::HomeTiles::first) recent.games.insert(recent.games.begin(), specials.begin(), specials.end());
+    else recent.games.insert(recent.games.end(), specials.begin(), specials.end());
     categories_.push_back(std::move(recent));
     if (!settings_.enabled_pc_sources.empty() || custom_games) {
         Category pcs{tr(L"Platformy PC")};
@@ -589,7 +588,7 @@ void Launcher::rebuildCards(bool preserve_background) {
     }
     if (!same_list) arrived_ = 0;
     // The same focus keeps its settled background and title (and on PSfive its focused button).
-    if (!same_list || selected_ >= shelf_card_keys_.size() || old_focus != shelf_card_keys_[selected_]) { detail_ = 0; psfive_action_ = psfive_top_ = -1; }
+    if (!same_list || selected_ >= shelf_card_keys_.size() || old_focus != shelf_card_keys_[selected_]) { detail_ = 0; psfive_action_ = psfive_top_ = psfive_details_ = -1; }
     requestVisibleArt();
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
@@ -599,6 +598,24 @@ bool Launcher::shelfPosters() const {
         screen_ != ScreenMode::shelves || category_ >= categories_.size()) return false;
     const auto& games = categories_[category_].games;
     return std::any_of(games.begin(), games.end(), [](const Game& game) { return isGame(game); });
+}
+
+// The tiles that open the launcher's own screens, for the first row: Wszystkie gry (with a
+// library); with Kafle Wszystkie, Glance… (AppSettings::home_tiles) also Glance, Tarot and
+// Towarzyszka while they are on, their floating shortcuts giving way (homeWidgets); and Dodaj
+// grę's "+" while add_game_tile is on. buildShelves puts them first or last.
+std::vector<Game> Launcher::homeSpecialTiles() const {
+    std::vector<Game> tiles;
+    const bool snitch = settings_.home_layout == AppSettings::HomeLayout::snitch;
+    const auto tile = [&](GameKind kind, std::wstring name) { Game game; game.kind = kind; game.name = std::move(name); tiles.push_back(std::move(game)); };
+    if (!public_library_.empty()) tile(GameKind::all, snitch ? tr(L"Wszystkie") : tr(L"Wszystkie gry"));
+    if (settings_.home_tiles != AppSettings::HomeTiles::layout && !desktop_mode_) {
+        if (settings_.glance) tile(GameKind::glance, L"Glance");
+        if (settings_.tarot) tile(GameKind::tarot, L"Tarot");
+        if (settings_.companion) tile(GameKind::companion, companion::name(companionLook()));
+    }
+    if (settings_.add_game_tile && !desktop_mode_) tile(GameKind::add, tr(L"Dodaj grę"));
+    return tiles;
 }
 
 bool Launcher::shelfAllTile() const {

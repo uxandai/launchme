@@ -22,8 +22,9 @@ D2D1_COLOR_F mix(D2D1_COLOR_F a, D2D1_COLOR_F b, float t, float alpha) {
 void Renderer::drawMetro() {
     const auto& cards = *cards_;
     drawBackground();
-    // The tiles carry the page: the focused game's background stays behind a dark veil.
-    brush(D2D1::ColorF(0.010f, 0.012f, 0.016f, 0.62f));
+    // The tiles carry the page: the focused game's background stays behind a dark veil (Jasny motyw:
+    // a white one, the background barely showing through).
+    brush(metro_light_ ? D2D1::ColorF(0.955f, 0.958f, 0.965f, 0.9f) : D2D1::ColorF(0.010f, 0.012f, 0.016f, 0.62f));
     target_->FillRectangle(D2D1::RectF(0, 0, viewport_.width, viewport_.height), solid_.Get());
     beginScreenForeground();
     drawMetroTabs();
@@ -72,7 +73,8 @@ void Renderer::drawMetroTabs() {
         // Previous tabs fade out before the screen's edge could cut them ("ny pc").
         const float alpha = (left < metro_layout::left ? smoothFade(left / std::max(1.0f, metro_layout::left)) : 1.0f) * quiet;
         if (alpha < 0.01f) continue;
-        textLine(tabs[i], left, metro_layout::tabs_center, widths[i] + 8, metro_tab_font_.Get(), gray(std::lerp(0.42f, 0.97f, active), alpha));
+        textLine(tabs[i], left, metro_layout::tabs_center, widths[i] + 8, metro_tab_font_.Get(),
+                 metro_light_ ? gray(std::lerp(0.62f, 0.06f, active), alpha) : gray(std::lerp(0.42f, 0.97f, active), alpha));
         // The strip has the focus: an accent bar under the current tab, gliding with it.
         if (context_->metro_tabs_focus && active > 0.01f) {
             brush(uiAccent(active * alpha));
@@ -119,6 +121,13 @@ void Renderer::drawMetroGlyph(metro_layout::Role role, float cx, float cy, float
         break;
     }
     case Role::glance: drawGlanceGlyph(cx, cy, size * 0.95f, ink); break;
+    case Role::tarot: drawTarotGlyph(cx, cy, size * 1.1f, ink); break;
+    case Role::add: { // Dodaj grę: a plus in a ring.
+        target_->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), size * 0.5f, size * 0.5f), solid_.Get(), stroke);
+        line(cx - size * 0.24f, cy, cx + size * 0.24f, cy, ink, stroke * 1.2f);
+        line(cx, cy - size * 0.24f, cx, cy + size * 0.24f, ink, stroke * 1.2f);
+        break;
+    }
     default: break;
     }
 }
@@ -150,12 +159,12 @@ void Renderer::drawMetroTile(const GameCard& card, size_t index) {
     const float transparency = card.opacity * (0.9f + 0.1f * emphasis) * (1.0f - 0.55f * away);
     for (int layer = 3; layer >= 1; --layer) {
         const float spread = layer * (3.0f + 2.0f * emphasis);
-        brush(D2D1::ColorF(0, 0, 0, (0.045f + 0.025f * emphasis) * transparency));
+        brush(D2D1::ColorF(0, 0, 0, (0.045f + 0.025f * emphasis) * transparency * (metro_light_ ? 0.45f : 1.0f)));
         const auto shadow = tileShape(D2D1::RectF(x - spread, y + 8 - spread, x + tile_w + spread, y + tile_h + 8 + spread), tile_shape_);
         if (shadow) target_->FillGeometry(shadow.Get(), solid_.Get());
     }
-    if (inner > 0.05f) { // The empty band: almost black, under the content.
-        brush(D2D1::ColorF(0.012f, 0.014f, 0.018f, 0.94f * transparency));
+    if (inner > 0.05f) { // The empty band: almost black (white on the light page), under the content.
+        brush(metro_light_ ? D2D1::ColorF(0.97f, 0.97f, 0.975f, 0.94f * transparency) : D2D1::ColorF(0.012f, 0.014f, 0.018f, 0.94f * transparency));
         target_->FillGeometry(frame_shape.Get(), solid_.Get());
     }
     const auto& game = card.game;
@@ -176,7 +185,7 @@ void Renderer::drawMetroTile(const GameCard& card, size_t index) {
         // Shortcut tiles: a diagonal gradient of their own colour, lighter at the top-left corner,
         // with a soft sheen while focused.
         const size_t gradient = role == Role::library ? 0 : role == Role::pc_platforms ? 1 : role == Role::emulation ? 2 :
-                                role == Role::glance ? 4 : role == Role::companion ? 5 : 3;
+                                role == Role::glance ? 4 : role == Role::companion ? 5 : role == Role::tarot ? 2 : 3;
         if (auto* fill = metro_gradients_[gradient].Get()) {
             fill->SetStartPoint(D2D1::Point2F(x, y));
             fill->SetEndPoint(D2D1::Point2F(x + tile_w, y + tile_h));
@@ -272,6 +281,8 @@ void Renderer::drawMetroTile(const GameCard& card, size_t index) {
     }
     // The accent outline fades into the plain edge of the other tiles as `emphasis` drops; with the
     // focus gap it stands an empty ring away from the tile.
+    // On the light page a white outline would vanish: it turns dark.
+    if (metro_light_ && 0.2126f * accent.r + 0.7152f * accent.g + 0.0722f * accent.b > 0.75f) accent = D2D1::ColorF(0.08f, 0.09f, 0.11f);
     const float ring = context_->focus_ring ? 0.0f : emphasis;
     auto outline = frame_shape;
     if (ring > 0.004f) if (const float out = focusOutset(3.2f); out > 0)
@@ -288,7 +299,7 @@ void Renderer::drawMetroTile(const GameCard& card, size_t index) {
         target_->DrawGeometry(outline.Get(), solid_.Get(), 3.2f);
     }
     if (ring < 0.996f) {
-        brush(gray(1, (1.0f - ring) * 0.14f * transparency));
+        brush(metro_light_ ? gray(0, (1.0f - ring) * 0.12f * transparency) : gray(1, (1.0f - ring) * 0.14f * transparency));
         target_->DrawGeometry(frame_shape.Get(), solid_.Get(), 1.0f);
     }
     if (focused && context_->focus_ring && emphasis > 0.004f) drawFocusRing(accent, emphasis * transparency, scale, false);

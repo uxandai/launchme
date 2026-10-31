@@ -25,7 +25,12 @@ void Renderer::drawArtworkBrowser() {
     target_->Clear(D2D1::ColorF(0.022f, 0.024f, 0.030f));
     if (!context_->artwork_browser) return;
     const auto& state = *context_->artwork_browser;
-    const artwork_ui::Layout layout{viewport_.width, viewport_.height, state.kind(), state.providerChoice()};
+    // The wallpaper (or, in the wallpaper picker, the focused animated one's preview) dimmed behind the gallery.
+    if ((wallpaper_places_.artwork || state.wallpaper) && drawWallpaperBackdrop(1.0f)) {
+        brush(D2D1::ColorF(0.012f, 0.014f, 0.018f, state.wallpaper ? 0.58f : 0.74f));
+        target_->FillRectangle(D2D1::RectF(0, 0, viewport_.width, viewport_.height), solid_.Get());
+    }
+    const auto layout = state.layout(viewport_.width, viewport_.height);
     const auto base = layout.base();
     const auto fill = [&](settings_ui::Rect r, D2D1_COLOR_F color, float radius = 12) {
         brush(color);
@@ -60,7 +65,8 @@ void Renderer::drawArtworkBrowser() {
     }
     if (state.search_focus && state.query_selected && ink > 0)
         fill({text_left - 3, center(search) - 15, text_left + ink + 3, center(search) + 15}, uiAccent(0.35f), 4);
-    textLine(state.query.empty() ? std::wstring(tr(L"Nazwa gry, Steam AppID lub link SteamGridDB")) : state.query, text_left, center(search),
+    const std::wstring placeholder = state.wallpaper ? tr(L"Szukaj tapet, np. nature, cyberpunk, space") : tr(L"Nazwa gry, Steam AppID lub link SteamGridDB");
+    textLine(state.query.empty() ? placeholder : state.query, text_left, center(search),
              text_right - text_left, menu_font_.Get(), shade(state.query.empty() ? 0.45f : 0.92f));
     if (state.search_focus && !state.query_selected) line(text_left + ink + 2, center(search) - 14, text_left + ink + 2, center(search) + 14, shade(0.92f), 1.6f);
     if (!state.query.empty()) {
@@ -80,7 +86,7 @@ void Renderer::drawArtworkBrowser() {
         const auto source = layout.providerButton();
         const auto source_ink = drawButton(box(source), state.provider_focus ? 1.0f : 0.0f, 1, false);
         const float arrow = source.right - 30, cy = center(source), d = state.provider_open ? -1.0f : 1.0f;
-        textLine(std::wstring(tr(L"Źródło")) + L": " + artwork_ui::providerName(state.provider), source.left + 22, cy, arrow - source.left - 34,
+        textLine(std::wstring(tr(L"Źródło")) + L": " + artwork_ui::providerName(state.activeProvider()), source.left + 22, cy, arrow - source.left - 34,
                  button_font_.Get(), source_ink);
         line(arrow - 6, cy - 3 * d, arrow, cy + 3 * d, source_ink, 1.8f);
         line(arrow, cy + 3 * d, arrow + 6, cy - 3 * d, source_ink, 1.8f);
@@ -104,10 +110,10 @@ void Renderer::drawArtworkBrowser() {
         if (context_->artwork_glide) { const auto& g = *context_->artwork_glide; r = D2D1::RectF(g.left, g.top, g.right, g.bottom); }
         drawButtonFocus(r);
     }
-    for (int i = 0; i < static_cast<int>(artwork_ui::kinds.size()); ++i) {
+    for (int i = 0; i < state.railCount(); ++i) {
         const auto r = base.rail(i);
         const bool active = state.category == i, focus = active && type_focus;
-        textLine(tr(artwork_ui::names[i]), r.left + 25, center(r), r.right - r.left - 50,
+        textLine(tr(state.railName(i)), r.left + 25, center(r), r.right - r.left - 50,
                  category_font_.Get(), focus ? shade(0.08f) : active ? shade(0.95f) : shade(0.57f));
     }
     // "Z dysku…" opens the type/file panel.
@@ -189,13 +195,13 @@ void Renderer::drawArtworkBrowser() {
         const auto list = layout.providerList();
         fill(list, shade(0.09f, 0.98f), 16);
         if (panel_borders_) { brush(shade(1, 0.16f)); target_->DrawRoundedRectangle(D2D1::RoundedRect(box(list), 16, 16), solid_.Get(), 1.0f); }
-        for (int i = 0; i < artwork_ui::Layout::providers_count; ++i) {
+        for (int i = 0; i < static_cast<int>(state.choices.size()); ++i) {
             const auto r = layout.providerRow(i);
             const bool focused = state.provider_row == i;
             if (focused) fillPill(r, shade(0.95f));
-            const auto provider = artwork_ui::providers[static_cast<size_t>(i)];
+            const auto provider = state.choices[static_cast<size_t>(i)];
             textLine(artwork_ui::providerName(provider), r.left + 18, center(r), r.right - r.left - 60, menu_font_.Get(), focused ? shade(0.08f) : shade(0.91f));
-            if (provider == state.provider) {
+            if (provider == state.activeProvider()) {
                 const float y = center(r);
                 const auto mark = focused ? shade(0.08f) : uiAccent();
                 line(r.right - 31, y, r.right - 26, y + 5, mark, 2);

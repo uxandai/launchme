@@ -518,7 +518,37 @@ void Launcher::paint(bool overlay) {
                 if (const auto* games = consoleGames(game.platform)) context.psfive_caption = gamesLabel(games->size());
             }
         }
+        // Szczegóły pod rzędem (psfive_details.cpp): the sheet while it shows or slides away.
+        if ((psfiveDetailsShown() || psfive_details_progress_ > 0.001f) && selected_ < cards_.size() && isGame(cards_[selected_].game)) {
+            const auto& game = cards_[selected_].game;
+            ViewContext::PsfiveDetails details_sheet;
+            details_sheet.progress = psfive_details_progress_;
+            details_sheet.scroll = psfive_details_scroll_;
+            details_sheet.section = std::max(0, psfive_details_);
+            details_sheet.shot = psfive_shot_; details_sheet.similar = psfive_similar_;
+            details_sheet.shots = psfive_shot_full_urls_.size();
+            details_sheet.viewer = psfive_shot_view_ && psfiveDetailsShown();
+            details_sheet.title = game.name;
+            details_sheet.platform = activePlatformName(game);
+            bool loading = false;
+            const auto& info = desktopDetails(game, loading);
+            details_sheet.loading = loading || psfive_shots_loading_;
+            details_sheet.description = info.description;
+            const auto fact = [&](const wchar_t* label, const std::wstring& value) { if (!value.empty()) details_sheet.facts.push_back({tr(label), value}); };
+            fact(L"Developer", info.developer);
+            fact(L"Wydawca", info.publisher);
+            if (!info.release_date.empty()) fact(L"Premiera", game_index::releaseLabel(info.release_date, i18n::english()));
+            fact(L"Gatunek", info.genres);
+            fact(L"Gracze", info.players);
+            if (info.playtime_minutes && *info.playtime_minutes) fact(L"Czas gry", formatPlaytime(*info.playtime_minutes));
+            fact(L"Ocena", info.score);
+            for (const auto& similar : psfive_similar_games_) details_sheet.similar_names.push_back(similar.name);
+            context.psfive_details = std::move(details_sheet);
+            if (psfiveDetailsShown()) context.psfive_action = -1; // The buttons give their focus to the sheet.
+        }
     }
+    context.metro_light = settings_.metro_light;
+    context.menu_dialog = settings_.menu_dialog;
     context.friends_progress = friends_progress_;
     context.friends = &friends_;
     context.friends_loading = friends_loading_;

@@ -83,7 +83,15 @@ Settings → System → Help → **Open folder** (the version row) opens it.
 - **Home layouts**: shelves (default), XMB, Flix, Metro, PSfive and snitch, with a PS5-like tile
   entrance, frosted glass, button colour themes and several focus-outline styles. In Flix, resting
   on a game for a few seconds unfolds its poster into a wide card with its background, logo and facts,
-  pushing the neighbouring tiles aside.
+  pushing the neighbouring tiles aside. In PSfive, Down from Play scrolls to the game's description, facts,
+  Steam screenshots and similar games from your library. All games, Glance, Tarot, the companion and an
+  *Add game* tile can lead or close the first row of every layout; Metro has a light theme, and the game menu
+  can be a large dialog with an icon for each option.
+- **Wallpaper** (Settings → Interface → *Wallpaper*): a picture from Wallhaven or Danbooru (safe content only) or
+  an animated background from MotionBGs or Steam's animated profile backgrounds, with a moving preview before it
+  is downloaded, or your own picture or video; it shows on snitch, behind Settings and the menu screens, in
+  *Change artwork* and behind home tiles without a picture (XMB categories, All games). Without one, the
+  launcher's own backdrop of lights orbiting along lines fills those places.
 - **Made for a pad**: XInput, DualSense, DualShock 4, Nintendo (Switch Pro, Joy-Con), Steam Controller and generic
   HID pads, an on-screen keyboard, and a bottom
   bar with Search, All games, plugins, Downloads, Controllers, Sound, Widgets, Settings and Power. Keyboard and
@@ -137,7 +145,9 @@ Settings → System → Help → **Open folder** (the version row) opens it.
   live friends chat in both desktop and TV modes. Primarily for single-player/offline games; some games, especially multiplayer,
   DRM and Steamworks titles, may require the Steam client. See the [Aurelia guide](docs/AURELIA.md).
 - **Artwork**: SteamGridDB covers, heroes (the sharp 3840 px ones first), logos and posters with OCR-assisted cropping,
-  a variant browser and *Adjust crop* for covers and backgrounds; where SteamGridDB has nothing, the store's own
+  a variant browser (*Change artwork*: its *Source* list adds the Steam store, GOG, Xbox / Microsoft Store,
+  Nintendo eShop, GameTDB, TitleDB, TheGamesDB and Wikimedia Commons, each switched on or off in Settings → Media &
+  data → *Artwork sources*) and *Adjust crop* for covers and backgrounds; where SteamGridDB has nothing, the store's own
   art (Epic, Ubisoft Connect, GOG, EA, Battle.net, Amazon Games). Epic account games use Epic's box art as their poster.
   Games added by hand (and DRM-free folders) fall back to the same game's Steam store art; Settings → Library →
   *Manually added games* → **Covers** fetches all their missing covers at once. Missing art downloads in the background, covers and
@@ -196,9 +206,13 @@ Nothing is needed to start; without a key only the related feature is off. Paste
 | **Steam Web API** | Sign in at [steamcommunity.com/dev/apikey](https://steamcommunity.com/dev/apikey), enter any domain (e.g. `localhost`) | Steam friends, names of uninstalled games, full achievement lists |
 | **RAWG** | Create an account at [rawg.io/apidocs](https://rawg.io/apidocs) → *Get API key* | ratings and metadata for non-Steam games |
 | **ScreenScraper** | Create an account at [screenscraper.fr](https://www.screenscraper.fr); API developer credentials (*devid* / *devpassword*) are requested from ScreenScraper on their forum | emulated games: ROM identification, descriptions, artwork, videos |
+| **TheGamesDB** | Request a free public API key on the [TheGamesDB forum](https://forums.thegamesdb.net) | box art, fanart, banners, clear logos in *Change artwork* |
+
+The other artwork sources (Steam store, GOG, Xbox / Microsoft Store, Nintendo eShop, GameTDB, TitleDB, Wikimedia
+Commons) and the wallpaper sources (Wallhaven, Danbooru, MotionBGs, Steam) need no key.
 
 Files and variables: `steamgriddb_api_key.txt` / `STEAMGRIDDB_API_KEY`, `steam_web_api_key.txt` /
-`STEAM_WEB_API_KEY`, `rawg_api_key.txt` / `RAWG_API_KEY`. ScreenScraper has its own page with the
+`STEAM_WEB_API_KEY`, `rawg_api_key.txt` / `RAWG_API_KEY`, `thegamesdb_api_key.txt` / `THEGAMESDB_API_KEY`. ScreenScraper has its own page with the
 developer and user login (**Settings → Media & data → ScreenScraper**, variables `SCREENSCRAPER_DEV_ID`,
 `SCREENSCRAPER_DEV_PASSWORD`, `SCREENSCRAPER_SSID`, `SCREENSCRAPER_SSPASSWORD`); passwords are stored with DPAPI.
 

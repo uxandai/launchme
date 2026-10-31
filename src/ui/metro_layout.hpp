@@ -13,11 +13,11 @@
 // grid top. Shared by the animation targets, navigation, art binding, hit testing and drawing.
 namespace metro_layout {
 // What a tile is; the card's Game says which game, category or store.
-enum class Role { recent_large, recent, library, settings, pc_platforms, emulation, install, all, game, logo, glance, companion };
+enum class Role { recent_large, recent, library, settings, pc_platforms, emulation, install, all, game, logo, glance, companion, tarot, add };
 // Solid tiles of their own colour, without artwork.
 inline bool systemTile(Role role) {
     return role == Role::library || role == Role::settings || role == Role::pc_platforms || role == Role::emulation ||
-           role == Role::glance || role == Role::companion;
+           role == Role::glance || role == Role::companion || role == Role::tarot || role == Role::add;
 }
 inline bool landscape(Role role) { return role == Role::recent_large || role == Role::recent; }
 

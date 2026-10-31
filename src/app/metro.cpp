@@ -113,6 +113,19 @@ void Launcher::rebuildMetro(bool preserve_background) {
             tile.name = L"Glance";
             middle.emplace_back(std::move(tile), Role::glance);
         }
+        // Kafle Wszystkie, Glance…: Tarot joins them; Dodaj grę's "+" while it is on. Up to four share the two cells as halves.
+        if (settings_.home_tiles != AppSettings::HomeTiles::layout && settings_.tarot) {
+            Game tile;
+            tile.kind = GameKind::tarot;
+            tile.name = L"Tarot";
+            middle.emplace_back(std::move(tile), Role::tarot);
+        }
+        if (settings_.add_game_tile) {
+            Game tile;
+            tile.kind = GameKind::add;
+            tile.name = tr(L"Dodaj grę");
+            middle.emplace_back(std::move(tile), Role::add);
+        }
         for (const auto& [id, role] : {std::pair{"pc-platforms", Role::pc_platforms}, std::pair{"emulation", Role::emulation}})
             if (const auto category = shortcut(id); category && middle.size() < 2) {
                 Game tile;
@@ -122,9 +135,10 @@ void Launcher::rebuildMetro(bool preserve_background) {
                 tile.source_id = categories_[*category].id;
                 middle.emplace_back(std::move(tile), role);
             }
-        if (middle.size() > 2) middle.resize(2);
+        if (middle.size() > 4) middle.resize(4);
         for (size_t i = 0; i < middle.size(); ++i)
-            add(middle[i].first, middle[i].second, metro_layout::cell(0, 1 + static_cast<int>(i), 2, middle.size() == 1 ? 2 : 1, 1));
+            if (middle.size() <= 2) add(middle[i].first, middle[i].second, metro_layout::cell(0, 1 + static_cast<int>(i), 2, middle.size() == 1 ? 2 : 1, 1));
+            else add(middle[i].first, middle[i].second, metro_layout::half(0, 1 + static_cast<int>(i / 2), 2, static_cast<int>(i % 2)));
         if (const auto* install = metroInstallGame();
             install && std::none_of(recent.begin(), recent.end(), [&](const Game* game) { return gameKey(*game) == gameKey(*install); }))
             add(*install, Role::install, metro_layout::cell(0, 3, 0, 1, 3));
@@ -298,6 +312,8 @@ bool Launcher::metroActivate() {
     case Role::all: openCategoryLibrary(game.source_id); return true;
     case Role::glance: openGlance(); return true;
     case Role::companion: openCompanion(); return true;
+    case Role::tarot: openTarot(); return true;
+    case Role::add: openCustomEditor({}); return true;
     default: return false;
     }
 }

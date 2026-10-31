@@ -331,6 +331,29 @@ struct AppSettings {
     // The blocks are kept on disk (textures\), so a picture is compressed once. On by default
     // (stored as texture_compression; the older low_memory_bc1=1 turns it on as well).
     bool texture_compression = true;
+    // Media i dane → Źródła grafik: the galleries "Zmień grafikę" may offer (artwork_sources slugs,
+    // src/artwork/artwork_sources.hpp) that were switched off; every source is on by default.
+    std::unordered_set<std::string> artwork_sources_off;
+    // Interfejs → Tapeta (src/app/wallpaper.cpp): a picture or a looping video chosen online or from
+    // disk, kept in <config>\wallpapers; none: the launcher's own animated backdrop stays.
+    enum class WallpaperKind { none, picture, video };
+    WallpaperKind wallpaper = WallpaperKind::none;
+    std::filesystem::path wallpaper_file;
+    uint32_t wallpaper_id = 0; // Its gallery entry (the check mark in the picker).
+    // Where it shows: snitch's backdrop, Settings and the menu screens, Zmień grafikę, and home tiles
+    // without a picture of their own (XMB categories, Wszystkie, Glance...).
+    bool wallpaper_snitch = true, wallpaper_menus = true, wallpaper_artwork = true, wallpaper_tiles = true;
+    // Tryb TV: Wszystkie, Glance, Tarot and Towarzyszka (with Dodaj grę) as tiles of the first row in
+    // every layout, leading or closing it; layout: each layout's own way (floating widgets).
+    enum class HomeTiles { layout, first, last };
+    HomeTiles home_tiles = HomeTiles::layout;
+    bool add_game_tile = false; // A "+" tile opening Dodaj grę.
+    // PSfive: Down from Graj / … scrolls to the game's details, screenshots and similar games.
+    bool psfive_details = true;
+    // The game menu as a large scrollable dialog with an icon beside each option.
+    bool menu_dialog = false;
+    // Metro: a white page with dark text (the light theme of Windows Phone).
+    bool metro_light = false;
 };
 
 // The name or nickname she may call you by (AppSettings::companion_user_name): trimmed, one line,

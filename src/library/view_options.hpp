@@ -125,6 +125,8 @@ inline std::string selectionKey(const Game& game) {
     if (game.kind == GameKind::settings) return "tile:settings";
     if (game.kind == GameKind::glance) return "tile:glance";
     if (game.kind == GameKind::companion) return "tile:companion";
+    if (game.kind == GameKind::tarot) return "tile:tarot";
+    if (game.kind == GameKind::add) return "tile:add";
     if (game.kind == GameKind::category) return "tile:category:" + std::to_string(game.app_id);
     return gameKey(game);
 }

@@ -6,7 +6,8 @@
 // pinned to the shared left margin (psfive_layout.hpp), and Enter/A or a click on a game
 // moves the focus down to its buttons, "Graj" and "…" (the game menu), instead of starting it.
 // Up from the row goes to the top bar (three categories, "Więcej...", Widgets, Menu = the quick
-// bar); LB/RB change the tab; Down from the buttons opens the quick bar.
+// bar); LB/RB change the tab; Down from the buttons opens the quick bar, or with Szczegóły pod rzędem
+// (on by default) scrolls to the game's details and the quick bar opens from above the tabs.
 #include "launcher.hpp"
 #include "../ui/psfive_layout.hpp"
 
@@ -119,6 +120,7 @@ bool Launcher::psfiveAccept() {
         category_menu_open_ || quick_open_ || menu_open_ || launchAnimationActive() || identifyOpen() || gogInstallOpen() ||
         customEditorOpen() || fileBrowserOpen() || libraryDialogOpen()) return false;
     if (psfiveTopFocused()) { psfiveTopActivate(); return true; }
+    if (psfiveDetailsShown()) { psfiveDetailsAccept(); return true; }
     if (psfiveActions()) { psfiveActivate(); return true; }
     // The library, "Wszystkie" and store/console tiles open at once (launch()).
     if (!psfiveButtons()) return false;
@@ -167,17 +169,23 @@ void Launcher::psfiveHorizontal(int amount) {
 
 void Launcher::psfiveVertical(int amount) {
     if (cards_.empty() || !amount) return;
+    if (psfiveDetailsShown()) { psfiveDetailsVertical(amount); return; } // The details under the row (psfive_details.cpp).
+    // Opcje układu → Szczegóły pod rzędem: Down from the buttons scrolls to the game's details and
+    // the menu (quick bar) comes from above the tabs; without it the menu is under the buttons.
+    const bool details = settings_.psfive_details;
     if (psfiveTopFocused()) { // The top bar: Down back to the row.
         if (amount > 0) {
             if (psfive_top_ == static_cast<int>(psfive_layout::visible_tabs) && psfive_top_ < psfiveTabCount()) openCategoryMenu();
             else { psfiveFocusTop(-1); audio_.navigate(); }
         }
+        else if (details) openQuick(); // Up past the very top: the menu.
         else navigationBoundary();
         return;
     }
     if (psfiveActions()) {
-        // The buttons: Up back to the row, Down to the quick bar under them.
+        // The buttons: Up back to the row, Down to the details (or the quick bar under them).
         if (amount < 0) { psfiveFocusAction(-1); audio_.navigate(); }
+        else if (details) psfiveOpenDetails();
         else openQuick();
         return;
     }
@@ -188,6 +196,7 @@ void Launcher::psfiveVertical(int amount) {
         return;
     }
     if (psfiveButtons()) { psfiveFocusAction(0); audio_.navigate(); }
+    else if (settings_.psfive_details) navigationBoundary(); // The menu is above the tabs.
     else openQuick(); // The library and "Wszystkie" tiles have no buttons.
 }
 
@@ -198,6 +207,7 @@ void Launcher::psfiveClickCard(size_t index, bool double_click) {
     if (moved) { focusCard(index, false); audio_.navigate(); }
     const auto game = cards_[index].game;
     if (game.kind == GameKind::all) { openLibrary(); return; }
+    if (specialTile(game)) { launch(); return; } // Glance, Tarot, Towarzyszka, Dodaj grę as tiles: one click.
     if (game.kind == GameKind::category) { openCategoryLibrary(game.source_id); return; }
     if (game.kind == GameKind::platform || game.kind == GameKind::pc_platform) {
         categories_[category_].selected = index;
@@ -239,6 +249,8 @@ void Launcher::psfiveHover(float x, float y) {
 
 bool Launcher::psfiveClick(float x, float y, bool double_click) {
     if (!psfiveActive() || menu_open_) return false;
+    if (!double_click && psfiveDetailsClick(x, y)) return true; // The details sheet's strips.
+    if (psfiveDetailsShown()) return true; // Nothing under the sheet takes clicks.
     const auto view = renderer_.viewport();
     // Category tabs show their row; the overflow opens beneath its tab.
     if (const int tab = renderer_.psfiveTabAt(x, y); tab >= 0) {

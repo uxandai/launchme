@@ -1,7 +1,9 @@
 #include "launcher.hpp"
+#include "../artwork/artwork_sources.hpp"
 #include "../artwork/cover_cache.hpp"
 #include "../artwork/esde_art.hpp"
 #include "../artwork/screenscraper_art.hpp"
+#include "../artwork/wallpaper_sources.hpp"
 #include "../platform/atomic_file.hpp"
 #include "../platform/text_encoding.hpp"
 #include <algorithm>
@@ -108,8 +110,22 @@ void Launcher::initializeArtworkBrowser() {
             result->generation = job.generation;
             result->asset_id = job.asset.id;
             result->kind = job.kind;
+            result->wallpaper = job.wallpaper;
+            const auto wallpapers = userConfigDirectory() / L"wallpapers";
             if (job.type == ArtworkBrowserMessage::Type::search) {
                 result->search = searchGridGames(job.query, userSecret(L"STEAMGRIDDB_API_KEY", L"steamgriddb_api_key.txt"));
+            } else if (job.type == ArtworkBrowserMessage::Type::preview) {
+                result->file = wallpaper_sources::preview(job.asset, wallpapers);
+                result->video = true;
+            } else if (job.wallpaper && job.type == ArtworkBrowserMessage::Type::local) {
+                // A picture or video from disk becomes the wallpaper (copied into <config>\wallpapers).
+                bool video = false;
+                result->file = wallpaper_sources::storeLocal(std::filesystem::path(job.query), wallpapers, video, result->error);
+                result->video = video;
+                result->asset_id = 0;
+            } else if (job.wallpaper && job.type == ArtworkBrowserMessage::Type::apply) {
+                result->file = wallpaper_sources::store(job.provider, job.asset, wallpapers, result->error);
+                result->video = wallpaper_sources::video(job.provider);
             } else if (job.type == ArtworkBrowserMessage::Type::local) {
                 // An image from disk becomes one more variant of this game, kept like a SteamGridDB pick.
                 auto bytes = cachedImage(std::filesystem::path(job.query));
@@ -129,10 +145,23 @@ void Launcher::initializeArtworkBrowser() {
                     }
                 }
             } else if (job.type == ArtworkBrowserMessage::Type::list) {
-                result->page = job.provider == ArtworkProvider::steamgriddb ?
+                if (job.wallpaper) result->page = wallpaper_sources::browse(job.provider, job.query, job.page);
+                else if (artwork_sources::own(job.provider)) {
+                    artwork_sources::Context context{userConfigDirectory(), job.steam_app_id, job.query.empty() ? artworkTitle(job.game) : job.query,
+                                                     userSecret(L"THEGAMESDB_API_KEY", L"thegamesdb_api_key.txt")};
+                    result->page = artwork_sources::browse(job.provider, job.game, job.kind, context);
+                } else result->page = job.provider == ArtworkProvider::steamgriddb ?
                     browseSteamGridDB(job.game, job.kind, job.page, job.source, userSecret(L"STEAMGRIDDB_API_KEY", L"steamgriddb_api_key.txt")) :
                     providerPage(job.game, job.kind, job.provider);
-                result->applied_id = selectedArtworkId(job.game, job.kind, cache);
+                if (!job.wallpaper) result->applied_id = selectedArtworkId(job.game, job.kind, cache);
+            } else if (job.wallpaper) {
+                // A wallpaper's thumbnail, kept apart from the games' (thumbnails\wallpaper).
+                const auto file = cache.parent_path() / L"artwork" / L"thumbnails" / L"wallpaper" / (std::to_wstring(job.asset.id) + L".img");
+                result->bytes = cachedImage(file);
+                if (result->bytes.empty()) {
+                    result->bytes = wallpaper_sources::thumbnail(job.asset);
+                    if (!result->bytes.empty()) saveThumbnail(file, result->bytes);
+                }
             } else {
                 const bool thumbnail = job.type == ArtworkBrowserMessage::Type::thumbnail;
                 // ES-DE files are on disk already: no thumbnail copies of them.
@@ -143,7 +172,9 @@ void Launcher::initializeArtworkBrowser() {
                 result->bytes = cachedImage(file);
                 if (result->bytes.empty()) {
                     result->bytes = job.provider == ArtworkProvider::screenscraper ? screenscraperImage(job.asset.url, thumbnail) :
-                                    esde ? cachedImage(std::filesystem::path(job.asset.url)) : downloadGridImage(job.asset, thumbnail);
+                                    esde ? cachedImage(std::filesystem::path(job.asset.url)) :
+                                    artwork_sources::own(job.provider) ? artwork_sources::download(job.provider, job.asset, thumbnail) :
+                                    downloadGridImage(job.asset, thumbnail);
                     if (job.kind == ArtworkKind::disc && !thumbnail && !result->bytes.empty() && !discImage(result->bytes)) {
                         result->bytes.clear(); result->error = tr(L"Wybrana grafika nie jest skanem płyty.");
                     }
@@ -188,6 +219,8 @@ void Launcher::openArtworkBrowser(const Game& game) {
     artwork_state_.source = artwork_state_.override_source = selectedArtworkSource(game, coverCacheDirectory());
     artwork_state_.query = game.name;
     artwork_state_.category = artwork_ui::category(opened_from);
+    artwork_state_.choices = artworkChoices(artwork_state_);
+    artwork_state_.provider = artwork_state_.choices.front();
     dismissMenu();
     menu_progress_ = 0;
     closeFriends();
@@ -198,34 +231,99 @@ void Launcher::openArtworkBrowser(const Game& game) {
     loadArtworkPage();
 }
 
+// Interfejs → Tapeta: "Zmień grafikę" with Zdjęcia (Wallhaven, Danbooru) and Animowane (MotionBGs,
+// Steam's animated profile backgrounds); the focused animated one plays behind the gallery.
+void Launcher::openWallpaperBrowser() {
+    if (pending_launch_ || desktop_mode_) return;
+    artwork_return_ = screen_;
+    artwork_return_selected_ = selected_;
+    artwork_return_scroll_ = grid_scroll_;
+    artwork_state_ = {};
+    artwork_pages_.clear(); artwork_page_key_.clear();
+    artwork_state_.wallpaper = true;
+    artwork_state_.game.name = tr(L"Tapeta");
+    artwork_state_.category = settings_.wallpaper == AppSettings::WallpaperKind::video ? 1 : 0;
+    artwork_state_.choices = artworkChoices(artwork_state_);
+    artwork_state_.provider = artwork_state_.choices.front();
+    artwork_state_.query = wallpaper_sources::defaultQuery(artwork_state_.provider);
+    wallpaper_preview_id_ = 0;
+    dismissMenu();
+    screen_ = ScreenMode::artwork;
+    loadArtworkPage();
+    audio_.context();
+}
+
+// Another rail entry: its gallery; in the wallpaper picker also its sources (and their first query).
+void Launcher::showArtworkCategory(int category) {
+    auto& state = artwork_state_;
+    const auto before = state.activeProvider();
+    state.category = category; state.page = 0; state.source = state.override_source;
+    if (state.wallpaper) {
+        state.choices = artworkChoices(state);
+        state.provider = state.choices.front();
+        if (state.query.empty() || state.query == wallpaper_sources::defaultQuery(before)) state.query = wallpaper_sources::defaultQuery(state.provider);
+        stopWallpaperPreview();
+    }
+    loadArtworkPage();
+}
+
+// The "Źródło" list: the sources switched on (Media i dane → Źródła grafik) that can have this
+// game's art, or in the wallpaper picker the sources of the type in view; never empty.
+std::vector<ArtworkProvider> Launcher::artworkChoices(const artwork_ui::State& state) const {
+    std::vector<ArtworkProvider> choices;
+    const auto on = [&](ArtworkProvider provider) { return !settings_.artwork_sources_off.contains(artwork_sources::slug(provider)); };
+    if (state.wallpaper) {
+        for (const auto provider : state.videoWallpapers() ? std::array{ArtworkProvider::motionbgs, ArtworkProvider::steam_backgrounds}
+                                                           : std::array{ArtworkProvider::wallhaven, ArtworkProvider::danbooru})
+            choices.push_back(provider);
+        return choices;
+    }
+    // ScreenScraper and ES-DE right after SteamGridDB for emulated games, as before.
+    for (const auto provider : {ArtworkProvider::steamgriddb, ArtworkProvider::screenscraper, ArtworkProvider::esde, ArtworkProvider::steam,
+                                ArtworkProvider::gog, ArtworkProvider::xbox, ArtworkProvider::nintendo, ArtworkProvider::gametdb,
+                                ArtworkProvider::titledb, ArtworkProvider::thegamesdb, ArtworkProvider::wikimedia})
+        if (on(provider) && artwork_sources::applicable(provider, state.game)) choices.push_back(provider);
+    if (choices.empty()) choices.push_back(ArtworkProvider::steamgriddb);
+    return choices;
+}
+
 void Launcher::closeArtworkBrowser() {
     {
         std::lock_guard lock(artwork_jobs_->mutex);
         artwork_jobs_->generation.fetch_add(1);
         artwork_jobs_->jobs.clear();
     }
+    const bool wallpaper = artwork_state_.wallpaper;
     artwork_state_.assets.clear();
     artwork_state_.applying = false;
+    artwork_state_.wallpaper = false;
     artwork_pages_.clear(); artwork_page_key_.clear(); // The visit's pages and thumbnails go with it.
     renderer_.resetArtworkThumbnails(0);
     screen_ = artwork_return_;
     grid_scroll_ = artwork_return_scroll_;
+    if (wallpaper) { // Back to Tło i szkło, the wallpaper chosen (or the one before) behind it again.
+        stopWallpaperPreview();
+        buildSettingsRows();
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        return;
+    }
     rebuildCards(false);
     if (screen_ == ScreenMode::details) { requestDetails(); return; }
     if (!cards_.empty()) navigate(static_cast<int>(std::min(artwork_return_selected_, cards_.size() - 1)) - static_cast<int>(selected_), false);
 }
 
 void Launcher::closeEditorsFor(const std::function<bool(const Game&)>& gone) {
-    if (artworkOpen() && gone(artwork_state_.game)) closeArtworkBrowser();
+    if (artworkOpen() && !artwork_state_.wallpaper && gone(artwork_state_.game)) closeArtworkBrowser();
     if (cropOpen() && !crop_games_.empty() && gone(crop_games_[0])) closeCropEditor();
 }
 
 std::string Launcher::artworkPageKey() const {
     const auto& state = artwork_state_;
-    const auto provider = state.kind() == ArtworkKind::disc ? ArtworkProvider::screenscraper : state.emulated() ? state.provider : ArtworkProvider::steamgriddb;
-    auto key = std::to_string(state.category) + '|' + std::to_string(state.page) + '|' + std::to_string(static_cast<int>(provider)) + '|' +
-               std::to_string(state.source.id) + (state.source.steam ? "s" : "g");
-    if (state.kind() == ArtworkKind::disc) key += '|' + text_encoding::utf8(state.query); // Its gallery follows the field.
+    const auto provider = state.activeProvider();
+    auto key = std::string(state.wallpaper ? "w|" : "") + std::to_string(state.category) + '|' + std::to_string(state.page) + '|' +
+               std::to_string(static_cast<int>(provider)) + '|' + std::to_string(state.source.id) + (state.source.steam ? "s" : "g");
+    // Płyta, the sources beside SteamGridDB and the wallpapers follow the field.
+    if (state.wallpaper || state.kind() == ArtworkKind::disc || provider != ArtworkProvider::steamgriddb) key += '|' + text_encoding::utf8(state.query);
     return key;
 }
 
@@ -239,6 +337,7 @@ void Launcher::loadArtworkPage() {
     state.loading = true;
     state.more = state.applying = false;
     state.status = tr(L"Wczytywanie…");
+    state.provider = state.activeProvider();
     renderer_.resetArtworkThumbnails(0);
     artwork_page_key_ = artworkPageKey();
     if (const auto cached = artwork_pages_.find(artwork_page_key_); cached != artwork_pages_.end()) {
@@ -248,7 +347,7 @@ void Launcher::loadArtworkPage() {
         state.loading = false;
         state.assets = page.assets; state.provider = page.provider; state.more = page.more; state.status = page.status;
         if (page.provider == ArtworkProvider::steamgriddb) state.source = page.source;
-        state.applied_id = selectedArtworkId(state.game, state.kind(), coverCacheDirectory()); // A pick made since.
+        state.applied_id = state.wallpaper ? settings_.wallpaper_id : selectedArtworkId(state.game, state.kind(), coverCacheDirectory()); // A pick made since.
         renderer_.resetArtworkThumbnails(state.assets.size());
         for (size_t i = 0; i < state.assets.size(); ++i)
             if (const auto bytes = page.thumbnails.find(state.assets[i].id); bytes != page.thumbnails.end()) {
@@ -264,8 +363,14 @@ void Launcher::loadArtworkPage() {
         const auto generation = artwork_jobs_->generation.fetch_add(1) + 1;
         artwork_jobs_->jobs.clear();
         ArtworkBrowserJob job{ArtworkBrowserMessage::Type::list, generation, state.game, state.kind(), state.page, state.source};
-        job.provider = state.kind() == ArtworkKind::disc ? ArtworkProvider::screenscraper : state.emulated() ? state.provider : ArtworkProvider::steamgriddb;
-        if (state.kind() == ArtworkKind::disc && !state.query.empty()) job.game.name = state.query;
+        job.provider = state.provider;
+        job.wallpaper = state.wallpaper;
+        if (state.kind() == ArtworkKind::disc && !state.query.empty() && !state.wallpaper) job.game.name = state.query;
+        // The other sources look the field's text up (the game's name until it is edited).
+        if (state.wallpaper || artwork_sources::own(job.provider)) job.query = state.query;
+        job.steam_app_id = steamArtwork(state.game) ? state.game.app_id : state.source.steam ? state.source.id : 0;
+        if (!job.steam_app_id) if (const auto found = rawg_metadata_.find(gameKey(state.game)); found != rawg_metadata_.end()) job.steam_app_id = found->second.steam_app_id;
+        if (state.query != state.game.name) job.steam_app_id = 0; // A typed name (or AppID) is looked up instead.
         artwork_jobs_->jobs.push_back(std::move(job));
     }
     artwork_jobs_->wake.notify_one();
@@ -297,7 +402,13 @@ void Launcher::clearArtworkQuery() {
 }
 void Launcher::searchArtwork() {
     if (artwork_state_.applying) return;
-    if (artwork_state_.kind() == ArtworkKind::disc) { loadArtworkPage(); return; }
+    // Płyta, wallpapers and the sources beside SteamGridDB: the gallery of the typed text at once.
+    if (artwork_state_.kind() == ArtworkKind::disc || artwork_state_.wallpaper || artwork_state_.activeProvider() != ArtworkProvider::steamgriddb) {
+        artwork_state_.page = 0;
+        loadArtworkPage();
+        artwork_state_.gallery = false;
+        return;
+    }
     editArtworkQuery();
     auto& state = artwork_state_; state.loading = true; state.status = tr(L"Szukanie gry…"); state.selected = 0; state.scroll = 0;
     ArtworkBrowserJob job; job.type = ArtworkBrowserMessage::Type::search; job.query = state.query;
@@ -333,6 +444,7 @@ void Launcher::requestArtworkThumbnails() {
         ArtworkBrowserJob job{ArtworkBrowserMessage::Type::thumbnail, artwork_jobs_->generation.load(), state.game,
                               state.kind(), state.page, state.source, asset};
         job.provider = state.provider;
+        job.wallpaper = state.wallpaper;
         if (index == state.selected) artwork_jobs_->jobs.push_front(std::move(job));
         else artwork_jobs_->jobs.push_back(std::move(job));
     };
@@ -341,12 +453,44 @@ void Launcher::requestArtworkThumbnails() {
         const auto r = layout.cell(i, state.scroll);
         if (r.bottom >= layout.top && r.top < layout.bottom()) request(i);
     }
+    // Animated wallpapers: the focused one's moving preview plays behind the gallery before it is chosen.
+    if (state.videoWallpapers() && state.selected < state.assets.size() && !state.assets[state.selected].preview.empty() &&
+        wallpaper_preview_id_ != state.assets[state.selected].id) {
+        wallpaper_preview_id_ = state.assets[state.selected].id;
+        ArtworkBrowserJob job{ArtworkBrowserMessage::Type::preview, artwork_jobs_->generation.load(), state.game,
+                              state.kind(), state.page, state.source, state.assets[state.selected]};
+        job.provider = state.provider;
+        job.wallpaper = true;
+        artwork_jobs_->jobs.push_front(std::move(job));
+    }
     artwork_jobs_->wake.notify_all();
 }
 
 void Launcher::onArtworkBrowser(std::unique_ptr<ArtworkBrowserMessage> message) {
     if (!artworkOpen() || message->generation != artwork_jobs_->generation.load()) return;
     auto& state = artwork_state_;
+    if (message->type == ArtworkBrowserMessage::Type::preview) {
+        // Still the focused animated wallpaper: its preview plays behind the gallery.
+        if (state.wallpaper && !message->file.empty() && state.selected < state.assets.size() && state.assets[state.selected].id == message->asset_id)
+            showWallpaperPreview(message->file);
+        return;
+    }
+    if (message->wallpaper && (message->type == ArtworkBrowserMessage::Type::apply || message->type == ArtworkBrowserMessage::Type::local)) {
+        if (!state.applying) return;
+        state.applying = false;
+        if (message->file.empty()) { state.status = message->error.empty() ? std::wstring(tr(L"Nie można pobrać tapety.")) : message->error; InvalidateRect(hwnd_, nullptr, FALSE); return; }
+        settings_.wallpaper = message->video ? AppSettings::WallpaperKind::video : AppSettings::WallpaperKind::picture;
+        settings_.wallpaper_file = message->file;
+        settings_.wallpaper_id = message->asset_id;
+        state.applied_id = message->asset_id;
+        state.status = tr(L"Tapeta ustawiona.");
+        settingsChanged();
+        stopWallpaperPreview();
+        applyWallpaper();
+        audio_.context();
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        return;
+    }
     if (message->type == ArtworkBrowserMessage::Type::search) {
         state.loading = false; state.games = std::move(message->search.games); state.status = std::move(message->search.error);
         // Equal titles: the release year known for this game (RAWG, DRM-free folder) comes first.
@@ -373,7 +517,7 @@ void Launcher::onArtworkBrowser(std::unique_ptr<ArtworkBrowserMessage> message) 
         state.provider = message->page.provider;
         if (message->page.provider == ArtworkProvider::steamgriddb) state.source = message->page.source;
         state.more = message->page.more;
-        state.applied_id = message->applied_id;
+        state.applied_id = state.wallpaper ? settings_.wallpaper_id : message->applied_id;
         state.status = message->page.error;
         if (state.status.empty() && state.assets.empty()) state.status = tr(L"Brak grafik.");
         // Kept for the rest of this visit; a failed answer (no connection, a rate limit) is asked again.
@@ -426,17 +570,51 @@ void Launcher::onArtworkBrowser(std::unique_ptr<ArtworkBrowserMessage> message) 
 void Launcher::openLocalArtwork() {
     auto& state = artwork_state_;
     if (!artworkOpen() || state.applying) return;
+    if (state.wallpaper) { pickLocalWallpaper(); return; } // One kind of file: the picker at once.
     state.local_open = true; state.local_focus = true; state.gallery = state.search_focus = false;
     state.local_kind = state.local_row = state.category; // The type in view is the likely one.
     audio_.context();
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
+// "Z dysku…" in the wallpaper picker: a picture or a video file becomes the wallpaper.
+void Launcher::pickLocalWallpaper() {
+    auto& state = artwork_state_;
+    state.local_focus = true; state.gallery = state.search_focus = false;
+    const auto apply = [this](const std::filesystem::path& picked) {
+        auto& browser = artwork_state_;
+        if (!artworkOpen() || !browser.wallpaper || browser.applying || picked.empty()) return;
+        browser.applying = true;
+        browser.status = tr(L"Wczytywanie tapety…");
+        ArtworkBrowserJob job;
+        job.type = ArtworkBrowserMessage::Type::local; job.wallpaper = true; job.query = picked.wstring();
+        {
+            std::lock_guard lock(artwork_jobs_->mutex);
+            job.generation = artwork_jobs_->generation.load();
+            artwork_jobs_->jobs.push_front(std::move(job));
+        }
+        artwork_jobs_->wake.notify_one();
+        audio_.context();
+        InvalidateRect(hwnd_, nullptr, FALSE);
+    };
+    if (pick_image_) { // Tests: an injected picker answers at once.
+        const auto picked = pick_image_(hwnd_);
+        mouse_transition_until_ = GetTickCount64() + GetDoubleClickTime();
+        apply(picked);
+        return;
+    }
+    file_browser::Request request;
+    request.title = tr(L"Wybierz tapetę");
+    request.extensions = {L".png", L".jpg", L".jpeg", L".mp4", L".m4v", L".webm", L".mkv", L".mov", L".wmv"};
+    request.images = true;
+    openFileBrowser(std::move(request), apply);
+}
+
 void Launcher::cycleArtworkProvider() {
     auto& state = artwork_state_;
-    if (!artworkOpen() || !state.providerChoice() || state.applying) return;
-    const auto at = std::find(artwork_ui::providers.begin(), artwork_ui::providers.end(), state.provider) - artwork_ui::providers.begin();
-    state.provider = artwork_ui::providers[(at + 1) % artwork_ui::providers.size()];
+    if (!artworkOpen() || !state.providerChoice() || state.applying || state.choices.empty()) return;
+    const auto at = std::find(state.choices.begin(), state.choices.end(), state.activeProvider()) - state.choices.begin();
+    state.provider = state.choices[static_cast<size_t>(at + 1) % state.choices.size()];
     state.page = 0;
     state.source = state.override_source;
     loadArtworkPage();
@@ -446,13 +624,15 @@ void Launcher::cycleArtworkProvider() {
 void Launcher::chooseArtworkProvider(int index) {
     auto& state = artwork_state_;
     state.provider_open = false;
-    if (!artworkOpen() || !state.providerChoice() || state.applying || index < 0 || index >= static_cast<int>(artwork_ui::providers.size())) return;
-    const auto chosen = artwork_ui::providers[static_cast<size_t>(index)];
+    if (!artworkOpen() || !state.providerChoice() || state.applying || index < 0 || index >= static_cast<int>(state.choices.size())) return;
+    const auto chosen = state.choices[static_cast<size_t>(index)];
     audio_.context();
-    if (chosen != state.provider) {
+    if (chosen != state.activeProvider()) {
         state.provider = chosen;
         state.page = 0;
         state.source = state.override_source;
+        if (state.wallpaper && state.query.empty()) state.query = wallpaper_sources::defaultQuery(chosen);
+        stopWallpaperPreview();
         loadArtworkPage();
     }
     InvalidateRect(hwnd_, nullptr, FALSE);
@@ -463,7 +643,7 @@ void Launcher::openArtworkProviders() {
     if (!artworkOpen() || !state.providerChoice() || state.applying) return;
     state.local_focus = state.crop_focus = state.back_focus = state.gallery = state.search_focus = false;
     state.provider_focus = state.provider_open = true;
-    state.provider_row = static_cast<int>(std::find(artwork_ui::providers.begin(), artwork_ui::providers.end(), state.provider) - artwork_ui::providers.begin());
+    state.provider_row = std::max(0, static_cast<int>(std::find(state.choices.begin(), state.choices.end(), state.activeProvider()) - state.choices.begin()));
     audio_.context();
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
@@ -527,7 +707,7 @@ void Launcher::artworkMove(int horizontal, int vertical) {
     if (!artworkOpen() || artwork_state_.applying) return;
     auto& state = artwork_state_;
     const auto view = renderer_.viewport();
-    const artwork_ui::Layout layout{view.width, view.height, state.kind()};
+    const auto layout = state.layout(view.width, view.height);
     if (state.local_open) {
         // Panel: the types, then "Wskaż plik…".
         if (vertical) {
@@ -540,7 +720,7 @@ void Launcher::artworkMove(int horizontal, int vertical) {
     // "Źródło"'s open list: Up/Down between the providers (A picks, Back closes).
     if (state.provider_open) {
         if (vertical) {
-            const int next = std::clamp(state.provider_row + vertical, 0, static_cast<int>(artwork_ui::providers.size()) - 1);
+            const int next = std::clamp(state.provider_row + vertical, 0, std::max(0, static_cast<int>(state.choices.size()) - 1));
             if (next == state.provider_row) navigationBoundary(); else audio_.navigate();
             state.provider_row = next;
         }
@@ -619,9 +799,9 @@ void Launcher::artworkMove(int horizontal, int vertical) {
     }
     if (!state.gallery) {
         if (vertical) {
-            const int next = std::clamp(state.category + vertical, 0, static_cast<int>(artwork_ui::kinds.size()) - 1);
+            const int next = std::clamp(state.category + vertical, 0, state.railCount() - 1);
             if (vertical < 0 && state.category == 0) state.back_focus = true; // Up from the first type: Back, above it.
-            else if (next != state.category) { state.category = next; state.page = 0; state.source = state.override_source; loadArtworkPage(); }
+            else if (next != state.category) showArtworkCategory(next);
             else if (vertical > 0) state.local_focus = true; // Below the last type: "Z dysku…".
             else navigationBoundary();
         }
@@ -671,12 +851,13 @@ void Launcher::artworkAccept() {
     }
     if (state.assets.empty() || state.assets[state.selected].id == state.applied_id) return;
     state.applying = true;
-    state.status = tr(L"Pobieranie grafiki…");
+    state.status = state.wallpaper ? tr(L"Pobieranie tapety…") : tr(L"Pobieranie grafiki…");
     {
         std::lock_guard lock(artwork_jobs_->mutex);
         ArtworkBrowserJob job{ArtworkBrowserMessage::Type::apply, artwork_jobs_->generation.load(),
             state.game, state.kind(), state.page, state.source, state.assets[state.selected]};
         job.provider = state.provider;
+        job.wallpaper = state.wallpaper;
         artwork_jobs_->jobs.push_front(std::move(job));
     }
     artwork_jobs_->wake.notify_one();
@@ -703,7 +884,7 @@ void Launcher::artworkWheel(float mouse_x, int amount) {
 void Launcher::artworkClick(float x, float y, bool double_click) {
     const auto view = renderer_.viewport();
     auto& state = artwork_state_;
-    const artwork_ui::Layout layout{view.width, view.height, state.kind(), state.providerChoice()};
+    const auto layout = state.layout(view.width, view.height);
     if (state.local_open) {
         const int row = layout.hitLocal(x, y);
         if (row == artwork_ui::State::local_pick_row) { state.local_row = row; pickLocalArtwork(); return; }
@@ -727,9 +908,9 @@ void Launcher::artworkClick(float x, float y, bool double_click) {
     if (!state.query.empty() && layout.clearButton().contains(x, y)) { clearArtworkQuery(); return; }
     if (layout.searchBox().contains(x, y)) { state.search_focus = true; state.gallery = false; state.query_selected = true; InvalidateRect(hwnd_, nullptr, FALSE); return; }
     if (layout.searchButton().contains(x, y)) { searchArtwork(); return; }
-    for (int i = 0; i < static_cast<int>(artwork_ui::kinds.size()); ++i) if (layout.base().rail(i).contains(x, y)) {
+    for (int i = 0; i < state.railCount(); ++i) if (layout.base().rail(i).contains(x, y)) {
         state.gallery = false;
-        if (i != state.category || state.results_mode) { state.category = i; state.page = 0; state.source = state.override_source; loadArtworkPage(); }
+        if (i != state.category || state.results_mode) showArtworkCategory(i);
         InvalidateRect(hwnd_, nullptr, FALSE);
         return;
     }

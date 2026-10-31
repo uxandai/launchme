@@ -38,6 +38,8 @@ home_widgets::Placement Launcher::homeWidgets() const {
     // The desktop window: Glance is a top bar shortcut and she has her card in the sidebar, so no
     // free-standing tile (her bubble still speaks, beside that card).
     if (desktop_mode_) return Placement::tiles;
+    // Interfejs → Kafle Wszystkie, Glance…: they are tiles of the first row in every layout.
+    if (settings_.home_tiles != AppSettings::HomeTiles::layout) return Placement::tiles;
     switch (settings_.home_layout) {
     case AppSettings::HomeLayout::xmb:
     case AppSettings::HomeLayout::metro: return Placement::tiles;
@@ -58,6 +60,8 @@ home_widgets::Spots Launcher::homeWidgetSpots() const {
     }
     // Flix with the menu's icons at the top: Glance and her avatar as two more small icons in that row.
     if (flixIconsShown()) home_widgets::icons::place(spots, quick_menu::count(static_cast<int>(plugin_menu_.size())), view.width);
+    // PSfive's details sheet covers the corner where they stand.
+    if (psfive_details_progress_ > 0.001f && psfiveActive()) { spots.glance.reset(); spots.companion.reset(); }
     return spots;
 }
 

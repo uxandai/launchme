@@ -245,6 +245,8 @@ bool Launcher::initialize(HWND hwnd) {
     renderer_.setPanelBorders(settings_.panel_borders);
     renderer_.setGlass(settings_.glass);
     renderer_.setConsoleColors(settings_.console_colors);
+    renderer_.setMetroLight(settings_.metro_light);
+    applyWallpaper(); // Interfejs → Tapeta (src/app/wallpaper.cpp).
     applyLowMemory(); // System → Wydajność → Tryb niskiego zużycia RAM.
 #ifndef LAUNCHME_UI_TEST
     // Kompresja grafik: compressed art kept on disk, so each picture is compressed once (tests
@@ -871,6 +873,8 @@ void Launcher::tick() {
     updateScreensaver(now, dt);
     if (screensaverActive()) needs_paint = true;
     tickVideo(needs_paint); // After the screensaver: it stops the video the moment it starts.
+    tickWallpaper(needs_paint); // A video wallpaper's frames while it is seen (src/app/wallpaper.cpp).
+    tickPsfiveDetails(dt, needs_paint); // PSfive's details sliding in under the row (src/app/psfive_details.cpp).
     if (renderer_.marqueeActive() && GetForegroundWindow() == hwnd_) needs_paint = true; // A long focused name glides (fadingLine).
     if (GetForegroundWindow() == hwnd_) watchEsde(); // Every 20 s: did ES-DE scrape meanwhile?
     if (profiler_.enabled()) profiler_.tick(std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - now).count(),

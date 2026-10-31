@@ -317,6 +317,9 @@ bool Renderer::createTargetResources() {
     for (auto& [id, avatar] : avatars_) { (void)id; createBitmap(avatar); }
     for (auto& [name, badge] : platform_badges_) { (void)name; createBitmap(badge); }
     for (auto& image : saver_slots_) createBitmap(image);
+    createBitmap(wallpaper_);
+    createBitmap(psfive_shot_full_);
+    for (auto* list : {&psfive_shots_, &psfive_similar_}) for (auto& image : *list) createBitmap(image);
     createBitmap(file_browser_preview_);
     createBitmap(notification_cover_);
     createBitmap(custom_poster_);
@@ -334,6 +337,9 @@ void Renderer::discardTarget() {
     kept_hero_.bitmap.Reset(); kept_hero_.brush.Reset();
     hero_shown_.bitmap.Reset(); hero_leaving_ = {}; hero_mix_ = 1; // The shown picture comes back from its slot.
     video_bitmap_.Reset(); video_blur_.Reset(); // The next video frame creates them again.
+    wallpaper_.bitmap.Reset(); wallpaper_.brush.Reset(); wallpaper_video_.Reset();
+    psfive_shot_full_.bitmap.Reset(); psfive_shot_full_.brush.Reset();
+    for (auto* list : {&psfive_shots_, &psfive_similar_}) for (auto& image : *list) { image.bitmap.Reset(); image.brush.Reset(); }
     cinematic_hero_.Reset(); cinematic_previous_hero_.Reset();
     desktop_hero_.Reset(); desktop_hero_previous_.Reset(); // Bitmaps of the old device: the pane picks its picture again.
     platform_aura_.Reset();
@@ -522,6 +528,9 @@ void Renderer::uploadDecoded() {
     for (auto& [id, icon] : widget_icons_) { (void)id; collect(icon); }
     for (auto& [name, badge] : platform_badges_) { (void)name; collect(badge); }
     for (auto& image : saver_slots_) collect(image);
+    collect(wallpaper_);
+    collect(psfive_shot_full_);
+    for (auto* list : {&psfive_shots_, &psfive_similar_}) for (auto& image : *list) collect(image);
     collect(file_browser_preview_);
     collect(notification_cover_);
     collect(custom_poster_);

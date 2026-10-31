@@ -437,6 +437,22 @@ struct ViewContext {
     bool psfive_clock_shown = true;
     std::wstring psfive_clock;   // The time in the top bar (drawer_clock::time).
     std::wstring psfive_caption; // Beside a focused "Wszystkie gry" / "Wszystkie" tile: games (and category).
+    // PSfive → Szczegóły pod rzędem (psfive_details_renderer.cpp): the sheet under the row.
+    struct PsfiveDetails {
+        float progress = 0, scroll = 0; // The sheet's rise and the sections' offset (psfive_details_layout.hpp).
+        int section = 0;                // 0 information, 1 screenshots, 2 similar games.
+        size_t shot = 0, similar = 0;   // The focused screenshot and similar game.
+        size_t shots = 0;               // Screenshots known (their pictures in the renderer's slots).
+        bool loading = false, viewer = false; // Still asking; a screenshot shown full screen.
+        std::wstring title, description, platform;
+        std::vector<std::pair<std::wstring, std::wstring>> facts; // Label, value.
+        std::vector<std::wstring> similar_names;
+    };
+    std::optional<PsfiveDetails> psfive_details;
+    // Metro's light theme (Opcje układu → Jasny motyw).
+    bool metro_light = false;
+    // The game menu as the large dialog with icons (Okna i podpowiedzi → Duże menu gry).
+    bool menu_dialog = false;
     const Notification* notification = nullptr; // Borrowed for the duration of paint().
     const VolumeNotice* volume_notice = nullptr;
     float volume_level = -1; // Unknown until the first system audio reading.

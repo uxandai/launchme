@@ -195,7 +195,7 @@ void Launcher::animateFocus(float dt, float target_x, float target_y, float targ
     // Back is its own circle at the top left (drawn white when focused): the pill does not glide there.
     if (artworkOpen() && artwork_state_.railFocus() && !artwork_state_.back_focus) {
         const auto& state = artwork_state_;
-        const artwork_ui::Layout layout{view.width, view.height, state.kind(), state.providerChoice()};
+        const auto layout = state.layout(view.width, view.height);
         const auto r = state.local_focus ? layout.localButton() : layout.base().rail(state.category);
         glideBox(artwork_glide_, true, 0, r.left, r.top, r.right, r.bottom);
     } else artwork_glide_.valid = false;

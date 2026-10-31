@@ -85,6 +85,7 @@ void Launcher::navigate(int amount, bool edge_menu) {
         else metroFocus(static_cast<size_t>(std::clamp(static_cast<int>(selected_) + amount, 0, static_cast<int>(cards_.size()) - 1)));
         return;
     }
+    if (psfiveDetailsShown() && edge_menu) { if (menu_open_) dismissMenu(); psfiveDetailsHorizontal(amount); return; } // Screenshots, similar games.
     if ((psfiveActions() || psfiveTopFocused()) && edge_menu) { if (menu_open_) dismissMenu(); psfiveHorizontal(amount); return; } // "Graj" / "…", top bar.
     if (screen_ == ScreenMode::shelves && edge_menu && amount < 0 && selected_ == 0) {
         if (psfiveActive() || snitchActive()) { navigationBoundary(); return; }
@@ -321,6 +322,7 @@ void Launcher::back() {
     if (flixActive() && flix_row_ > 0) { flixFocus(0, categories_.empty() ? 0 : categories_[0].selected); audio_.navigate(); return; }
     if (metroTabsFocused()) { metroFocusTabs(false); audio_.navigate(); return; } // The tabs give the focus back to the page.
     if (metroActive() && metro_page_ > 0) { homePage(-static_cast<int>(metro_page_)); return; } // Back to the start page.
+    if (psfiveDetailsShown()) { psfiveDetailsBack(); return; } // A screenshot shown full screen, then the details: back up to "Graj" / "…".
     if (psfiveActions()) { psfiveFocusAction(-1); audio_.navigate(); return; } // The buttons give the focus back to the row.
     if (psfiveTopFocused()) { psfiveFocusTop(-1); audio_.navigate(); return; } // So does the top bar.
     if (psfiveActive() && category_ != 0) { showCategory(0); audio_.navigate(); return; } // Another shelf: back to Recent.
@@ -496,8 +498,13 @@ void Launcher::changeCategory(int amount) {
     if (screen_ != ScreenMode::shelves) return;
     if (categories_.empty() || pending_launch_ || category_menu_open_) return;
     // The quick bar closes towards the tiles: Down on the other layouts, Up on Metro (opened by Down).
-    // PSfive opens it both from the row (Up) and from the buttons (Down): either way closes it.
-    if (quick_open_) { if (psfiveActive() || ((metroActive() || snitchActive()) ? amount < 0 : amount > 0)) closeQuick(); return; }
+    // PSfive opens it from the buttons (Down) and closes it either way; with its details under the
+    // row (Opcje układu → Szczegóły pod rzędem) it opens from above the tabs, and Down closes it.
+    if (quick_open_) {
+        if (psfiveActive() && settings_.psfive_details) { if (amount > 0) closeQuick(); else navigationBoundary(); return; }
+        if (psfiveActive() || ((metroActive() || snitchActive()) ? amount < 0 : amount > 0)) closeQuick();
+        return;
+    }
     if (snitchActive()) {
         if (amount > 0) openQuick(); else navigationBoundary();
         return;

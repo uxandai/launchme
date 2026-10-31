@@ -57,6 +57,14 @@ set(LAUNCHME_APP_SOURCES
     src/app/screenscraper_ui.cpp
     src/app/identify.cpp
     src/artwork/identified_artwork.cpp
+    src/artwork/artwork_sources.cpp
+    src/artwork/wallpaper_sources.cpp
+    src/app/wallpaper.cpp
+    src/app/settings_extras.cpp
+    src/app/psfive_details.cpp
+    src/ui/psfive_details_renderer.cpp
+    src/ui/wallpaper_renderer.cpp
+    src/ui/menu_dialog_renderer.cpp
     src/artwork/bulk_covers.cpp
     src/app/store.cpp
     src/app/plugins.cpp

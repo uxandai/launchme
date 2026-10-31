@@ -48,9 +48,13 @@ void Launcher::rebuildXmb(bool keep_top, bool preserve_background) {
             tile.name = companion::name(companionLook());
             widgets.push_back(std::move(tile));
         }
+        // Kafle Wszystkie, Glance…: they are in the recent row already, first or last (homeSpecialTiles).
+        const bool special_row = settings_.home_tiles != AppSettings::HomeTiles::layout;
+        if (special_row) widgets.clear();
         for (size_t i = 0; i < categories_.size(); ++i) {
             const auto& category = categories_[i];
-            if (category.id == "recent") {
+            if (category.id == "recent" && special_row) xmb_top_.insert(xmb_top_.end(), category.games.begin(), category.games.end());
+            else if (category.id == "recent") {
                 const auto games = std::find_if(category.games.begin(), category.games.end(), [](const Game& game) { return !isGame(game); });
                 xmb_top_.insert(xmb_top_.end(), category.games.begin(), games);
                 xmb_top_.insert(xmb_top_.end(), widgets.begin(), widgets.end());
@@ -207,6 +211,7 @@ void Launcher::wheel(int amount, float mouse_x) {
     if (screen_ == ScreenMode::plugin_page && !friends_open_) { pluginPageMove(amount); return; }
     if (downloadsOpen() && !friends_open_ && !gogInstallOpen()) { if (amount > 0 || selected_ > 0) downloadsMove(amount); return; } // The wheel stays on the rows.
     if (identifyOpen()) { identifyMove(amount); return; }
+    if (psfiveDetailsShown() && !menu_open_) { psfiveDetailsVertical(amount); return; } // PSfive's details: between their sections.
     // An open filter menu or view drawer scrolls its rows, never picks one.
     if (libraryControls() && library_controls_.open()) { libraryVertical(amount); return; }
     if (achievementsOpen()) { if (amount > 0 || achievements_.selected > 0) achievementsMove(amount); return; } // The wheel stays on the list.

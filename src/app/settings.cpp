@@ -151,6 +151,8 @@ void Launcher::settingsChanged(bool shelves) {
     renderer_.setPanelBorders(settings_.panel_borders);
     renderer_.setGlass(settings_.glass);
     renderer_.setConsoleColors(settings_.console_colors);
+    renderer_.setMetroLight(settings_.metro_light);
+    renderer_.setWallpaperPlaces(settings_.wallpaper_snitch, settings_.wallpaper_menus, settings_.wallpaper_artwork, settings_.wallpaper_tiles);
     configureGameOverlay();
     audio_.setMusicLevel(settings_.music_volume);
     if (shelves) buildShelves(); else buildSettingsRows();
@@ -337,6 +339,7 @@ void Launcher::settingsActivate() {
     }
     if (row.control == Control::page) { openSettingsPage(row.page); return; } // Its settings on a page of their own.
     if (row.id == Id::bulk_covers) { openBulkCovers(); return; }
+    if (settingsExtraActivate(row)) return; // The wallpaper picker, Bez tapety (settings_extras.cpp).
     if (row.id == Id::steam_sync) { requestSteamSync(true); audio_.context(); return; }
     if (row.id == Id::collection_manage) { openCollectionManager(); return; }
     if (row.id == Id::studio_hidden) { showStudios(); return; }
@@ -478,6 +481,7 @@ void Launcher::settingsActivate() {
             const bool saved = row.id == Id::steam_key ? saveUserSecret(L"steam_web_api_key.txt", settings_secret_input_) :
                                row.id == Id::rawg_key ? saveUserSecret(L"rawg_api_key.txt", settings_secret_input_) :
                                row.id == Id::sgdb_key ? saveUserSecret(L"steamgriddb_api_key.txt", settings_secret_input_) :
+                               row.id == Id::thegamesdb_key ? saveUserSecret(L"thegamesdb_api_key.txt", settings_secret_input_) :
                                false;
             if (!saved) {
                 showNotification(NotificationKind::error, tr(L"Nie udało się zapisać klucza"), tr(L"Sprawdź klucz i dostęp do katalogu konfiguracji."));
@@ -490,7 +494,8 @@ void Launcher::settingsActivate() {
             clearSecretInput();
             settings_secret_input_ = row.id == Id::steam_key ? userSecret(L"STEAM_WEB_API_KEY", L"steam_web_api_key.txt") :
                                      row.id == Id::rawg_key ? userSecret(L"RAWG_API_KEY", L"rawg_api_key.txt") :
-                                     row.id == Id::sgdb_key ? userSecret(L"STEAMGRIDDB_API_KEY", L"steamgriddb_api_key.txt") : std::wstring{};
+                                     row.id == Id::sgdb_key ? userSecret(L"STEAMGRIDDB_API_KEY", L"steamgriddb_api_key.txt") :
+                                     row.id == Id::thegamesdb_key ? userSecret(L"THEGAMESDB_API_KEY", L"thegamesdb_api_key.txt") : std::wstring{};
             settings_secret_selected_ = true;
             settings_state_.editing = true;
         }
@@ -516,6 +521,7 @@ void Launcher::settingsChoose(const Row& row) {
         settingsChanged();
         return;
     }
+    if (settingsExtraChoose(row)) return; // 0.4.9's choices (settings_extras.cpp).
     const auto& choice = row.choices[settings_state_.choice];
     bool relabel = false;
     if (row.id == Id::font) settings_.font_family = choice.label;
@@ -626,6 +632,7 @@ bool Launcher::settingsResetFocused() {
 void Launcher::settingsToggle(const Row& row) {
     // Outside the else-if chain below (MSVC's nesting limit): read after the next game.
     if (row.id == Id::save_backups) { settings_.save_backup_after_game = !settings_.save_backup_after_game; settingsChanged(); audio_.context(); return; }
+    if (settingsExtraToggle(row)) return; // 0.4.9's switches (settings_extras.cpp).
     if (row.id == Id::uninstalled) settings_.show_uninstalled = !settings_.show_uninstalled;
     else if (row.id == Id::recent_uninstalled) settings_.recent_uninstalled = !settings_.recent_uninstalled;
     else if (row.id == Id::emulation) settings_.show_emulation = !settings_.show_emulation;
@@ -900,7 +907,7 @@ void Launcher::setHomeLayout(int option) {
     xmb_column_ = 0; xmb_row_ = -1; xmb_rows_.clear();
     flix_row_ = 0;
     metro_page_ = 0; metro_scroll_ = metro_tab_ = 0; metro_tabs_ = false;
-    psfive_action_ = psfive_top_ = -1;
+    psfive_action_ = psfive_top_ = psfive_details_ = -1;
     closeQuick(); quick_progress_ = 0; quick_circle_valid_ = false;
     // Metro pages keep a tile per category; positions from a row layout mean nothing there.
     if (layout == AppSettings::HomeLayout::metro) for (auto& category : categories_) category.selected = 0;

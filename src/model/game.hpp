@@ -21,7 +21,8 @@ inline constexpr std::array<GameSource, 8> pc_sources{GameSource::gog, GameSourc
                                                       GameSource::xbox, GameSource::multimc, GameSource::amazon};
 // category/settings are XMB home tiles: a Steam collection (app_id = category index) and the Settings shortcut.
 // glance/companion: the Glance and Towarzyszka tiles of the Metro and XMB homes (src/ui/home_widgets.hpp).
-enum class GameKind { steam, all, platform, back, nonsteam, store, catalog, pc_platform, category, settings, glance, companion };
+// tarot/add: the Tarot reading and "Dodaj grę" as home tiles (AppSettings::home_tiles, add_game_tile).
+enum class GameKind { steam, all, platform, back, nonsteam, store, catalog, pc_platform, category, settings, glance, companion, tarot, add };
 enum class GameVisibility { public_game, hidden, private_game };
 enum class ActionKind { play, install, open_client };
 
@@ -166,7 +167,13 @@ inline bool steamArtwork(const Game& game) {
 // Full, collision-free identity for UI messages, in-memory artwork and retries.
 inline bool uiTile(const Game& game) {
     return game.kind == GameKind::all || game.kind == GameKind::back || game.kind == GameKind::category || game.kind == GameKind::settings ||
-           game.kind == GameKind::glance || game.kind == GameKind::companion;
+           game.kind == GameKind::glance || game.kind == GameKind::companion || game.kind == GameKind::tarot || game.kind == GameKind::add;
+}
+// The tiles that open a screen of the launcher (not a game, store or console): Wszystkie, Glance,
+// Tarot, Towarzyszka and Dodaj grę; they may lead or close the first row (AppSettings::home_tiles).
+inline bool specialTile(const Game& game) {
+    return game.kind == GameKind::all || game.kind == GameKind::glance || game.kind == GameKind::companion ||
+           game.kind == GameKind::tarot || game.kind == GameKind::add;
 }
 
 inline std::string gameKey(const Game& game) {

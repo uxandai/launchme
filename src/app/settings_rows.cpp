@@ -6,6 +6,7 @@
 #include "../platform/sound_cues.hpp"
 #include "../platform/text_encoding.hpp"
 #include "../library/screenscraper_config.hpp"
+#include "../artwork/artwork_sources.hpp"
 #include <algorithm>
 #include <cmath>
 
@@ -58,6 +59,7 @@ std::wstring Launcher::settingsPageTitle() const {
     case Page::prefixes: return tr(L"Prefiksy");
     case Page::compat_stores: return tr(L"Sklepy i launchery");
     case Page::game_shortcuts: return tr(L"Skróty: ") + shortcuts_game_.name;
+    case Page::artwork_sources: return tr(L"Źródła grafik");
     case Page::prefix: {
 #ifndef _WIN32
         const auto path = std::filesystem::path(text_encoding::wideLenient(frame->key)).lexically_normal();
@@ -160,15 +162,21 @@ void Launcher::buildSettingsRows() {
                 add({Id::flix_top_icons, Control::toggle, tr(L"Ikony menu w prawym górnym rogu"),
                     tr(L"Wszystkie ikony dolnego menu, małe, obok znaku platformy. Towarzyszka jako awatar, Glance jako ikona."), {}, settings_.flix_top_icons});
             }
-            if (settings_.home_layout == HomeLayout::metro)
+            if (settings_.home_layout == HomeLayout::metro) {
                 add({Id::metro_3d, Control::toggle, tr(L"Efekt 3D"),
                     tr(L"Strony obok bieżącej są mniejsze (80%) i powiększają się po przejściu na nie."), {}, settings_.metro_3d});
+                add({Id::metro_light, Control::toggle, tr(L"Jasny motyw"),
+                    tr(L"Białe tło i ciemne napisy, jak jasny motyw Windows Phone. Kafle zostają kolorowe."), {}, settings_.metro_light});
+            }
             if (settings_.home_layout == HomeLayout::psfive) {
                 const int size = std::clamp(static_cast<int>(settings_.psfive_size), 0, 2);
                 add({Id::psfive_size, Control::slider, tr(L"Rozmiar kafelków PSfive"),
                     tr(L"Mały, domyślny lub duży — dla kafelków w rzędzie."), tr(xmb_sizes[size]), false, size / 2.0f});
                 add({Id::psfive_clock, Control::toggle, tr(L"Zegar"),
                     tr(L"Godzina w prawym górnym rogu, obok ikon szukania i menu."), {}, settings_.psfive_clock});
+                add({Id::psfive_details, Control::toggle, tr(L"Szczegóły pod rzędem"),
+                    tr(L"W dół z przycisków Graj / …: opis, informacje, zrzuty ekranu i podobne gry. Menu otwiera się wtedy ruchem w górę nad zakładkami."),
+                    {}, settings_.psfive_details});
             }
             break;
         }
@@ -191,6 +199,22 @@ void Launcher::buildSettingsRows() {
             break;
         }
         if (settings_state_.at(Page::backdrop)) {
+            // The wallpaper (src/app/wallpaper.cpp): which one, and where it shows.
+            if (!desktop_mode_) section(tr(L"Tapeta"));
+            if (!desktop_mode_) add({Id::wallpaper_pick, Control::action, tr(L"Tapeta"), wallpaperDescription(), wallpaperLabel()});
+            if (!desktop_mode_ && settings_.wallpaper != AppSettings::WallpaperKind::none) {
+                add({Id::wallpaper_clear, Control::action, tr(L"Bez tapety"),
+                    tr(L"Wraca animowane tło launchera z kropkami krążącymi po liniach."), tr(L"Usuń")});
+                add({Id::wallpaper_tiles, Control::toggle, tr(L"Pod kategoriami i kaflami bez grafiki"),
+                    tr(L"Ekran główny: kategorie XMB, Wszystkie, Glance, Towarzyszka i gry bez tła."), {}, settings_.wallpaper_tiles});
+                add({Id::wallpaper_snitch, Control::toggle, tr(L"Na ekranie snitch"),
+                    tr(L"Zamiast jednolitego szarego tła, lekko przyciemniona."), {}, settings_.wallpaper_snitch});
+                add({Id::wallpaper_menus, Control::toggle, tr(L"W Ustawieniach i menu"),
+                    tr(L"Pod rozmytym szkłem Ustawień, Pobierania, Urządzeń, Glance i czatu."), {}, settings_.wallpaper_menus});
+                add({Id::wallpaper_artwork, Control::toggle, tr(L"W „Zmień grafikę”"),
+                    tr(L"Przyciemniona za galerią zamiast czarnego tła."), {}, settings_.wallpaper_artwork});
+            }
+            section(tr(L"Szkło i siatka"));
             // Glass under panels, the grid over background videos and the darkening under drawers.
             add({Id::glass, Control::slider, tr(L"Efekt szkła"),
                 tr(L"Rozmycie pod oknami, menu, szufladami i Ustawieniami. 0%: pełne panele."), percent(settings_.glass), false,
@@ -239,7 +263,13 @@ void Launcher::buildSettingsRows() {
         choiceRow(Id::search_art, tr(L"Grafiki w wyszukiwarce"),
                   tr(L"Wyniki wyszukiwania jako kwadratowe okładki, pionowe plakaty albo poziome kafle."),
                   search_arts, static_cast<int>(settings_.search_art));
+        choiceRow(Id::home_tiles, tr(L"Kafle Wszystkie, Glance, Tarot i Towarzyszka"),
+                  tr(L"W każdym układzie jako kafle pierwszego rzędu: na jego początku albo końcu. Jak w układzie: pływające skróty jak dotąd."),
+                  home_tile_places, static_cast<int>(settings_.home_tiles));
+        add({Id::add_game_tile, Control::toggle, tr(L"Kafel „Dodaj grę”"),
+            tr(L"Kafel z plusem w pierwszym rzędzie: dodasz grę spoza sklepów prosto z trybu TV."), {}, settings_.add_game_tile});
         section(tr(L"Wygląd"));
+        if (!desktop_mode_) add({Id::wallpaper_pick, Control::action, tr(L"Tapeta"), wallpaperDescription(), wallpaperLabel()});
         accentRow(Id::ui_accent, tr(L"Kolor akcentu interfejsu"), tr(L"Przełączniki, suwaki, zaznaczenia i powiadomienia."),
                   settings_.ui_accent_rgb, ui_accents, ui_accent_names);
         accentRow(Id::button_color, tr(L"Kolor przycisków"),
@@ -264,13 +294,15 @@ void Launcher::buildSettingsRows() {
             pageRow(Page::cover_focus, tr(L"Zaznaczona okładka"), tr(L"Kolor akcentu, poświata i jej animacja, sprężysty obrys fokusu."),
                     found != accents.end() ? std::wstring(tr(accent_names[found - accents.begin()])) : std::wstring(custom));
         }
-        pageRow(Page::backdrop, tr(L"Tło i szkło"), tr(L"Efekt szkła, siatka na wideo w tle i przyciemnienie pod panelami."),
+        pageRow(Page::backdrop, tr(L"Tło i szkło"), tr(L"Gdzie widać tapetę, efekt szkła, siatka na wideo w tle i przyciemnienie pod panelami."),
                 tr(L"Szkło ") + percent(settings_.glass));
         add({Id::console_colors, Control::toggle, tr(L"Kolorowe kafelki konsol"),
             tr(L"Kolor platformy pod logo w rzędzie Emulacja. Wyłączone: ciemne tło."), {}, settings_.console_colors});
         section(tr(L"Okna i podpowiedzi"));
         add({Id::panel_borders, Control::toggle, tr(L"Ramki okien"),
             tr(L"Cienka ramka wokół okien dialogowych, menu kontekstowych i przewodnika."), {}, settings_.panel_borders});
+        add({Id::menu_dialog, Control::toggle, tr(L"Duże menu gry"),
+            tr(L"Menu gry na ekranie głównym jako duże przewijane okno z ikoną przy każdej opcji."), {}, settings_.menu_dialog});
         add({Id::screen_transitions, Control::toggle, tr(L"Animacje przejść ekranów"),
             tr(L"Płynne pojawianie się z powiększeniem i lekkim odgięciem brzegów."), {}, settings_.screen_transitions});
         choiceRow(Id::tile_entrance, tr(L"Pojawianie się kafli"),
@@ -501,6 +533,9 @@ void Launcher::buildSettingsRows() {
             add({Id::rawg_key, Control::secret, tr(L"Klucz RAWG"),
                 tr(L"Oceny przy starcie i identyfikacja metadanych gier spoza Steam."),
                 storedUserSecret(L"rawg_api_key.txt") ? tr(L"Klucz zapisany") : tr(L"Wpisz klucz")});
+            add({Id::thegamesdb_key, Control::secret, tr(L"Klucz TheGamesDB"),
+                tr(L"Pudełka, tła, logo i zrzuty z TheGamesDB w „Zmień grafikę” (darmowy klucz z forum TheGamesDB)."),
+                storedUserSecret(L"thegamesdb_api_key.txt") ? tr(L"Klucz zapisany") : tr(L"Wpisz klucz")});
             // ScreenScraper: several fields of its own, one level further.
             const bool ready = screenscraper::load().ready();
             Row scraper{Id::screenscraper_open, Control::page, L"ScreenScraper",
@@ -509,16 +544,38 @@ void Launcher::buildSettingsRows() {
             add(std::move(scraper));
             break;
         }
+        if (settings_state_.at(Page::artwork_sources)) {
+            // The galleries "Zmień grafikę" offers in its "Źródło" list; those needing a key say so.
+            for (const auto provider : artwork_sources::all) {
+                const auto slug = std::string(artwork_sources::slug(provider));
+                std::wstring description = tr(artwork_sources::description(provider));
+                if (artwork_sources::needsKey(provider)) description += L" · " + std::wstring(tr(L"wymaga klucza"));
+                Row row{Id::artwork_source, Control::toggle, artwork_sources::name(provider), std::move(description), {},
+                        !settings_.artwork_sources_off.contains(slug)};
+                row.key = slug;
+                add(std::move(row));
+            }
+            break;
+        }
         section(tr(L"Usługi"));
         {
             const int stored = static_cast<int>(storedUserSecret(L"steam_web_api_key.txt")) + static_cast<int>(storedUserSecret(L"steamgriddb_api_key.txt")) +
-                               static_cast<int>(storedUserSecret(L"rawg_api_key.txt")) + static_cast<int>(screenscraper::load().ready());
-            pageRow(Page::service_keys, tr(L"Klucze usług"), tr(L"Steam Web API, SteamGridDB, RAWG i ScreenScraper: znajomi, grafiki, oceny i gry z emulatorów."),
-                    tr(L"Zapisane: ") + std::to_wstring(stored) + L"/4");
+                               static_cast<int>(storedUserSecret(L"rawg_api_key.txt")) + static_cast<int>(screenscraper::load().ready()) +
+                               static_cast<int>(storedUserSecret(L"thegamesdb_api_key.txt"));
+            pageRow(Page::service_keys, tr(L"Klucze usług"), tr(L"Steam Web API, SteamGridDB, RAWG, TheGamesDB i ScreenScraper: znajomi, grafiki, oceny i gry z emulatorów."),
+                    tr(L"Zapisane: ") + std::to_wstring(stored) + L"/5");
         }
         section(tr(L"Okładki"));
         add({Id::bulk_covers, Control::action, tr(L"Pobierz brakujące okładki"),
             tr(L"Kwadratowe, pionowe i poziome. Tylko brakujące."), tr(L"Otwórz")});
+        {
+            const auto enabled = std::count_if(artwork_sources::all.begin(), artwork_sources::all.end(), [&](ArtworkProvider provider) {
+                return !settings_.artwork_sources_off.contains(artwork_sources::slug(provider));
+            });
+            pageRow(Page::artwork_sources, tr(L"Źródła grafik"),
+                    tr(L"SteamGridDB, Steam, GOG, Xbox, Nintendo eShop, GameTDB, TitleDB, TheGamesDB, Wikimedia, ScreenScraper i ES-DE w „Zmień grafikę”."),
+                    tr(L"Włączone: ") + std::to_wstring(enabled) + L"/" + std::to_wstring(artwork_sources::all.size()));
+        }
         section(tr(L"Filmy w tle"));
         add({Id::game_videos, Control::toggle, tr(L"Autoodtwarzanie filmów z emulatorów"),
             tr(L"Po chwili na grze z emulatora jej film z ES-DE lub ScreenScraper zastępuje tło, a muzyka cichnie."), {}, settings_.game_videos});

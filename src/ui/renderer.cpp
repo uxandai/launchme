@@ -464,8 +464,14 @@ void Renderer::paint(const std::vector<GameCard>& cards, size_t selected, bool s
             return;
         }
         cards_ = &cards;
+        wallpaper_drawn_ = false; // Set again by whatever draws the wallpaper this frame.
+        // The orbiting lights behind home tiles with no picture of their own (Wszystkie, Glance, Tarot,
+        // Towarzyszka, Dodaj grę; XMB's categories and Ustawienia), unless a wallpaper takes their place.
+        const auto plainTile = [&](const Game& game) {
+            return specialTile(game) || (context.xmb && (game.kind == GameKind::category || game.kind == GameKind::settings));
+        };
         const bool library_backdrop = context.screen == ScreenMode::shelves && !scanning &&
-            selected < cards.size() && cards[selected].game.kind == GameKind::all;
+            selected < cards.size() && plainTile(cards[selected].game) && !(wallpaper_places_.tiles && hasWallpaper());
         // Snapshot the current mix on interrupted navigation, including a rebuilt
         // shelf at the same index. The app's detail clock also works while unfocused.
         if (library_backdrop != library_backdrop_active_ || selected != selected_ || detail < detail_)
@@ -777,8 +783,11 @@ Renderer::TextureStats Renderer::textureStats() const {
             ++stats.bitmaps; stats.bytes += static_cast<size_t>(relief.width) * relief.height * 4;
         }
     };
-    for (const auto* list : {&covers_, &logos_, &heroes_, &posters_, &discs_, &plugin_thumbnails_, &glance_thumbnails_, &tarot_images_, &profile_images_})
+    for (const auto* list : {&covers_, &logos_, &heroes_, &posters_, &discs_, &plugin_thumbnails_, &glance_thumbnails_, &tarot_images_, &profile_images_,
+                             &psfive_shots_, &psfive_similar_})
         for (const auto& cover : *list) count(cover);
+    count(wallpaper_);
+    count(psfive_shot_full_);
     for (const auto& tile : tile_thumbnails_) for (const auto& thumbnail : tile) count(thumbnail);
     return stats;
 }

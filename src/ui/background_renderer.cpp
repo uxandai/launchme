@@ -142,6 +142,17 @@ void Renderer::drawBackground() {
         }
         if (platform_aura_) target_->FillRectangle(D2D1::RectF(0, 0, width, height), platform_aura_.Get());
     }
+    // Tapeta (wallpaper_renderer.cpp) where a screen had no picture: home tiles without a background
+    // of their own (it gives way as a game's background fades in) and Settings with the menu screens.
+    const auto screen = context_->screen;
+    const bool home = screen == ScreenMode::shelves || screen == ScreenMode::platform_games;
+    const bool menu_screen = screen == ScreenMode::settings || screen == ScreenMode::downloads || screen == ScreenMode::devices ||
+                             screen == ScreenMode::glance || screen == ScreenMode::companion || screen == ScreenMode::plugin_page;
+    bool menu_wallpaper = false;
+    if (!tinted && home && wallpaper_places_.tiles && cards_ && !cards_->empty() && context_->library_mode != library_view::View::cinematic) {
+        const float presence = std::max(hero_shown_.bitmap ? hero_shown_.level : 0.0f, hero_leaving_.bitmap ? hero_leaving_.level : 0.0f);
+        if (presence < 0.999f) drawWallpaperBackdrop(1.0f - presence);
+    } else if (!tinted && menu_screen && wallpaper_places_.menus) menu_wallpaper = drawWallpaperBackdrop(1.0f);
     if (library_backdrop_opacity_ > 0.001f) drawLibraryBackdrop(library_backdrop_opacity_);
     // PSfive and Szczegóły use brighter artwork and their own shade. Still images
     // share the same full-screen crop; only the video's presentation follows this mix.
@@ -217,7 +228,7 @@ void Renderer::drawBackground() {
                        {hero_shown_.bitmap.Get(), alpha(hero_shown_) * hero_shown_.level * picture_share, hero_shown_.focus});
         drawVideo(std::lerp(0.8f, 0.96f, full_screen_mix_) * video);
         art = video_bitmap_ ? video : 0.0f;
-    } else if (hero_shown_.bitmap && (context_->screen == ScreenMode::settings || context_->screen == ScreenMode::downloads || context_->screen == ScreenMode::devices || context_->screen == ScreenMode::glance ||
+    } else if (hero_shown_.bitmap && !menu_wallpaper && (context_->screen == ScreenMode::settings || context_->screen == ScreenMode::downloads || context_->screen == ScreenMode::devices || context_->screen == ScreenMode::glance ||
                                      context_->screen == ScreenMode::companion)) {
         const float alpha = hero_shown_.tone == HeroTone::logo ? 0.13f : hero_shown_.tone == HeroTone::dimmed ? 0.32f : 0.75f;
         drawWallpaper(hero_shown_.bitmap.Get(), alpha * hero_shown_.level * picture_share, 0, hero_shown_.focus);

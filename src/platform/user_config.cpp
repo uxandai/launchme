@@ -158,6 +158,48 @@ bool parseLookSetting(AppSettings& settings, std::string_view key, std::string_v
     }
     return false;
 }
+// 0.4.9: artwork sources, the wallpaper, home tiles, PSfive's details, the menu dialog, Metro's light theme.
+bool parseExtraSetting(AppSettings& settings, std::string_view key, std::string_view value) {
+    const auto flag = [&](bool& target) { if (value == "0" || value == "1") target = value == "1"; return true; };
+    if (key == "artwork_sources_off") {
+        settings.artwork_sources_off.clear();
+        while (!value.empty()) {
+            const auto comma = value.find(',');
+            const auto item = value.substr(0, comma);
+            if (!item.empty() && item.size() <= 32) settings.artwork_sources_off.insert(std::string(item));
+            value = comma == std::string_view::npos ? std::string_view{} : value.substr(comma + 1);
+        }
+        return true;
+    }
+    if (key == "wallpaper") {
+        if (value == "none") settings.wallpaper = AppSettings::WallpaperKind::none;
+        if (value == "picture") settings.wallpaper = AppSettings::WallpaperKind::picture;
+        if (value == "video") settings.wallpaper = AppSettings::WallpaperKind::video;
+        return true;
+    }
+    if (key == "wallpaper_file") { settings.wallpaper_file = std::filesystem::path(text_encoding::wideLenient(value)); return true; }
+    if (key == "wallpaper_id") {
+        uint32_t id = 0;
+        const auto [end, error] = std::from_chars(value.data(), value.data() + value.size(), id);
+        if (error == std::errc{} && end == value.data() + value.size()) settings.wallpaper_id = id;
+        return true;
+    }
+    if (key == "wallpaper_snitch") return flag(settings.wallpaper_snitch);
+    if (key == "wallpaper_menus") return flag(settings.wallpaper_menus);
+    if (key == "wallpaper_artwork") return flag(settings.wallpaper_artwork);
+    if (key == "wallpaper_tiles") return flag(settings.wallpaper_tiles);
+    if (key == "home_tiles") {
+        if (value == "layout") settings.home_tiles = AppSettings::HomeTiles::layout;
+        if (value == "first") settings.home_tiles = AppSettings::HomeTiles::first;
+        if (value == "last") settings.home_tiles = AppSettings::HomeTiles::last;
+        return true;
+    }
+    if (key == "add_game_tile") return flag(settings.add_game_tile);
+    if (key == "psfive_details") return flag(settings.psfive_details);
+    if (key == "menu_dialog") return flag(settings.menu_dialog);
+    if (key == "metro_light") return flag(settings.metro_light);
+    return false;
+}
 }
 
 AppSettings parseAppSettings(std::string_view text) {
@@ -184,6 +226,7 @@ AppSettings parseAppSettings(std::string_view text) {
         const auto key = trim(line.substr(0, equal));
         auto value = trim(line.substr(equal + 1));
         if (parseLookSetting(settings, key, value)) continue; // Kept apart: MSVC caps one if/else chain's depth.
+        if (parseExtraSetting(settings, key, value)) continue;
         if (key == "xbox_own_install") { if (value == "0" || value == "1") settings.xbox_own_install = value == "1"; continue; }
         if (key == "texture_compression") { if (value == "0" || value == "1") settings.texture_compression = value == "1"; continue; }
         // Before 0.4.6 (opt-in under the low memory mode): on stays on; off takes the new default.
@@ -699,6 +742,27 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
     output << "shelves_hero_facts=" << settings.shelves_hero_facts << '\n';
     output << "search_art=" << (settings.search_art == AppSettings::SearchArt::poster ? "poster" :
                                 settings.search_art == AppSettings::SearchArt::landscape ? "landscape" : "square") << '\n';
+    {
+        std::vector<std::string> off(settings.artwork_sources_off.begin(), settings.artwork_sources_off.end());
+        std::sort(off.begin(), off.end());
+        output << "artwork_sources_off=";
+        for (size_t i = 0; i < off.size(); ++i) output << (i ? "," : "") << off[i];
+        output << '\n';
+    }
+    output << "wallpaper=" << (settings.wallpaper == AppSettings::WallpaperKind::picture ? "picture" :
+                               settings.wallpaper == AppSettings::WallpaperKind::video ? "video" : "none") << '\n';
+    output << "wallpaper_file=" << text_encoding::utf8Lenient(settings.wallpaper_file.wstring()) << '\n';
+    output << "wallpaper_id=" << settings.wallpaper_id << '\n';
+    output << "wallpaper_snitch=" << settings.wallpaper_snitch << '\n';
+    output << "wallpaper_menus=" << settings.wallpaper_menus << '\n';
+    output << "wallpaper_artwork=" << settings.wallpaper_artwork << '\n';
+    output << "wallpaper_tiles=" << settings.wallpaper_tiles << '\n';
+    output << "home_tiles=" << (settings.home_tiles == AppSettings::HomeTiles::first ? "first" :
+                                settings.home_tiles == AppSettings::HomeTiles::last ? "last" : "layout") << '\n';
+    output << "add_game_tile=" << settings.add_game_tile << '\n';
+    output << "psfive_details=" << settings.psfive_details << '\n';
+    output << "menu_dialog=" << settings.menu_dialog << '\n';
+    output << "metro_light=" << settings.metro_light << '\n';
     output << "language=" << (settings.language == AppSettings::LanguageChoice::pl ? "pl" :
                               settings.language == AppSettings::LanguageChoice::en ? "en" :
                               settings.language == AppSettings::LanguageChoice::pt_br ? "pt-BR" :

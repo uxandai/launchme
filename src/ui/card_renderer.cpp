@@ -168,7 +168,8 @@ void Renderer::drawCard(const GameCard& card, size_t index) {
         // A missing cover is still a usable game, not a permanent loading skeleton.
         // "Wszystkie gry" shows its 2x2 glyph in every layout (a lone dot read as a loading tile).
         if (card.game.kind == GameKind::category || card.game.kind == GameKind::settings ||
-            card.game.kind == GameKind::glance || card.game.kind == GameKind::companion || card.game.kind == GameKind::all) {
+            card.game.kind == GameKind::glance || card.game.kind == GameKind::companion || card.game.kind == GameKind::all ||
+            card.game.kind == GameKind::tarot || card.game.kind == GameKind::add) {
             drawXmbTileIcon(card, index, x, y, size, transparency);
             target_->SetTransform(D2D1::Matrix3x2F::Scale(size, size) * D2D1::Matrix3x2F::Translation(x, y) * base);
         } else if (card.game.kind == GameKind::back) {

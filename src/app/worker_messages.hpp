@@ -288,7 +288,8 @@ struct StoreImportMessage {
     web_import::Snapshot snapshot;
 };
 struct ArtworkBrowserMessage {
-    enum class Type { list, thumbnail, apply, search, local } type = Type::list; // local: an image file from disk.
+    // local: an image file from disk; preview: a video wallpaper's moving preview, downloaded.
+    enum class Type { list, thumbnail, apply, search, local, preview } type = Type::list;
     ArtworkKind kind = ArtworkKind::cover;
     uint32_t generation = 0;
     GridPage page;
@@ -298,6 +299,9 @@ struct ArtworkBrowserMessage {
     std::vector<uint8_t> bytes;
     CropFocus focus;
     std::wstring error;
+    // The wallpaper picker: the stored wallpaper (apply, local) or preview (preview), and whether it is a video.
+    bool wallpaper = false, video = false;
+    std::filesystem::path file;
 };
 struct StoreMessage {
     uint32_t generation = 0;

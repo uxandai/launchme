@@ -163,6 +163,8 @@ struct ArtworkBrowserJob {
     GridAsset asset;
     std::wstring query;
     ArtworkProvider provider = ArtworkProvider::steamgriddb;
+    bool wallpaper = false; // The wallpaper picker's job (wallpaper_sources.hpp).
+    uint32_t steam_app_id = 0; // The game's Steam AppID when known (artwork_sources::Context).
 };
 struct ArtworkBrowserQueue {
     std::mutex mutex;

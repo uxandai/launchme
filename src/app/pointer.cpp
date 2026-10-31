@@ -189,6 +189,13 @@ void Launcher::click(float mouse_x, float mouse_y, bool double_click) {
         launch();
         return;
     }
+    if (menu_open_ && !cards_.empty() && menuDialog()) {
+        // Duże menu gry: a row runs its action, a click outside the dialog closes it.
+        const context_menu::Dialog dialog{view.width, view.height, context_menu::rows(menuRows())};
+        if (const int row = dialog.hit(x, y, dialog.first(menu_selected_)); row >= 0) { menu_selected_ = row; menuAccept(); return; }
+        if (!dialog.panel.contains(x, y)) dismissMenu();
+        return;
+    }
     if (menu_open_ && !cards_.empty()) {
         const auto& active = cards_[selected_];
         const auto rows = menuRows();
@@ -233,6 +240,7 @@ void Launcher::click(float mouse_x, float mouse_y, bool double_click) {
             if (psfiveActive()) { psfiveClickCard(i, double_click); return; }
             if (screen_ == ScreenMode::store) { selected_ = i; openDetails(card.game); return; }
             if (card.game.kind == GameKind::all) { openLibrary(); return; }
+            if (specialTile(card.game)) { focusCard(i, false); launch(); return; } // Glance, Tarot, Towarzyszka, Dodaj grę: one click.
             if (card.game.kind == GameKind::category && shelfAllTile()) { // The default layout's "Wszystkie".
                 categories_[category_].selected = i;
                 openCategoryLibrary(card.game.source_id);
@@ -334,7 +342,7 @@ bool Launcher::hoverButton(float mouse_x, float mouse_y) const {
         return layout.back().contains(x, y) || (device_state_.panel == devices::Panel::audio ? device_ui::AudioLayout{view.width, view.height}.hit(device_state_, x, y) : layout.hit(x, y, device_state_.rows.size(), device_state_.scroll)) >= 0;
     }
     if (artworkOpen()) {
-        const artwork_ui::Layout layout{view.width, view.height, artwork_state_.kind(), artwork_state_.providerChoice()};
+        const auto layout = artwork_state_.layout(view.width, view.height);
         if (artwork_state_.local_open) return layout.hitLocal(x, y) >= 0;
         if (artwork_state_.provider_open) return layout.hitProvider(x, y) >= 0;
         if (layout.backButton().contains(x, y)) return true;
@@ -342,7 +350,7 @@ bool Launcher::hoverButton(float mouse_x, float mouse_y) const {
         if (layout.localButton().contains(x, y) || (!artwork_state_.query.empty() && layout.clearButton().contains(x, y))) return true;
         if (artwork_state_.croppable() && layout.cropButton().contains(x, y)) return true;
         if (artwork_state_.providerChoice() && layout.providerButton().contains(x, y)) return true;
-        for (int i = 0; i < static_cast<int>(artwork_ui::kinds.size()); ++i) if (layout.base().rail(i).contains(x, y)) return true;
+        for (int i = 0; i < artwork_state_.railCount(); ++i) if (layout.base().rail(i).contains(x, y)) return true;
         return (artwork_state_.page > 0 && layout.pageButton(false).contains(x, y)) ||
                (artwork_state_.more && layout.pageButton(true).contains(x, y)) ||
                layout.hit(x, y, artwork_state_.assets.size(), artwork_state_.scroll) >= 0;
@@ -423,6 +431,10 @@ bool Launcher::hoverButton(float mouse_x, float mouse_y) const {
     if (screen_ == ScreenMode::details && !menu_open_) {
         const int action = details_layout::Layout{view.width, view.height}.hit(detailsActions(), x, y);
         return action >= -1 && (action != 0 || (!cards_.empty() && actionEnabled(cards_[0].game)));
+    }
+    if (menu_open_ && !cards_.empty() && menuDialog()) {
+        const context_menu::Dialog dialog{view.width, view.height, context_menu::rows(menuRows())};
+        return dialog.hit(x, y, dialog.first(menu_selected_)) >= 0;
     }
     if (menu_open_ && !cards_.empty()) {
         const auto& active = cards_[selected_];

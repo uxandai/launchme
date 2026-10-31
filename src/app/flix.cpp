@@ -174,6 +174,7 @@ void Launcher::flixClick(size_t index, bool double_click) {
     if (moved) { flixFocusCard(index); audio_.navigate(); }
     const auto game = cards_[index].game;
     if (game.kind == GameKind::all) { openLibrary(); return; }
+    if (specialTile(game)) { launch(); return; } // Glance, Tarot, Towarzyszka, Dodaj grę as tiles: one click.
     if (game.kind == GameKind::category) { openCategoryLibrary(game.source_id); return; }
     if (game.kind == GameKind::platform) { openPlatform(game.platform); return; }
     if (game.kind == GameKind::pc_platform) { openPcLibrary(game.source); return; }

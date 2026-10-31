@@ -442,6 +442,7 @@ LRESULT CALLBACK windowProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lpara
             else if (app->settingsOpen()) app->settingsWheel(static_cast<float>(point.x), step);
             else if (app->friendsOpen() && app->overFriends(static_cast<float>(point.x))) app->scrollFriends(step);
             else if (app->categoryMenuOpen()) app->scrollCategoryMenu(step);
+            else if (app->menuOpen() && app->menuDialog()) app->menuMove(step); // Duże menu gry scrolls.
             else app->wheel(step, static_cast<float>(point.x));
         }
         return 0;

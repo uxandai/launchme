@@ -138,6 +138,9 @@ void Launcher::launch() {
     // Metro and XMB: Glance and Towarzyszka are tiles of the layout.
     if (active.kind == GameKind::glance) { openGlance(); return; }
     if (active.kind == GameKind::companion) { openCompanion(); return; }
+    // Kafle Wszystkie, Glance…: Tarot and Dodaj grę as tiles of the first row.
+    if (active.kind == GameKind::tarot) { openTarot(); return; }
+    if (active.kind == GameKind::add) { openCustomEditor({}); return; }
     // XMB collection/console tiles open their column below instead of a separate screen.
     if (xmbActive() && selected_ < xmb_top_.size() && xmbColumn(active)) { xmbVertical(1); return; }
     if (active.kind == GameKind::category && (flixActive() || shelfAllTile() || psfiveActive())) { openCategoryLibrary(active.source_id); return; }

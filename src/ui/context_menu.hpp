@@ -116,4 +116,31 @@ inline settings_ui::Rect bounds(const GameCard& card, Rows rows, bool beside, fl
     }
     return {x, y, x + w, y + h};
 }
+// Okna i podpowiedzi → Duże menu gry: the same rows as a large dialog in the middle of the screen,
+// an icon beside each, the game's name and cover in its header; long menus scroll.
+struct Dialog {
+    static constexpr float max_width = 760, row_height = 70, row_step = 78, header = 150, padding = 26;
+    settings_ui::Rect panel{};
+    int rows = 0, visible = 0;
+    Dialog(float view_width, float view_height, int count) : rows(count) {
+        const float w = std::min(max_width, view_width - 96);
+        const float room = std::max(row_step, view_height - 120 - header - padding);
+        visible = std::clamp(static_cast<int>(room / row_step), 1, std::max(1, count));
+        const float h = header + visible * row_step + padding;
+        panel = {(view_width - w) * 0.5f, (view_height - h) * 0.5f, (view_width + w) * 0.5f, (view_height + h) * 0.5f};
+    }
+    // The first row shown: the selected one stays in view, a row of context above and below it.
+    int first(int selected) const {
+        if (rows <= visible) return 0;
+        return std::clamp(selected - visible / 2, 0, rows - visible);
+    }
+    settings_ui::Rect row(int index, int first_row) const {
+        const float y = panel.top + header + (index - first_row) * row_step;
+        return {panel.left + padding, y, panel.right - padding, y + row_height};
+    }
+    int hit(float x, float y, int first_row) const {
+        for (int i = first_row; i < std::min(rows, first_row + visible); ++i) if (row(i, first_row).contains(x, y)) return i;
+        return -1;
+    }
+};
 } // namespace context_menu

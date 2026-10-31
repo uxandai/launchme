@@ -195,6 +195,24 @@ public:
     // stride width * 4. It fades in over the picture; clearVideo removes it at once.
     void setVideoFrame(const uint8_t* bgra, uint32_t width, uint32_t height);
     void clearVideo();
+    // Interfejs → Tapeta (wallpaper_renderer.cpp): the picture (null removes it), the video's
+    // frames, where it shows, and whether the last frame drew it.
+    void setWallpaperImage(ImageBytes pixels);
+    void setWallpaperFrame(const uint8_t* bgra, uint32_t width, uint32_t height);
+    void clearWallpaperVideo();
+    void setWallpaperPlaces(bool snitch, bool menus, bool artwork, bool tiles);
+    bool wallpaperVisible() const { return wallpaper_drawn_; }
+    bool hasWallpaperVideo() const { return wallpaper_video_ != nullptr; }
+    bool hasWallpaper() const;
+    // Metro's light theme (Opcje układu → Jasny motyw): a white page with dark text.
+    void setMetroLight(bool light) { metro_light_ = light; }
+    // PSfive's details under the row (psfive_details_renderer.cpp): screenshots, similar games'
+    // covers and the screenshot shown full screen.
+    void resetPsfiveDetails(size_t shots, size_t similar);
+    void setPsfiveShot(size_t index, ImageBytes pixels);
+    void setPsfiveSimilar(size_t index, ImageBytes pixels);
+    bool hasPsfiveSimilar(size_t index) const;
+    void setPsfiveShotFull(ImageBytes pixels);
     bool videoShown() const { return video_bitmap_ != nullptr; }
     bool marqueeActive() const { return marquee_active_; } // The last frame had a gliding name (fadingLine): paint the next one too.
     float videoFade() const; // 0..1: the playing video's 600 ms fade-in (0 without one).
@@ -1069,6 +1087,19 @@ private:
     Microsoft::WRL::ComPtr<ID2D1DeviceContext1> main_realizer_;
     Microsoft::WRL::ComPtr<ID2D1BitmapRenderTarget> screen_ui_target_;
     Microsoft::WRL::ComPtr<ID2D1Bitmap> video_bitmap_;
+    // Tapeta: its picture, its video's latest frame, where it shows, whether this frame drew it.
+    Cover wallpaper_;
+    Microsoft::WRL::ComPtr<ID2D1Bitmap> wallpaper_video_;
+    struct WallpaperPlaces { bool snitch = true, menus = true, artwork = true, tiles = true; } wallpaper_places_;
+    bool wallpaper_drawn_ = false;
+    bool metro_light_ = false;
+    bool drawWallpaperBackdrop(float opacity);
+    // PSfive's details under the row (psfive_details_renderer.cpp): screenshots and similar games' covers.
+    std::vector<Cover> psfive_shots_, psfive_similar_;
+    Cover psfive_shot_full_;
+    void drawPsfiveDetails();
+    // The large game menu (menu_dialog_renderer.cpp).
+    void drawContextMenuDialog();
     Microsoft::WRL::ComPtr<ID2D1Effect> video_blur_; // Fill behind 4:3 videos.
     std::chrono::steady_clock::time_point video_started_{};
     Microsoft::WRL::ComPtr<ID2D1Bitmap> cinematic_hero_, cinematic_previous_hero_;

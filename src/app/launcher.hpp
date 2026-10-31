@@ -649,6 +649,8 @@ public:
     std::wstring keyboardPreview() const;
     bool keyboardClick(float x, float y); // Logical coordinates; true when the keyboard took it.
     bool menuOpen() const { return menu_open_; }
+    // Okna i podpowiedzi → Duże menu gry: the home screen's game menu is the large dialog.
+    bool menuDialog() const { return settings_.menu_dialog && screen_ == ScreenMode::shelves && !desktop_mode_; }
     void menuMove(int amount);
     void menuAccept();
     void openContextMenu();
@@ -1734,6 +1736,53 @@ private:
     void leaveArtworkSearch(); // Field → types; an unsearched edit gets the gallery back.
     void searchArtwork();
     void editArtworkQuery();
+    // The "Źródło" list of the game (Media i dane → Źródła grafik) or of the wallpaper type in view.
+    std::vector<ArtworkProvider> artworkChoices(const artwork_ui::State& state) const;
+    void showArtworkCategory(int category);
+    // Interfejs → Tapeta (src/app/wallpaper.cpp): the picker (the artwork browser's wallpaper mode),
+    // "Z dysku…" there, the chosen wallpaper applied, a video's frames and the picker's preview.
+    void openWallpaperBrowser();
+    void pickLocalWallpaper();
+    void applyWallpaper();
+    void stopWallpaperVideo();
+    void showWallpaperPreview(const std::filesystem::path& file);
+    void stopWallpaperPreview();
+    void tickWallpaper(bool& needs_paint);
+    std::wstring wallpaperLabel() const;
+    std::wstring wallpaperDescription() const;
+    VideoPlayer wallpaper_player_;
+    std::vector<uint8_t> wallpaper_frame_;
+    std::filesystem::path wallpaper_playing_, wallpaper_preview_, wallpaper_failed_;
+    uint32_t wallpaper_preview_id_ = 0;
+    // 0.4.9's settings rows (src/app/settings_extras.cpp); false: not theirs.
+    bool settingsExtraToggle(const settings_ui::Row& row);
+    bool settingsExtraChoose(const settings_ui::Row& row);
+    bool settingsExtraActivate(const settings_ui::Row& row);
+    // Wszystkie gry, and with Kafle Wszystkie, Glance… Glance, Tarot, Towarzyszka (and Dodaj grę) for the first row.
+    std::vector<Game> homeSpecialTiles() const;
+    // PSfive → Szczegóły pod rzędem (src/app/psfive_details.cpp): -1 hidden; else the focused
+    // section (0 information, 1 screenshots, 2 similar games).
+    bool psfiveDetailsShown() const;
+    void psfiveOpenDetails();
+    void psfiveCloseDetails(bool to_buttons);
+    void psfiveDetailsBack();
+    void psfiveLoadDetails(const Game& game);
+    void psfiveShotsArrived(uint32_t generation, std::vector<std::wstring> fulls, std::vector<std::vector<uint8_t>> pictures);
+    void psfiveViewShot();
+    void psfiveDetailsVertical(int amount);
+    void psfiveDetailsHorizontal(int amount);
+    void psfiveDetailsAccept();
+    bool psfiveDetailsClick(float x, float y);
+    void tickPsfiveDetails(float dt, bool& needs_paint);
+    int psfive_details_ = -1;
+    float psfive_details_progress_ = 0, psfive_details_scroll_ = 0;
+    size_t psfive_shot_ = 0, psfive_similar_ = 0;
+    bool psfive_shot_view_ = false, psfive_shots_loading_ = false;
+    std::string psfive_details_key_;
+    uint32_t psfive_details_generation_ = 0;
+    std::vector<std::wstring> psfive_shot_full_urls_; // "<cache file>|<URL>" of each shown screenshot's full picture.
+    std::vector<Game> psfive_similar_games_;
+    std::array<bool, 10> psfive_similar_bound_{};
     void openStore();
     void searchStore();
     void openDetails(const Game& game);

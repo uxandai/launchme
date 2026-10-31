@@ -265,7 +265,7 @@ void Launcher::focusCard(size_t index, bool reveal) {
     library_controls_.action = -1;
     // A library refresh focusing the shelf's same card again keeps its settled background and title.
     const bool same_focus = screen_ == ScreenMode::shelves && std::min(index, cards_.size() - 1) == selected_;
-    if (!same_focus) psfive_action_ = psfive_top_ = -1; // PSfive: another tile takes the focus back from the buttons and the top bar.
+    if (!same_focus) psfive_action_ = psfive_top_ = psfive_details_ = -1; // PSfive: another tile takes the focus back from the buttons and the top bar.
     selected_ = std::min(index, cards_.size() - 1);
     if (screen_ == ScreenMode::shelves) {
         categories_[category_].selected = selected_;
@@ -817,7 +817,7 @@ void Launcher::requestPreview() {
 }
 void Launcher::onPreview(std::unique_ptr<PreviewMessage> message) {
     if (message->app_id) gameIndexTouch({"steam:" + std::to_string(message->app_id)}); // Its store page is cached now.
-    if (preview_.accept(std::move(*message)) && (library_view::metadata(libraryPresentation()) || heroFactsShown())) InvalidateRect(hwnd_, nullptr, FALSE);
+    if (preview_.accept(std::move(*message)) && (library_view::metadata(libraryPresentation()) || heroFactsShown() || psfiveDetailsShown())) InvalidateRect(hwnd_, nullptr, FALSE);
 }
 void Launcher::noteFastScroll() {
     if (screen_ != ScreenMode::library || library_controls_.options.order != library_view::Order::alphabetical) return;

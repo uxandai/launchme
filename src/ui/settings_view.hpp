@@ -109,7 +109,15 @@ enum class Id { font, home_layout, ui_accent, accent, uninstalled, emulation, co
                    launch_tricks,
                    // Interfejs → Widoki biblioteki: Tryb TV's view of a console's, a collection's and a
                    // publisher's library without its own; Row::reset ("views:<kind>") makes all follow it.
-                   default_view_console, default_view_collection, default_view_studio };
+                   default_view_console, default_view_collection, default_view_studio,
+                   // Media i dane → Źródła grafik: one source on or off (Row::key its slug); TheGamesDB's key.
+                   artwork_source, thegamesdb_key,
+                   // Interfejs → Tapeta: the picker, back to none, and where it shows.
+                   wallpaper_pick, wallpaper_clear, wallpaper_snitch, wallpaper_menus, wallpaper_artwork, wallpaper_tiles,
+                   // Interfejs → Tryb TV: the special tiles in the first row; the "+" tile (Dodaj grę).
+                   home_tiles, add_game_tile,
+                   // Opcje układu: PSfive's details under the row; Metro's light theme. Okna: the game menu as a dialog.
+                   psfive_details, metro_light, menu_dialog };
 inline bool hasOptionsButton(Id id) { return id == Id::plugin_enabled || id == Id::pc_platform; }
 // layout: drawn preview tiles in the row (one per home layout); Row::choice is the active one.
 // count: Row::value as a large number with a chevron; activating opens a sub-list.
@@ -131,7 +139,8 @@ enum class Page {
     // prefix (key: its path); Wine/Proton options of a game (key: its game key) or the default (key empty).
     compat, compat_source, prefixes, prefix, launch_options,
     compat_stores, // Linux: store launchers installed in a prefix of their own (Battle.net, EA app...).
-    game_shortcuts // One game's shortcuts outside Launchme (key: its game key); Tryb TV's way to them.
+    game_shortcuts, // One game's shortcuts outside Launchme (key: its game key); Tryb TV's way to them.
+    artwork_sources // Media i dane → Źródła grafik: the galleries of "Zmień grafikę", each on or off.
 };
 // A row drawn as tiles, with State::tile picking one of them.
 inline bool tiled(Control control) { return control == Control::sources || control == Control::pads; }
@@ -199,6 +208,8 @@ inline constexpr std::array<const wchar_t*, 3> tile_entrances{trKey(L"Powiększa
 inline constexpr std::array<const wchar_t*, 3> focus_gaps{trKey(L"Brak"), trKey(L"Obrys odsunięty na zewnątrz"), trKey(L"Grafika odsunięta do środka")};
 // Indexed like AppSettings::SearchArt.
 inline constexpr std::array<const wchar_t*, 3> search_arts{trKey(L"Kwadratowe okładki"), trKey(L"Pionowe plakaty"), trKey(L"Poziome kafle")};
+// Indexed like AppSettings::HomeTiles.
+inline constexpr std::array<const wchar_t*, 3> home_tile_places{trKey(L"Jak w układzie"), trKey(L"Na początku rzędu"), trKey(L"Na końcu rzędu")};
 struct Choice { std::wstring label; uint32_t color = 0; bool custom = false; std::wstring key; };
 
 // "Inny…" colour: hue (0..360), saturation and value (0..1) edited with three sliders.
