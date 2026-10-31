@@ -1075,6 +1075,9 @@ private:
     // The cross-fade from hero_leaving_ to hero_shown_, linear 0..1 (1: settled). It advances with
     // the frame clock or with detail_'s growth, whichever is more (a test sets detail_ directly).
     float hero_mix_ = 1;
+    // The wallpaper behind home tiles: faded in and out (it waits while the focused game's own background loads).
+    float home_wallpaper_mix_ = 0, home_wallpaper_target_ = 0;
+    std::chrono::steady_clock::time_point home_wallpaper_at_{};
     float hero_detail_seen_ = 0;
     std::chrono::steady_clock::time_point hero_frame_{};
     bool hero_waiting_ = false; // A ready picture waits for the focus to settle or a fade to finish.

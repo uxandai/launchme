@@ -245,7 +245,6 @@ void Launcher::openWallpaperBrowser() {
     artwork_state_.category = settings_.wallpaper == AppSettings::WallpaperKind::video ? 1 : 0;
     artwork_state_.choices = artworkChoices(artwork_state_);
     artwork_state_.provider = artwork_state_.choices.front();
-    artwork_state_.query = wallpaper_sources::defaultQuery(artwork_state_.provider);
     wallpaper_preview_id_ = 0;
     dismissMenu();
     screen_ = ScreenMode::artwork;
@@ -253,15 +252,13 @@ void Launcher::openWallpaperBrowser() {
     audio_.context();
 }
 
-// Another rail entry: its gallery; in the wallpaper picker also its sources (and their first query).
+// Another rail entry: its gallery; in the wallpaper picker also its sources (the typed query kept).
 void Launcher::showArtworkCategory(int category) {
     auto& state = artwork_state_;
-    const auto before = state.activeProvider();
     state.category = category; state.page = 0; state.source = state.override_source;
     if (state.wallpaper) {
         state.choices = artworkChoices(state);
         state.provider = state.choices.front();
-        if (state.query.empty() || state.query == wallpaper_sources::defaultQuery(before)) state.query = wallpaper_sources::defaultQuery(state.provider);
         stopWallpaperPreview();
     }
     loadArtworkPage();
@@ -637,7 +634,6 @@ void Launcher::chooseArtworkProvider(int index) {
         state.provider = chosen;
         state.page = 0;
         state.source = state.override_source;
-        if (state.wallpaper && state.query.empty()) state.query = wallpaper_sources::defaultQuery(chosen);
         stopWallpaperPreview();
         loadArtworkPage();
     }

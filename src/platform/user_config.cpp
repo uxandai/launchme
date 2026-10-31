@@ -435,7 +435,7 @@ AppSettings parseAppSettings(std::string_view text) {
         else if (key == "steam_account_switch" && (value == "0" || value == "1")) settings.steam_account_switch = value == "1";
         else if (key == "steam_install_dialog" && (value == "0" || value == "1")) settings.steam_install_dialog = value == "1";
         else if (key == "game_videos" && (value == "0" || value == "1")) settings.game_videos = value == "1";
-        else if (key == "video_delay" && (value == "3" || value == "5" || value == "10")) settings.video_delay = value == "3" ? 3 : value == "5" ? 5 : 10;
+        else if (key == "video_delay" && (value == "1" || value == "3" || value == "5" || value == "10")) settings.video_delay = value == "1" ? 1 : value == "3" ? 3 : value == "5" ? 5 : 10;
         else if (key == "video_volume" && value.size() == 1 && value[0] >= '0' && value[0] <= '3') settings.video_volume = value[0] - '0';
         else if (key == "steam_trailers" && (value == "0" || value == "1")) settings.steam_trailers = value == "1";
         else if (key == "trailer_space_mb" && (value == "100" || value == "250" || value == "500" || value == "1000")) settings.trailer_space_mb = std::stoi(std::string(value));

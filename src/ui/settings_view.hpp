@@ -158,7 +158,7 @@ inline constexpr std::array<const wchar_t*, 2> flix_sizes{trKey(L"Domyślny"), t
 inline int sizeSteps(Id id) { return id == Id::xmb_size || id == Id::psfive_size || id == Id::companion_reply_length ? 3 : id == Id::flix_size ? 2 : 0; }
 // Indexed like AppSettings::AcceptAction.
 inline constexpr std::array<const wchar_t*, 2> accept_actions{trKey(L"Uruchom / instaluj"), trKey(L"Szczegóły")};
-inline constexpr std::array<int, 3> video_delays{3, 5, 10};
+inline constexpr std::array<int, 4> video_delays{1, 3, 5, 10};
 inline constexpr std::array<int, 4> trailer_spaces{100, 250, 500, 1000}; // MB
 inline constexpr std::array<const wchar_t*, 4> video_volumes{trKey(L"Wyciszony"), trKey(L"Cicho"), trKey(L"Normalnie"), trKey(L"Głośno")};
 inline constexpr std::array<double, 4> video_volume_levels{0.0, 0.2, 0.45, 0.8};

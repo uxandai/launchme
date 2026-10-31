@@ -130,20 +130,23 @@ void Renderer::drawPsfiveDetails() {
     const auto glided = [&](D2D1_RECT_F fallback) {
         return details.focus_glide ? D2D1::RectF(details.focus_left, details.focus_top, details.focus_right, details.focus_bottom) : fallback;
     };
-    // Screenshots: a strip of 16:9 pictures.
+    // Screenshots: a strip of 16:9 pictures, sliding as tiles do; one leaving past the margin fades.
+    const float shot_step = psfive_details::shot_width + psfive_details::shot_gap;
+    const float similar_step = psfive_details::similar_size + psfive_details::similar_gap;
     if (details.shots || details.loading) {
         textLine(upper(tr(L"Zrzuty ekranu")), psfive_details::left, top + psfive_details::shots_label, 600, friend_section_font_.Get(), gray(0.6f, rise));
-        const auto first = psfive_details::firstShown(details.shot, details.shots, width, psfive_details::shot_width + psfive_details::shot_gap);
         if (!details.shots) {
             const auto r = psfive_details::shot(0, 0, top);
             drawSkeleton(D2D1::RectF(r.left, r.top, r.right, r.bottom), 1, r.bottom - r.top, rise);
         }
-        for (size_t i = first; i < details.shots && i < psfive_shots_.size(); ++i) {
-            const auto r = psfive_details::shot(i, first, top);
+        for (size_t i = 0; i < details.shots && i < psfive_shots_.size(); ++i) {
+            const auto r = psfive_details::shot(i, details.shots_scroll, top);
             if (r.left > width) break;
+            const float shown = rise * psfive_details::edgeFade(r.left, shot_step);
+            if (shown <= 0.003f) continue;
             const auto rect = D2D1::RectF(r.left, r.top, r.right, r.bottom);
             const auto shape = D2D1::RoundedRect(rect, 14, 14);
-            brush(gray(1, 0.05f * rise));
+            brush(gray(1, 0.05f * shown));
             target_->FillRoundedRectangle(shape, solid_.Get());
             const auto& image = psfive_shots_[i];
             if (image.bitmap) {
@@ -154,26 +157,26 @@ void Renderer::drawPsfiveDetails() {
                 Microsoft::WRL::ComPtr<ID2D1RoundedRectangleGeometry> clip;
                 if (SUCCEEDED(factory_->CreateRoundedRectangleGeometry(shape, clip.GetAddressOf()))) {
                     target_->PushLayer(D2D1::LayerParameters(D2D1::InfiniteRect(), clip.Get()), nullptr);
-                    target_->DrawBitmap(image.bitmap.Get(), D2D1::RectF(x, y, x + w, y + h), rise * reveal(image), D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
+                    target_->DrawBitmap(image.bitmap.Get(), D2D1::RectF(x, y, x + w, y + h), shown * reveal(image), D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
                     target_->PopLayer();
                 }
             }
-            brush(gray(1, 0.10f * rise));
+            brush(gray(1, 0.10f * shown));
             target_->DrawRoundedRectangle(shape, solid_.Get(), 1.0f);
             if (details.section == 1 && details.shot == i) focus = std::pair{glided(rect), accentOf(nullptr)};
         }
     }
-    // Similar games: square covers, the focused one's name under it.
+    // Similar games: square covers sliding the same way, the focused one's name under it.
     if (!details.similar_names.empty()) {
         textLine(upper(tr(L"Podobne gry")), psfive_details::left, top + psfive_details::similar_label, 600, friend_section_font_.Get(), gray(0.6f, rise));
-        const auto first = psfive_details::firstShown(details.similar, details.similar_names.size(), width,
-                                                       psfive_details::similar_size + psfive_details::similar_gap);
-        for (size_t i = first; i < details.similar_names.size(); ++i) {
-            const auto r = psfive_details::similar(i, first, top);
+        for (size_t i = 0; i < details.similar_names.size(); ++i) {
+            const auto r = psfive_details::similar(i, details.similar_scroll, top);
             if (r.left > width) break;
+            const float shown = rise * psfive_details::edgeFade(r.left, similar_step);
+            if (shown <= 0.003f) continue;
             const auto rect = D2D1::RectF(r.left, r.top, r.right, r.bottom);
             const auto shape = tileShape(rect, tile_shape_);
-            brush(gray(1, 0.06f * rise));
+            brush(gray(1, 0.06f * shown));
             if (shape) target_->FillGeometry(shape.Get(), solid_.Get());
             const auto* image = i < psfive_similar_.size() ? &psfive_similar_[i] : nullptr;
             if (image && image->bitmap && shape) {
@@ -183,14 +186,14 @@ void Renderer::drawPsfiveDetails() {
                 const float w = size.width * scale, h = size.height * scale;
                 const float x = rect.left - (w - (rect.right - rect.left)) * 0.5f, y = rect.top - (h - (rect.bottom - rect.top)) * 0.5f;
                 target_->PushLayer(D2D1::LayerParameters(D2D1::InfiniteRect(), shape.Get()), nullptr);
-                target_->DrawBitmap(image->bitmap.Get(), D2D1::RectF(x, y, x + w, y + h), rise * reveal(*image), D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
+                target_->DrawBitmap(image->bitmap.Get(), D2D1::RectF(x, y, x + w, y + h), shown * reveal(*image), D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
                 target_->PopLayer();
             } else if (!image || !image->bitmap)
-                text(details.similar_names[i], rect.left + 10, rect.top + 44, rect.right - rect.left - 20, 70, button_font_.Get(), gray(0.86f, rise));
-            if (shape) { brush(gray(1, 0.10f * rise)); target_->DrawGeometry(shape.Get(), solid_.Get(), 1.0f); }
+                text(details.similar_names[i], rect.left + 10, rect.top + 44, rect.right - rect.left - 20, 70, button_font_.Get(), gray(0.86f, shown));
+            if (shape) { brush(gray(1, 0.10f * shown)); target_->DrawGeometry(shape.Get(), solid_.Get(), 1.0f); }
             if (details.section == 2 && details.similar == i) {
                 focus = std::pair{glided(rect), accentOf(image)};
-                textLine(details.similar_names[i], rect.left, rect.bottom + 24, std::max(360.0f, rect.right - rect.left), menu_font_.Get(), gray(0.95f, rise));
+                textLine(details.similar_names[i], rect.left, rect.bottom + 24, std::max(360.0f, rect.right - rect.left), menu_font_.Get(), gray(0.95f, shown));
             }
         }
     }

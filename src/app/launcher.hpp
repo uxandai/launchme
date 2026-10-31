@@ -1242,6 +1242,7 @@ private:
     bool libraryCoverflow() const;
     bool libraryCarousel() const;
     bool selectedLogoPending() const;
+    bool selectedHeroPending() const; // The focused game's own background is on its way (artwork_requests.cpp).
     float library_focus_age_ = 0;
     bool libraryActions() const;
     // Buttons beside the games that take the focus (library_controls_.action): Szczegółowy's
@@ -1785,6 +1786,7 @@ private:
     std::array<bool, 10> psfive_similar_bound_{};
     bool psfive_focus_glide_ = false;              // The strips' focus frame, gliding (tickPsfiveDetails).
     std::array<float, 4> psfive_focus_box_{};
+    float psfive_shots_scroll_ = 0, psfive_similar_scroll_ = 0; // The strips' slide, in pixels (eased like tiles).
     void openStore();
     void searchStore();
     void openDetails(const Game& game);

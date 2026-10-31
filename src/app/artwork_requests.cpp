@@ -21,6 +21,20 @@ bool Launcher::selectedLogoPending() const {
     return jobs_->requested.contains(key) && !jobs_->blocked_until.contains(key);
 }
 
+// The focused game has (or is getting) a background of its own: in RAM, queued or downloading, until
+// a failure blocks it. The home wallpaper waits meanwhile, as the TV home without cards waits for
+// its library; it shows behind tiles without art and games known to have none (background_renderer.cpp).
+bool Launcher::selectedHeroPending() const {
+    if (cards_.empty()) return emptyLibraryReason() == empty_library::Reason::loading;
+    const auto& game = cards_[std::min(selected_, cards_.size() - 1)].game;
+    if (!isGame(game)) return false;
+    if (const auto* art = art_.peek(gameKey(game)); art && art->hero) return true;
+    const auto key = artRequestKey(game, CoverMessage::Kind::hero);
+    std::lock_guard lock(jobs_->mutex);
+    const auto blocked = jobs_->blocked_until.find(key);
+    return blocked == jobs_->blocked_until.end() || std::chrono::steady_clock::now() >= blocked->second;
+}
+
 bool Launcher::artBlocked(const Game& game, CoverMessage::Kind kind) const {
     std::lock_guard lock(jobs_->mutex);
     const auto found = jobs_->blocked_until.find(artRequestKey(game, kind));

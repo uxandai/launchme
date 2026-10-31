@@ -6,6 +6,7 @@
 // slider and the saved layout. Artwork comes from fixtures (the badge: the drawn white DRM-free logo).
 // Captures: psfive-*.png, settings-psfive.png.
 #include "../src/ui/psfive_layout.hpp"
+#include "../src/ui/psfive_details_layout.hpp"
 #include "../src/artwork/platform_logo.hpp"
 
 int LauncherUiTest::psfive(HWND window) {
@@ -152,6 +153,16 @@ int LauncherUiTest::psfive(HWND window) {
         if (app.psfive_details_ != 1 || app.psfiveActions()) return 5130;
         settle();
         if (!app.psfive_focus_glide_ || !capture(L"psfive-details.png")) return 5131;
+        // Right along the screenshots: the strip slides as the tiles do (caught mid-way), the frame on its picture.
+        for (int i = 0; i < 4; ++i) app.psfiveDetailsHorizontal(1);
+        frame(); frame(); frame();
+        if (app.psfive_shot_ != 4 || app.psfive_shots_scroll_ <= 0 || !capture(L"psfive-details-slide.png")) return 5137;
+        settle();
+        // Five pictures, four in view: the last one brings the strip one step along.
+        if (std::abs(app.psfive_shots_scroll_ - (psfive_details::shot_width + psfive_details::shot_gap)) > 1) return 5138;
+        if (!capture(L"psfive-details-scrolled.png")) return 5139;
+        for (int i = 0; i < 4; ++i) app.psfiveDetailsHorizontal(-1);
+        settle();
         app.psfiveDetailsVertical(1);
         if (app.psfive_details_ != 2) return 5132;
         settle();
@@ -181,6 +192,14 @@ int LauncherUiTest::psfive(HWND window) {
     const auto menu = context_menu::bounds(app.cards_[app.selected_], app.menuRows(), app.menuBeside(), view.width, view.height, app.libraryMenuAnchor());
     if (menu.bottom > layout::action(1, view.height).top || menu.left != layout::action(1, view.height).left) return 4916;
     if (!capture(L"psfive-menu.png")) return 4917;
+    { // Duże menu gry: the same menu as a large dialog; the white button glides between the rows.
+        app.settings_.menu_dialog = true;
+        if (!capture(L"menu-dialog.png")) return 5135;
+        app.menu_selected_ = 3; frame(); frame();
+        if (!app.menu_glide_.valid || !capture(L"menu-dialog-glide.png")) return 5136;
+        app.menu_selected_ = 0; settle();
+        app.settings_.menu_dialog = false;
+    }
     app.dismissMenu(); app.menu_progress_ = 0;
     if (app.psfive_action_ != 1) return 4918;
     app.enterDown(false); app.menuAccept(); // Enter/A on the initial row opens Details, never launches.

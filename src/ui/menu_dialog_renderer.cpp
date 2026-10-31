@@ -9,6 +9,7 @@
 #include "../i18n/i18n.hpp"
 
 #include <algorithm>
+#include <cmath>
 
 using namespace render_detail;
 
@@ -81,8 +82,8 @@ void Renderer::drawContextMenuDialog() {
         }
         title_left = box.right + 24;
     }
-    textLine(active.game.name, title_left, panel.top + 62, panel.right - title_left - 30, psfive_name_font_.Get(), color(0.97f, 0.97f, 0.97f, alpha));
-    textLine(tr(L"Menu gry"), title_left, panel.top + 100, panel.right - title_left - 30, settings_body_font_.Get(), color(0.6f, 0.6f, 0.6f, alpha));
+    textLine(active.game.name, title_left, panel.top + 64, panel.right - title_left - 30, psfive_name_font_.Get(), color(0.97f, 0.97f, 0.97f, alpha));
+    textLine(tr(L"Menu gry"), title_left, panel.top + 93, panel.right - title_left - 30, settings_body_font_.Get(), color(0.6f, 0.6f, 0.6f, alpha));
     const std::wstring account_label = tr(L"Konto Steam: ") + context_->menu_steam_account;
     const auto label = [&](context_menu::Item item, int row) -> std::wstring {
         switch (item) {
@@ -110,35 +111,48 @@ void Renderer::drawContextMenuDialog() {
         }
         return {};
     };
-    const int first = dialog.first(context_->menu_selected);
-    for (int row = first; row < std::min(count, first + dialog.visible); ++row) {
-        auto r = dialog.row(row, first);
-        r.top += rise; r.bottom += rise;
-        const auto box = D2D1::RectF(r.left, r.top, r.right, r.bottom);
+    // The white button glides between rows (ViewContext::menu_glide, a fractional row) and a long list
+    // slides under it, as the other menus do; the text darkens as the button reaches its row.
+    const float glide = std::clamp(context_->menu_glide.value_or(static_cast<float>(context_->menu_selected)), 0.0f, static_cast<float>(std::max(0, count - 1)));
+    const float first = count <= dialog.visible ? 0.0f :
+        std::clamp(glide - static_cast<float>(dialog.visible / 2), 0.0f, static_cast<float>(count - dialog.visible));
+    const auto rowBox = [&](float index) {
+        const float y = panel.top + context_menu::Dialog::header + (index - first) * context_menu::Dialog::row_step;
+        return D2D1::RectF(panel.left + context_menu::Dialog::padding, y, panel.right - context_menu::Dialog::padding, y + context_menu::Dialog::row_height);
+    };
+    const float list_top = panel.top + context_menu::Dialog::header - 6;
+    const float list_bottom = panel.top + context_menu::Dialog::header + dialog.visible * context_menu::Dialog::row_step;
+    target_->PushAxisAlignedClip(D2D1::RectF(panel.left, list_top, panel.right, list_bottom), D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
+    const auto dark = drawButton(rowBox(glide), 1.0f, alpha, false);
+    const int from = std::max(0, static_cast<int>(std::floor(first))), to = std::min(count, static_cast<int>(std::ceil(first)) + dialog.visible + 1);
+    for (int row = from; row < to; ++row) {
+        const auto box = rowBox(static_cast<float>(row));
         const auto entry = context_menu::item(row, rows);
-        const bool focused = row == context_->menu_selected;
+        const float focus = std::clamp(1.0f - std::abs(static_cast<float>(row) - glide), 0.0f, 1.0f);
         const bool destructive = entry == context_menu::Item::close || entry == context_menu::Item::uninstall || entry == context_menu::Item::remove;
         const bool enabled = entry != context_menu::Item::primary || context_->primary_enabled;
-        // The focused row: the white button; the others a faint glass row.
-        D2D1_COLOR_F ink = color(0.95f, 0.95f, 0.95f, alpha);
-        if (focused) ink = drawButton(box, 1.0f, alpha, false);
-        else {
-            brush(color(1, 1, 1, 0.045f * alpha));
+        // The others: a faint glass row, fading where the button passes.
+        if (focus < 0.999f) {
+            brush(color(1, 1, 1, 0.045f * alpha * (1.0f - focus)));
             target_->FillRoundedRectangle(pill(box), solid_.Get());
         }
-        const auto tone = destructive && !focused ? palette::danger(alpha) : !enabled ? color(0.53f, 0.53f, 0.53f, 0.75f * alpha) : ink;
+        const auto mix = [&](D2D1_COLOR_F light) {
+            return color(std::lerp(light.r, dark.r, focus), std::lerp(light.g, dark.g, focus), std::lerp(light.b, dark.b, focus), std::lerp(light.a, dark.a, focus));
+        };
+        const auto tone = !enabled ? color(0.53f, 0.53f, 0.53f, 0.75f * alpha) : mix(destructive ? palette::danger(alpha) : color(0.95f, 0.95f, 0.95f, alpha));
         // The icon in a small disc on the left.
-        const float cx = r.left + 44, cy = (r.top + r.bottom) * 0.5f;
-        brush(focused ? color(0, 0, 0, 0.08f * alpha) : color(1, 1, 1, 0.07f * alpha));
+        const float cx = box.left + 44, cy = (box.top + box.bottom) * 0.5f;
+        brush(focus > 0.5f ? color(0, 0, 0, 0.08f * alpha) : color(1, 1, 1, 0.07f * alpha));
         target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), 23, 23), solid_.Get());
         desktopGlyph(icon(entry, context_->menu_hidden), cx, cy, 20, tone);
-        textLine(label(entry, row), r.left + 88, cy, r.right - r.left - 110, category_font_.Get(), tone);
+        textLine(label(entry, row), box.left + 88, cy, box.right - box.left - 110, category_font_.Get(), tone);
     }
+    target_->PopAxisAlignedClip();
     // A scroll bar when not every row fits.
     if (count > dialog.visible) {
         const float track_top = panel.top + context_menu::Dialog::header, track = dialog.visible * context_menu::Dialog::row_step - 8;
         const float thumb = std::max(36.0f, track * dialog.visible / count);
-        const float y = track_top + (track - thumb) * first / std::max(1, count - dialog.visible);
+        const float y = track_top + (track - thumb) * first / static_cast<float>(std::max(1, count - dialog.visible));
         brush(color(1, 1, 1, 0.28f * alpha));
         target_->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(panel.right - 12, y, panel.right - 8, y + thumb), 2, 2), solid_.Get());
     }

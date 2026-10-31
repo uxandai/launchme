@@ -101,6 +101,7 @@ void Launcher::paint(bool overlay) {
     context.library_panel = library_controls_.open() ? library_controls_.panel : library_panel_shown_;
     context.library_list = libraryList();
     context.library_mode = libraryView();
+    context.home_background_pending = (screen_ == ScreenMode::shelves || screen_ == ScreenMode::platform_games) && selectedHeroPending();
     context.library_options = libraryPresentation();
     context.library_search_progress = library_search_progress_;
     if (library_view::metadata(context.library_options) && !cards_.empty()) {
@@ -535,6 +536,7 @@ void Launcher::paint(bool overlay) {
             details_sheet.achievements_unlocked = info.achievements_unlocked;
             details_sheet.achievements_total = info.achievements_total;
             details_sheet.focus_glide = psfive_focus_glide_;
+            details_sheet.shots_scroll = psfive_shots_scroll_; details_sheet.similar_scroll = psfive_similar_scroll_;
             details_sheet.focus_left = psfive_focus_box_[0]; details_sheet.focus_top = psfive_focus_box_[1];
             details_sheet.focus_right = psfive_focus_box_[2]; details_sheet.focus_bottom = psfive_focus_box_[3];
             // As on Szczegóły: the four main facts always (a dash when unknown), the others when known.

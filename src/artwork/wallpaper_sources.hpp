@@ -13,8 +13,8 @@
 namespace wallpaper_sources {
 bool own(ArtworkProvider provider);
 bool video(ArtworkProvider provider);
-// What a first visit shows before anything is typed.
-std::wstring defaultQuery(ArtworkProvider provider);
+// An empty query: the source's best or newest (Wallhaven's toplist, Danbooru's scenery, MotionBGs' 4K list,
+// every Steam background), as the picker opens before anything is typed.
 GridPage browse(ArtworkProvider provider, const std::wstring& query, int page, const ArtworkHttp& get = httpGet);
 std::vector<uint8_t> thumbnail(const GridAsset& asset, const ArtworkHttp& get = httpGet);
 // The chosen wallpaper downloaded into `folder`: the stored file, or empty with `error` set.

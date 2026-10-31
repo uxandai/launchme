@@ -35,12 +35,16 @@ inline size_t firstShown(size_t focus, size_t count, float width, float step) {
     if (count <= visible || focus < visible - 1) return 0;
     return std::min(focus + 2 - visible, count - visible);
 }
-inline settings_ui::Rect shot(size_t index, size_t first, float top) {
-    const float x = left + (static_cast<float>(index) - static_cast<float>(first)) * (shot_width + shot_gap);
+// Where a strip scrolls to keep its focused item in view, in pixels (eased by tickPsfiveDetails, as tiles slide).
+inline float scrollFor(size_t focus, size_t count, float width, float step) { return static_cast<float>(firstShown(focus, count, width, step)) * step; }
+inline settings_ui::Rect shot(size_t index, float scroll, float top) {
+    const float x = left + static_cast<float>(index) * (shot_width + shot_gap) - scroll;
     return {x, top + shots_top, x + shot_width, top + shots_top + shot_height};
 }
-inline settings_ui::Rect similar(size_t index, size_t first, float top) {
-    const float x = left + (static_cast<float>(index) - static_cast<float>(first)) * (similar_size + similar_gap);
+inline settings_ui::Rect similar(size_t index, float scroll, float top) {
+    const float x = left + static_cast<float>(index) * (similar_size + similar_gap) - scroll;
     return {x, top + similar_top, x + similar_size, top + similar_top + similar_size};
 }
+// An item sliding out past the left margin fades over one step.
+inline float edgeFade(float x, float step) { return std::clamp((x - (left - step)) / step, 0.0f, 1.0f); }
 }

@@ -290,15 +290,6 @@ bool own(ArtworkProvider provider) {
 }
 bool video(ArtworkProvider provider) { return provider == ArtworkProvider::motionbgs || provider == ArtworkProvider::steam_backgrounds; }
 
-std::wstring defaultQuery(ArtworkProvider provider) {
-    switch (provider) {
-    case ArtworkProvider::wallhaven: return L"landscape";
-    case ArtworkProvider::danbooru: return L"scenery";
-    case ArtworkProvider::motionbgs: return L"nature";
-    default: return {};
-    }
-}
-
 GridPage browse(ArtworkProvider provider, const std::wstring& query, int page, const ArtworkHttp& get) {
     GridPage out;
     switch (provider) {

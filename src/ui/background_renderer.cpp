@@ -149,9 +149,24 @@ void Renderer::drawBackground() {
     const bool menu_screen = screen == ScreenMode::settings || screen == ScreenMode::downloads || screen == ScreenMode::devices ||
                              screen == ScreenMode::glance || screen == ScreenMode::companion || screen == ScreenMode::plugin_page;
     bool menu_wallpaper = false;
-    if (!tinted && home && wallpaper_places_.tiles && cards_ && !cards_->empty() && context_->library_mode != library_view::View::cinematic) {
+    // It waits while the focused game's own background is on its way (and an empty home for its library),
+    // fading in and out instead of showing for the moment a background takes to load.
+    const bool home_wallpaper = !tinted && home && wallpaper_places_.tiles && context_->library_mode != library_view::View::cinematic;
+    {
+        const auto now = std::chrono::steady_clock::now();
+        const float dt = home_wallpaper_at_ == std::chrono::steady_clock::time_point{} ? 1.0f :
+                         std::min(0.1f, std::chrono::duration<float>(now - home_wallpaper_at_).count());
+        home_wallpaper_at_ = now;
+        if (!home_wallpaper) home_wallpaper_mix_ = home_wallpaper_target_ = 1; // Back home, it stands as it was left.
+        else {
+            home_wallpaper_target_ = context_->home_background_pending ? 0.0f : 1.0f;
+            home_wallpaper_mix_ += (home_wallpaper_target_ - home_wallpaper_mix_) * (1.0f - std::exp(-dt * 9.0f));
+        }
+        if (std::abs(home_wallpaper_mix_ - home_wallpaper_target_) <= 0.002f) home_wallpaper_mix_ = home_wallpaper_target_;
+    }
+    if (home_wallpaper) {
         const float presence = std::max(hero_shown_.bitmap ? hero_shown_.level : 0.0f, hero_leaving_.bitmap ? hero_leaving_.level : 0.0f);
-        if (presence < 0.999f) drawWallpaperBackdrop(1.0f - presence);
+        if (presence < 0.999f) drawWallpaperBackdrop((1.0f - presence) * home_wallpaper_mix_);
     } else if (!tinted && menu_screen && wallpaper_places_.menus) menu_wallpaper = drawWallpaperBackdrop(1.0f);
     if (library_backdrop_opacity_ > 0.001f) drawLibraryBackdrop(library_backdrop_opacity_);
     // PSfive and Szczegóły use brighter artwork and their own shade. Still images

@@ -248,7 +248,7 @@ struct AppSettings {
     // layout of ES-DE's downloaded_media (pointing it there shares them). Empty: <config>\media.
     std::filesystem::path video_folder;
     bool game_videos = true;
-    int video_delay = 3;   // Seconds on a game before its video: 3, 5 or 10.
+    int video_delay = 3;   // Seconds on a game before its video: 1, 3, 5 or 10.
     int video_volume = 2;  // The video's own sound: 0 muted, 1 quiet, 2 normal, 3 loud.
     int trailer_space_mb = 250;  // Trailer clips kept at most (100, 250, 500, 1000); the oldest-played go first.
     bool steam_trailers = false; // Steam games: the store trailer (480p) the same way, downloaded once.

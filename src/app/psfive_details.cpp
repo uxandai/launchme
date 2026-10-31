@@ -65,6 +65,7 @@ void Launcher::psfiveLoadDetails(const Game& game) {
     psfive_details_key_ = key;
     const auto generation = ++psfive_details_generation_;
     psfive_shot_ = psfive_similar_ = 0;
+    psfive_shots_scroll_ = psfive_similar_scroll_ = 0;
     psfive_shot_full_urls_.clear();
     psfive_shots_loading_ = true;
     psfive_similar_games_.clear();
@@ -233,17 +234,15 @@ bool Launcher::psfiveDetailsClick(float x, float y) {
     if (psfive_shot_view_) { psfive_shot_view_ = false; InvalidateRect(hwnd_, nullptr, FALSE); return true; }
     const auto view = renderer_.viewport();
     const float top = psfive_details::sheetTop(view.height, psfive_details_progress_) - psfive_details_scroll_;
-    const auto shots_first = psfive_details::firstShown(psfive_shot_, psfive_shot_full_urls_.size(), view.width, psfive_details::shot_width + psfive_details::shot_gap);
-    for (size_t i = shots_first; i < psfive_shot_full_urls_.size(); ++i)
-        if (psfive_details::shot(i, shots_first, top).contains(x, y)) {
+    for (size_t i = 0; i < psfive_shot_full_urls_.size(); ++i)
+        if (psfive_details::shot(i, psfive_shots_scroll_, top).contains(x, y) && x >= psfive_details::left - 1) {
             const bool again = psfive_details_ == 1 && psfive_shot_ == i;
             psfive_details_ = 1; psfive_shot_ = i;
             if (again) psfiveViewShot(); else { audio_.navigate(); InvalidateRect(hwnd_, nullptr, FALSE); }
             return true;
         }
-    const auto similar_first = psfive_details::firstShown(psfive_similar_, psfive_similar_games_.size(), view.width, psfive_details::similar_size + psfive_details::similar_gap);
-    for (size_t i = similar_first; i < psfive_similar_games_.size(); ++i)
-        if (psfive_details::similar(i, similar_first, top).contains(x, y)) {
+    for (size_t i = 0; i < psfive_similar_games_.size(); ++i)
+        if (psfive_details::similar(i, psfive_similar_scroll_, top).contains(x, y) && x >= psfive_details::left - 1) {
             const bool again = psfive_details_ == 2 && psfive_similar_ == i;
             psfive_details_ = 2; psfive_similar_ = i;
             if (again) psfiveDetailsAccept(); else { audio_.navigate(); InvalidateRect(hwnd_, nullptr, FALSE); }
@@ -266,14 +265,24 @@ void Launcher::tickPsfiveDetails(float dt, bool& needs_paint) {
     // The focus frame glides between the screenshots and the similar games, as the tiles' outline does.
     const auto view = renderer_.viewport();
     const float top = psfive_details::sheetTop(view.height, psfive_details_progress_);
-    std::optional<settings_ui::Rect> focus;
-    if (psfive_details_ == 1 && psfive_shot_ < psfive_shot_full_urls_.size()) {
-        const auto first = psfive_details::firstShown(psfive_shot_, psfive_shot_full_urls_.size(), view.width, psfive_details::shot_width + psfive_details::shot_gap);
-        focus = psfive_details::shot(psfive_shot_, first, top);
-    } else if (psfive_details_ == 2 && psfive_similar_ < psfive_similar_games_.size()) {
-        const auto first = psfive_details::firstShown(psfive_similar_, psfive_similar_games_.size(), view.width, psfive_details::similar_size + psfive_details::similar_gap);
-        focus = psfive_details::similar(psfive_similar_, first, top);
+    // The strips slide to keep their focused item in view, and the frame slides with its strip.
+    const float shot_step = psfive_details::shot_width + psfive_details::shot_gap;
+    const float similar_step = psfive_details::similar_size + psfive_details::similar_gap;
+    const auto slide = [&](float& scroll, float wanted) {
+        const float before = scroll;
+        if (std::abs(wanted - scroll) > 0.3f) { scroll += (wanted - scroll) * (1.0f - std::exp(-dt * 14.0f)); needs_paint = true; }
+        else scroll = wanted;
+        return scroll - before;
+    };
+    const float shots_moved = slide(psfive_shots_scroll_, psfive_details::scrollFor(psfive_shot_, psfive_shot_full_urls_.size(), view.width, shot_step));
+    const float similar_moved = slide(psfive_similar_scroll_, psfive_details::scrollFor(psfive_similar_, psfive_similar_games_.size(), view.width, similar_step));
+    if (psfive_focus_glide_) {
+        const float moved = psfive_details_ == 1 ? shots_moved : psfive_details_ == 2 ? similar_moved : 0.0f;
+        psfive_focus_box_[0] -= moved; psfive_focus_box_[2] -= moved;
     }
+    std::optional<settings_ui::Rect> focus;
+    if (psfive_details_ == 1 && psfive_shot_ < psfive_shot_full_urls_.size()) focus = psfive_details::shot(psfive_shot_, psfive_shots_scroll_, top);
+    else if (psfive_details_ == 2 && psfive_similar_ < psfive_similar_games_.size()) focus = psfive_details::similar(psfive_similar_, psfive_similar_scroll_, top);
     if (!focus) psfive_focus_glide_ = false;
     else if (!psfive_focus_glide_) { psfive_focus_box_ = {focus->left, focus->top, focus->right, focus->bottom}; psfive_focus_glide_ = true; needs_paint = true; }
     else {

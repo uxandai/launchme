@@ -262,6 +262,9 @@ struct ViewContext {
     library_ui::Panel library_panel = library_ui::Panel::none;    // Drawn while fading out too.
     bool library_list = false;                                    // Library screen in the list view.
     library_view::View library_mode = library_view::View::grid;
+    // The TV home's focused game has its own background on the way (or the library is still loading):
+    // the wallpaper behind tiles waits instead of showing for the moment it takes (background_renderer.cpp).
+    bool home_background_pending = false;
     library_view::Options library_options;
     float library_search_progress = 0;                            // The library's search field unfolding.
     std::optional<float> library_choice_glide;
@@ -450,6 +453,7 @@ struct ViewContext {
         std::vector<std::wstring> similar_names;
         // The focus frame gliding between screenshots and similar games (absolute rectangle).
         bool focus_glide = false;
+        float shots_scroll = 0, similar_scroll = 0; // The strips' slide (psfive_details_layout.hpp).
         float focus_left = 0, focus_top = 0, focus_right = 0, focus_bottom = 0;
     };
     std::optional<PsfiveDetails> psfive_details;
