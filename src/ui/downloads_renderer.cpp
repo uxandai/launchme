@@ -90,7 +90,7 @@ void Renderer::drawDownloads() {
         brush(gray(1, 0.12f));
         target_->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(text_left, bar_top, right, bar_bottom), 3, 3), solid_.Get());
         float begin = text_left, end = text_left;
-        if (row.fraction) end = text_left + (right - text_left) * std::clamp(*row.fraction, 0.0f, 1.0f);
+        if (row.fraction) end = text_left + (right - text_left) * std::clamp(state.bar(static_cast<size_t>(i), row), 0.0f, 1.0f); // Eased (tickDownloadBars).
         else if (row.moving) {
             const float segment = (right - text_left) * 0.2f;
             begin = text_left + (right - text_left - segment) * (0.5f + 0.5f * std::sin(elapsed_ * 2.5f));

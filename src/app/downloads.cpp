@@ -7,6 +7,7 @@
 #include "../platform/text_encoding.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 
 namespace {
@@ -220,6 +221,32 @@ void Launcher::refreshDownloads() {
         layout.reveal(static_cast<int>(selected_), static_cast<int>(downloads_games_.size()), downloads_state_.scroll);
     requestDownloadsArt();
     InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+// Every frame while Pobierania is open: each bar glides to its reported share instead of jumping
+// when the store's next sample arrives (a second or more apart). A new row starts where it is.
+void Launcher::tickDownloadBars(float dt, bool& needs_paint) {
+    if (!downloadsOpen()) { download_bars_.clear(); downloads_state_.bars.clear(); return; }
+    auto& state = downloads_state_;
+    state.bars.assign(state.rows.size(), -1.0f);
+    std::unordered_map<std::string, float> next;
+    const float rate = 1.0f - std::exp(-dt * 2.2f);
+    for (size_t i = 0; i < state.rows.size() && i < downloads_games_.size(); ++i) {
+        if (!state.rows[i].fraction) continue;
+        const float target = std::clamp(*state.rows[i].fraction, 0.0f, 1.0f);
+        const auto key = gameKey(downloads_games_[i]);
+        const auto found = download_bars_.find(key);
+        float shown = found == download_bars_.end() || target < found->second - 0.25f ? target : found->second; // A restart: at once.
+        // At least a little speed, so the last bit does not crawl; never past the share.
+        if (std::abs(target - shown) > 0.0005f) {
+            const float step = (target - shown) * rate;
+            shown += step > 0 ? std::max(step, std::min(target - shown, dt * 0.01f)) : step;
+            needs_paint = true;
+        } else shown = target;
+        next[key] = shown;
+        state.bars[i] = shown;
+    }
+    download_bars_ = std::move(next);
 }
 
 void Launcher::requestDownloadsArt() {

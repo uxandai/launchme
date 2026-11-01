@@ -94,8 +94,8 @@ void Renderer::drawLibraryCoverflow() {
     // Where the focus is in the row ("12 / 140"), right-aligned with the title.
     const auto position = std::to_wstring(selected_ + 1) + L" / " + std::to_wstring(cards_->size());
     const float position_width = textAdvance(position, settings_body_font_.Get());
-    textLine(game.name, layout.left(), bottom + 12 * (1 - fade), right - layout.left() - position_width - 24,
-             settings_heading_font_.Get(), gray(0.97f, fade));
+    fadingLine(game.name, layout.left(), bottom + 12 * (1 - fade), right - layout.left() - position_width - 24,
+               settings_heading_font_.Get(), gray(0.97f, fade), true);
     textLine(position, right - position_width, bottom + 12 * (1 - fade), position_width + 1, settings_body_font_.Get(), gray(0.6f, fade),
              DWRITE_TEXT_ALIGNMENT_TRAILING);
     // The platform's logo under the title (its name while there is none), then what Półka and

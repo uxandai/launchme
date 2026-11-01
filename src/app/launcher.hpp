@@ -545,6 +545,7 @@ public:
     void openDownloads();
     void refreshDownloads();
     void requestDownloadsArt();
+    void tickDownloadBars(float dt, bool& needs_paint); // Pobierania: the bars ease to their share.
     void requestDownloadArt(const Game& game);
     void pollDownloadArt();
     void onDownloadArt(std::unique_ptr<DownloadArtMessage> message);
@@ -2158,6 +2159,7 @@ private:
     // "Dodano do kolejki pobierania" once per download: a title announced, and when it was last in Pobierania
     // (GetTickCount64). A transfer that drops out of a source's report for a moment is not announced again.
     std::map<std::wstring, uint64_t> download_announced_;
+    std::unordered_map<std::string, float> download_bars_; // Pobierania: each game's bar as drawn (tickDownloadBars).
     std::function<std::vector<uint8_t>(const download_art::Target&)> download_art_fetch_; // Offline test backend.
     uint32_t plugin_command_generation_ = 0;
     uint32_t plugin_refresh_generation_ = 0; // The page refresh in flight (plugin_refresh_pending_).

@@ -141,8 +141,9 @@ void Renderer::drawGrid() {
             const auto& card = (*cards_)[i];
             if (card.y < -180 || card.y > viewport_.height - 30) continue;
             if (squares && i < covers_.size() && !covers_[i].bitmap && !covers_[i].decoding && isGame(card.game)) continue;
-            textLine(card.game.name, card.x, card.y + card.size + 20, card.width(), toast_font_.Get(),
-                     color(0.92f, 0.92f, 0.92f, (i == selected_ ? 1.0f : 0.74f) * card.opacity), DWRITE_TEXT_ALIGNMENT_CENTER);
+            // A name longer than its tile fades out on the right; the focused one glides to its end and back.
+            fadingLine(card.game.name, card.x, card.y + card.size + 20, card.width(), toast_font_.Get(),
+                       color(0.92f, 0.92f, 0.92f, (i == selected_ ? 1.0f : 0.74f) * card.opacity), i == selected_, DWRITE_TEXT_ALIGNMENT_CENTER);
         }
         if (pinned) target_->PopAxisAlignedClip();
     }

@@ -356,7 +356,7 @@ void Renderer::drawLibraryList() {
             const auto found = context_->library_rows.find(i);
             const std::wstring time = found != context_->library_rows.end() && !found->second.playtime.empty() ? found->second.playtime : L"—";
             const auto ink = focused ? gray(0.06f, card.opacity) : palette::text(card.opacity * 0.82f);
-            textLine(card.game.name, left + 18, top + list_layout::row_height * 0.5f, right - left - 138, menu_font_.Get(), ink);
+            fadingLine(card.game.name, left + 18, top + list_layout::row_height * 0.5f, right - left - 138, menu_font_.Get(), ink, focused);
             textLine(time, right - 110, top + list_layout::row_height * 0.5f, 92, settings_body_font_.Get(),
                      focused ? gray(0.22f, card.opacity) : palette::muted(card.opacity), DWRITE_TEXT_ALIGNMENT_TRAILING);
             continue;
@@ -713,7 +713,12 @@ void Renderer::drawLibraryCinematic() {
     for (size_t i = 0; i < cards_->size() && !column; ++i) { // One column: the name is in the synopsis.
         const auto& card = (*cards_)[i];
         if (card.y > height || card.y + card.size + 48 < list_top - 12) continue;
-        text(card.game.name, card.x, card.y + card.size + 14, card.width(), 36, menu_font_.Get(), gray(i == selected_ ? 0.96f : 0.67f, card.opacity * rowAlpha(card)));
+        const auto ink = gray(i == selected_ ? 0.96f : 0.67f, card.opacity * rowAlpha(card));
+        if (textAdvance(card.game.name, menu_font_.Get()) <= card.width()) text(card.game.name, card.x, card.y + card.size + 14, card.width(), 36, menu_font_.Get(), ink);
+        else { // Too long: it fades out on the right, and the focused one glides to its end and back.
+            const auto metrics = typeMetrics(menu_font_.Get());
+            fadingLine(card.game.name, card.x, card.y + card.size + 14 + metrics.baseline - metrics.cap * 0.5f, card.width(), menu_font_.Get(), ink, i == selected_);
+        }
     }
     target_->PopAxisAlignedClip();
 }
@@ -888,7 +893,9 @@ void Renderer::drawCategoryStrip(const std::vector<ViewContext::LibraryTab>& tab
         const float room = r.right - r.left - 24 - (counted ? count_width + 8 : 0.0f);
         const float title_width = std::min(room, std::ceil(textAdvance(title, button_font_.Get())) + 2);
         const float x = (r.left + r.right) * 0.5f - (title_width + (counted ? 8 + count_width : 0.0f)) * 0.5f;
-        textLine(title, x, cy, title_width, button_font_.Get(), gray(std::lerp(0.6f, 0.98f, focus), alpha), DWRITE_TEXT_ALIGNMENT_LEADING);
+        // A name longer than its pill fades out at the edge; the shown category's glides to its end and back.
+        fadingLine(title, x, cy, title_width, button_font_.Get(), gray(std::lerp(0.6f, 0.98f, focus), alpha), static_cast<int>(i) == std::lround(glide),
+                   DWRITE_TEXT_ALIGNMENT_LEADING);
         if (!counted) continue;
         const float pill_left = x + title_width + 8;
         brush(gray(1, (0.08f + 0.08f * focus) * alpha));
@@ -953,7 +960,7 @@ void Renderer::drawOverviewPanel() {
         brush(gray(1, 0.16f)); target_->DrawGeometry(shape.Get(), solid_.Get(), 1.0f);
     }
     float y = area.bottom + 18;
-    textLine(game.name, left, y + 12, panel_width, category_font_.Get(), gray(0.97f, fade));
+    fadingLine(game.name, left, y + 12, panel_width, category_font_.Get(), gray(0.97f, fade), true);
     y += 34;
     if (const auto platform = activePlatformName(game); !platform.empty()) {
         // The platform's logo under the name (its name until the logo arrives).

@@ -97,7 +97,7 @@ void Renderer::drawDesktopDownloadsPage() {
         // Progress: its share, a gliding segment while none is known; still when paused.
         const float bar_l = text_left, bar_r = r.right - 16, by = r.bottom - 14;
         desktopFill({bar_l, by - 2, bar_r, by + 2}, 2, gray(1, 0.1f));
-        if (row.fraction) desktopFill({bar_l, by - 2, bar_l + (bar_r - bar_l) * std::clamp(*row.fraction, 0.0f, 1.0f), by + 2}, 2,
+        if (row.fraction) desktopFill({bar_l, by - 2, bar_l + (bar_r - bar_l) * std::clamp(state->bar(i, row), 0.0f, 1.0f), by + 2}, 2,
                                       row.moving ? uiAccent() : gray(0.55f));
         else if (row.moving) {
             const float span = (bar_r - bar_l) * 0.25f, phase = std::fmod(elapsed_ * 0.6f, 1.0f), x0 = bar_l + (bar_r - bar_l + span) * phase - span;

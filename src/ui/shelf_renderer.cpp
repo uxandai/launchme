@@ -444,7 +444,7 @@ void Renderer::drawLibraryShelf() {
     // Title, then year · developer, centred under the cover; they rise in with every new focus.
     const float fade = smoothFade(detail_ * 1.6f) * (1 - launch * 0.6f), rise = 10 * (1 - fade);
     const float text_left = 68, text_width = viewport_.width - 136;
-    textLine(card.game.name, text_left, layout.titleY() + rise, text_width, settings_heading_font_.Get(), gray(0.97f, fade), DWRITE_TEXT_ALIGNMENT_CENTER);
+    fadingLine(card.game.name, text_left, layout.titleY() + rise, text_width, settings_heading_font_.Get(), gray(0.97f, fade), true, DWRITE_TEXT_ALIGNMENT_CENTER);
     // Under it, as in PSfive: the platform's badge, then year · developer · playtime, all at once when
     // the game's details are in (never the platform first and the rest replacing it later).
     if (context_->preview_waiting || !isGame(card.game)) return;

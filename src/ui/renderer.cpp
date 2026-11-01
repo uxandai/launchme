@@ -434,6 +434,9 @@ void Renderer::paint(const std::vector<GameCard>& cards, size_t selected, bool s
     companion_links_.clear();
     companion_videos_.clear();
     marquee_active_ = false; // Set again by a gliding name (fadingLine).
+    // Gliding names not drawn last frame start from their beginning when they come back.
+    std::erase_if(marquees_, [](const auto& entry) { return !entry.second.used; });
+    for (auto& [text, marquee] : marquees_) marquee.used = false;
     const auto started = std::chrono::steady_clock::now();
     PAINTSTRUCT ps{};
     BeginPaint(hwnd_, &ps);

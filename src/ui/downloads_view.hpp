@@ -22,6 +22,13 @@ struct Row {
 };
 struct State {
     std::vector<Row> rows;
+    // The bar each row draws: its fraction eased (the stores report in steps), same order as rows;
+    // a negative value or a missing entry: the row's own fraction.
+    std::vector<float> bars;
+    float bar(size_t index, const Row& row) const {
+        if (index < bars.size() && bars[index] >= 0) return bars[index];
+        return row.fraction.value_or(0.0f);
+    }
     bool back = false;    // Back (top left) has the focus instead of a row.
     float scroll = 0;
 };

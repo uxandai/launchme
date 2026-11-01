@@ -484,8 +484,10 @@ private:
     void textLine(const std::wstring& value, float x, float center_y, float width, IDWriteTextFormat* format,
                   D2D1_COLOR_F ink, std::optional<DWRITE_TEXT_ALIGNMENT> alignment = {});
     // textLine for a name that may not fit: instead of an ellipsis it fades out on the right and, while
-    // moving (the focused row), glides to its end and back with a pause at each end (marqueeActive).
-    void fadingLine(const std::wstring& value, float x, float center_y, float width, IDWriteTextFormat* format, D2D1_COLOR_F ink, bool moving);
+    // moving (the focused row), glides to its end and back after a 2 s rest at each end (marqueeActive).
+    // `alignment`: where a name that fits sits (a long one always starts at the left).
+    void fadingLine(const std::wstring& value, float x, float center_y, float width, IDWriteTextFormat* format, D2D1_COLOR_F ink, bool moving,
+                    std::optional<DWRITE_TEXT_ALIGNMENT> alignment = {});
     // A title (one line, ellipsis) with an optional description directly beneath it, wrapped to
     // `max_lines` and then cut with an ellipsis. The group from the title's capitals to the last
     // description baseline is centred on `y`, or starts at `y` with `top_aligned`.
@@ -1134,7 +1136,10 @@ private:
     Microsoft::WRL::ComPtr<ID2D1LinearGradientBrush> shelf_floor_, shelf_fade_, shelf_shade_, shelf_gloss_;
     Microsoft::WRL::ComPtr<ID2D1RadialGradientBrush> shelf_glow_;
     std::unordered_map<std::wstring, Microsoft::WRL::ComPtr<ID2D1Bitmap>> shelf_spines_; // shelfSpine, by content.
-    std::wstring marquee_text_; std::chrono::steady_clock::time_point marquee_since_{}; bool marquee_active_ = false; // fadingLine.
+    // fadingLine: every gliding name of the frame (a list's focused row, the category pill...), since when it shows.
+    struct Marquee { std::chrono::steady_clock::time_point since{}; bool used = true; };
+    std::map<std::wstring, Marquee> marquees_;
+    bool marquee_active_ = false;
     uint64_t slot_generation_ = 0; // resetCovers/keepCovers/remapCovers.
     // Procedural backdrop for the All games tile, blended with the hero transition.
     bool library_backdrop_active_ = false;
