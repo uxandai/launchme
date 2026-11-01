@@ -154,7 +154,7 @@ export const en = {
       tag: "One library",
       title: "Every store, fewer store apps.",
       text:
-        "GOG and Epic games install straight from the stores' servers — no Galaxy, no Epic launcher — and so do Amazon and Xbox games (Xbox experimental). With Aurelia, Steam single-player games run without the Steam client. Emulated games come straight from your EmuDeck or ES-DE ROM folder, no Steam ROM Manager needed. Plus EA, Battle.net, Ubisoft, DRM-free folders, Prism Launcher and your own programs or ROMs.",
+        "GOG and Epic games install straight from the stores' servers — no Galaxy, no Epic launcher — and so do Amazon and Xbox games (Xbox experimental). With Aurelia, Steam single-player games run without the Steam client. Emulated games come straight from your EmuDeck or ES-DE ROM folder, no Steam ROM Manager needed; each system shows the emulator it found (EmuDeck, ES-DE, installed or on PATH) and lets you pick another, its program and launch arguments. Plus EA, Battle.net, Ubisoft, DRM-free folders, Prism Launcher and your own programs or ROMs.",
     },
     plugins: {
       tag: "Plugins",

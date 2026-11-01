@@ -156,7 +156,7 @@ export const pl: Dict = {
       tag: "Jedna biblioteka",
       title: "Każdy sklep, mniej ich aplikacji.",
       text:
-        "Gry z GOG i Epic instalują się prosto z serwerów sklepów — bez Galaxy, bez launchera Epic — tak samo gry z Amazona i Xboksa (Xbox eksperymentalnie). Z Aurelią gry single player ze Steama działają bez klienta Steam. Gry z emulatorów prosto z folderu ROM-ów EmuDecka lub ES-DE, bez Steam ROM Managera. Do tego EA, Battle.net, Ubisoft, foldery DRM-free, Prism Launcher i Twoje programy albo ROM-y.",
+        "Gry z GOG i Epic instalują się prosto z serwerów sklepów — bez Galaxy, bez launchera Epic — tak samo gry z Amazona i Xboksa (Xbox eksperymentalnie). Z Aurelią gry single player ze Steama działają bez klienta Steam. Gry z emulatorów prosto z folderu ROM-ów EmuDecka lub ES-DE, bez Steam ROM Managera; przy każdym systemie widać znaleziony emulator (EmuDeck, ES-DE, zainstalowany albo w PATH), a inny, jego program i parametry ustawisz ręcznie. Do tego EA, Battle.net, Ubisoft, foldery DRM-free, Prism Launcher i Twoje programy albo ROM-y.",
     },
     plugins: {
       tag: "Wtyczki",
