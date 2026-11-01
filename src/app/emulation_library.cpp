@@ -34,8 +34,9 @@ void Launcher::startRomScan() {
     emulators::Choices choices;
     for (const auto& [id, chosen] : settings_.emulator_overrides) choices.overrides[id] = {chosen.program, chosen.arguments};
     choices.systems = settings_.system_emulator;
-    work_.start([alive = alive_, window = hwnd_, generation, folder, scan_games, hidden, choices = std::move(choices)]() mutable {
-        auto setup = std::make_shared<emulation_scan::Setup>(emulation_scan::load(emulation_scan::systemEnvironment(), folder, std::move(choices)));
+    work_.start([alive = alive_, window = hwnd_, generation, folder, scan_games, hidden, choices = std::move(choices),
+                 environment = emulation_environment_]() mutable {
+        auto setup = std::make_shared<emulation_scan::Setup>(emulation_scan::load(environment ? environment() : emulation_scan::systemEnvironment(), folder, std::move(choices)));
         auto games = std::make_shared<std::vector<Game>>();
         if (scan_games) *games = emulation_scan::scan(*setup, hidden, [&] { return !alive->load(); }).games;
         if (!alive->load()) return;

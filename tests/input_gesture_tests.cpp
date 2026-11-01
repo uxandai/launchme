@@ -30,7 +30,9 @@ int main() {
     // The bands push the rows down and grow the panel; hits follow the rows.
     const power_menu::Geometry geometry{1600, 900, power_menu::gaps(rows)};
     const auto cancel = geometry.row(5), sleep = geometry.row(2);
-    if (sleep.top - geometry.row(1).top != power_menu::Geometry::row_step + power_menu::Geometry::band ||
+    // As the large game menu: its 78 px rows where they fit, shorter on a short window.
+    if (geometry.rowStep() != power_menu::Geometry::tall_step || power_menu::Geometry{1600, 600, power_menu::gaps(rows)}.rowStep() >= geometry.rowStep()) return 10;
+    if (sleep.top - geometry.row(1).top != geometry.rowStep() + power_menu::Geometry::band ||
         geometry.hit(sleep.left + 4, sleep.top + 4) != 2 || geometry.hit(cancel.left + 4, cancel.bottom - 4) != 5 ||
         geometry.hit(sleep.left + 4, sleep.top - 6) != -1 || !geometry.panel().contains(cancel.left, cancel.bottom + 4)) return 9;
     // Item and PowerAction values line up for the cast in powerMenuAccept.

@@ -228,6 +228,7 @@ struct ViewContext {
     std::vector<float> settings_toggles; // Per row, 0..1 animated switch position.
     settings_ui::State settings_state;
     std::wstring settings_title;
+    std::wstring settings_parent; // A page opened from a page: that page's title (its way back); empty: the category.
     int settings_hover_row = -1, settings_preview_option = -1;
     int settings_hover_badge = -1; // The row whose badge button (Row::reset) the pointer is over.
     int settings_hover_trash = -1; // The collection row whose trash (Row::removable) the pointer is over.
@@ -364,6 +365,7 @@ struct ViewContext {
     int power_menu = -1; // Selected row of power_labels; -1 = closed.
     std::vector<std::wstring> power_labels;
     std::vector<bool> power_gaps, power_danger; // power_menu::gaps / danger of each row.
+    std::vector<wchar_t> power_icons;           // power_menu::icon of each row.
     // Default home (AppSettings::shelves_hero_facts): the focused game's facts centred under its logo
     // (capitalised heading, value); the platform's mark is drawn for hero_platform. Empty: off.
     struct HeroFact { std::wstring heading, value; };

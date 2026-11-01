@@ -144,7 +144,8 @@ void Renderer::drawSettings() {
     // A page names its category there, the way back.
     textGroup(context_->settings_title.empty() ? tr(categories[state.category].title) : context_->settings_title,
               context_->settings_title.empty() ? std::wstring(tr(categories[state.category].description)) :
-                                                 L"‹  " + std::wstring(tr(categories[state.category].title)), left, Layout::heading_cap_top,
+                                                 L"‹  " + (context_->settings_parent.empty() ? std::wstring(tr(categories[state.category].title)) : context_->settings_parent),
+              left, Layout::heading_cap_top,
               right - left, heading, gray(0.96f), body, gray(0.55f), 1, true, heading_group_gap);
     target_->PushAxisAlignedClip(D2D1::RectF(left - 3, list_top - 2, right + 3, list_bottom), D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
     // The list scrolls and the row highlight moves smoothly (settings_motion); hit tests use the targets.

@@ -146,7 +146,7 @@ void Renderer::drawControllerGallery() {
         const auto& row = state.rows[index];
         const auto t = layout.tile(which, count, focus);
         const bool focused = state.selected == index;
-        // No fill: the tile's border (its state's colour, moving) and its focus are drawPadTile's.
+        // The tile's card and its state's dot are drawPadTile's; its focus frame drawPadFocus's below.
         settings_ui::Tile tile;
         if (row.kind == device_ui::Kind::bluetooth) {
             tile.pair = true; tile.title = row.title; tile.caption = L"Bluetooth"; tile.action = tr(L"Sparuj");
@@ -163,6 +163,9 @@ void Renderer::drawControllerGallery() {
         }
         drawPadTile(tile, t, focused);
     }
+    // Only the focused tile is framed, as in Settings → Kontrolery (Back or a footer button: none).
+    for (int which = first; which < end; ++which)
+        if (state.selected == state.rowOf(which)) drawPadFocus(layout.tile(which, count, focus));
     // More pads than fit: chevrons beside the gallery.
     const float y = layout.list_top + device_ui::Layout::tile_height * 0.5f;
     const auto chevron = [&](float x, int direction) {

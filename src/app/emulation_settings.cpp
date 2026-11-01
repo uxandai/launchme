@@ -59,7 +59,8 @@ std::wstring Launcher::emulationFoundText(const emulation_scan::Rule& rule, cons
     std::wstring text = viaLabel(found.via);
     if (!found.detail.empty() && found.via != emulators::Via::esde_rule) text += L" (" + found.detail + L")";
     else if (found.via == emulators::Via::esde_rule) text = found.detail;
-    if (found.id == L"retroarch" && !rule.core.empty()) text += L" · " + (tr(L"rdzeń ") + rule.core);
+    if (found.id == L"retroarch" && !rule.core.empty())
+        text += L" · " + ((emulation_setup_ && emulation_scan::coreMissing(rule, *emulation_setup_) ? tr(L"brak rdzenia ") : tr(L"rdzeń ")) + rule.core);
     return text;
 }
 
@@ -118,6 +119,10 @@ void Launcher::emulationSettingsRows() {
                 where = entry->program.wstring();
                 if (!entry->prefix.empty()) where += L" " + entry->prefix;
                 if (entry->via == emulators::Via::emudeck_script && !entry->target.empty()) where += L" → " + entry->target.wstring();
+                // RetroArch without the system's core (its title says so): its games would not start.
+                if (found == entry && emulation_scan::coreMissing(*rule, setup))
+                    where = std::wstring(tr(L"Pobierz go w RetroArch (Główne menu → Aktualizacje online → Pobieranie rdzeni).")) + L" " +
+                            emulation_scan::core(*rule, setup).wstring();
             } else where = tr(L"Nie znaleziono programu. Wskaż go niżej albo zainstaluj emulator (np. przez EmuDecka).");
             Row detected{Id::emulation_detected, Control::action,
                          std::wstring(info->name) + L" · " + (entry ? emulationFoundText(*rule, *entry) : std::wstring(tr(L"Nie znaleziono"))),
@@ -165,6 +170,7 @@ void Launcher::emulationSettingsRows() {
                         play.target.empty() ? std::wstring(tr(L"Brak: emulator nie jest znaleziony.")) : play.target + L" " + play.arguments};
             preview.key = key;
             preview.lines = 4;
+            preview.locked = true; // Information only: no button.
             add(std::move(preview));
         }
         return;
@@ -220,7 +226,7 @@ void Launcher::emulationSettingsRows() {
         if (found) description += emulationFoundText(rule, *found);
         else description += !chosen.empty() ? emulatorName(chosen) + L" · " + tr(L"nie znaleziono") : std::wstring(tr(L"Nie znaleziono emulatora"));
         Row row{Id::emulation_system, Control::page, emulationSystemTitle(rule.system), std::move(description),
-                found ? emulatorName(found->id) : std::wstring(tr(L"Brak emulatora"))};
+                !found ? std::wstring(tr(L"Brak emulatora")) : emulation_scan::coreMissing(rule, setup) ? std::wstring(tr(L"Brak rdzenia")) : emulatorName(found->id)};
         row.page = Page::emulation_system;
         row.key = text_encoding::utf8(rule.system);
         row.indent = indent;

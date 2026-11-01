@@ -33,6 +33,7 @@ struct Info {
     std::array<std::wstring_view, 2> linux_names;     // Linux: its program names (PATH, AppImage).
     std::wstring_view direct_args;                    // Its own arguments before the ROM when started directly.
     bool shared_exe = false;                          // Its program's name is another emulator's too (PrimeHack: Dolphin.exe).
+    bool title_id = false;                            // It starts a game by its folder's name, not its file (Vita3K: -r PCSE00000).
 };
 std::span<const Info> catalog();
 const Info* find(std::wstring_view id);

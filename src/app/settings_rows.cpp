@@ -26,8 +26,16 @@ std::string Launcher::settingsPage() const {
 }
 
 // The title of the open page (its tile's or plugin's name); empty on a category's own list.
-std::wstring Launcher::settingsPageTitle() const {
-    const auto* frame = settings_state_.top();
+std::wstring Launcher::settingsPageTitle() const { return settingsPageTitle(settings_state_.top()); }
+
+// The way back under the heading: the page this one opened from (Emulacja under a system's page);
+// empty on a category's first page (the category's name).
+std::wstring Launcher::settingsParentTitle() const {
+    const auto& pages = settings_state_.pages;
+    return pages.size() >= 2 ? settingsPageTitle(&pages[pages.size() - 2]) : std::wstring{};
+}
+
+std::wstring Launcher::settingsPageTitle(const settings_ui::PageFrame* frame) const {
     if (!frame) return {};
     switch (frame->page) {
     case Page::plugin: if (const auto* plugin = plugins_.find(frame->key)) return plugin->manifest.name.localized(); return {};

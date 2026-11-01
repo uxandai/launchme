@@ -2884,6 +2884,12 @@ constexpr Entry entries[] = {
     {L"nie znaleziono", L"not found"},
     {L"Katalogi", L"Folders"},
     {L"Dodaj katalog, w którym każdy podfolder to jedna gra.", L"Add a folder in which each subfolder is one game."},
+    // Next: RetroArch without the system's core.
+    {L"brak rdzenia ", L"missing core "},
+    {L"Brak rdzenia", L"Core missing"},
+    {L"Pobierz go w RetroArch (Główne menu → Aktualizacje online → Pobieranie rdzeni).",
+     L"Download it in RetroArch (Main Menu → Online Updater → Core Downloader)."},
+    {L"Launcher i komputer", L"The launcher and the PC"},
     // Entries of extras built only on this machine (local/i18n), when present.
 #if __has_include("strings_en_local.inc")
 #include "strings_en_local.inc"

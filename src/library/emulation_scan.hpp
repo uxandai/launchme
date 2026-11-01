@@ -81,7 +81,12 @@ Setup load(const Environment& environment, const std::filesystem::path& roms_ove
 // An SRM glob tried on a path relative to the system folder ('/' separated, any case): the ${title}
 // it captures (the file stem when the glob has none), nullopt when it does not match.
 std::optional<std::wstring> match(std::wstring_view glob, std::wstring_view relative);
-// How a system's emulator starts one ROM; empty when none of its emulators is installed.
+// RetroArch's core file the system's games start with (cores\<core>.dll); empty when its emulator is
+// not RetroArch with a core. Missing: an absolute path to a file that is not there.
+std::filesystem::path core(const Rule& rule, const Setup& setup);
+bool coreMissing(const Rule& rule, const Setup& setup);
+// How a system's emulator starts one ROM; empty when none of its emulators is installed (a Windows
+// shortcut, .lnk, starts itself).
 GameAction action(const Rule& rule, const Setup& setup, const std::filesystem::path& rom);
 // A typed emulator command ("C:\Emu\pcsx2.exe" -fullscreen %ROM%): %ROM% becomes the quoted ROM
 // path, appended when the command does not name it.

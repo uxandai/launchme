@@ -1866,6 +1866,8 @@ private:
     // Back from the innermost page to the row it was opened from.
     void closeSettingsPage();
     std::wstring settingsPageTitle() const; // The open page's heading; empty on a category's list.
+    std::wstring settingsPageTitle(const settings_ui::PageFrame* frame) const;
+    std::wstring settingsParentTitle() const; // The page under it; empty: the category.
     // Focuses the row `id` (and `key`) of the current category, opening the page it is on; false: none.
     bool revealSetting(settings_ui::Id id, const std::string& key = {});
     void openSettingsCollections();
@@ -2343,6 +2345,8 @@ private:
     std::shared_ptr<const emulation_scan::Setup> emulation_setup_;
     uint64_t rom_scan_generation_ = 0;
     bool rom_scanning_ = false;
+    // Tests: the computer the scan reads (a fixture folder, the registry off); empty: this one.
+    std::function<emulation_scan::Environment()> emulation_environment_;
     bool romLibraryActive() const;     // The ROM folder's games replace SRM's emulated shortcuts.
     bool srmCollectionsHidden() const; // SRM's collections stay off the shelves (Emulacja or the ROM folder lists them).
     void startRomScan();

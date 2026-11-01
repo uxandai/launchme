@@ -64,10 +64,13 @@ void Renderer::drawCompanionCardFocus(D2D1_RECT_F rect, int surface, float alpha
         if (SUCCEEDED(factory_->CreateRoundedRectangleGeometry(D2D1::RoundedRect(current, 10 + out, 10 + out), rounded.GetAddressOf()))) shape = rounded;
     }
     if (!shape) return;
-    // One outline, like a cover, with the traveling highlight on the same path (no second rim).
-    brush(uiAccent(0.72f * alpha));
-    target_->DrawGeometry(shape.Get(), solid_.Get(), 1.8f);
-    drawOrbitOutline(shape.Get(), uiAccent(), alpha, 2.0f);
+    // As a focused cover's (Interfejs → Animacja poświaty): the travelling highlight on one thin
+    // outline, else the outline with its glow, pulsing when the glow pulses.
+    if (glow_trace_) {
+        brush(uiAccent(0.72f * alpha));
+        target_->DrawGeometry(shape.Get(), solid_.Get(), 1.8f);
+        drawOrbitOutline(shape.Get(), uiAccent(), alpha, 2.0f);
+    } else drawCoverOutline(shape.Get(), uiAccent(), alpha, true);
 }
 
 void Renderer::drawCompanionPicker() {
@@ -166,11 +169,12 @@ float Renderer::drawCompanionAffinity(float left, float cy, float alpha, bool dr
         brush(cardColor(0.4f * card_pulse * alpha));
         target_->FillRoundedRectangle(pill(D2D1::RectF(rect.left - grow, rect.top - grow, rect.right + grow, rect.bottom + grow)), solid_.Get());
     }
-    brush(D2D1::ColorF(0.02f, 0.022f, 0.03f, 0.62f * alpha)); target_->FillRoundedRectangle(pill(rect), solid_.Get());
-    brush(affinityPink((0.42f + 0.5f * pulse) * alpha)); target_->DrawRoundedRectangle(pill(rect), solid_.Get(), 1.0f + pulse);
+    // A glass pill as the interface's buttons (frosted, translucent); a new level still lights its edge.
+    drawButtonGlass(rect, alpha, true, false, true);
+    if (pulse > 0.003f) { brush(affinityPink(0.9f * pulse * alpha)); target_->DrawRoundedRectangle(pill(rect), solid_.Get(), 1.0f + pulse); }
     const bool bar = progress >= 0;
     const float text_y = bar ? cy - 2 : cy;
-    textLine(level, rect.left + padding, text_y, level_w + 4, font, gray(0.96f, alpha));
+    textLine(level, rect.left + padding, text_y, level_w + 4, font, buttonInk(0, true, alpha));
     if (!flame.empty()) textLine(flame, rect.left + padding + level_w, text_y, flame_w + 4, font, D2D1::ColorF(1.0f, 0.66f, 0.3f, alpha));
     if (card) { // A referee's card, a little tilted, after the level and the streak.
         const float x = rect.left + padding + level_w + flame_w + card_gap + card_w * 0.5f;

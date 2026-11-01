@@ -39,4 +39,10 @@ if(BUILD_TESTING)
     endif()
     add_test(NAME webkit_browser_lifecycle COMMAND browser_window_linux_tests)
     set_tests_properties(webkit_browser_lifecycle PROPERTIES TIMEOUT 120 RUN_SERIAL TRUE SKIP_RETURN_CODE 77)
+    # Not run by default: WebKitGTK needs a display with EGL, which WSL and build machines lack (the
+    # program is still built). -DLAUNCHME_WEBKIT_TEST=ON runs it on a real desktop.
+    option(LAUNCHME_WEBKIT_TEST "Run webkit_browser_lifecycle (needs a display with EGL)" OFF)
+    if(NOT LAUNCHME_WEBKIT_TEST)
+        set_tests_properties(webkit_browser_lifecycle PROPERTIES DISABLED TRUE)
+    endif()
 endif()

@@ -116,6 +116,9 @@ void Renderer::setFontFamily(std::wstring family) {
     psfive_tab_font_.Reset(); psfive_tab_idle_font_.Reset(); psfive_button_font_.Reset();
     desktop_font_.Reset(); desktop_strong_font_.Reset(); desktop_small_font_.Reset(); desktop_label_font_.Reset();
     desktop_title_font_.Reset(); desktop_heading_font_.Reset(); desktop_button_font_.Reset();
+    // Made on the first reading in the chosen family too: made again on the next.
+    tarot_title_font_.Reset(); tarot_name_font_.Reset(); tarot_numeral_font_.Reset(); tarot_question_font_.Reset();
+    tarot_body_font_.Reset(); tarot_small_font_.Reset(); tarot_result_font_.Reset();
     createFonts();
 }
 

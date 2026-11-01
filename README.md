@@ -136,7 +136,8 @@ Settings → System → Help → **Open folder** (the version row) opens it.
   Emulators folder, ES-DE's find rules, the Windows registry, the usual install folders, `PATH`, or on Linux a
   flatpak or an AppImage, so EmuDeck is optional. Pick another emulator (PS1, PSP, DS, GameCube and Wii can also
   run on RetroArch), point at its program by hand and replace its launch arguments (`%ROM%`, `%CORE%`); the
-  command a game starts with is shown below.
+  command a game starts with is shown below, and a RetroArch system without its core says so. PS4 (shadPS4),
+  PS Vita (Vita3K) and ScummVM are among them.
 - **Games added by hand** (Settings → Library → *DRM-free folders* → **Add game** → **Choose file** or **Choose
   folder**, the "+" tile, or a file or folder dropped on the desktop window): a program, shortcut or script is a PC
   game; a disc image or ROM is an emulated game with its console guessed and changeable (*Platform*), started by

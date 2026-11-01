@@ -697,6 +697,7 @@ private:
     void drawSettingsTiles(const settings_ui::Layout& layout, const settings_ui::Row& row, int index, float scroll, bool focused);
     void drawSettingsIcon(int category, float cx, float cy, D2D1_COLOR_F ink);
     void drawPadTile(const settings_ui::Tile& tile, settings_ui::Rect rect, bool lit);
+    void drawPadFocus(settings_ui::Rect rect);
     void drawControllerGallery(); // The Kontrolery screen (device_renderer.cpp) with pads present.
     // A controller's picture fitted into `box`: the downloaded photo, else its drawn family.
     void drawControllerPicture(devices::Picture picture, D2D1_RECT_F box);
@@ -709,7 +710,7 @@ private:
     // time = seconds into its one-shot preview (0 = at rest), emphasis 1 for a focused or chosen tile.
     void drawLayoutScene(int option, D2D1_RECT_F picture, float time, float emphasis);
     // A layout tile: Settings (no description) or the walkthrough's large tiles (with one).
-    void drawLayoutTile(int option, D2D1_RECT_F box, bool active, bool focus, float time, const std::wstring& description);
+    void drawLayoutTile(int option, D2D1_RECT_F box, bool active, bool focus, float time, const std::wstring& description, bool card = false);
     // First-run walkthrough (src/ui/tour_renderer.cpp): dimmed screen with a spotlight, bubble and card.
     void drawTour();
     void drawTourCard(const TourView& tour);
@@ -1020,8 +1021,10 @@ private:
     Cover notification_cover_;
     Cover custom_poster_; // Dodaj / Edytuj grę: the poster beside the fields (ViewContext::custom_poster).
     Cover companion_photo_; // The picture she sent in the chat.
-    std::array<SpringBox, 3> companion_card_focus_;
-    std::array<float, 3> companion_card_frame_{-1, -1, -1}; // TV settings, desktop settings, picker.
+    // The gliding focus frame of card rows: TV settings' companions, desktop settings', the picker,
+    // the TV layouts in Settings, the controller tiles (Settings → Kontrolery and the Kontrolery screen).
+    std::array<SpringBox, 5> companion_card_focus_;
+    std::array<float, 5> companion_card_frame_{-1, -1, -1, -1, -1};
     // Settings → Asystent: the cards' slider gliding to its first card (fractional), and when it last moved.
     float companion_strip_first_ = 0, companion_strip_time_ = -1;
     Cover companion_photo_large_; // The same, decoded larger once it is enlarged.

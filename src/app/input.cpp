@@ -17,6 +17,18 @@ int padArrow(const PadReading& state, WORD buttons) {
         (buttons & XINPUT_GAMEPAD_DPAD_LEFT) || state.x < -16000 ? VK_LEFT :
         (buttons & XINPUT_GAMEPAD_DPAD_RIGHT) || state.x > 16000 ? VK_RIGHT : 0;
 }
+// Milliseconds between repeats of a held arrow key: Windows' keyboard repeat rate (0..31 = ~2.5..30
+// a second, 31 by default); ~30 a second elsewhere.
+ULONGLONG keyRepeatInterval() {
+#ifdef _WIN32
+    DWORD speed = 31;
+    if (!SystemParametersInfoW(SPI_GETKEYBOARDSPEED, 0, &speed, 0)) speed = 31;
+    const double rate = 2.5 + std::min<DWORD>(speed, 31) * (27.5 / 31.0);
+    return static_cast<ULONGLONG>(std::lround(1000.0 / rate));
+#else
+    return 33;
+#endif
+}
 }
 
 // --- Modal layers -----------------------------------------------------------
@@ -511,12 +523,12 @@ void Launcher::controllerInput(const PadReading& state) {
         noteUserInput();
         if (pad_enter_hold_) cancelEnterHold(); // Moving away while A is held: neither the menu nor a launch.
         controllerNavigate(direction);
-        // A held direction speeds up (a library of hundreds of games is crossed in seconds, not a minute).
-        const auto held = now - pad_direction_since_;
+        // A held direction repeats as a held arrow key does (Windows' keyboard repeat rate, ~30 a second
+        // by default): a row of games is crossed as fast with the pad as with the keyboard.
         // A volume slider glides instead: 1% about every 30 ms after a short pause (~0..100% in 3 s).
         const bool volume = std::abs(direction) == 1 && volumeSliderFocused();
         controller_repeat_ = now + (volume ? (direction != controller_direction_ ? 260 : 30) :
-                                    direction != controller_direction_ ? 280 : held > 3000 ? 45 : held > 1500 ? 85 : 170);
+                                    direction != controller_direction_ ? 280 : keyRepeatInterval());
     }
     dashboardPollHold(now);
     if (!(buttons & XINPUT_GAMEPAD_A) && (controller_buttons_ & XINPUT_GAMEPAD_A)) {

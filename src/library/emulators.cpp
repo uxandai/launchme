@@ -20,6 +20,12 @@ constexpr Info table[] = {
      {L"PCSX2"}, {L"PCSX2", L"PCSX2-Qt"}, L"net.pcsx2.PCSX2", {L"pcsx2-qt", L"pcsx2"}, L"-batch -fullscreen"},
     {L"rpcs3", L"RPCS3", L"rpcs3", L"'--no-gui'", L"RPCS3", {L"rpcs3.exe"},
      {L"RPCS3"}, {L"RPCS3"}, L"net.rpcs3.RPCS3", {L"rpcs3"}, L"--no-gui"},
+    // A game installed by shadPS4 is its folder's eboot.bin; EmuDeck's launcher also takes the .lnk shortcuts shadPS4 makes.
+    {L"shadps4", L"shadPS4", L"shadps4", L"", L"shadps4-qt", {L"shadPS4QtLauncher.exe", L"shadPS4.exe"},
+     {L"SHADPS4"}, {L"shadPS4", L"shadps4-qt"}, L"net.shadps4.shadPS4", {L"shadps4", L"Shadps4-qt"}, L""},
+    // Vita3K runs an installed game by its title ID: the name of the folder holding eboot.bin.
+    {L"vita3k", L"Vita3K", L"vita3k", L"'-Fr'", L"vita3k", {L"Vita3K.exe"},
+     {L"VITA3K"}, {L"Vita3K"}, L"", {L"Vita3K", L"vita3k"}, L"-F -r", false, true},
     {L"ppsspp", L"PPSSPP", L"ppsspp", L"'-f' '-g'", L"PPSSPP", {L"PPSSPPWindows64.exe", L"PPSSPPWindows.exe"},
      {L"PPSSPP"}, {L"PPSSPP"}, L"org.ppsspp.PPSSPP", {L"PPSSPPSDL", L"ppsspp"}, L"--fullscreen"},
     {L"dolphin", L"Dolphin", L"dolphin", L"'-b' '-e'", L"Dolphin-x64", {L"Dolphin.exe"},
@@ -44,6 +50,9 @@ constexpr Info table[] = {
      {L"XEMU"}, {L"xemu"}, L"app.xemu.xemu", {L"xemu"}, L"-full-screen -dvd_path"},
     {L"xenia", L"Xenia", L"xenia", L"", L"xenia", {L"xenia_canary.exe", L"xenia.exe"},
      {L"XENIA"}, {L"Xenia", L"xenia"}, L"", {}, L""},
+    // A game is a .scummvm file in its folder (ES-DE's and EmuDeck's layout): ScummVM finds the game beside it.
+    {L"scummvm", L"ScummVM", L"scummvm", L"'--path=%ROM%' --auto-detect", L"scummvm", {L"scummvm.exe"},
+     {L"SCUMMVM"}, {L"ScummVM"}, L"org.scummvm.ScummVM", {L"scummvm"}, L"--path=%ROM% --auto-detect"},
     {L"retroarch", L"RetroArch", L"retroarch", L"", L"RetroArch", {L"retroarch.exe"},
      {L"RETROARCH"}, {L"RetroArch-Win64", L"RetroArch"}, L"org.libretro.RetroArch", {L"retroarch"}, L""},
 };

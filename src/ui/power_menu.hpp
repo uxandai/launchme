@@ -39,6 +39,19 @@ inline const wchar_t* label(Item item, bool desktop = false) {
     }
     return L"";
 }
+// Its icon beside the row (Segoe Fluent / MDL2 code points, as the large game menu's).
+inline wchar_t icon(Item item) {
+    switch (item) {
+    case Item::sleep: return 0xE708;     // A moon.
+    case Item::hibernate: return 0xE823; // A clock.
+    case Item::restart: return 0xE72C;   // Refresh.
+    case Item::shutdown: return 0xE7E8;  // Power.
+    case Item::exit: return 0xE8BB;      // The window's close.
+    case Item::tv_mode: return 0xE7F4;   // A TV.
+    case Item::cancel: return 0xE72B;    // Back.
+    }
+    return 0xE712;
+}
 // gaps[i]: row i starts a new group (an empty band above it).
 inline std::vector<bool> gaps(const std::vector<Item>& items) {
     std::vector<bool> result(items.size(), false);
@@ -46,27 +59,36 @@ inline std::vector<bool> gaps(const std::vector<Item>& items) {
     return result;
 }
 
-// Tryb TV's menu: the picker's panel grown by the bands, its rows pushed down past them. Drawing,
-// clicks and the pointer's hand all measure here.
+// Tryb TV's menu, as the large game menu (context_menu::Dialog): a wide panel with a header (its
+// icon and "Zasilanie") and tall rows with an icon each, the groups apart by a band. Rows shrink
+// to fit a short window. Drawing, clicks and the pointer's hand all measure here.
 struct Geometry {
     float width = 1600, height = 900;
     std::vector<bool> gaps;
-    static constexpr float row_step = 54, row_height = 50, band = 18, header = 83;
+    static constexpr float max_width = 760, padding = 26, band = 18, header = 132;
+    static constexpr float tall_step = 78, tall_height = 70;
     int count() const { return static_cast<int>(gaps.size()); }
     float bandsAbove(int row) const {
         float total = 0;
         for (int i = 1; i <= std::min(row, count() - 1); ++i) if (gaps[static_cast<size_t>(i)]) total += band;
         return total;
     }
+    // The large menu's 78 px rows where they fit, else down to the picker's 54.
+    float rowStep() const {
+        if (count() <= 0) return tall_step;
+        const float room = (height - 80 - header - padding - bandsAbove(count() - 1)) / count();
+        return std::clamp(room, 54.0f, tall_step);
+    }
+    float rowHeight() const { return rowStep() - (tall_step - tall_height); }
     settings_ui::Rect panel() const {
-        const float h = 100.0f + count() * row_step + bandsAbove(count() - 1);
-        const float w = std::min(620.0f, width - 96);
+        const float h = header + count() * rowStep() + bandsAbove(count() - 1) + padding;
+        const float w = std::min(max_width, width - 96);
         return {(width - w) * 0.5f, (height - h) * 0.5f, (width + w) * 0.5f, (height + h) * 0.5f};
     }
     settings_ui::Rect row(int index) const {
         const auto p = panel();
-        const float top = p.top + header + index * row_step + bandsAbove(index);
-        return {p.left + 18, top, p.right - 18, top + row_height};
+        const float top = p.top + header + index * rowStep() + bandsAbove(index);
+        return {p.left + padding, top, p.right - padding, top + rowHeight()};
     }
     // A fractional row (the highlight gliding between two rows).
     settings_ui::Rect rowAt(float position) const {

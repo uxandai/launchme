@@ -190,6 +190,7 @@ void Launcher::paint(bool overlay) {
     context.settings_preview_option = settings_preview_.option;
     context.settings_preview_seconds = settings_preview_.seconds(GetTickCount64());
     context.settings_title = settingsPageTitle();
+    context.settings_parent = settingsParentTitle();
     if (screen_ == ScreenMode::plugin_page) context.plugin_page = &plugin_page_;
     if (plugin_drawer_active_) context.plugin_drawer = &plugin_page_;
     if (downloadsOpen()) context.downloads = &downloads_state_;
@@ -337,6 +338,7 @@ void Launcher::paint(bool overlay) {
         for (const auto item : power_items_) {
             context.power_labels.emplace_back(power_menu::label(item, desktop_mode_));
             context.power_danger.push_back(power_menu::danger(item));
+            context.power_icons.push_back(power_menu::icon(item));
         }
         context.power_gaps = power_menu::gaps(power_items_);
     }

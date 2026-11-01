@@ -44,47 +44,61 @@ void Renderer::drawPicker(const std::wstring& title, const std::vector<std::wstr
     }
 }
 
-// Zasilanie: the picker's look in three groups with an empty band between them; the PC's own
-// power actions in red (their highlight a red tint).
+// Zasilanie, as the large game menu (menu_dialog_renderer.cpp): a wide glass panel, its icon and
+// title in the header, tall rows with an icon each in three groups with a band between them; the
+// white button glides between the rows; the PC's own power actions in red.
 void Renderer::drawPowerMenu() {
     const auto& labels = context_->power_labels;
     const int count = static_cast<int>(labels.size());
     power_menu::Geometry layout{viewport_.width, viewport_.height, context_->power_gaps};
     if (static_cast<int>(layout.gaps.size()) != count) layout.gaps.assign(static_cast<size_t>(count), false);
-    const auto panel = layout.panel();
-    const auto shape = [](settings_ui::Rect r, float radius) { return D2D1::RoundedRect(D2D1::RectF(r.left, r.top, r.right, r.bottom), radius, radius); };
+    const auto p = layout.panel();
+    const auto panel = D2D1::RectF(p.left, p.top, p.right, p.bottom);
     const auto danger = [&](int i) { return i >= 0 && i < static_cast<int>(context_->power_danger.size()) && context_->power_danger[static_cast<size_t>(i)]; };
-    brush(color(0, 0, 0, 0.78f));
+    const auto rect = [](settings_ui::Rect r) { return D2D1::RectF(r.left, r.top, r.right, r.bottom); };
+    brush(color(0, 0, 0, 0.62f));
     target_->FillRectangle(D2D1::RectF(0, 0, viewport_.width, viewport_.height), solid_.Get());
-    const auto glass = glassPanel(shape(panel, 18));
-    glassFill(glass, color(0.035f, 0.035f, 0.035f));
+    glassFill(glassPanel(D2D1::RoundedRect(panel, 26, 26)), color(0.022f, 0.024f, 0.027f, 0.95f));
     if (panel_borders_) {
-        brush(color(1, 1, 1, 0.16f));
-        target_->DrawRoundedRectangle(shape(panel, 18), solid_.Get(), 1.0f);
+        brush(color(0.90f, 0.90f, 0.90f, 0.5f));
+        target_->DrawRoundedRectangle(D2D1::RoundedRect(panel, 26, 26), solid_.Get(), 1.4f);
     }
-    textGroup(tr(L"Zasilanie"), {}, panel.left + 28, panel.top + 28, panel.right - panel.left - 56, category_font_.Get(),
-              color(0.95f, 0.95f, 0.95f), settings_body_font_.Get(), color(0.62f, 0.62f, 0.62f), 1, true);
+    // Header: the power sign in a disc, the title and what it is for.
+    const float header_left = panel.left + power_menu::Geometry::padding;
+    {
+        const float cx = header_left + 40, cy = panel.top + 66;
+        brush(color(1, 1, 1, 0.08f)); target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), 40, 40), solid_.Get());
+        desktopGlyph(power_menu::icon(power_menu::Item::shutdown), cx, cy, 34, color(0.95f, 0.95f, 0.95f));
+        const float title_left = header_left + 104;
+        textLine(tr(L"Zasilanie"), title_left, panel.top + 52, panel.right - title_left - 30, psfive_name_font_.Get(), color(0.97f, 0.97f, 0.97f));
+        textLine(tr(L"Launcher i komputer"), title_left, panel.top + 81, panel.right - title_left - 30, settings_body_font_.Get(), color(0.6f, 0.6f, 0.6f));
+    }
     // A hairline in the middle of each band separates the groups.
     for (int i = 1; i < count; ++i) {
         if (!layout.gaps[static_cast<size_t>(i)]) continue;
-        const float y = layout.row(i).top - (power_menu::Geometry::row_step - power_menu::Geometry::row_height + power_menu::Geometry::band) * 0.5f;
+        const float y = layout.row(i).top - (layout.rowStep() - layout.rowHeight() + power_menu::Geometry::band) * 0.5f;
         line(panel.left + 36, y, panel.right - 36, y, color(1, 1, 1, 0.08f), 1);
     }
-    if (count > 0) {
-        // The highlight glides between rows (ViewContext::picker_glide, a fractional row), red over the PC's actions.
-        const float position = context_->picker_glide.value_or(static_cast<float>(context_->power_menu));
-        const auto r = layout.rowAt(position);
-        const int below = std::clamp(static_cast<int>(position), 0, count - 1), above = std::min(below + 1, count - 1);
-        const float t = std::clamp(position - below, 0.0f, 1.0f);
-        const float red = std::lerp(danger(below) ? 1.0f : 0.0f, danger(above) ? 1.0f : 0.0f, t);
-        const auto tint = palette::dangerStrong();
-        brush(color(std::lerp(1.0f, tint.r, red), std::lerp(1.0f, tint.g, red), std::lerp(1.0f, tint.b, red), std::lerp(0.13f, 0.2f, red)));
-        target_->FillRoundedRectangle(shape(r, (r.bottom - r.top) * 0.5f), solid_.Get());
-    }
+    if (count <= 0) return;
+    // The white button glides between rows (ViewContext::picker_glide, a fractional row); the text
+    // darkens as it reaches its row.
+    const float glide = std::clamp(context_->picker_glide.value_or(static_cast<float>(context_->power_menu)), 0.0f, static_cast<float>(count - 1));
+    const auto dark = drawButton(rect(layout.rowAt(glide)), 1.0f, 1.0f, false);
     for (int i = 0; i < count; ++i) {
-        const auto r = layout.row(i);
-        const auto ink = danger(i) ? palette::danger() : color(0.91f, 0.91f, 0.91f);
-        textLine(labels[static_cast<size_t>(i)], r.left + 18, (r.top + r.bottom) * 0.5f, r.right - r.left - 36, menu_font_.Get(), ink);
+        const auto box = rect(layout.row(i));
+        const float focus = std::clamp(1.0f - std::abs(static_cast<float>(i) - glide), 0.0f, 1.0f);
+        if (focus < 0.999f) { // The others: a faint glass row, fading where the button passes.
+            brush(color(1, 1, 1, 0.045f * (1.0f - focus)));
+            target_->FillRoundedRectangle(pill(box), solid_.Get());
+        }
+        const auto light = danger(i) ? palette::danger() : color(0.95f, 0.95f, 0.95f);
+        const auto tone = color(std::lerp(light.r, dark.r, focus), std::lerp(light.g, dark.g, focus), std::lerp(light.b, dark.b, focus), std::lerp(light.a, dark.a, focus));
+        const float cy = (box.top + box.bottom) * 0.5f, radius = std::min(23.0f, (box.bottom - box.top) * 0.5f - 6);
+        const float cx = box.left + 21 + radius;
+        brush(focus > 0.5f ? color(0, 0, 0, 0.08f) : color(1, 1, 1, 0.07f));
+        target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), radius, radius), solid_.Get());
+        if (i < static_cast<int>(context_->power_icons.size())) desktopGlyph(context_->power_icons[static_cast<size_t>(i)], cx, cy, radius * 0.87f, tone);
+        textLine(labels[static_cast<size_t>(i)], cx + radius + 21, cy, box.right - cx - radius - 43, category_font_.Get(), tone);
     }
 }
 

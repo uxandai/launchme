@@ -96,6 +96,7 @@ void Renderer::drawSettingsTiles(const settings_ui::Layout& layout, const settin
         }
         drawPadTile(tile, t, lit);
     }
+    if (row.control == Control::pads && focused) drawPadFocus(layout.tile(index, scroll, row.control, focus, count, focus));
     if (row.control == Control::pads) {
         // More pads than fit: chevrons at the gallery's edges.
         const auto r = layout.row(index, scroll);
@@ -105,24 +106,21 @@ void Renderer::drawSettingsTiles(const settings_ui::Layout& layout, const settin
     }
 }
 
-// One controller tile (Settings → Kontrolery and the Kontrolery screen): no fill, a border in the
-// pad's state (green connected, red not: a light travelling round it, brighter with the focus) and
-// a dot of that colour in the corner; the picture (photo or drawn family; a "+" for pairing), battery,
-// name and status, then its action button. `lit` marks the focused tile.
+// One controller tile (Settings → Kontrolery and the Kontrolery screen): a card as the sound
+// sources' (a faint grey fill, lighter with the focus, and a faint edge) in the interface's tile
+// shape, a dot in the pad's state colour in the corner (green connected, red not); the picture
+// (photo or drawn family; a "+" for pairing), battery, name and status, then its action button.
+// `lit` marks the focused tile; its frame glides between the tiles (drawPadFocus), as the
+// companions' cards in Settings.
 void Renderer::drawPadTile(const settings_ui::Tile& tile, settings_ui::Rect t, bool lit) {
     using namespace settings_ui;
     const auto accent = uiAccent();
     {
         const auto green = D2D1::ColorF(0.30f, 0.82f, 0.42f), red = D2D1::ColorF(0.93f, 0.33f, 0.30f);
         const auto state = tile.connected ? green : red;
-        Microsoft::WRL::ComPtr<ID2D1RoundedRectangleGeometry> shape;
-        if (tile.pair) {
-            brush(gray(1, lit ? 0.5f : 0.14f));
-            target_->DrawRoundedRectangle(D2D1::RoundedRect(box(t), 16, 16), solid_.Get(), lit ? 1.6f : 1.0f);
-        } else if (SUCCEEDED(factory_->CreateRoundedRectangleGeometry(D2D1::RoundedRect(box(t), 16, 16), shape.GetAddressOf()))) {
-            brush(D2D1::ColorF(state.r, state.g, state.b, lit ? 0.55f : 0.28f));
-            target_->DrawGeometry(shape.Get(), solid_.Get(), lit ? 1.6f : 1.0f);
-            drawOrbitOutline(shape.Get(), state, lit ? 1.0f : 0.55f, lit ? 3.0f : 2.2f);
+        if (const auto shape = companionCardShape(box(t))) {
+            brush(gray(1, lit ? 0.14f : 0.042f)); target_->FillGeometry(shape.Get(), solid_.Get());
+            if (!lit) { brush(gray(1, 0.08f)); target_->DrawGeometry(shape.Get(), solid_.Get(), 1.0f); }
         }
         if (!tile.pair) {
             const float dx = t.left + 22, dy = t.top + 22;
@@ -167,6 +165,9 @@ void Renderer::drawPadTile(const settings_ui::Tile& tile, settings_ui::Rect t, b
                  settings_body_font_.Get(), ink, DWRITE_TEXT_ALIGNMENT_CENTER);
     }
 }
+
+// The focused controller tile's frame: the companions' gliding frame (surface 4), only on the focus.
+void Renderer::drawPadFocus(settings_ui::Rect t) { drawCompanionCardFocus(box(t), 4); }
 
 void Renderer::drawSettingsIcon(int category, float cx, float cy, D2D1_COLOR_F ink) {
     using settings_ui::Category;

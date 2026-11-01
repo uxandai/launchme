@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(launchme VERSION 0.5.2 LANGUAGES C CXX)
+project(launchme VERSION 0.5.3 LANGUAGES C CXX)
 
 if(NOT WIN32)
     # Linux (highly experimental, docs/linux-port.md): the shared core, its tests and the launcher on SDL3 + Skia.
@@ -418,6 +418,7 @@ add_test(NAME low_memory_mode COMMAND launcher_ui_tests --low-memory)
     add_test(NAME launchme_updates_and_whats_new COMMAND launcher_ui_tests --updates)
     add_test(NAME tray_while_playing_and_background_crop COMMAND launcher_ui_tests --tray)
     add_test(NAME drm_free_artwork_crop_controls COMMAND launcher_ui_tests --drm-free)
+    add_test(NAME emulation_settings_pages_and_add_folder COMMAND launcher_ui_tests --emulation)
     set_tests_properties(tarot_reading_cards_and_results PROPERTIES TIMEOUT 60)
     add_test(NAME companion_home_chat_and_settings COMMAND launcher_ui_tests --companion)
     add_test(NAME companion_semantic_prompt_and_settings COMMAND launcher_ui_tests --companion-semantic)

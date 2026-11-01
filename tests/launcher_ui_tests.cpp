@@ -109,6 +109,7 @@ public:
     static int modalLayers(HWND window);
     static int language(HWND window);
     static int customGames(HWND window);
+    static int emulationSettings(HWND window);
     static int manualGames(HWND window); // manual_games_ui_cases.hpp
     static int fileBrowserAndColors(HWND window);
     static int dashboard(HWND window);
@@ -2092,6 +2093,7 @@ int LauncherUiTest::language(HWND window) {
 #include "platform_settings_ui_cases.hpp"
 #include "pc_refresh_ui_cases.hpp"
 #include "drm_free_ui_cases.hpp"
+#include "emulation_settings_ui_cases.hpp"
 #include "quick_resume_failure_ui_cases.hpp"
 #include "game_discovery_ui_cases.hpp"
 #include "game_overlay_ui_cases.hpp"
@@ -2439,6 +2441,15 @@ int main(int argc, char** argv) {
         CoUninitialize();
         if (code) std::cerr << "Guide overlay regression failed at checkpoint " << code << '\n';
         else std::cout << "Guide overlay keyboard, controller, focus and animation regression passed\n";
+        return code;
+    }
+    if (argc == 2 && std::string_view(argv[1]) == "--emulation") {
+        std::filesystem::create_directories(root);
+        const auto code = window ? LauncherUiTest::emulationSettings(window) : 99;
+        if (window) DestroyWindow(window);
+        CoUninitialize();
+        if (code) std::cerr << "Emulation settings regression failed at checkpoint " << code << '\n';
+        else std::cout << "Emulacja page, system pages, emulator choice, program by hand, missing core and Wskaż folder passed\n";
         return code;
     }
     if (argc == 2 && std::string_view(argv[1]) == "--drm-free") {

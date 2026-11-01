@@ -297,14 +297,24 @@ void Renderer::drawLayoutScene(int option, D2D1_RECT_F picture, float time, floa
     target_->PopAxisAlignedClip();
 }
 
-void Renderer::drawLayoutTile(int option, D2D1_RECT_F box, bool active, bool focus, float time, const std::wstring& description) {
+void Renderer::drawLayoutTile(int option, D2D1_RECT_F box, bool active, bool focus, float time, const std::wstring& description, bool card) {
     using settings_ui::home_layouts;
     const bool large = !description.empty();
     const float radius = large ? 14.0f : 10.0f;
-    brush(D2D1::ColorF(1, 1, 1, focus ? 0.065f : active ? 0.045f : 0.02f));
-    target_->FillRoundedRectangle(D2D1::RoundedRect(box, radius, radius), solid_.Get());
-    brush(focus || active ? uiAccent(focus ? 0.9f : 0.5f) : D2D1::ColorF(1, 1, 1, 0.14f));
-    target_->DrawRoundedRectangle(D2D1::RoundedRect(box, radius, radius), solid_.Get(), focus ? 1.8f : 1.0f);
+    if (card) {
+        // A card as the companions' in Settings: the interface's tile shape and a faint edge; the
+        // focus frame glides over the cards on its own (drawSettingsLayouts).
+        if (const auto shape = companionCardShape(box)) {
+            brush(D2D1::ColorF(1, 1, 1, focus ? 0.085f : active ? 0.06f : 0.04f));
+            target_->FillGeometry(shape.Get(), solid_.Get());
+            if (!focus) { brush(D2D1::ColorF(1, 1, 1, 0.08f)); target_->DrawGeometry(shape.Get(), solid_.Get(), 1); }
+        }
+    } else {
+        brush(D2D1::ColorF(1, 1, 1, focus ? 0.065f : active ? 0.045f : 0.02f));
+        target_->FillRoundedRectangle(D2D1::RoundedRect(box, radius, radius), solid_.Get());
+        brush(focus || active ? uiAccent(focus ? 0.9f : 0.5f) : D2D1::ColorF(1, 1, 1, 0.14f));
+        target_->DrawRoundedRectangle(D2D1::RoundedRect(box, radius, radius), solid_.Get(), focus ? 1.8f : 1.0f);
+    }
     const float side = large ? 16.0f : 12.0f;
     const float caption = large ? tour::Layout::tile_caption : 38.0f;
     drawLayoutScene(option, D2D1::RectF(box.left + side, box.top + (large ? 16.0f : 10.0f), box.right - side, box.bottom - caption),
@@ -326,12 +336,20 @@ void Renderer::drawLayoutTile(int option, D2D1_RECT_F box, bool active, bool foc
 
 void Renderer::drawSettingsLayouts(const settings_ui::Layout& layout, int row, float scroll, bool focused) {
     const auto& item = (*context_->settings_rows)[row];
+    int framed = -1;
     for (int option = 0; option < settings_ui::home_layout_count; ++option) {
         const auto tile = layout.layoutOption(row, scroll, option);
         const bool active = item.choice == option;
         const bool preview = context_->settings_preview_option == option;
         const bool focus = preview || (focused && active && context_->settings_preview_option < 0);
+        if (focus || (framed < 0 && active)) framed = option;
         drawLayoutTile(option, D2D1::RectF(tile.left, tile.top, tile.right, tile.bottom), active, focus,
-                       preview ? context_->settings_preview_seconds : 0, {});
+                       preview ? context_->settings_preview_seconds : 0, {}, true);
+    }
+    // One frame, as on the companions' cards: it glides to the layout under the focus (the chosen one
+    // without it, fainter).
+    if (framed >= 0) {
+        const auto tile = layout.layoutOption(row, scroll, framed);
+        drawCompanionCardFocus(D2D1::RectF(tile.left, tile.top, tile.right, tile.bottom), 3, focused ? 1.0f : 0.75f);
     }
 }

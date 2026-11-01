@@ -229,7 +229,7 @@ const std::pair<std::wstring_view, std::wstring_view> extension_systems[] = {
     {L".cdi", L"dreamcast"}, {L".xex", L"xbox360"}, {L".md", L"megadrive"}, {L".gen", L"megadrive"}, {L".smd", L"megadrive"},
     {L".sms", L"mastersystem"}, {L".gg", L"gamegear"}, {L".pce", L"pcengine"}, {L".32x", L"sega32x"}, {L".ws", L"wonderswan"},
     {L".wsc", L"wonderswancolor"}, {L".ngp", L"ngp"}, {L".ngc", L"ngpc"}, {L".lnx", L"atarilynx"}, {L".a26", L"atari2600"},
-    {L".j64", L"atarijaguar"}, {L".vb", L"virtualboy"}, {L".tic", L"tic80"}, {L".p8", L"pico8"},
+    {L".j64", L"atarijaguar"}, {L".vb", L"virtualboy"}, {L".tic", L"tic80"}, {L".p8", L"pico8"}, {L".scummvm", L"scummvm"},
 };
 std::wstring extensionSystem(std::wstring_view extension) {
     for (const auto& [ext, system] : extension_systems) if (ext == extension) return std::wstring(system);
@@ -349,7 +349,12 @@ const Builtin builtin[] = {
     {L"psx", L".cue|.img|.chd|.ecm|.iso|.m3u|.mds|.pbp", L"mednafen_psx_hw_libretro", {}, {L"duckstation", L"retroarch"}},
     {L"ps2", disc, {}, {}, {L"pcsx2"}},
     {L"ps3", {}, {}, L"**/${title}/PS3_GAME/USRDIR/@(eboot.bin|iso.bin.edat)", {L"rpcs3"}},
+    // EmuDeck's PS4 parsers: the shortcuts shadPS4 makes (ps4\shortcuts) and games kept as folders.
+    {L"ps4", {}, {}, L"**/${title}@(.lnk|.LNK)", {L"shadps4"}},
+    {L"ps4", {}, {}, L"**/${title}/@(eboot.bin|EBOOT.BIN)", {L"shadps4"}},
     {L"psp", L".7z|.cso|.elf|.iso|.pbp|.prx", L"ppsspp_libretro", {}, {L"ppsspp", L"retroarch"}},
+    // Installed Vita games: <title ID>\eboot.bin (Vita3K starts them by that ID).
+    {L"psvita", {}, {}, L"**/${title}/@(eboot.bin|EBOOT.BIN)", {L"vita3k"}},
     {L"gc", dolphin_discs, L"dolphin_libretro", {}, {L"dolphin", L"retroarch"}},
     {L"wii", dolphin_discs, L"dolphin_libretro", {}, {L"dolphin", L"retroarch"}},
     {L"primehack", dolphin_discs, {}, {}, {L"primehack"}},
@@ -388,6 +393,7 @@ const Builtin builtin[] = {
     {L"mame", L".zip", L"mame2003_plus_libretro"},
     {L"fbneo", L".7z|.zip", L"fbneo_libretro"},
     {L"dos", L".7z|.zip", L"dosbox_pure_libretro"},
+    {L"scummvm", L".scummvm", L"scummvm_libretro", {}, {L"scummvm", L"retroarch"}},
     {L"pcengine", L".7z|.bin|.pce|.zip", L"mednafen_pce_libretro"},
     {L"pcenginecd", L".7z|.ccd|.chd|.cue|.iso|.zip", L"mednafen_pce_libretro"},
     {L"tg16", L".7z|.bin|.pce|.zip", L"mednafen_pce_libretro"},
@@ -620,41 +626,72 @@ Setup load(const Environment& environment, const std::filesystem::path& roms_ove
     return setup;
 }
 
+namespace {
+// RetroArch's folder for a system's games: its program (behind EmuDeck's launcher: the one it names).
+std::filesystem::path retroFolder(const emulators::Found& found, const Setup& setup) {
+    const bool script = found.via == emulators::Via::emudeck_script;
+    std::filesystem::path folder;
+    if (!found.target.empty() && !script) folder = found.target.parent_path();
+    else if (!found.target.empty() && fileExists(found.target)) folder = found.target.parent_path();
+    if (folder.empty()) folder = retroArchFolder(setup.paths);
+    return folder;
+}
+std::filesystem::path coreFile(const Rule& rule, const Setup& setup, const emulators::Found& found, const std::filesystem::path& retro_folder) {
+    if (setup.environment.windows) return (retro_folder.empty() ? std::filesystem::path(L"cores") : retro_folder / L"cores") / (rule.core + L".dll");
+    std::filesystem::path folder = setup.paths.ra_cores;
+    if (folder.empty() && found.via == emulators::Via::flatpak) folder = setup.environment.home / L".var/app/org.libretro.RetroArch/config/retroarch/cores";
+    if (folder.empty()) folder = setup.environment.app_data / L"retroarch" / L"cores";
+    return folder / (rule.core + L".so");
+}
+} // namespace
+
+std::filesystem::path core(const Rule& rule, const Setup& setup) {
+    const auto* found = setup.emulatorFor(rule);
+    if (!found || found->id != L"retroarch" || rule.core.empty()) return {};
+    return coreFile(rule, setup, *found, retroFolder(*found, setup));
+}
+
+bool coreMissing(const Rule& rule, const Setup& setup) {
+    const auto file = core(rule, setup);
+    return !file.empty() && file.is_absolute() && !fileExists(file);
+}
+
 GameAction action(const Rule& rule, const Setup& setup, const std::filesystem::path& rom) {
     const auto* found = setup.emulatorFor(rule);
     const auto* info = found ? emulators::find(found->id) : nullptr;
-    if (!info) return {};
-    const auto& paths = setup.paths;
     const bool windows = setup.environment.windows;
-    const bool script = found->via == emulators::Via::emudeck_script;
+    const bool script = found && found->via == emulators::Via::emudeck_script;
+    // A Windows shortcut (shadPS4's own for a PS4 game) starts itself unless EmuDeck's launcher takes it.
+    if (windows && !script && lower(rom.extension().wstring()) == L".lnk")
+        return GameAction{rom.wstring(), {}, rom.parent_path(), ActionKind::play};
+    if (!info) return {};
     const bool retro = found->id == L"retroarch" && !rule.core.empty();
     std::wstring words = setup.arguments(found->id);
     if (words.empty()) words = emulators::defaultArguments(*info, script, retro);
-    // RetroArch's folder: its program (behind EmuDeck's launcher: the one it names).
-    std::filesystem::path retro_folder;
-    if (retro) {
-        if (!found->target.empty() && !script) retro_folder = found->target.parent_path();
-        else if (!found->target.empty() && fileExists(found->target)) retro_folder = found->target.parent_path();
-        if (retro_folder.empty()) retro_folder = retroArchFolder(paths);
-    }
+    const auto retro_folder = retro ? retroFolder(*found, setup) : std::filesystem::path{};
     if (words.find(L"%CORE%") != std::wstring::npos) {
         std::wstring core;
         if (!rule.core.empty()) {
-            if (windows) {
-                const auto file = (retro_folder.empty() ? std::filesystem::path(L"cores") : retro_folder / L"cores") / (rule.core + L".dll");
-                core = script ? powershellQuoted(file.wstring()) : L"\"" + file.wstring() + L"\"";
-            } else {
-                std::filesystem::path folder = paths.ra_cores;
-                if (folder.empty() && found->via == emulators::Via::flatpak) folder = setup.environment.home / L".var/app/org.libretro.RetroArch/config/retroarch/cores";
-                if (folder.empty()) folder = setup.environment.app_data / L"retroarch" / L"cores";
-                core = shellQuoted((folder / (rule.core + L".so")).wstring());
-            }
+            const auto file = coreFile(rule, setup, *found, retro_folder).wstring();
+            core = !windows ? shellQuoted(file) : script ? powershellQuoted(file) : L"\"" + file + L"\"";
         }
         replaceAll(words, L"%CORE%", core);
     }
     if (windows && script) replaceAll(words, L"\"", L"\\\""); // Inside -Command "…".
-    const auto quoted = windows ? (script ? powershellQuoted(rom.wstring()) : L"\"" + rom.wstring() + L"\"") : shellQuoted(rom.wstring());
+    // Vita3K: the game's title ID, the name of the folder holding its eboot.bin.
+    const auto game = info->title_id && !rom.parent_path().filename().empty() ? rom.parent_path().filename() : rom;
+    const auto quoted = windows ? (script ? powershellQuoted(game.wstring()) : L"\"" + game.wstring() + L"\"") : shellQuoted(game.wstring());
     bool placed = false;
+    // %ROM% inside a quoted PowerShell word ('--path=%ROM%'): the bare path, quoted as that word is.
+    if (windows && script)
+        for (size_t at = words.find(L"%ROM%"); at != std::wstring::npos; at = words.find(L"%ROM%", at)) {
+            if (at == 0 || words[at - 1] == L' ' || words[at - 1] == L'\'' || words[at - 1] == L'"') { at += 5; continue; }
+            std::wstring bare;
+            for (const auto ch : game.wstring()) { bare += ch; if (ch == L'\'') bare += L'\''; }
+            words.replace(at, 5, bare);
+            at += bare.size();
+            placed = true;
+        }
     for (const std::wstring_view placeholder : {std::wstring_view(L"\"%ROM%\""), std::wstring_view(L"'%ROM%'"), std::wstring_view(L"%ROM%"), std::wstring_view(L"%rom%")})
         if (words.find(placeholder) != std::wstring::npos) { replaceAll(words, placeholder, quoted); placed = true; }
     if (!placed) words += (words.empty() ? L"" : L" ") + quoted;
