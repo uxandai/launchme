@@ -20,6 +20,9 @@ struct Layout {
     // Card at the bottom edge instead of the top: XMB keeps its top row (and the game menu
     // beside it) up there.
     bool bottom = false;
+    // The layout tiles of the last step are a slider of tile_visible at a time: its leftmost slot
+    // (firstFor the chosen layout; fractional while the renderer glides it).
+    float first = 0;
     static constexpr float card_width = 700, edge = 24, padding = 26, bottom_padding = 22;
     static constexpr float stepper_top = 22, stepper_height = 4, stepper_gap = 6;
     static constexpr float row_top = 44, row_height = settings_ui::Layout::button_height;
@@ -28,7 +31,8 @@ struct Layout {
     static constexpr float body_line = 22; // Reserved per line of a bottom card; the body font is 16 px.
     static constexpr float next_width = 150, skip_width = 120, button_gap = 10;
     // Large layout tiles of the last step: picture, then the name and one or two lines under it.
-    static constexpr float tile_gap = 28, tile_caption = 92, tile_aspect = 2.5f;
+    static constexpr float tile_gap = 28, tile_caption = 92, tile_aspect = 2.5f, tile_visible = 4.5f;
+    static float firstFor(int choice) { return settings_ui::layoutFirst(choice, tile_visible); }
 
     float cardLeft() const { return (width - std::min(card_width, width - 2 * edge)) * 0.5f; }
     float cardRight() const { return width - cardLeft(); }
@@ -57,17 +61,24 @@ struct Layout {
         for (int i = with_back ? back : skip; i < button_count; ++i) if (button(i).contains(x, y)) return i;
         return -1;
     }
+    float tilesWidth() const { return std::min(1380.0f, width - 160); }
     settings_ui::Rect tile(int option) const {
-        const float total = std::min(1380.0f, width - 160);
-        const float w = (total - (settings_ui::home_layout_count - 1) * tile_gap) / settings_ui::home_layout_count;
+        const float total = tilesWidth();
+        const float pitch = (total + tile_gap) / tile_visible, w = pitch - tile_gap;
         const float h = 16 + (w - 32) / tile_aspect + tile_caption;
         // Centred in the space under the tallest card.
         const float below = edge + body_top + body_lines * body_line + bottom_padding;
         const float top = below + std::max(40.0f, (height - below - h) * 0.5f);
-        const float left = (width - total) * 0.5f + option * (w + tile_gap);
+        const float left = (width - total) * 0.5f + (static_cast<float>(option) - first) * pitch;
         return {left, top, left + w, top + h};
     }
+    // Where the slider shows its tiles: drawing clips to it, a pointer outside it hits none.
+    settings_ui::Rect tileBand() const {
+        const auto t = tile(0);
+        return {(width - tilesWidth()) * 0.5f - 10, t.top - 10, (width + tilesWidth()) * 0.5f + 10, t.bottom + 10};
+    }
     int hitTile(float x, float y) const {
+        if (!tileBand().contains(x, y)) return -1;
         for (int option = 0; option < settings_ui::home_layout_count; ++option) if (tile(option).contains(x, y)) return option;
         return -1;
     }

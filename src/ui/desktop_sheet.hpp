@@ -266,14 +266,16 @@ struct Layout : Sheet {
         const float y = controlY(i, s), r = controlsLeft(item, i, s) - 14;
         return {r - badge_width, y - 12, r, y + 12};
     }
-    // Home layout previews under the row's title.
-    Rect layoutTile(int i, float s, int option) const {
+    // Home layout previews under the row's title: a slider of layout_visible at a time, `first` its
+    // leftmost slot (settings_ui::layoutFirst of the chosen one); the band clips them.
+    static constexpr float layout_visible = 5.5f;
+    Rect layoutTile(int i, float s, int option, float first = 0) const {
         const auto r = row(i, s);
-        const int n = settings_ui::home_layout_count;
-        const float w = (r.right - r.left - 32 - 12.0f * static_cast<float>(n - 1)) / static_cast<float>(n);
-        const float left = r.left + 16 + static_cast<float>(option) * (w + 12);
-        return {left, r.top + 60, left + w, r.bottom - 34};
+        const float pitch = (r.right - r.left - 32 + 12) / layout_visible;
+        const float left = r.left + 16 + (static_cast<float>(option) - first) * pitch;
+        return {left, r.top + 60, left + pitch - 12, r.bottom - 34};
     }
+    Rect layoutBand(int i, float s) const { const auto r = row(i, s); return {r.left + 10, r.top + 52, r.right - 10, r.bottom - 4}; }
     // Companion cards: up to four at a time, `first` the leftmost.
     static constexpr int avatar_visible = 4;
     static int avatarFirst(int choice, int count) { return std::clamp(choice - 1, 0, std::max(0, count - avatar_visible)); }

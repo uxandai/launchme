@@ -154,6 +154,14 @@ std::vector<uint8_t> backgroundFile(const std::wstring& slug, const std::filesys
 }
 } // namespace
 
+// A platform logo shipped in assets\platforms beside the program (Switch 2: not in HVR88's set);
+// empty when the program has none of that name.
+static std::vector<uint8_t> shippedPlatformLogo(const std::wstring& filename) {
+    wchar_t exe[32768]{};
+    GetModuleFileNameW(nullptr, exe, static_cast<DWORD>(std::size(exe)));
+    return logoFile(std::filesystem::path(exe).parent_path() / L"assets" / L"platforms" / filename);
+}
+
 // A publisher's or developer's logo ("publisher:capcom"): shipped in assets\studios beside the program.
 std::optional<std::vector<uint8_t>> studioLogo(const std::wstring& platform) {
     if (!platform.starts_with(L"publisher:") && !platform.starts_with(L"developer:")) return std::nullopt;
@@ -169,7 +177,9 @@ std::vector<uint8_t> platformLogoCached(const std::wstring& platform,
     if (auto studio = studioLogo(platform)) return std::move(*studio);
     if (platform == L"DRM-free") return drmFreeLogo();
     const auto filename = platformLogoFilename(platform);
-    return filename.empty() ? std::vector<uint8_t>{} : logoFile(cache / filename);
+    if (filename.empty()) return {};
+    if (auto shipped = shippedPlatformLogo(filename); !shipped.empty()) return shipped;
+    return logoFile(cache / filename);
 }
 
 std::vector<uint8_t> platformLogo(const std::wstring& platform,
@@ -178,6 +188,7 @@ std::vector<uint8_t> platformLogo(const std::wstring& platform,
     if (platform == L"DRM-free") return drmFreeLogo();
     const auto filename = platformLogoFilename(platform);
     if (filename.empty()) return {};
+    if (auto shipped = shippedPlatformLogo(filename); !shipped.empty()) return shipped;
     const auto file = cache / filename;
     if (auto bytes = logoFile(file); !bytes.empty()) return bytes;
     // HVR88 has no Epic logo. Use the white shield/transparent background variant.

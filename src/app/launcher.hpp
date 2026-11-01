@@ -1198,6 +1198,9 @@ private:
     int identifyDetailAction() const;
     void openIdentify();
     void openIdentifyFor(const Game& game); // Also from Settings (DRM-free game options).
+    // A game Zidentyfikuj grę can name and nothing has yet: no RAWG match the user confirmed, no
+    // ScreenScraper / ES-DE details. The game's menu offers it then.
+    bool unidentifiedGame(const Game& game) const;
     void closeIdentify();
     void identifySearch();
     void identifyAccept();
@@ -2252,6 +2255,10 @@ private:
     // Game videos (src/app/game_video.cpp): 3 s on an emulated game, then its ES-DE/ScreenScraper
     // video replaces the background and the music is ducked until focus moves on.
     std::unordered_map<std::string, std::wstring> emulation_names_;          // Titles matched by ROM file.
+    std::unordered_set<std::string> manual_names_; // Of those, the ones the player picked in Zidentyfikuj grę: shown always.
+    // Emulated games' identified titles (ROM matches when chosen, the player's picks always, a RAWG
+    // identification), before the player's own titles from Edytuj metadane.
+    void applyIdentifiedNames(std::vector<Game>& games) const;
     std::unordered_map<std::string, std::wstring> shortcut_original_names_;  // Shortcut names from shortcuts.vdf.
     bool renameShortcuts(); // emulation_names_ or the original names on shortcut_library_; true = changed.
     // ES-DE gamelist.xml changes (ES-DE scraped meanwhile): details and missing artwork reload.
@@ -2920,6 +2927,7 @@ private:
     std::optional<uint32_t> desktopSteamPlaytime(const Game& game) const;
     void desktopMetaClose();
     void desktopMetadataChanged();
+    void refreshShownNames(); // Copies the open screens hold (details, a system's games, cards) take the library's names.
     void desktopMetaSave();
     void desktopMetaActivate(int item);
     void desktopMetaInsert(std::wstring_view text);

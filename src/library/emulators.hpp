@@ -34,6 +34,7 @@ struct Info {
     std::wstring_view direct_args;                    // Its own arguments before the ROM when started directly.
     bool shared_exe = false;                          // Its program's name is another emulator's too (PrimeHack: Dolphin.exe).
     bool title_id = false;                            // It starts a game by its folder's name, not its file (Vita3K: -r PCSE00000).
+    bool manual_only = false;                         // A per-system custom program, with no detection assumptions.
 };
 std::span<const Info> catalog();
 const Info* find(std::wstring_view id);
@@ -58,6 +59,7 @@ struct Override {
 struct Choices {
     std::map<std::string, Override> overrides; // Emulator ID (UTF-8) -> what was chosen.
     std::map<std::string, std::string> systems; // System folder ("ps2") -> emulator ID.
+    std::map<std::string, std::filesystem::path> roms; // System -> explicit ROM folder, replacing <roms>/<system>.
 };
 
 struct Context {

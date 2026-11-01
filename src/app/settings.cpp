@@ -875,8 +875,11 @@ void Launcher::settingsClick(float x, float y) {
                 settingsChanged(); audio_.context();
             }
     } else if (row.control == Control::layout) {
-        for (int option = 0; option < static_cast<int>(home_layouts.size()); ++option)
-            if (layout.layoutOption(index, settings_state_.offset(), option).contains(x, y)) { setHomeLayout(option); audio_.context(); }
+        // The slider: a tile half out of view comes into it once chosen.
+        const float first = layout.layoutFirstOf(index, row.choice);
+        if (layout.layoutBand(index, settings_state_.offset()).contains(x, y))
+            for (int option = 0; option < static_cast<int>(home_layouts.size()); ++option)
+                if (layout.layoutOption(index, settings_state_.offset(), option, first).contains(x, y)) { setHomeLayout(option); audio_.context(); break; }
     } else if (tiled(row.control)) {
         const int count = static_cast<int>(row.tiles.size());
         const int tile = layout.hitTile(index, settings_state_.offset(), row.control, count, settings_state_.tile, x, y);

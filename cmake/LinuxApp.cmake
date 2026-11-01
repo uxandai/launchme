@@ -81,13 +81,15 @@ companion_embedding_assets(launchme)
 target_link_libraries(launchme PRIVATE launchme_companion_resources)
 # Beside the program, as the Windows build places them: the music themes and the studio logos.
 file(GLOB LAUNCHME_STUDIO_LOGOS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/res/studios/*.png")
+file(GLOB LAUNCHME_PLATFORM_LOGOS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/res/platforms/*.png")
 set(LAUNCHME_THEMES "${CMAKE_CURRENT_SOURCE_DIR}/res/HorizonsTheme.mp3" "${CMAKE_CURRENT_SOURCE_DIR}/res/ExploratorySilenceTheme.mp3")
 # The icon font standing in for Segoe Fluent Icons (tools/linux/make-icon-font.sh, Fluent UI System Icons, MIT).
 set(LAUNCHME_FONTS "${CMAKE_CURRENT_SOURCE_DIR}/res/fonts/launchme-icons.ttf" "${CMAKE_CURRENT_SOURCE_DIR}/res/fonts/launchme-icons-LICENSE.txt")
 add_custom_target(launchme_assets ALL
-    COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/assets/studios" "${CMAKE_CURRENT_BINARY_DIR}/assets/fonts"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/assets/studios" "${CMAKE_CURRENT_BINARY_DIR}/assets/platforms" "${CMAKE_CURRENT_BINARY_DIR}/assets/fonts"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${LAUNCHME_THEMES} "${CMAKE_CURRENT_BINARY_DIR}/assets/"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${LAUNCHME_STUDIO_LOGOS} "${CMAKE_CURRENT_BINARY_DIR}/assets/studios/"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${LAUNCHME_PLATFORM_LOGOS} "${CMAKE_CURRENT_BINARY_DIR}/assets/platforms/"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${LAUNCHME_FONTS} "${CMAKE_CURRENT_BINARY_DIR}/assets/fonts/"
-    DEPENDS ${LAUNCHME_THEMES} ${LAUNCHME_STUDIO_LOGOS} ${LAUNCHME_FONTS} VERBATIM)
+    DEPENDS ${LAUNCHME_THEMES} ${LAUNCHME_STUDIO_LOGOS} ${LAUNCHME_PLATFORM_LOGOS} ${LAUNCHME_FONTS} VERBATIM)
 add_dependencies(launchme launchme_assets)

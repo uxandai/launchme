@@ -56,7 +56,7 @@ Paths resolve(const Environment& environment, const std::filesystem::path& roms_
 // emulators::catalog()), preferred first.
 struct Rule {
     std::wstring system, platform, glob, core; // core: RetroArch's ("snes9x_libretro"); empty: no RetroArch.
-    std::filesystem::path folder;              // <roms>\<system>
+    std::filesystem::path folder;              // Explicit system override, else <roms>\<system>.
     std::vector<std::wstring> emulators;
     bool present = false;                      // Its folder exists.
 };
@@ -93,6 +93,7 @@ GameAction action(const Rule& rule, const Setup& setup, const std::filesystem::p
 GameAction commandAction(std::wstring_view command, const std::filesystem::path& rom);
 struct Result {
     std::vector<Game> games;
+    std::map<std::wstring, size_t> system_counts;
     size_t hidden = 0, excluded = 0, systems = 0;
 };
 using Cancelled = std::function<bool()>;

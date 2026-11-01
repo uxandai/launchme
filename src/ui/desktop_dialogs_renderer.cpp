@@ -350,6 +350,10 @@ void Renderer::drawDesktopIdentify() {
         textLine(state.game.name, p.left + 22, y + 8, p.right - p.left - 44, desktop_small_font_.Get(), palette::muted());
         y += 22;
     }
+    if (const auto path = identify_ui::gamePath(state.game); !path.empty()) { // What it is on disk: its ROM, program or folder.
+        textLine(elideStart(path, p.right - p.left - 44, desktop_small_font_.Get()), p.left + 22, y + 8, p.right - p.left - 44, desktop_small_font_.Get(), gray(0.5f));
+        y += 22;
+    }
     const Rect search{p.left + 20, y, p.right - 20 - 104, y + 40};
     desktopTextField(search, state.query, tr(L"Szukaj"), state.query.size(), state.query_focus, state.select_all, hover.kind == Kind::field ? 1.0f : 0.0f);
     desktopModalHot({Kind::field}, search);

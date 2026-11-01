@@ -215,7 +215,7 @@ void Launcher::tourKey(WPARAM key, bool repeated) {
 void Launcher::tourClick(float x, float y) {
     if (!tour_.open) return;
     const auto view = renderer_.viewport();
-    const tour::Layout layout{view.width, view.height, tourCardAtBottom()};
+    const tour::Layout layout{view.width, view.height, tourCardAtBottom(), tour::Layout::firstFor(static_cast<int>(settings_.home_layout))};
     if (stepOf(tour_.step) == Step::layout) {
         if (const int tile = layout.hitTile(x, y); tile >= 0) { tourLayout(tile, false); InvalidateRect(hwnd_, nullptr, FALSE); return; }
     }
@@ -229,7 +229,7 @@ void Launcher::tourClick(float x, float y) {
 void Launcher::tourHover(float x, float y) {
     if (!tour_.open) return;
     const auto view = renderer_.viewport();
-    const tour::Layout layout{view.width, view.height, tourCardAtBottom()};
+    const tour::Layout layout{view.width, view.height, tourCardAtBottom(), tour::Layout::firstFor(static_cast<int>(settings_.home_layout))};
     const int button = layout.hitButton(x, y, tour_.step > 0);
     const int tile = stepOf(tour_.step) == Step::layout ? layout.hitTile(x, y) : -1;
     if (button == tour_.hover_button && tile == tour_.hover_tile) return;

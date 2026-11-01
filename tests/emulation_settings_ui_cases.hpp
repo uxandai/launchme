@@ -108,6 +108,7 @@ int LauncherUiTest::emulationSettings(HWND window) {
     if (!select(Id::emulation_more)) return 9958;
     app.settingsActivate();
     if (!rowOf(Id::emulation_system, "ps4") || !rowOf(Id::emulation_system, "scummvm") || rowOf(Id::emulation_system, "ps4")->indent != 1) return 9958;
+    if (!rowOf(Id::emulation_system, "ps5") || !rowOf(Id::emulation_system, "switch2")) return 19950;
     if (!select(Id::emulation_system, "ps4")) return 9958;
     settle();
     if (!capture(L"emulation-page-other.png")) return 9958;
@@ -158,6 +159,22 @@ int LauncherUiTest::emulationSettings(HWND window) {
     app.settingsActivate();
     if (!scanned() || app.settings_.emulator_overrides.contains("pcsx2") || rowOf(Id::emulation_program_reset) ||
         rowOf(Id::emulation_detected)->title.find(L"Skrypt EmuDecka") == std::wstring::npos) return 9975;
+    // A per-system ROM folder replaces the old games and updates the system count.
+    const auto own_roms = root / L"Separate drive" / L"PS2 games";
+    write(own_roms / L"New Game.iso", "iso");
+    if (!select(Id::emulation_system_folder) || rowOf(Id::emulation_system_folder_reset)) return 19951;
+    answer.clear(); app.settingsActivate(); // Cancel keeps the original source.
+    if (!app.settings_.system_roms.empty()) return 19952;
+    answer = own_roms; app.settingsActivate();
+    if (!scanned() || app.settings_.system_roms["ps2"] != own_roms || picked.back() != roms / L"ps2" ||
+        app.rom_system_counts_[L"ps2"] != 1 || app.rom_library_.size() != 3 || !rowOf(Id::emulation_system_folder_reset)) return 19953;
+    for (const auto& game : app.rom_library_) if (game.platform == L"PS2" && game.name != L"New Game") return 19954;
+    settle();
+    if (!capture(L"emulation-system-rom-folder.png")) return 19955;
+    if (!select(Id::emulation_system_folder_reset)) return 19956;
+    app.settingsActivate();
+    if (!scanned() || !app.settings_.system_roms.empty() || rowOf(Id::emulation_system_folder_reset)) return 19957;
+    for (const auto& game : app.rom_library_) if (game.platform == L"PS2" && game.name != L"Okami") return 19958;
     app.back();
 
     // PS1's emulator chosen by hand: RetroArch (not found: its page says so), then automatic again.
@@ -201,12 +218,12 @@ int LauncherUiTest::emulationSettings(HWND window) {
     if (app.customEditorOpen() || app.settings_.emulation_roms != other_roms || app.settings_.emulation_source != AppSettings::EmulationSource::roms) return 9985;
     if (!scanned() || app.rom_library_.size() != 2 || app.emulation_setup_->paths.roms != other_roms) return 9986;
     // A folder of games (two programs in their own folders): the DRM-free catalogue keeps it.
-    wchar_t system[MAX_PATH]{};
-    GetSystemDirectoryW(system, MAX_PATH);
+    wchar_t system_directory[MAX_PATH]{};
+    GetSystemDirectoryW(system_directory, MAX_PATH);
     const auto games = root / L"PC Games";
     for (const auto* name : {L"Alpha", L"Beta"}) {
         std::filesystem::create_directories(games / name);
-        std::filesystem::copy_file(std::filesystem::path(system) / L"where.exe", games / name / (std::wstring(name) + L".exe"), error);
+        std::filesystem::copy_file(std::filesystem::path(system_directory) / L"where.exe", games / name / (std::wstring(name) + L".exe"), error);
     }
     app.openCustomEditor({}, ui::Item::pick_folder);
     answer = games;
@@ -238,6 +255,30 @@ int LauncherUiTest::emulationSettings(HWND window) {
     if (!app.settings_state_.at(Page::emulation_system) || !rowOf(Id::emulation_preview)) return 9992;
     settle();
     if (!capture(L"emulation-system-desktop.png")) return 9993;
+    app.back();
+    // Independent manual-only systems, even without a global ROM folder.
+    app.settings_.emulation_roms.clear();
+    for (const auto* system : {"ps5", "switch2"}) {
+        app.openSettingsPage(Page::emulation_system, system);
+        if (!rowOf(Id::emulation_program) || rowOf(Id::emulation_emulator) || !rowOf(Id::emulation_system_folder)) return 19959;
+        answer = manual;
+        if (!select(Id::emulation_program)) return 19960;
+        app.settingsActivate();
+        if (!scanned() || app.settings_.emulator_overrides[system].program != manual) return 19961;
+        const auto folder = root / L"Standalone" / text_encoding::wideLenient(system);
+        write(folder / (std::string(system) == "ps5" ? L"Sample/eboot.bin" : L"Sample.nsp"), "rom");
+        answer = folder;
+        if (!select(Id::emulation_system_folder)) return 19962;
+        app.settingsActivate();
+        if (!scanned() || !app.romLibraryActive() || !app.emulation_setup_->paths.roms.empty() ||
+            app.rom_system_counts_[text_encoding::wideLenient(system)] != 1) return 19963;
+        settle();
+        if (!capture(std::string(system) == "ps5" ? L"emulation-ps5-desktop.png" : L"emulation-switch2-desktop.png")) return 19964;
+        app.back();
+        const auto* system_row = rowOf(Id::emulation_system, system);
+        if (!system_row || system_row->description.find(L"Gry: 1") == std::wstring::npos || system_row->indent) return 19965;
+    }
+    if (app.rom_library_.size() != 2) return 19966;
     for (int i = 0; i < 8 && app.settingsOpen(); ++i) app.back();
     app.desktop_mode_ = false;
     std::filesystem::remove_all(root, error);

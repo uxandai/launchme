@@ -197,6 +197,7 @@ void Renderer::drawContextMenu() {
         case context_menu::Item::steam_account: return account_label.c_str();
         case context_menu::Item::compat: return L"Proton / Wine";
         case context_menu::Item::shortcuts: return tr(L"Skróty");
+        case context_menu::Item::identify: return tr(L"Zidentyfikuj grę…");
         }
         return L"";
     };

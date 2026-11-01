@@ -374,8 +374,18 @@ void Launcher::paint(bool overlay) {
         const auto& game = cards_[selected_].game;
         const auto* info = preview_.find(game);
         if (!info) info = localDetails(game);
-        // A fact the game does not have is left out rather than shown as a dash.
-        const auto minutes = gamePlaytime(game, info ? info->playtime_minutes : std::nullopt);
+        // A fact the game does not have is left out rather than shown as a dash. Steam's count from the
+        // preview, else (not read yet, or the preview had none) the game index's, as the profile shows it.
+        std::optional<uint32_t> steam = info ? info->playtime_minutes : std::nullopt;
+        if ((!steam || !*steam) && game_index_) {
+            const auto key = gameKey(game);
+            const auto indexed = game_index_->read([&](const game_index::Index& value) -> std::optional<uint32_t> {
+                const auto* record = value.get(key);
+                return record ? record->playtime_minutes : std::nullopt;
+            });
+            if (indexed && *indexed) steam = indexed;
+        }
+        const auto minutes = gamePlaytime(game, steam);
         if (minutes && *minutes) context.hero_facts.push_back({tr(L"CZAS GRY"), formatPlaytime(*minutes)});
         context.hero_facts.push_back({tr(L"OSTATNIO GRANE"), desktopPlayedWhen(game.last_played)});
         std::wstring released = info ? info->release_date : std::wstring{};

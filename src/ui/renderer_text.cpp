@@ -282,3 +282,13 @@ void Renderer::fadingLine(const std::wstring& value, float x, float center_y, fl
     textLine(value, x - offset, center_y, advance + 8, format, ink);
     target_->PopLayer();
 }
+
+std::wstring Renderer::elideStart(const std::wstring& value, float width, IDWriteTextFormat* format) {
+    if (!format || value.empty() || textAdvance(value, format) <= width) return value;
+    size_t low = 1, high = value.size(); // The fewest leading characters to drop.
+    while (low < high) {
+        const size_t mid = (low + high) / 2;
+        if (textAdvance(L"\u2026" + value.substr(mid), format) <= width) high = mid; else low = mid + 1;
+    }
+    return L"\u2026" + value.substr(low);
+}

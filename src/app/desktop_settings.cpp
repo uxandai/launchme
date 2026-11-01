@@ -286,10 +286,13 @@ SheetHit Launcher::desktopSettingsHit(float x, float y) const {
     const auto& item = settings_rows_[static_cast<size_t>(index)];
     if (!item.reset.empty() && !item.badge.empty() && L.badge(item, index, s).contains(x, y)) return {K::badge, index};
     switch (item.control) {
-    case Control::layout:
-        for (int option = 0; option < settings_ui::home_layout_count; ++option)
-            if (L.layoutTile(index, s, option).contains(x, y)) return {K::layout, index, option};
+    case Control::layout: {
+        const float first = settings_ui::layoutFirst(item.choice, L.layout_visible);
+        if (L.layoutBand(index, s).contains(x, y))
+            for (int option = 0; option < settings_ui::home_layout_count; ++option)
+                if (L.layoutTile(index, s, option, first).contains(x, y)) return {K::layout, index, option};
         return {K::row, index};
+    }
     case Control::avatar: {
         const int count = companion::lookCount(), first = settings_sheet::Layout::avatarFirst(item.choice, count);
         for (int option = first; option < std::min(count, first + settings_sheet::Layout::avatar_visible); ++option)

@@ -284,7 +284,7 @@ bool Launcher::hoverButton(float mouse_x, float mouse_y) const {
     case Modal::exit_prompt: return exit_prompt::Layout{view.width, view.height}.hit(x, y) >= 0;
     case Modal::power_menu: return power_menu::Geometry{view.width, view.height, power_menu::gaps(power_items_)}.hit(x, y) >= 0;
     case Modal::tour: {
-        const tour::Layout layout{view.width, view.height, tourCardAtBottom()};
+        const tour::Layout layout{view.width, view.height, tourCardAtBottom(), tour::Layout::firstFor(static_cast<int>(settings_.home_layout))};
         return layout.hitButton(x, y, tour_.step > 0) >= 0 ||
                (tour_.step == static_cast<int>(tour::Step::layout) && layout.hitTile(x, y) >= 0);
     }
@@ -565,8 +565,10 @@ void Launcher::mouseMove(float mouse_x, float mouse_y) {
         const float x = mouse_x / view.scale, y = mouse_y / view.scale;
         const int row = settings_state_.editing || customEditorOpen() || friends_open_ ? -1 : layout.hitRow(x, y, static_cast<int>(settings_rows_.size()), settings_state_.offset());
         int option = -1;
-        if (row >= 0 && settings_rows_[row].control == Control::layout)
-            for (int i = 0; i < home_layout_count; ++i) if (layout.layoutOption(row, settings_state_.offset(), i).contains(x, y)) option = i;
+        if (row >= 0 && settings_rows_[row].control == Control::layout && layout.layoutBand(row, settings_state_.offset()).contains(x, y)) {
+            const float first = layout.layoutFirstOf(row, settings_rows_[row].choice);
+            for (int i = 0; i < home_layout_count; ++i) if (layout.layoutOption(row, settings_state_.offset(), i, first).contains(x, y)) option = i;
+        }
         const int badge = row >= 0 && !settings_rows_[row].reset.empty() && !settings_rows_[row].badge.empty() &&
                           layout.badge(row, settings_state_.offset(), settings_rows_[row].control).contains(x, y) ? row : -1;
         const int trash = row >= 0 && settings_rows_[row].removable && layout.trash(row, settings_state_.offset()).contains(x, y) ? row : -1;

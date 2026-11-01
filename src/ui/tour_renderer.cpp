@@ -176,11 +176,18 @@ void Renderer::drawTour() {
         }
     } else target_->FillRectangle(screen, solid_.Get());
     if (tour->layouts) {
-        const tour::Layout layout{width, height, tour->card_bottom};
-        for (int option = 0; option < settings_ui::home_layout_count; ++option)
-            drawLayoutTile(option, box(layout.tile(option)), tour->layout_choice == option,
+        // A slider: the chosen layout in view, the tile cut at an edge says there are more.
+        const tour::Layout layout{width, height, tour->card_bottom, glideLayoutStrip(tour::Layout::firstFor(tour->layout_choice))};
+        const auto band = layout.tileBand();
+        target_->PushAxisAlignedClip(box(band), D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
+        for (int option = 0; option < settings_ui::home_layout_count; ++option) {
+            const auto tile = layout.tile(option);
+            if (tile.right <= band.left || tile.left >= band.right) continue;
+            drawLayoutTile(option, box(tile), tour->layout_choice == option,
                            tour->hover_tile >= 0 ? tour->hover_tile == option : tour->focus_tile == option, // As in Settings: the mouse takes the highlight.
                            tour->preview_option == option ? tour->preview_seconds : 0, tour->layout_descriptions[option]);
+        }
+        target_->PopAxisAlignedClip();
     }
     if (spot && !tour->bubble_body.empty() && clear > 0.01f) drawTourBubble(*tour, anchor, side, clear);
     drawTourCard(*tour);

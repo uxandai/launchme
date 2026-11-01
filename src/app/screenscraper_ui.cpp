@@ -79,16 +79,31 @@ bool Launcher::renameShortcuts() {
         const auto key = gameKey(game);
         const auto original = shortcut_original_names_.find(key);
         if (original == shortcut_original_names_.end()) continue;
-        const auto named = settings_.emulation_names ? emulation_names_.find(key) : emulation_names_.end();
+        const auto named = settings_.emulation_names || manual_names_.contains(key) ? emulation_names_.find(key) : emulation_names_.end();
         const auto& name = named != emulation_names_.end() && !named->second.empty() ? named->second : original->second;
         if (game.name != name) { game.name = name; changed = true; }
     }
     return changed;
 }
 
+void Launcher::applyIdentifiedNames(std::vector<Game>& games) const {
+    for (auto& game : games) {
+        if (game.kind != GameKind::nonsteam || game.rom.empty()) continue;
+        const auto key = gameKey(game);
+        // The player's ScreenScraper pick, then their RAWG pick (an emulated game's RAWG identification is
+        // always theirs), then an automatic ROM match when ROM titles are on.
+        const auto named = emulation_names_.find(key);
+        const bool has_name = named != emulation_names_.end() && !named->second.empty();
+        if (has_name && manual_names_.contains(key)) { game.name = named->second; continue; }
+        if (const auto rawg = rawg_metadata_.find(key); rawg != rawg_metadata_.end() && !rawg->second.name.empty()) { game.name = rawg->second.name; continue; }
+        if (has_name && settings_.emulation_names) game.name = named->second;
+    }
+}
+
 void Launcher::applyEmulationNames() {
-    if (!renameShortcuts()) return;
+    renameShortcuts(); // The ROM folder's own games take their titles in buildShelves (applyIdentifiedNames).
     buildShelves();
+    refreshShownNames(); // Szczegóły, a system's games and the cards on screen in Tryb TV too.
     if (screen_ == ScreenMode::shelves || screen_ == ScreenMode::library) rebuildCards(true);
     else if (screen_ == ScreenMode::search) updateSearch();
 }

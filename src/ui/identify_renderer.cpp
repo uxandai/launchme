@@ -22,7 +22,14 @@ void Renderer::drawIdentify() {
     brush(gray(0, 0.82f)); target_->FillRectangle(D2D1::RectF(0, 0, viewport_.width, viewport_.height), solid_.Get());
     brush(gray(0.055f)); target_->FillRoundedRectangle(D2D1::RoundedRect(box(panel), 18, 18), solid_.Get());
     if (panel_borders_) { brush(gray(1, 0.18f)); target_->DrawRoundedRectangle(D2D1::RoundedRect(box(panel), 18, 18), solid_.Get()); }
-    textLine(tr(L"Zidentyfikuj grę"), panel.left + 28, panel.top + 42, panel.right - panel.left - 250, category_font_.Get(), gray(0.96f));
+    // The title, and under it what the game is on disk (its ROM, program or folder), cut at the start.
+    const auto path = identify_ui::gamePath(state.game);
+    const float title_y = path.empty() ? panel.top + 42 : panel.top + 34;
+    textLine(tr(L"Zidentyfikuj grę"), panel.left + 28, title_y, panel.right - panel.left - 250, category_font_.Get(), gray(0.96f));
+    if (!path.empty()) {
+        const float path_width = layout.source().left - panel.left - 40;
+        textLine(elideStart(path, path_width, toast_sub_font_.Get()), panel.left + 28, panel.top + 66, path_width, toast_sub_font_.Get(), gray(0.55f));
+    }
     const auto source = layout.source();
     // Emulated games: a switch between RAWG and ScreenScraper (click, ←/→, F2); others link to RAWG.
     const std::wstring source_label = !state.emulated ? L"RAWG ↗" :
@@ -30,7 +37,7 @@ void Renderer::drawIdentify() {
     // The switch is a glass pill (on the opaque panel, no frosting); its caption keeps clear of the round ends.
     const auto source_ink = state.emulated ? drawButton(box(source), 0, 1, false) : uiAccent();
     const float source_inset = state.emulated ? (source.bottom - source.top) * 0.5f - 6 : 10.0f;
-    textLine(source_label, source.left + source_inset, panel.top + 42, source.right - source.left - 2 * source_inset, settings_body_font_.Get(), source_ink);
+    textLine(source_label, source.left + source_inset, (source.top + source.bottom) * 0.5f, source.right - source.left - 2 * source_inset, settings_body_font_.Get(), source_ink);
     // Back: a glass circle with a dot, white while it has the focus (Up from the search field).
     const auto back = layout.back();
     brush(drawButton(box(back), state.back_focus ? 1.0f : 0.0f, 1, false));

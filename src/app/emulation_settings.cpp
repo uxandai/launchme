@@ -91,8 +91,29 @@ void Launcher::emulationSettingsRows() {
         const auto& setup = *emulation_setup_;
         const auto chosen = setup.chosen(*rule);
         const auto* found = setup.emulatorFor(*rule);
-        // The emulator: automatically the first one found, or one chosen.
+        section(tr(L"Gry emulowane"));
+        const auto own_folder = settings_.system_roms.find(key);
+        const bool custom_folder = own_folder != settings_.system_roms.end() && !own_folder->second.empty();
         {
+            const auto folder = custom_folder ? own_folder->second : rule->folder;
+            std::wstring description = folder.empty() ? std::wstring(tr(L"Nie wybrano folderu.")) : folder.wstring();
+            if (!folder.empty() && !rule->present) description += L" · " + std::wstring(tr(L"Tego folderu nie ma."));
+            description += L"\n" + std::wstring(tr(L"Wybierz katalog z grami tylko tego systemu. Zastępuje jego podfolder w głównym folderze ROM-ów."));
+            Row folder_row{Id::emulation_system_folder, Control::action, tr(L"Folder ROM-ów"), std::move(description), tr(L"Zmień")};
+            folder_row.key = key;
+            folder_row.lines = 3;
+            add(std::move(folder_row));
+        }
+        if (custom_folder) {
+            Row reset{Id::emulation_system_folder_reset, Control::action, tr(L"Przywróć domyślny folder ROM-ów"),
+                      tr(L"Użyj podfolderu tego systemu w głównym folderze ROM-ów."), tr(L"Przywróć")};
+            reset.key = key;
+            add(std::move(reset));
+        }
+        section(tr(L"Emulator"));
+        const auto* profile = rule->emulators.empty() ? nullptr : emulators::find(rule->emulators.front());
+        // The emulator: automatically the first one found, or one chosen.
+        if (!profile || !profile->manual_only) {
             Row choice{Id::emulation_emulator, Control::choice, tr(L"Emulator"),
                        tr(L"Automatycznie: pierwszy znaleziony z listy. Inny wybór dotyczy wszystkich gier tego systemu.")};
             choice.key = key;
@@ -123,9 +144,11 @@ void Launcher::emulationSettingsRows() {
                 if (found == entry && emulation_scan::coreMissing(*rule, setup))
                     where = std::wstring(tr(L"Pobierz go w RetroArch (Główne menu → Aktualizacje online → Pobieranie rdzeni).")) + L" " +
                             emulation_scan::core(*rule, setup).wstring();
-            } else where = tr(L"Nie znaleziono programu. Wskaż go niżej albo zainstaluj emulator (np. przez EmuDecka).");
+            } else where = info->manual_only ? tr(L"Wskaż własny program i jego parametry uruchamiania. Ten system jest konfigurowany ręcznie.") :
+                                              tr(L"Nie znaleziono programu. Wskaż go niżej albo zainstaluj emulator (np. przez EmuDecka).");
             Row detected{Id::emulation_detected, Control::action,
-                         std::wstring(info->name) + L" · " + (entry ? emulationFoundText(*rule, *entry) : std::wstring(tr(L"Nie znaleziono"))),
+                          (info->manual_only ? std::wstring(tr(L"Program własny")) : std::wstring(info->name)) + L" · " +
+                              (entry ? emulationFoundText(*rule, *entry) : std::wstring(tr(L"Nie znaleziono"))),
                          std::move(where), entry && entry->found() && entry->via != emulators::Via::flatpak ? tr(L"Otwórz folder") : std::wstring{}};
             detected.key = key;
             detected.lines = 3;
@@ -137,15 +160,17 @@ void Launcher::emulationSettingsRows() {
         section(tr(L"Ręcznie"));
         {
             Row program{Id::emulation_program, Control::action, tr(L"Program"),
-                        manual ? own->second.program.wstring() :
-                            tr(L"Wskaż plik emulatora (.exe), jeśli jest gdzie indziej. Dotyczy każdego systemu z ") + std::wstring(info->name) + L".",
+                         manual ? own->second.program.wstring() :
+                         info->manual_only ? tr(L"Wskaż własny program i jego parametry uruchamiania. Ten system jest konfigurowany ręcznie.") :
+                             tr(L"Wskaż plik emulatora (.exe), jeśli jest gdzie indziej. Dotyczy każdego systemu z ") + std::wstring(info->name) + L".",
                         tr(L"Wybierz…")};
             program.key = key;
             add(std::move(program));
         }
         if (manual) {
-            Row reset{Id::emulation_program_reset, Control::action, tr(L"Przywróć wykrywanie"),
-                      tr(L"Program znajdowany automatycznie (EmuDeck, ES-DE, rejestr, typowe foldery, PATH)."), tr(L"Przywróć")};
+            Row reset{Id::emulation_program_reset, Control::action, info->manual_only ? tr(L"Usuń wskazany program") : tr(L"Przywróć wykrywanie"),
+                       info->manual_only ? tr(L"Wskaż własny program i jego parametry uruchamiania. Ten system jest konfigurowany ręcznie.") :
+                           tr(L"Program znajdowany automatycznie (EmuDeck, ES-DE, rejestr, typowe foldery, PATH)."), tr(L"Przywróć")};
             reset.key = key;
             add(std::move(reset));
         }
@@ -263,6 +288,36 @@ bool Launcher::emulationSettingsChoose(const Row& row) {
 
 // The action rows of the Emulacja page and its systems; false: not one of them.
 bool Launcher::emulationSettingsActivate(const Row& row) {
+    if (row.id == Id::emulation_system_folder_reset) {
+        settings_.system_roms.erase(row.key);
+        settings_state_.selected[settings_state_.category] = std::max(0, settings_state_.row() - 1);
+        settingsChanged(); audio_.context();
+        startRomScan();
+        return true;
+    }
+    if (row.id == Id::emulation_system_folder) {
+        const auto* rule = emulationRule(row.key);
+        if (!rule) { navigationBoundary(); return true; }
+        const auto apply = [this, key = row.key](const std::filesystem::path& picked) {
+            if (!settingsOpen() || picked.empty() || !picked.is_absolute()) return;
+            settings_.system_roms[key] = picked;
+            settingsChanged(); audio_.context();
+            startRomScan();
+        };
+        file_browser::Request request;
+        request.mode = file_browser::Mode::folder;
+        request.title = std::wstring(tr(L"Wybierz folder ROM-ów")) + L" · " + emulationSystemTitle(rule->system);
+        request.initial = rule->folder;
+        if (pick_path_) {
+            const auto picked = pick_path_(hwnd_, true, request.initial);
+            mouse_transition_until_ = GetTickCount64() + GetDoubleClickTime();
+            apply(picked);
+            return true;
+        }
+        request.native = [this, initial = request.initial, title = request.title] { return pickPath(hwnd_, true, title.c_str(), {}, {}, false, initial); };
+        openFileBrowser(std::move(request), apply);
+        return true;
+    }
     if (row.id == Id::emulation_folder_reset) {
         settings_.emulation_roms.clear();
         settingsChanged(); audio_.context();

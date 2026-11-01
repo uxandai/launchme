@@ -45,6 +45,7 @@ void screenscraperPass(const std::vector<Game>& games, const std::shared_ptr<std
             if (const auto entry = ss::loadCached(game, metadata); entry && entry->game) {
                 cached->emulation.emplace(gameKey(game), entry->game->details);
                 cached->names.emplace(gameKey(game), entry->game->name);
+                if (entry->manual) cached->manual.insert(gameKey(game));
             }
             continue;
         }
@@ -54,6 +55,7 @@ void screenscraperPass(const std::vector<Game>& games, const std::shared_ptr<std
             if (entry->game) {
                 cached->emulation.emplace(gameKey(game), entry->game->details);
                 cached->names.emplace(gameKey(game), entry->game->name);
+                if (entry->manual) cached->manual.insert(gameKey(game));
                 continue;
             }
             if (now - entry->checked < ss::missing_retry_ms) continue;
@@ -172,6 +174,7 @@ void Launcher::startRatings() {
                 if (const auto picked = screenscraper::loadCached(game, root / L"metadata"); picked && picked->manual && picked->game) {
                     cached->emulation.emplace(gameKey(game), picked->game->details);
                     cached->names.emplace(gameKey(game), picked->game->name);
+                    cached->manual.insert(gameKey(game));
                     continue;
                 }
                 if (auto found = library.find(game.platform, game.rom, game.name)) {
@@ -210,7 +213,8 @@ void Launcher::onRatings(std::unique_ptr<RatingsMessage> message) {
         auto& known = emulation_names_[key];
         if (known != name) { known = std::move(name); renamed = true; }
     }
-    if (renamed && settings_.emulation_names) applyEmulationNames();
+    for (const auto& key : message->manual) renamed |= manual_names_.insert(key).second;
+    if (renamed) applyEmulationNames(); // The player's picks show even with ROM titles off.
     for (auto& [key, rating] : message->ratings) if (!rawg_metadata_.contains(key)) ratings_[key] = std::move(rating);
     if (screen_ == ScreenMode::details && !detail_games_.empty() && !steamArtwork(detail_games_[0])) {
         if (const auto* details = localDetails(detail_games_[0])) { details_ = *details; completeDetails(details_, detail_games_[0]); }

@@ -122,7 +122,8 @@ enum class Id { font, home_layout, ui_accent, accent, uninstalled, emulation, co
                    // the other systems' fold; a system's page: its emulator, how it was found, the program
                    // chosen by hand and its reset, the launch arguments and the command they make.
                    emulation_system, emulation_more, emulation_emulator, emulation_detected, emulation_program,
-                   emulation_program_reset, emulation_arguments, emulation_preview,
+                    emulation_program_reset, emulation_arguments, emulation_preview,
+                    emulation_system_folder, emulation_system_folder_reset,
                    // DRM-free → Katalogi: the page of the scanned folders.
                    drm_roots,
                    // Metro / Flix → Pasek kategorii (AppSettings::metro_category_tabs / flix_category_tabs).
@@ -166,6 +167,13 @@ inline std::wstring companionImportHelp() {
 // Polish keys: draw them through tr(). Indexed like AppSettings::HomeLayout.
 inline constexpr std::array<const wchar_t*, 6> home_layouts{trKey(L"Domyślny"), L"XMB", L"Flix", L"Metro", L"PSfive", L"snitch"};
 inline constexpr int home_layout_count = static_cast<int>(home_layouts.size());
+// The layout tiles of Settings, the desktop window's settings and the walkthrough are a slider:
+// `visible` tiles at a time, the one cut at an edge shows there are more. Its leftmost slot
+// (fractional while it glides) keeps `focus` in the middle.
+inline float layoutFirst(int focus, float visible) {
+    const float last = std::max(0.0f, static_cast<float>(home_layout_count) - visible);
+    return std::clamp(static_cast<float>(focus) - (visible - 1.0f) * 0.5f, 0.0f, last);
+}
 inline constexpr std::array<const wchar_t*, 3> xmb_sizes{trKey(L"Mały"), trKey(L"Domyślny"), trKey(L"Duży")};
 inline constexpr std::array<const wchar_t*, 2> flix_sizes{trKey(L"Domyślny"), trKey(L"Duży")}; // AppSettings::FlixSize.
 // Stepped sliders: the number of positions (0 = a continuous slider).
@@ -660,19 +668,26 @@ struct Layout {
         const auto r = row(index, scroll); const float y = middle(r);
         return {r.right - 68, y - 22, r.right - 24, y + 22};
     }
-    // Preview tile of a Control::layout row; option 0 is left.
-    static constexpr float layout_tile = 136, layout_step = 148;
-    Rect layoutOption(int index, float scroll, int option) const {
+    // Preview tile of a Control::layout row; option 0 is left. The large row (Interfejs) is a slider of
+    // layout_visible tiles; `first` is its leftmost slot (layoutFirstOf, gliding in the renderer).
+    static constexpr float layout_tile = 136, layout_step = 148, layout_visible = 4.5f;
+    Rect layoutOption(int index, float scroll, int option, float first = 0) const {
         const auto r = row(index, scroll);
         if (index == layout_index) {
-            const float tile_width = (r.right - r.left - 48 - 16 * (home_layout_count - 1)) / home_layout_count;
-            const float left = r.left + 24 + option * (tile_width + 16);
-            return {left, r.top + 84, left + tile_width, r.bottom - 20};
+            const float pitch = (r.right - r.left - 48 + 16) / layout_visible;
+            const float left = r.left + 24 + (static_cast<float>(option) - first) * pitch;
+            return {left, r.top + 84, left + pitch - 16, r.bottom - 20};
         }
         const float step = std::min(layout_step, (r.right - r.left - 48 + layout_step - layout_tile) / home_layout_count);
         const float right = r.right - 24 - (home_layout_count - 1 - option) * step;
         return {right - (step - (layout_step - layout_tile)), r.top + 10, right, r.bottom - 10};
     }
+    // Where the layout slider shows its tiles: the renderer clips to it, a pointer outside it hits none.
+    Rect layoutBand(int index, float scroll) const {
+        const auto r = row(index, scroll);
+        return index == layout_index ? Rect{r.left + 18, r.top + 70, r.right - 18, r.bottom - 8} : r;
+    }
+    float layoutFirstOf(int index, int choice) const { return index == layout_index ? layoutFirst(choice, layout_visible) : 0.0f; }
     // A Control::avatar row: a slider of the companions' cards under its title, up to three at a
     // time; `first` is the leftmost one shown (avatarFirst). A card out of view is empty.
     static constexpr int avatar_visible = 3;

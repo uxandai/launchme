@@ -13,6 +13,9 @@ namespace {
 using std::filesystem::path;
 
 constexpr Info table[] = {
+    // Independent manual profiles: no assumed emulator or command-line interface.
+    {L"ps5", L"PS5", {}, {}, {}, {}, {}, {}, {}, {}, {}, false, false, true},
+    {L"switch2", L"Switch 2", {}, {}, {}, {}, {}, {}, {}, {}, {}, false, false, true},
     // id, name, script, script_args, EmuDeck folder, Windows programs, ES-DE names, installer folders, flatpak, Linux programs, direct arguments.
     {L"duckstation", L"DuckStation", L"duckstation", L"'-fullscreen'", L"duckstation", {L"duckstation-qt-x64-ReleaseLTCG.exe", L"duckstation-qt.exe"},
      {L"DUCKSTATION"}, {L"DuckStation"}, L"org.duckstation.DuckStation", {L"duckstation-qt", L"duckstation"}, L"-fullscreen"},
@@ -278,6 +281,7 @@ public:
             return found;
         };
         if (manual && fileExists(manual->program)) return take(Via::manual, manual->program.lexically_normal());
+        if (info.manual_only) return found;
         // EmuDeck's launcher, unless the program it names is gone.
         if (const auto script = scripts_.find(lower(info.script)); !info.script.empty() && script != scripts_.end()) {
             const auto target = scriptTarget(script->second, context_);

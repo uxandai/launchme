@@ -115,6 +115,7 @@ context_menu::Rows Launcher::menuRows() const {
     rows.uninstall = canUninstall(game);
     rows.remove = canRemoveFromLibrary(game);
     rows.aurelia = aurelia_active_ && aurelia::validGame(game);
+    rows.identify = unidentifiedGame(game);
     return rows;
 }
 

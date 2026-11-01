@@ -375,6 +375,7 @@ struct AppSettings {
     };
     std::map<std::string, EmulatorOverride> emulator_overrides;
     std::map<std::string, std::string> system_emulator;
+    std::map<std::string, std::filesystem::path> system_roms; // System ID -> ROM folder override.
     // Metro: a white page with dark text (the light theme of Windows Phone).
     bool metro_light = false;
 };

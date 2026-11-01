@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cwctype>
+#include <unordered_map>
 
 using namespace desktop_ui;
 
@@ -209,11 +210,27 @@ void Launcher::desktopMetaClose() {
 
 // Titles, the pane and Szczegóły take the new values (the library is built again: a title also
 // orders, groups and finds the game).
+// The screens Tryb TV keeps open hold copies of their games (Szczegóły, a system's games, the search,
+// the cards drawn): after a rename they take the name the library has now, so Tryb TV and the desktop
+// show the same title.
+void Launcher::refreshShownNames() {
+    std::unordered_map<std::string, std::wstring> names;
+    for (const auto* games : {&grouped_library_, &public_library_, &private_category_.games})
+        for (const auto& game : *games) if (const auto key = gameKey(game); !key.empty()) names.emplace(key, game.name);
+    const auto rename = [&](Game& game) {
+        if (const auto found = names.find(gameKey(game)); found != names.end()) game.name = found->second;
+    };
+    for (auto* games : {&detail_games_, &nested_games_, &search_results_, &crop_games_, &downloads_games_})
+        for (auto& game : *games) rename(game);
+    for (auto& card : cards_) if (isGame(card.game)) rename(card.game);
+}
+
 void Launcher::desktopMetadataChanged() {
     desktop_details_key_.clear();
     buildShelves();
     syncGameIndex(); // Towarzyszka's index takes the new facts too.
-    if (screen_ == ScreenMode::shelves) rebuildCards(true);
+    refreshShownNames();
+    if (screen_ == ScreenMode::shelves || screen_ == ScreenMode::library) rebuildCards(true);
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 

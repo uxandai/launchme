@@ -592,7 +592,7 @@ void Renderer::paint(const std::vector<GameCard>& cards, size_t selected, bool s
             drawGogInstall();
             drawBulkCovers();
             drawCustomGameEditor();
-            if (context.tv_meta) drawDesktopMeta(*context.tv_meta); // Edytuj metadane from the game's menu.
+            if (context.tv_meta) { if (desktopDialogs()) drawDesktopMeta(*context.tv_meta); else drawTvMeta(*context.tv_meta); } // Edytuj metadane from the game's menu.
             if (context.identify) drawIdentify(); // Over Dodaj / Edytuj grę, which opens it.
             drawLibraryManager();
             // Opened from the panels above; the power menu and exit prompt stay over it (over Aurelia, below).

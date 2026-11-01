@@ -486,6 +486,8 @@ private:
     // textLine for a name that may not fit: instead of an ellipsis it fades out on the right and, while
     // moving (the focused row), glides to its end and back after a 2 s rest at each end (marqueeActive).
     // `alignment`: where a name that fits sits (a long one always starts at the left).
+    // The value cut at its start ("…\folder\file") until it fits width: the end of a path is what tells it apart.
+    std::wstring elideStart(const std::wstring& value, float width, IDWriteTextFormat* format);
     void fadingLine(const std::wstring& value, float x, float center_y, float width, IDWriteTextFormat* format, D2D1_COLOR_F ink, bool moving,
                     std::optional<DWRITE_TEXT_ALIGNMENT> alignment = {});
     // A title (one line, ellipsis) with an optional description directly beneath it, wrapped to
@@ -711,6 +713,7 @@ private:
     // Home layout miniature (src/ui/settings_layout_renderer.cpp): option = AppSettings::HomeLayout,
     // time = seconds into its one-shot preview (0 = at rest), emphasis 1 for a focused or chosen tile.
     void drawLayoutScene(int option, D2D1_RECT_F picture, float time, float emphasis);
+    float glideLayoutStrip(float first); // The layout slider's leftmost slot, gliding (Settings, the walkthrough).
     // A layout tile: Settings (no description) or the walkthrough's large tiles (with one).
     void drawLayoutTile(int option, D2D1_RECT_F box, bool active, bool focus, float time, const std::wstring& description, bool card = false);
     // First-run walkthrough (src/ui/tour_renderer.cpp): dimmed screen with a spotlight, bubble and card.
@@ -916,7 +919,8 @@ private:
     // A cached brand geometry (brand_icons_) filled under `transform`, tessellated once per device scale.
     void fillBrandGeometry(const std::string& key, ID2D1Geometry* geometry, const D2D1_MATRIX_3X2_F& transform, D2D1_COLOR_F ink);
     void drawDesktopQuick(const desktop_ui::View& view);
-    void drawDesktopMeta(const desktop_ui::MetaView& meta); // Also Tryb TV's, from the game's menu.
+    void drawDesktopMeta(const desktop_ui::MetaView& meta);
+    void drawTvMeta(const desktop_ui::MetaView& meta); // Tryb TV's, from the game's menu (src/ui/tv_metadata_renderer.cpp).
     void desktopSelection(const std::wstring& value, float left, float cy, float width, IDWriteTextFormat* format); // Its highlight, if any.
     void desktopFill(settings_ui::Rect r, float radius, D2D1_COLOR_F ink);
     void desktopStroke(settings_ui::Rect r, float radius, D2D1_COLOR_F ink, float width = 1);
@@ -1034,6 +1038,7 @@ private:
     std::array<float, 5> companion_card_frame_{-1, -1, -1, -1, -1};
     // Settings → Asystent: the cards' slider gliding to its first card (fractional), and when it last moved.
     float companion_strip_first_ = 0, companion_strip_time_ = -1;
+    float layout_strip_first_ = 0, layout_strip_time_ = -1; // The layout slider (glideLayoutStrip).
     Cover companion_photo_large_; // The same, decoded larger once it is enlarged.
     std::map<std::string, Cover> companion_feed_images_; // Only the phone's visible neighbourhood.
     Microsoft::WRL::ComPtr<IDWriteTextFormat> feed_body_font_, feed_small_font_, feed_title_font_;

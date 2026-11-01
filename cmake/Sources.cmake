@@ -263,6 +263,7 @@ set(LAUNCHME_APP_SOURCES
     src/ui/metro_renderer.cpp
     src/ui/psfive_renderer.cpp
     src/ui/snitch_renderer.cpp
+    src/ui/tv_metadata_renderer.cpp
     src/ui/glass_renderer.cpp
     src/ui/achievements_renderer.cpp
     src/ui/dashboard_renderer.cpp

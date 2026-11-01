@@ -23,13 +23,13 @@ std::wstring wide(std::string_view text) { return text_encoding::wideLegacy(text
 
 bool platformMarker(std::wstring_view source, std::wstring_view marker) {
     if (marker.empty()) return false;
-    if (marker != L"wii") return source.find(marker) != std::wstring_view::npos;
-    // Wii is a complete word/folder, never the prefix of Wii U or WiiU.
+    if (marker != L"wii" && marker != L"switch") return source.find(marker) != std::wstring_view::npos;
+    // Console names are complete words/folders, never prefixes of the next generation.
     for (size_t at = source.find(marker); at != std::wstring_view::npos; at = source.find(marker, at + marker.size())) {
         const auto end = at + marker.size();
         if ((at && std::iswalnum(source[at - 1])) || (end < source.size() && std::iswalnum(source[end]))) continue;
         const auto next = source.find_first_not_of(L" \t", end);
-        if (next != std::wstring_view::npos && source[next] == L'u' &&
+        if (next != std::wstring_view::npos && source[next] == (marker == L"wii" ? L'u' : L'2') &&
             (next + 1 == source.size() || !std::iswalnum(source[next + 1]))) continue;
         return true;
     }

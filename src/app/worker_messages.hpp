@@ -50,6 +50,7 @@ struct RatingsMessage {
     rawg::Map metadata;
     std::unordered_map<std::string, GameDetails> emulation; // By gameKey: ES-DE gamelist.xml / ScreenScraper details.
     std::unordered_map<std::string, std::wstring> names;    // By gameKey: titles matched by ROM file (AppSettings::emulation_names).
+    std::unordered_set<std::string> manual;                  // By gameKey: names the player picked in Zidentyfikuj grę (always shown).
     // Games ScreenScraper just identified, with the artwork slots still empty on disk: retried now.
     std::vector<std::pair<Game, std::vector<ArtworkKind>>> artwork_refresh;
     std::wstring screenscraper_error; // Shown once: rejected credentials, quota, service closed.

@@ -17,6 +17,14 @@ struct State {
     bool emulated = false;
     std::vector<screenscraper::GameInfo> found; // Source::screenscraper: the game of each row.
 };
+// What the game is on disk, shown at the top of the dialog: its ROM, else its program, else its
+// folder (a DRM-free folder game), else what its play action starts.
+inline std::wstring gamePath(const Game& game) {
+    if (!game.rom.empty()) return game.rom.wstring();
+    if (!game.executable.empty()) return game.executable.wstring();
+    if (!game.install_directory.empty()) return game.install_directory.wstring();
+    return game.play_action.target;
+}
 struct Layout {
     float width, height;
     static constexpr int visible = 6;

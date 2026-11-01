@@ -138,7 +138,8 @@ Settings → System → Help → **Open folder** (the version row) opens it.
   flatpak or an AppImage, so EmuDeck is optional. Pick another emulator (PS1, PSP, DS, GameCube and Wii can also
   run on RetroArch), point at its program by hand and replace its launch arguments (`%ROM%`, `%CORE%`); the
   command a game starts with is shown below, and a RetroArch system without its core says so. PS4 (shadPS4),
-  PS Vita (Vita3K) and ScummVM are among them.
+  PS Vita (Vita3K) and ScummVM are among them; PS5 and Switch 2 start with a program you choose. Each system can
+  also have its own ROM folder in place of its subfolder of the main one.
 - **Games added by hand** (Settings → Library → *DRM-free folders* → **Add game** → **Choose file** or **Choose
   folder**, the "+" tile, or a file or folder dropped on the desktop window): a program, shortcut or script is a PC
   game; a disc image or ROM is an emulated game with its console guessed and changeable (*Platform*), started by

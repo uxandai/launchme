@@ -9,6 +9,7 @@
 #include "../platform/unicode_text.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cwctype>
 #include <fstream>
 #include <map>
@@ -352,6 +353,8 @@ const Builtin builtin[] = {
     // EmuDeck's PS4 parsers: the shortcuts shadPS4 makes (ps4\shortcuts) and games kept as folders.
     {L"ps4", {}, {}, L"**/${title}@(.lnk|.LNK)", {L"shadps4"}},
     {L"ps4", {}, {}, L"**/${title}/@(eboot.bin|EBOOT.BIN)", {L"shadps4"}},
+    // Manual profiles also work without an EmuDeck/ES-DE installation.
+    {L"ps5", {}, {}, L"**/${title}/eboot.bin", {L"ps5"}},
     {L"psp", L".7z|.cso|.elf|.iso|.pbp|.prx", L"ppsspp_libretro", {}, {L"ppsspp", L"retroarch"}},
     // Installed Vita games: <title ID>\eboot.bin (Vita3K starts them by that ID).
     {L"psvita", {}, {}, L"**/${title}/@(eboot.bin|EBOOT.BIN)", {L"vita3k"}},
@@ -361,6 +364,7 @@ const Builtin builtin[] = {
     {L"wiiu", {}, {}, L"${title}/**/*.rpx", {L"cemu"}},
     {L"wiiu", L".wux|.wud|.wua|.wad|.iso|.7z|.zip", {}, L"${title}@(.wux|.wud|.wua|.wad|.iso|.7z|.zip)", {L"cemu"}},
     {L"switch", L".kip|.nca|.nro|.nso|.nsp|.xci", {}, {}, {L"eden", L"citron", L"ryujinx", L"yuzu"}},
+    {L"switch2", L".kip|.nca|.nro|.nso|.nsp|.xci", {}, {}, {L"switch2"}},
     {L"n3ds", L".3ds|.3dsx|.app|.axf|.cii|.cxi|.elf|.cci|.zcci|.z3dsx|.zcxi", {}, {}, {L"azahar"}},
     {L"nds", L".nds|.app", L"melondsds_libretro", {}, {L"melonds", L"retroarch"}},
     {L"xbox", L".iso", {}, {}, {L"xemu"}},
@@ -616,7 +620,10 @@ Setup load(const Environment& environment, const std::filesystem::path& roms_ove
         rule.platform = platformForSystem(rule.system);
         rule.glob = builtinGlob(entry);
         rule.core = std::wstring(entry.core);
-        if (!setup.paths.roms.empty()) { rule.folder = setup.paths.roms / rule.system; rule.present = folderExists(rule.folder); }
+        const auto own = setup.choices.roms.find(text_encoding::utf8(rule.system));
+        if (own != setup.choices.roms.end() && own->second.is_absolute()) rule.folder = own->second.lexically_normal();
+        else if (!setup.paths.roms.empty()) rule.folder = setup.paths.roms / rule.system;
+        rule.present = folderExists(rule.folder);
         for (const auto id : entry.emulators) if (!id.empty()) rule.emulators.emplace_back(id);
         if (rule.emulators.empty() && !rule.core.empty()) rule.emulators.emplace_back(L"retroarch");
         setup.rules.push_back(std::move(rule));
@@ -742,7 +749,6 @@ GameAction commandAction(std::wstring_view command_text, const std::filesystem::
 
 Result scan(const Setup& setup, bool show_hidden, const Cancelled& cancelled) {
     Result result;
-    if (setup.paths.roms.empty()) return result;
     const auto exceptions = loadExceptions(setup.paths);
     std::map<std::wstring, Listing> listings; // Per folder, shared by its rules (Wii U: folders and discs).
     const auto listing = [&](const std::filesystem::path& folder) -> const Listing& {
@@ -755,28 +761,77 @@ Result scan(const Setup& setup, bool show_hidden, const Cancelled& cancelled) {
         std::filesystem::path rom;
         std::wstring title, platform;
         const Rule* rule = nullptr;
+        std::filesystem::path identity; // An unpacked folder game: the folder (its ROM moves with each update).
     };
     std::vector<Found> found;
     std::unordered_set<std::wstring> claimed;
     std::set<std::wstring> systems;
+    // A Switch game kept as an unpacked folder (Switch 2 dumps: <game>\...\EffectScript.nso and
+    // dozens more parts): one game named after its folder, not one per part named after the file.
+    // Its own image (.xci, .nsp) goes first, then a homebrew .nro, an .nso, an .nca, a .kip.
+    const auto part_rank = [](const std::filesystem::path& file) {
+        const auto extension = lower(file.extension().wstring());
+        constexpr std::array<std::wstring_view, 6> order{L".xci", L".nsp", L".nro", L".nso", L".nca", L".kip"};
+        for (size_t i = 0; i < order.size(); ++i) if (extension == order[i]) return static_cast<int>(i);
+        return static_cast<int>(order.size());
+    };
+    std::unordered_map<std::wstring, std::pair<size_t, std::filesystem::path>> unpacked; // Game folder -> its entry in `found`.
     for (const auto& rule : setup.rules) {
         if (cancelled && cancelled()) break;
         if (rule.folder.empty() || !folderExists(rule.folder)) continue;
+        const bool switch_rule = rule.system == L"switch" || rule.system == L"switch2";
         for (const auto& file : listing(rule.folder).files) {
             const auto key = romKey(file);
             if (claimed.contains(key)) continue;
-            const auto title = match(rule.glob, relativeText(file, rule.folder));
+            auto title = match(rule.glob, relativeText(file, rule.folder));
             if (!title || title->empty()) continue;
             const auto& platform = rule.platform;
+            const auto relative = file.lexically_relative(rule.folder);
+            if (switch_rule && part_rank(file) >= 2 && std::distance(relative.begin(), relative.end()) > 1) {
+                const auto folder = rule.folder / *relative.begin();
+                const auto folder_key = romKey(folder);
+                claimed.insert(key);
+                if (const auto known = unpacked.find(folder_key); known != unpacked.end()) {
+                    auto& entry = found[known->second.first];
+                    if (part_rank(file) < part_rank(entry.rom)) entry.rom = file;
+                    continue;
+                }
+                unpacked.emplace(folder_key, std::pair{found.size(), folder});
+                found.push_back({file, relative.begin()->wstring(), platform, &rule, folder});
+                systems.insert(platform);
+                if (found.size() >= most_games) break;
+                continue;
+            }
             claimed.insert(key);
             found.push_back({file, *title, platform, &rule});
             systems.insert(platform);
             if (found.size() >= most_games) break;
         }
     }
+    // A Switch 2 dump: <game>\base and <game>\updates\<version>, each with exefs\main; the newest
+    // update's main starts it, else the base's (else the part chosen above).
+    const auto switch2Main = [](const std::filesystem::path& game) {
+        std::filesystem::path best;
+        unsigned long long newest = 0;
+        std::error_code error;
+        for (std::filesystem::directory_iterator it(game / L"updates", error), end; !error && it != end; it.increment(error)) {
+            const auto name = it->path().filename().wstring();
+            if (name.empty() || name.size() > 18 || !std::all_of(name.begin(), name.end(), [](wchar_t ch) { return ch >= L'0' && ch <= L'9'; })) continue;
+            const auto version = std::wcstoull(name.c_str(), nullptr, 10);
+            const auto main = it->path() / L"exefs" / L"main";
+            if ((best.empty() || version > newest) && fileExists(main)) { best = main; newest = version; }
+        }
+        if (best.empty()) for (const auto* base : {L"base", L"."})
+            if (const auto main = (game / base / L"exefs" / L"main").lexically_normal(); fileExists(main)) { best = main; break; }
+        return best;
+    };
+    for (const auto& [key, place] : unpacked) {
+        auto& entry = found[place.first];
+        if (entry.rule->system == L"switch2") if (auto main = switch2Main(place.second); !main.empty()) entry.rom = std::move(main);
+    }
     // Loose files at the top of the ROM folder (a Switch .nsp left beside the system folders): the
     // parser of the system its extension belongs to.
-    {
+    if (!setup.paths.roms.empty()) {
         std::error_code error;
         for (std::filesystem::directory_iterator it(setup.paths.roms, error), end; !error && it != end && found.size() < most_games; it.increment(error)) {
             std::error_code kind;
@@ -785,6 +840,9 @@ Result scan(const Setup& setup, bool show_hidden, const Cancelled& cancelled) {
             if (claimed.contains(key)) continue;
             const auto system = extensionSystem(lower(it->path().extension().wstring()));
             if (system.empty()) continue;
+            // An explicit system folder replaces this source, including loose files in the global root.
+            if (const auto own = setup.choices.roms.find(text_encoding::utf8(system));
+                own != setup.choices.roms.end() && own->second.is_absolute()) continue;
             const auto platform = platformForSystem(system);
             const Rule* rule = nullptr;
             // The system's own glob must take it (Switch: .nsp and .xci, not an .nsz its emulator cannot open).
@@ -817,7 +875,14 @@ Result scan(const Setup& setup, bool show_hidden, const Cancelled& cancelled) {
             }
         if (name.empty()) name = displayTitle(entry.title);
         auto play = action(*entry.rule, setup, entry.rom);
-        result.games.push_back(makeGame(name, entry.platform, entry.rom, std::move(play)));
+        auto game = makeGame(name, entry.platform, entry.rom, std::move(play));
+        if (!entry.identity.empty()) { // Keyed by its folder: a new update (another exefs\main) keeps its identification.
+            game.app_id = romAppId(entry.identity);
+            game.shortcut_id = (static_cast<uint64_t>(game.app_id) << 32) | 0x02000000ULL;
+            game.install_directory = entry.identity;
+        }
+        result.games.push_back(std::move(game));
+        ++result.system_counts[entry.rule->system];
     }
     result.systems = systems.size();
     return result;

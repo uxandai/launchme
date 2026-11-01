@@ -334,22 +334,39 @@ void Renderer::drawLayoutTile(int option, D2D1_RECT_F box, bool active, bool foc
     }
 }
 
+// The layout slider's leftmost slot glides to its new place, like the tiles of a shelf, instead of
+// jumping (Settings and the walkthrough; one is drawn at a time).
+float Renderer::glideLayoutStrip(float first) {
+    const float dt = elapsed_ - layout_strip_time_;
+    if (layout_strip_time_ < 0 || dt < 0 || dt > 0.2f || screen_changed_) layout_strip_first_ = first;
+    else layout_strip_first_ += (first - layout_strip_first_) * (1 - std::exp(-std::min(dt, 0.05f) * 13.0f));
+    if (std::abs(layout_strip_first_ - first) < 0.002f) layout_strip_first_ = first;
+    layout_strip_time_ = elapsed_;
+    return layout_strip_first_;
+}
+
 void Renderer::drawSettingsLayouts(const settings_ui::Layout& layout, int row, float scroll, bool focused) {
     const auto& item = (*context_->settings_rows)[row];
+    // A slider of tiles: the one cut at an edge says there are more; the chosen one stays in view.
+    const float first = glideLayoutStrip(layout.layoutFirstOf(row, item.choice));
+    const auto band = layout.layoutBand(row, scroll);
+    target_->PushAxisAlignedClip(D2D1::RectF(band.left, band.top, band.right, band.bottom), D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
     int framed = -1;
     for (int option = 0; option < settings_ui::home_layout_count; ++option) {
-        const auto tile = layout.layoutOption(row, scroll, option);
+        const auto tile = layout.layoutOption(row, scroll, option, first);
         const bool active = item.choice == option;
         const bool preview = context_->settings_preview_option == option;
         const bool focus = preview || (focused && active && context_->settings_preview_option < 0);
         if (focus || (framed < 0 && active)) framed = option;
+        if (tile.right <= band.left || tile.left >= band.right) continue; // Out of view.
         drawLayoutTile(option, D2D1::RectF(tile.left, tile.top, tile.right, tile.bottom), active, focus,
                        preview ? context_->settings_preview_seconds : 0, {}, true);
     }
     // One frame, as on the companions' cards: it glides to the layout under the focus (the chosen one
     // without it, fainter).
     if (framed >= 0) {
-        const auto tile = layout.layoutOption(row, scroll, framed);
+        const auto tile = layout.layoutOption(row, scroll, framed, first);
         drawCompanionCardFocus(D2D1::RectF(tile.left, tile.top, tile.right, tile.bottom), 3, focused ? 1.0f : 0.75f);
     }
+    target_->PopAxisAlignedClip();
 }

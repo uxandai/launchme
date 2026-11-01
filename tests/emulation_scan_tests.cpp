@@ -133,6 +133,61 @@ int main(int argc, char** argv) {
             write(retroarch.parent_path() / L"cores" / L"snes9x_libretro.dll", "dll");
             if (coreMissing(snes, setup) || !core(*setup.forSystem(L"ps2"), setup).empty()) return 54;
         }
+        // Each system's explicit folder replaces its default, including loose ROMs in the root.
+        const auto custom_ps2 = root / L"Separate drive" / L"PlayStation games";
+        const auto custom_switch2 = root / L"Separate drive" / L"Nintendo games";
+        const auto custom_ps5 = root / L"Separate drive" / L"New PlayStation";
+        write(custom_ps2 / L"New Game.iso", "iso");
+        write(custom_switch2 / L"New Nintendo.xci", "rom");
+        write(custom_switch2 / L"Nested" / L"Nintendo NSP.nsp", "rom");
+        write(custom_ps5 / L"New Sony" / L"eboot.bin", "elf");
+        write(custom_ps5 / L"Nested" / L"Another Sony" / L"EBOOT.BIN", "elf");
+        write(custom_ps5 / L"New Sony" / L"module.elf", "support file");
+        write(custom_ps5 / L"New Sony" / L"data.bin", "support file");
+        write(custom_ps5 / L"Empty Game" / L"readme.txt", "not a game");
+        write(custom_ps5 / L"readme.txt", "ignored");
+        write(roms / L"switch" / L"Original.nsp", "rom");
+        write(roms / L"Loose.nsp", "rom");
+        choices = {};
+        choices.roms = {{"ps2", custom_ps2}, {"switch2", custom_switch2}, {"ps5", custom_ps5}};
+        choices.overrides["ps5"] = {manual, L"--game %ROM% --custom"};
+        choices.overrides["switch2"] = {pcsx2, L"--rom %ROM%"};
+        setup = load(environment, roms, choices);
+        if (setup.forSystem(L"ps2")->folder != custom_ps2 || !setup.forSystem(L"ps2")->present ||
+            setup.forSystem(L"ps5")->platform != L"PS5" || setup.forSystem(L"switch2")->platform != L"Switch 2") return 70;
+        auto result = scan(setup);
+        if (result.system_counts[L"ps2"] != 1 || result.system_counts[L"ps5"] != 2 ||
+            result.system_counts[L"switch2"] != 2 || result.system_counts[L"switch"] != 2) return 71;
+        for (const auto& game : result.games) {
+            if (game.platform == L"PS2" && game.name != L"New Game") return 72;
+            if (game.platform == L"PS5" && (game.play_action.target != manual.wstring() ||
+                game.play_action.arguments != L"--game \"" + game.rom.wstring() + L"\" --custom")) return 73;
+            if (game.platform == L"PS5" && game.name != L"New Sony" && game.name != L"Another Sony") return 81;
+            if (game.platform == L"Switch 2" && game.play_action.target != pcsx2.wstring()) return 74;
+        }
+        // Missing override: no silent fallback to the old folder. Reset: defaults are scanned again.
+        choices.roms["switch"] = root / L"Disconnected";
+        result = scan(load(environment, roms, choices));
+        if (result.system_counts.contains(L"switch")) return 75;
+        choices.roms.erase("switch");
+        choices.roms.erase("ps2");
+        result = scan(load(environment, roms, choices));
+        if (result.system_counts[L"switch"] != 2 || result.system_counts[L"ps2"] != 1) return 76;
+        for (const auto& game : result.games) if (game.platform == L"PS2" && game.name != L"Game") return 77;
+        // No global folder or EmuDeck: only the two manual profiles, separately configured.
+        Environment standalone; standalone.windows = true; standalone.registry = false;
+        setup = load(standalone, {}, choices);
+        result = scan(setup);
+        if (!setup.paths.roms.empty() || result.games.size() != 4 || result.system_counts[L"ps5"] != 2 ||
+            result.system_counts[L"switch2"] != 2) return 78;
+        choices.overrides.clear();
+        setup = load(standalone, {}, choices);
+        if (setup.emulatorFor(*setup.forSystem(L"ps5")) || setup.emulatorFor(*setup.forSystem(L"switch2")) ||
+            !action(*setup.forSystem(L"ps5"), setup, custom_ps5 / L"New Sony" / L"eboot.bin").target.empty()) return 79;
+        // Multiple rules for one system share its override (PS4: shortcuts and extracted games).
+        choices.roms = {{"ps4", roms / L"ps4"}};
+        setup = load(standalone, {}, choices);
+        if (scan(setup).system_counts[L"ps4"] != 2) return 80;
         std::filesystem::remove_all(root, error);
     }
     std::cout << "emulation_scan passed\n";

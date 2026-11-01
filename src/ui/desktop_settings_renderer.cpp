@@ -364,9 +364,14 @@ void Renderer::drawDesktopSettings() {
             textLine(item.value, t.right + 12, cy, right - 16 - t.right - 12, desktop_font_.Get(), gray(0.85f), DWRITE_TEXT_ALIGNMENT_TRAILING);
             break;
         }
-        case Control::layout:
+        case Control::layout: {
+            // A slider: the chosen layout in view, the tile cut at an edge says there are more.
+            const float first = settings_ui::layoutFirst(item.choice, L.layout_visible);
+            const auto band = L.layoutBand(i, s);
+            target_->PushAxisAlignedClip(box(band), D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
             for (int option = 0; option < settings_ui::home_layout_count; ++option) {
-                const auto t = L.layoutTile(i, s, option);
+                const auto t = L.layoutTile(i, s, option, first);
+                if (t.right <= band.left || t.left >= band.right) continue;
                 const bool chosen = item.choice == option;
                 const float h = hovered(Kind::layout, option);
                 const float time = context_->settings_preview_option == option ? context_->settings_preview_seconds : 0.0f;
@@ -376,7 +381,9 @@ void Renderer::drawDesktopSettings() {
                 textLine(tr(settings_ui::home_layouts[static_cast<size_t>(option)]), t.left, t.bottom + 16, t.right - t.left,
                          chosen ? desktop_strong_font_.Get() : desktop_font_.Get(), chosen ? palette::text() : gray(0.72f), DWRITE_TEXT_ALIGNMENT_CENTER);
             }
+            target_->PopAxisAlignedClip();
             break;
+        }
         case Control::avatar: {
             const int count = companion::lookCount(), first = L_t::avatarFirst(item.choice, count);
             const auto* her = context_->companion;

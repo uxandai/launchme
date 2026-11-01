@@ -50,7 +50,7 @@ void Launcher::onLibrary(std::unique_ptr<LibraryMessage> library) {
         library_dialog_ = {}; // Never edit the previous account's Steam overlays.
         preview_.clear(); // Play time and achievements belong to the signed-in account.
         ratings_alive_->store(false); ratings_alive_ = std::make_shared<std::atomic_bool>(true);
-        ++ratings_generation_; ratings_started_ = false; ratings_.clear(); rawg_metadata_.clear(); emulation_metadata_.clear(); emulation_names_.clear();
+        ++ratings_generation_; ratings_started_ = false; ratings_.clear(); rawg_metadata_.clear(); emulation_metadata_.clear(); emulation_names_.clear(); manual_names_.clear();
         ++*identify_token_; identify_state_ = {};
         crop_token_->fetch_add(1); pointerUp();
         {
@@ -233,6 +233,7 @@ void Launcher::buildShelves() {
         for (const auto& game : private_category_.games)
             if (game.installed || game.installation.active() || settings_.show_uninstalled)
                 public_library_.push_back(game);
+    applyIdentifiedNames(public_library_); // Zidentyfikuj grę (and ROM titles), under the player's own titles.
     applyMetadataTitles(public_library_); // Edytuj metadane: the player's own titles (before grouping and sorting).
     recent_games::apply(public_library_, library_state_.last_played, account_, gog_state_.account, epic_state_.account);
     recordLibraryGames(); // Record fallbacks before sorting and grouping this snapshot.

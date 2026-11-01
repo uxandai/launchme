@@ -165,6 +165,15 @@ bool emulatorKey(std::string_view value) {
 }
 // 0.5.1: emulator.<id>.program / emulator.<id>.arguments and system_emulator.<system>.
 bool parseEmulatorSetting(AppSettings& settings, std::string_view key, std::string_view value) {
+    if (key.starts_with("system_roms.")) {
+        const auto system = key.substr(12);
+        const auto text = text_encoding::wideLenient(value);
+        if (emulatorKey(system) && text.find_first_of(L"\r\n") == std::wstring::npos) {
+            if (text.empty()) settings.system_roms.erase(std::string(system));
+            else if (std::filesystem::path(text).is_absolute()) settings.system_roms[std::string(system)] = text;
+        }
+        return true;
+    }
     if (key.starts_with("system_emulator.")) {
         const auto system = key.substr(16);
         if (emulatorKey(system) && (value.empty() || emulatorKey(value))) {
@@ -811,6 +820,9 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
     output << "metro_light=" << settings.metro_light << '\n';
     output << "emulation_source=" << (settings.emulation_source == AppSettings::EmulationSource::steam ? "steam" : "roms") << '\n';
     output << "emulation_roms=" << text_encoding::utf8Lenient(settings.emulation_roms.wstring()) << '\n';
+    for (const auto& [system, folder] : settings.system_roms)
+        if (emulatorKey(system) && folder.is_absolute() && folder.wstring().find_first_of(L"\r\n") == std::wstring::npos)
+            output << "system_roms." << system << '=' << text_encoding::utf8Lenient(folder.wstring()) << '\n';
     for (const auto& [id, chosen] : settings.emulator_overrides) {
         if (!emulatorKey(id) || (chosen.program.empty() && chosen.arguments.empty())) continue;
         if (!chosen.program.empty()) output << "emulator." << id << ".program=" << text_encoding::utf8Lenient(chosen.program.wstring()) << '\n';

@@ -13,6 +13,11 @@ void Launcher::openIdentify() {
     if (identifyDetailAction() < 0) return;
     openIdentifyFor(cards_[0].game);
 }
+bool Launcher::unidentifiedGame(const Game& game) const {
+    if (!isGame(game) || steamArtwork(game) || game.kind == GameKind::catalog) return false;
+    const auto key = gameKey(game);
+    return !key.empty() && !rawg_metadata_.contains(key) && !emulation_metadata_.contains(key);
+}
 void Launcher::openIdentifyFor(const Game& game) {
     if (!isGame(game) || steamArtwork(game) || gameKey(game).empty()) return;
     identify_state_ = {}; identify_state_.open = true; identify_state_.game = game; identify_state_.query = game.name;
@@ -157,6 +162,7 @@ void Launcher::onIdentify(std::unique_ptr<IdentifyMessage> message) {
         rawg_metadata_.erase(key);
         emulation_metadata_[key] = message->picked->details;
         emulation_names_[key] = message->picked->name;
+        manual_names_.insert(key); // The player's pick: its name shows even with ROM titles off.
         if (screen_ == ScreenMode::details && !detail_games_.empty() && gameKey(detail_games_[0]) == key) details_ = message->picked->details;
         const auto failures = coverCacheDirectory().parent_path() / L"artwork" / L"failures";
         // The worker removed every automatic kind: posters and wide tiles load again when a view asks.
@@ -172,7 +178,7 @@ void Launcher::onIdentify(std::unique_ptr<IdentifyMessage> message) {
             if (kind == CoverMessage::Kind::cover || kind == CoverMessage::Kind::hero || kind == CoverMessage::Kind::logo) requestArt(game, kind);
         }
         closeIdentify(); audio_.context();
-        if (settings_.emulation_names) applyEmulationNames();
+        applyEmulationNames(); // The new name everywhere: tiles, the game's menu, details.
         requestVisibleArt();
     } else if (!message->metadata) state.status = std::move(message->error);
     else {
@@ -211,6 +217,7 @@ void Launcher::onIdentify(std::unique_ptr<IdentifyMessage> message) {
             if (kind == CoverMessage::Kind::cover || kind == CoverMessage::Kind::hero || kind == CoverMessage::Kind::logo) requestArt(game, kind);
         }
         if (game.source == GameSource::drmfree) drmIdentified(game, rawg_metadata_[key]);
+        else if (game.kind == GameKind::nonsteam && !game.rom.empty()) applyEmulationNames(); // An emulated game takes the RAWG title.
         closeIdentify(); audio_.context();
         customEditorIdentified(key); // Opened from Dodaj / Edytuj grę: its poster is the identified game's now.
         requestVisibleArt(); // Posters and wide tiles the views show (the desktop grid's) load again.

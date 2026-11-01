@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(launchme VERSION 0.5.5 LANGUAGES C CXX)
+project(launchme VERSION 0.5.6 LANGUAGES C CXX)
 
 if(NOT WIN32)
     # Linux (highly experimental, docs/linux-port.md): the shared core, its tests and the launcher on SDL3 + Skia.
@@ -162,6 +162,14 @@ add_custom_target(launchme_studios ALL
 add_dependencies(launchme launchme_studios)
 install(FILES ${LAUNCHME_STUDIO_LOGOS} DESTINATION assets/studios COMPONENT Runtime)
 install(FILES res/studios/LICENSE.txt DESTINATION assets/studios COMPONENT Runtime)
+# Platform logos missing from HVR88's set (src/artwork/platform_logo.cpp: shippedPlatformLogo).
+file(GLOB LAUNCHME_PLATFORM_LOGOS CONFIGURE_DEPENDS "${LAUNCHME_RES_DIR}/platforms/*.png")
+add_custom_target(launchme_platform_logos ALL
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets/platforms"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${LAUNCHME_PLATFORM_LOGOS} "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets/platforms/"
+    DEPENDS ${LAUNCHME_PLATFORM_LOGOS} VERBATIM)
+add_dependencies(launchme launchme_platform_logos)
+install(FILES ${LAUNCHME_PLATFORM_LOGOS} DESTINATION assets/platforms COMPONENT Runtime)
 
 # Bundled extensions are separate DLL/ZIPs, built by the normal launcher target.
 # Packaging also runs for manifest-only edits, without relying on a DLL relink.

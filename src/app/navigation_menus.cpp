@@ -311,6 +311,7 @@ void Launcher::menuAccept() {
     case Item::shortcuts: dismissMenu(); openGameShortcuts(game); break;
     case Item::metadata: dismissMenu(); if (desktop_mode_) desktopMetaOpen(game); else openMetadata(game); break;
     case Item::aurelia: dismissMenu(); openAurelia(&game); break;
+    case Item::identify: dismissMenu(); openIdentifyFor(game); break;
     case Item::steam_account: cycleSteamAccount(game); break; // The menu stays: the row shows the next choice.
     default: openArtworkBrowser(game); break;
     }

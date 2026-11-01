@@ -14,7 +14,9 @@
 using namespace settings_ui;
 
 bool Launcher::romLibraryActive() const {
-    return settings_.emulation_source == AppSettings::EmulationSource::roms && emulation_setup_ && !emulation_setup_->paths.roms.empty();
+    return settings_.emulation_source == AppSettings::EmulationSource::roms && emulation_setup_ &&
+        (!emulation_setup_->paths.roms.empty() || std::any_of(emulation_setup_->rules.begin(), emulation_setup_->rules.end(),
+                                                          [](const auto& rule) { return !rule.folder.empty(); }));
 }
 
 bool Launcher::srmCollectionsHidden() const { return settings_.show_emulation || romLibraryActive(); }
@@ -34,16 +36,18 @@ void Launcher::startRomScan() {
     emulators::Choices choices;
     for (const auto& [id, chosen] : settings_.emulator_overrides) choices.overrides[id] = {chosen.program, chosen.arguments};
     choices.systems = settings_.system_emulator;
+    choices.roms = settings_.system_roms;
     work_.start([alive = alive_, window = hwnd_, generation, folder, scan_games, hidden, choices = std::move(choices),
                  environment = emulation_environment_]() mutable {
         auto setup = std::make_shared<emulation_scan::Setup>(emulation_scan::load(environment ? environment() : emulation_scan::systemEnvironment(), folder, std::move(choices)));
         auto games = std::make_shared<std::vector<Game>>();
-        if (scan_games) *games = emulation_scan::scan(*setup, hidden, [&] { return !alive->load(); }).games;
-        if (!alive->load()) return;
-        // Games per system folder, for the Emulacja page.
         auto counts = std::make_shared<std::map<std::wstring, size_t>>();
-        for (const auto& game : *games)
-            if (const auto system = emulation_scan::systemOf(game.rom, setup->paths.roms); !system.empty()) ++(*counts)[system];
+        if (scan_games) {
+            auto result = emulation_scan::scan(*setup, hidden, [&] { return !alive->load(); });
+            *games = std::move(result.games);
+            *counts = std::move(result.system_counts);
+        }
+        if (!alive->load()) return;
         auto message = std::make_unique<RemoteMessage>();
         message->run = [generation, setup, games, counts](Launcher& app) mutable {
             if (generation == app.rom_scan_generation_) app.rom_system_counts_ = std::move(*counts);

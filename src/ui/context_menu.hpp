@@ -17,7 +17,8 @@ namespace context_menu {
 // "remove": Usuń z biblioteki, a game added by hand (only its entry goes, after a question), red and last like Odinstaluj.
 // "compat": Details' "…" → Proton / Wine (Linux: a Windows game's Wine/Proton options).
 // "shortcuts": Details' "…" → Skróty (the game's desktop, menu and Steam shortcuts).
-enum class Item { primary, suspend, plugin, details, artwork, retry, close, folder, hide, exclude, uninstall, launch, metadata, aurelia, steam_account, remove, compat, shortcuts };
+// "identify": Zidentyfikuj grę… on a game no RAWG or ScreenScraper match names yet (Launcher::unidentifiedGame).
+enum class Item { primary, suspend, plugin, details, artwork, retry, close, folder, hide, exclude, uninstall, launch, metadata, aurelia, steam_account, remove, compat, shortcuts, identify };
 struct Rows {
     bool suspend = false;
     int plugins = 0;
@@ -31,15 +32,17 @@ struct Rows {
     bool steam_account = false;  // Details' "…": a Steam game and more than one remembered account to launch it from.
     bool remove = false;         // Launcher::canRemoveFromLibrary (never while the game runs).
     bool compat = false;         // Details' "…": Launcher::compatGame (Linux).
+    bool identify = false;       // The game's menu: Launcher::unidentifiedGame.
     bool shortcuts = false;      // Details' "…": the game can have shortcuts (Launcher::shortcutAvailable).
 };
 constexpr auto order(Rows options) {
     return options.secondary_only ?
-        std::array{Item::details, Item::primary, Item::suspend, Item::aurelia, Item::plugin, Item::artwork, Item::retry, Item::close, Item::folder, Item::launch, Item::compat, Item::shortcuts, Item::steam_account, Item::metadata, Item::hide, Item::exclude, Item::uninstall, Item::remove} :
-        std::array{Item::primary, Item::suspend, Item::aurelia, Item::plugin, Item::details, Item::artwork, Item::retry, Item::close, Item::folder, Item::launch, Item::compat, Item::shortcuts, Item::steam_account, Item::metadata, Item::hide, Item::exclude, Item::uninstall, Item::remove};
+        std::array{Item::details, Item::primary, Item::suspend, Item::aurelia, Item::plugin, Item::identify, Item::artwork, Item::retry, Item::close, Item::folder, Item::launch, Item::compat, Item::shortcuts, Item::steam_account, Item::metadata, Item::hide, Item::exclude, Item::uninstall, Item::remove} :
+        std::array{Item::primary, Item::suspend, Item::aurelia, Item::plugin, Item::details, Item::identify, Item::artwork, Item::retry, Item::close, Item::folder, Item::launch, Item::compat, Item::shortcuts, Item::steam_account, Item::metadata, Item::hide, Item::exclude, Item::uninstall, Item::remove};
 }
 constexpr bool visible(Item entry, Rows options) {
     if (entry == Item::aurelia) return options.aurelia;
+    if (entry == Item::identify) return options.identify && !options.detail_options;
     if (entry == Item::steam_account) return options.detail_options && options.steam_account;
     if (options.detail_options) return entry == Item::artwork || (entry == Item::launch && options.launch) || (entry == Item::compat && options.compat) ||
         (entry == Item::shortcuts && options.shortcuts) ||

@@ -26,7 +26,7 @@ struct EmulationPlatform {
 
 inline constexpr uint32_t emulation_tile_base = 0xF0000000u;
 
-inline constexpr std::array<EmulationPlatform, 31> emulation_platforms{{
+inline constexpr std::array<EmulationPlatform, 32> emulation_platforms{{
     // "mesen_libretro", not "mesen": Mesen-S plays the SNES.
     {L"NES", L"nes", L"nintendo_nes.png", {L"nes", L"famicom"}, {L"mesen_libretro", L"nestopia", L"fceumm", L"\\nes\\"},
      {L"nintendo entertainment system", L"nes", L"famicom", L"nintendo famicom"}, 0.62f, 0.12f, 0.14f},
@@ -55,6 +55,8 @@ inline constexpr std::array<EmulationPlatform, 31> emulation_platforms{{
     {L"Wii U", L"wiiu", L"nintendo_wiiu.png", {L"wiiu"}, {L"cemu", L"wii u"}, {L"nintendo wii u", L"wii u"}, 0.11f, 0.49f, 0.72f},
     {L"Switch", L"switch", L"nintendo_switch.png", {L"switch"}, {L"ryujinx", L"yuzu", L"sudachi", L"switch"},
      {L"nintendo switch", L"switch"}, 0.85f, 0.14f, 0.17f},
+    {L"Switch 2", L"switch2", L"nintendo_switch_2.png", {L"switch2"}, {L"switch 2", L"switch2"},
+     {L"nintendo switch 2", L"switch 2", L"switch2"}, 0.80f, 0.12f, 0.16f},
     // No "ps1" marker: EmuDeck launchers are PowerShell scripts (*.ps1) for every emulator.
     {L"PS1", L"ps1", L"playstation_flat.png", {L"psx"}, {L"duckstation", L"epsxe", L"pcsxr", L"\\psx\\"},
      {L"sony playstation", L"playstation", L"psx", L"ps1"}, 0.29f, 0.30f, 0.33f},

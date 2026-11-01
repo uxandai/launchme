@@ -170,6 +170,15 @@ int LauncherUiTest::manualGames(HWND window) {
     app.openMetadata(steam);
     if (!app.metadataOpen() || app.desktop_meta_.identify) return 9539;
     app.desktopMetaClose();
+    // Saved from Szczegóły in Tryb TV: the screen shows the new name at once, as the desktop window does.
+    app.openDetails(game); settle(app);
+    app.openMetadata(game);
+    if (!app.metadataOpen()) return 9590;
+    app.desktop_meta_.fields[0] = L"Renamed by hand";
+    if (!capture(app, L"manual-game-metadata-tv.png")) return 9591;
+    app.desktopMetaSave();
+    if (app.metadataOpen() || app.detail_games_.empty() || app.detail_games_[0].name != L"Renamed by hand") return 9592;
+    app.back();
 
     // Usuń z biblioteki: the entry, its artwork and history go; its file (none here) is never touched.
     app.askRemoveFromLibrary(game); app.exitPromptMove(-1); app.exitPromptAccept();

@@ -36,6 +36,7 @@ wchar_t icon(context_menu::Item item, bool hidden) {
     case context_menu::Item::remove: return glyph::remove;
     case context_menu::Item::compat: return glyph::settings;
     case context_menu::Item::shortcuts: return glyph::open;
+    case context_menu::Item::identify: return glyph::search;
     }
     return glyph::more;
 }
@@ -108,6 +109,7 @@ void Renderer::drawContextMenuDialog() {
         case context_menu::Item::steam_account: return account_label;
         case context_menu::Item::compat: return L"Proton / Wine";
         case context_menu::Item::shortcuts: return tr(L"Skróty");
+        case context_menu::Item::identify: return tr(L"Zidentyfikuj grę…");
         }
         return {};
     };

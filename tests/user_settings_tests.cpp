@@ -446,11 +446,15 @@ int main() {
         emulation.emulator_overrides["pcsx2"] = {L"C:\\Emu\\PCSX2 ą\\pcsx2-qt.exe", L"-batch %ROM%"};
         emulation.emulator_overrides["retroarch"] = {{}, L"-L %CORE%"};
         emulation.system_emulator["switch"] = "ryujinx";
+        emulation.system_roms["ps2"] = L"D:\\Gry ąę\\PlayStation 2";
+        emulation.system_roms["switch2"] = L"E:\\Nintendo";
         if (!saveAppSettings(emulation, file)) return 57;
         const auto restored = loadAppSettings(file);
-        if (restored.emulator_overrides != emulation.emulator_overrides || restored.system_emulator != emulation.system_emulator) return 58;
-        const auto odd = parseAppSettings("emulator.Bad Id.program=C:\\x.exe\nemulator.cemu.program=relative.exe\nsystem_emulator.ps2=PCSX2!\n");
-        if (!odd.emulator_overrides.empty() || !odd.system_emulator.empty() || !saveAppSettings(config, file)) return 59;
+        if (restored.emulator_overrides != emulation.emulator_overrides || restored.system_emulator != emulation.system_emulator ||
+            restored.system_roms != emulation.system_roms) return 58;
+        const auto odd = parseAppSettings("emulator.Bad Id.program=C:\\x.exe\nemulator.cemu.program=relative.exe\nsystem_emulator.ps2=PCSX2!\n"
+                                          "system_roms.Bad Id=D:\\roms\nsystem_roms.ps2=relative\nsystem_roms.ps5=D:\\games\nsystem_roms.ps5=\n");
+        if (!odd.emulator_overrides.empty() || !odd.system_emulator.empty() || !odd.system_roms.empty() || !saveAppSettings(config, file)) return 59;
     }
     // Deny replacement while the old file is open: the failed save must preserve it.
     const auto locked = CreateFileW(file.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
