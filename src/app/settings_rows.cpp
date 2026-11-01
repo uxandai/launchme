@@ -172,8 +172,12 @@ void Launcher::buildSettingsRows() {
                     tr(L"Pierwszy w każdym rzędzie gier, z losowym tłem kategorii; otwiera jej bibliotekę."), {}, settings_.flix_category_all});
                 add({Id::flix_top_icons, Control::toggle, tr(L"Ikony menu w prawym górnym rogu"),
                     tr(L"Wszystkie ikony dolnego menu, małe, obok znaku platformy. Towarzyszka jako awatar, Glance jako ikona."), {}, settings_.flix_top_icons});
+                add({Id::flix_category_tabs, Control::toggle, tr(L"Pasek kategorii"),
+                    tr(L"Kategorie jak w bibliotece, na środku u góry; zmieniają je LB/RB albo Page Up/Down."), {}, settings_.flix_category_tabs});
             }
             if (settings_.home_layout == HomeLayout::metro) {
+                add({Id::metro_category_tabs, Control::toggle, tr(L"Pasek kategorii"),
+                    tr(L"Kategorie jak w bibliotece, na środku u góry, zamiast zakładek; zmieniają je LB/RB albo Page Up/Down."), {}, settings_.metro_category_tabs});
                 add({Id::metro_3d, Control::toggle, tr(L"Efekt 3D"),
                     tr(L"Strony obok bieżącej są mniejsze (80%) i powiększają się po przejściu na nie."), {}, settings_.metro_3d});
                 add({Id::metro_light, Control::toggle, tr(L"Jasny motyw"),

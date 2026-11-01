@@ -947,7 +947,7 @@ private:
     int aureliaVisibleRows() const;
     void aureliaPoll(uint64_t now);
     void aureliaApplyDownloads(const json::Value& data);
-    void aureliaSyncInstallations();
+    void aureliaSyncInstallations(const std::set<uint32_t>& released = {});
     void aureliaCheckCloud(const Game& game, bool force = false);
     std::wstring aureliaCloudText(const Game& game) const;
     std::shared_ptr<std::atomic_bool> profile_cancel_ = std::make_shared<std::atomic_bool>(false);
@@ -1941,6 +1941,11 @@ private:
     const Game* metroInstallGame() const; // An active installation, else the newest installed game.
     void metroFocusTabs(bool focus);
     bool metroTabsFocused() const { return metroActive() && metro_tabs_; }
+    // Metro / Flix "Pasek kategorii" (AppSettings::metro_category_tabs / flix_category_tabs), src/app/metro.cpp.
+    bool homeTabsShown() const;
+    std::vector<LibraryTab> homeTabs() const;
+    int homeTabIndex() const;
+    bool homeTabsClick(float x, float y);
     // The default shelves, XMB and Flix: LB/RB and Page Up/Down change the category (homePage).
     bool homeShoulderCategories() const {
         return screen_ == ScreenMode::shelves && !desktopActive() && !metroActive() && !psfiveActive() && !snitchActive();
@@ -1950,6 +1955,11 @@ private:
     // left margin shared with the tabs. Enter/A or a click on a game moves the focus down to its buttons
     // ("Graj", "…" = the game menu); psfive_action_ is the focused button, -1 the tiles.
     bool psfiveActive() const;
+    // The launcher started on PSfive: its first row plays the start-up intro (psfive_layout::intro),
+    // unless Interfejs → Pojawianie się kafli is off.
+    bool psfiveIntro() const {
+        return psfive_intro_ && psfiveActive() && !cards_.empty() && settings_.tile_entrance != AppSettings::TileEntrance::none;
+    }
     bool snitchActive() const;
     void snitchTarget(size_t index, float& x, float& y, float& size, float& aspect, float& delay) const;
     bool snitchClick(float x, float y, bool double_click);
@@ -2144,6 +2154,9 @@ private:
     std::map<std::string, uint64_t> download_art_retry_at_;
     std::string download_art_active_;
     uint64_t download_art_poll_at_ = 0;
+    // "Dodano do kolejki pobierania" once per download: a title announced, and when it was last in Pobierania
+    // (GetTickCount64). A transfer that drops out of a source's report for a moment is not announced again.
+    std::map<std::wstring, uint64_t> download_announced_;
     std::function<std::vector<uint8_t>(const download_art::Target&)> download_art_fetch_; // Offline test backend.
     uint32_t plugin_command_generation_ = 0;
     uint32_t plugin_refresh_generation_ = 0; // The page refresh in flight (plugin_refresh_pending_).
@@ -2651,6 +2664,7 @@ private:
     // the PS5-like entrance waits a moment on the bare background first. Other rebuilds (another
     // shelf, a filter) start at once.
     bool entrance_lead_ = true;
+    bool psfive_intro_ = false; // Set as the launcher starts (psfiveIntro); gone once played or left.
     float detail_ = 0;
     float menu_progress_ = 0;
     float launch_progress_ = 0;
@@ -2690,6 +2704,7 @@ private:
     IndexGlide menu_glide_, power_glide_, exit_glide_, library_choice_glide_;
     IndexGlide settings_choice_glide_; // Settings picker highlight.
     IndexGlide library_tab_glide_;     // The library's category tab strip.
+    IndexGlide home_tab_glide_;        // Flix's "Pasek kategorii" (Metro's glides with metro_tab_).
     IndexGlide library_flow_;          // Półka: Cover Flow's gliding centre (a fractional card index).
     // Settings picker fade (paint.cpp): open or not at the last paint, when that changed, and the
     // row/tile/choice it showed (drawn while it fades out).

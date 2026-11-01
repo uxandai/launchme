@@ -353,6 +353,18 @@ Result parseResult(uint64_t account, const std::vector<Change>& changes, std::st
         if (!applied.insert(at).second) { out.error = "invalid-reply"; out.applied.clear(); return out; }
         out.applied.push_back(changes[at]);
     }
+    if (const auto* unknown = value->get("unavailable")) {
+        if (unknown->type != json::Value::Type::array) { out.error = "invalid-reply"; out.applied.clear(); return out; }
+        for (const auto& index : unknown->elements) {
+            if (index.type != json::Value::Type::number || index.numeric < 0 || index.numeric >= changes.size() || std::floor(index.numeric) != index.numeric ||
+                !applied.insert(static_cast<size_t>(index.numeric)).second) {
+                out.error = "invalid-reply"; out.applied.clear(); out.unavailable.clear(); return out;
+            }
+            const auto& change = changes[static_cast<size_t>(index.numeric)];
+            if (change.kind != Kind::hidden && change.kind != Kind::member) { out.error = "invalid-reply"; out.applied.clear(); out.unavailable.clear(); return out; }
+            out.unavailable.push_back(change);
+        }
+    }
     out.snapshot = std::move(snapshot); out.error = text(value->get("error")); out.cloud_pending = flag(value->get("cloudPending"));
     return out;
 }

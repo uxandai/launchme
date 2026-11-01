@@ -32,11 +32,13 @@ void Renderer::setPsfiveShot(size_t index, ImageBytes pixels) {
     createBitmap(image);
 }
 
-void Renderer::setPsfiveSimilar(size_t index, ImageBytes pixels) {
+void Renderer::setPsfiveSimilar(size_t index, ImageBytes pixels, CropFocus focus) {
     if (index >= psfive_similar_.size() || !pixels) return;
     auto& image = psfive_similar_[index];
+    image.focus = focus; // The game's own square window (Kadruj, or the text-aware crop), as on its tile.
     if (image.pixels == pixels) return;
     image = {};
+    image.focus = focus;
     image.pixels = std::move(pixels);
     image.short_edge = coverEdge();
     createBitmap(image);
@@ -184,7 +186,10 @@ void Renderer::drawPsfiveDetails() {
                 const float side = std::min(size.width, size.height);
                 const float scale = (rect.right - rect.left) / side;
                 const float w = size.width * scale, h = size.height * scale;
-                const float x = rect.left - (w - (rect.right - rect.left)) * 0.5f, y = rect.top - (h - (rect.bottom - rect.top)) * 0.5f;
+                const float cell_w = rect.right - rect.left, cell_h = rect.bottom - rect.top;
+                // The cover's crop focus (Kadruj or the automatic one), as the tiles place it.
+                const float x = rect.left + std::clamp(cell_w * 0.5f - image->focus.x * w, std::min(cell_w - w, 0.0f), 0.0f);
+                const float y = rect.top + std::clamp(cell_h * 0.5f - image->focus.y * h, std::min(cell_h - h, 0.0f), 0.0f);
                 target_->PushLayer(D2D1::LayerParameters(D2D1::InfiniteRect(), shape.Get()), nullptr);
                 target_->DrawBitmap(image->bitmap.Get(), D2D1::RectF(x, y, x + w, y + h), shown * reveal(*image), D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
                 target_->PopLayer();

@@ -727,6 +727,11 @@ void Launcher::settingsToggle(const Row& row) {
         settings_.metro_3d = !settings_.metro_3d;
         settingsChanged(); audio_.context(); return; // Visual only: the tiles ease to their new targets.
     }
+    else if (row.id == Id::metro_category_tabs || row.id == Id::flix_category_tabs) {
+        auto& value = row.id == Id::metro_category_tabs ? settings_.metro_category_tabs : settings_.flix_category_tabs;
+        value = !value;
+        settingsChanged(); audio_.context(); return; // Visual only: the strip or Metro's tabs at the top.
+    }
     else if (row.id == Id::psfive_clock) {
         settings_.psfive_clock = !settings_.psfive_clock;
         settingsChanged(); audio_.context(); return; // Visual only: the icons take the clock's place.

@@ -90,6 +90,7 @@ struct VideoPlayer::Impl {
     std::mutex mutex;
     std::condition_variable wake;
     bool stopping = false;
+    bool paused = false; // Under the mutex: the worker waits before its next picture.
     // The latest frame, swapped out by frame().
     std::vector<uint8_t> ready;
     uint32_t ready_width = 0, ready_height = 0;
@@ -102,6 +103,15 @@ struct VideoPlayer::Impl {
         return !wake.wait_until(lock, when, [&] { return stopping; });
     }
     bool stopped() { std::lock_guard lock(mutex); return stopping; }
+    // While paused: waits, and moves the clock on by the time spent so the video goes on from where it stood.
+    bool waitWhilePaused(std::chrono::steady_clock::duration& shift) {
+        std::unique_lock lock(mutex);
+        if (!paused) return !stopping;
+        const auto since = std::chrono::steady_clock::now();
+        wake.wait(lock, [&] { return stopping || !paused; });
+        shift += std::chrono::steady_clock::now() - since;
+        return !stopping;
+    }
     void close() {
         if (sound) SDL_DestroyAudioStream(sound);
         sound = nullptr;
@@ -110,7 +120,7 @@ struct VideoPlayer::Impl {
         resampler.reset(); audio.reset(); video.reset(); input.reset();
         video_index = audio_index = -1;
         ready.clear(); ready_width = ready_height = 0; fresh = false;
-        stopping = false;
+        stopping = false; paused = false;
     }
 };
 
@@ -127,6 +137,7 @@ void VideoPlayer::Impl::run(const std::shared_ptr<std::atomic_bool>& error) {
     const double frame_time = guessed.num > 0 && guessed.den > 0 ? av_q2d(av_inv_q(guessed)) : 1.0 / 30;
     const int64_t first = stream->start_time != AV_NOPTS_VALUE ? stream->start_time : 0;
     const auto start = clock::now();
+    clock::duration paused_for{}; // Time spent paused: every later picture is due that much later.
     double offset = 0, pass_end = 0, last = -frame_time; // Seconds: loops so far, this pass's length, the last frame.
     int pass_frames = 0;
 
@@ -135,7 +146,8 @@ void VideoPlayer::Impl::run(const std::shared_ptr<std::atomic_bool>& error) {
         const double at = stamp != AV_NOPTS_VALUE ? (stamp - first) * base : last + frame_time;
         const double length = picture->duration > 0 ? picture->duration * base : frame_time;
         last = at; pass_end = std::max(pass_end, at + length); ++pass_frames;
-        const auto due = start + std::chrono::duration_cast<clock::duration>(std::chrono::duration<double>(offset + at));
+        if (!waitWhilePaused(paused_for)) return false;
+        const auto due = start + paused_for + std::chrono::duration_cast<clock::duration>(std::chrono::duration<double>(offset + at));
         if (!waitUntil(due)) return false;
         if (clock::now() - due > std::chrono::milliseconds(100)) return true; // Behind: drop it, catch up.
         if (picture->format == AV_PIX_FMT_VAAPI) { // Decoded on the GPU: its pixels back to memory (NV12 mostly).
@@ -259,8 +271,18 @@ bool VideoPlayer::open(const std::filesystem::path& file, double volume, void*) 
     return true;
 }
 
+void VideoPlayer::setPaused(bool paused) {
+    auto& impl = *impl_;
+    if (!impl.worker.joinable() || paused == paused_) return;
+    { std::lock_guard lock(impl.mutex); impl.paused = paused; }
+    impl.wake.notify_all();
+    if (impl.sound) paused ? SDL_PauseAudioStreamDevice(impl.sound) : SDL_ResumeAudioStreamDevice(impl.sound);
+    paused_ = paused;
+}
+
 void VideoPlayer::stop() {
     auto& impl = *impl_;
+    paused_ = false;
     if (!impl.worker.joinable()) return;
     { std::lock_guard lock(impl.mutex); impl.stopping = true; }
     impl.wake.notify_all();

@@ -85,6 +85,23 @@ int LauncherUiTest::psfive(HWND window) {
     if (std::abs(play_rest.bottom - (view.height - 145)) > 1 || play_raised.bottom > quick_menu::centerY(view.height, 1, false) - 44 ||
         std::abs(layout::labelLeft() - (layout::anchorX() + layout::focus_tile + layout::focus_gap)) > 0.5f) return 4950;
     if (!capture(L"psfive-row.png")) return 4907;
+    {
+        // Started on PSfive (psfive_layout::intro): an empty screen, the row sliding in from the right,
+        // small, tile after tile; then the first one grows to its focused size. About 3 s.
+        app.psfive_intro_ = true; app.arrived_ = 0;
+        const auto step = [&](int frames) { for (int i = 0; i < frames; ++i) { app.last_frame_ -= std::chrono::milliseconds(50); app.tick(); } };
+        step(6); // 0.3 s: still the bare background.
+        if (!app.psfiveIntro() || app.cards_[0].opacity > 0.01f || app.cards_[3].opacity > 0.01f) return 4870;
+        step(24); // 1.5 s: the first tile in place but small; a later one still on its way from the right.
+        if (std::abs(app.cards_[0].x - layout::tabs_left) > 1 || std::abs(app.cards_[0].size - layout::tileSize(false)) > 1 ||
+            app.cards_[0].emphasis > 0.01f || app.cards_[8].x < layout::tileLeft(8) + 100) return 4871;
+        if (!capture(L"psfive-intro-row.png")) return 4872;
+        step(14); // 2.2 s: the first growing, the row moving aside.
+        if (app.cards_[0].size <= layout::tileSize(false) + 1 || !capture(L"psfive-intro-grow.png")) return 4873;
+        step(20); // 3.2 s: done, as the row rests.
+        if (app.psfive_intro_ || std::abs(app.cards_[0].size - 182.0f) > 1 || std::abs(app.cards_[1].x - layout::tileLeft(1)) > 1 ||
+            app.cards_[0].emphasis < 0.99f) return 4874;
+    }
     // A 12-hour clock's longest times fit its box (they were cut off, #3).
     for (const auto* time : {L"12:00 PM", L"12:59 AM", L"10:08 PM"}) {
         const float advance = app.renderer_.psfiveClockAdvanceForTest(time);

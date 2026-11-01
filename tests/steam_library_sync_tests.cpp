@@ -75,5 +75,33 @@ int main() {
         const SteamCollection native{L"Yakuza", {}, id};
         if (managedCollections(11, {native}, offline.collections).size() != 2) return 18;
     }
+    {
+        // Apps Steam has no record of (removed demos): the edit stays local and leaves the queue.
+        LibraryState local;
+        local.hidden = {"steam-user:11/steam:3564860"};
+        local.steam_hidden_pending = {{"steam-user:11/steam:3564860", true}};
+        local.collections.members["11:user-collections.favorite"]["steam:3595150"] = false;
+        auto outbox = pending(local, 11);
+        if (outbox.size() != 2) return 20;
+        const std::string reply = R"({"ok":true,"account":"11","collections":[],"hidden":[],"privateApps":[],"ack":[],"unavailable":[0,1],"error":""})";
+        const auto parsed = parseResult(11, outbox, reply);
+        if (!parsed.snapshot || !parsed.error.empty() || parsed.unavailable.size() != 2 || !parsed.applied.empty()) return 21;
+        for (const auto& c : parsed.unavailable) if (!keepLocal(local, 11, c)) return 22;
+        if (!pending(local, 11).empty() || unsyncedCount(local, 11) != 2 || !local.hidden.contains("steam-user:11/steam:3564860") ||
+            !local.steam_hidden_pending.at("steam-user:11/steam:3564860")) return 23;
+        if (keepLocal(local, 11, parsed.unavailable[0]) || pruneUnsynced(local, 11)) return 24; // Nothing changes twice.
+        // Shown again: Steam cannot hide what it does not know, so that edit is simply done.
+        local.steam_hidden_pending["steam-user:11/steam:3564860"] = false; local.hidden.clear();
+        outbox = pending(local, 11);
+        if (outbox.size() != 1 || outbox[0].kind != Kind::hidden || outbox[0].value) return 25;
+        if (!keepLocal(local, 11, outbox[0]) || local.steam_hidden_pending.contains("steam-user:11/steam:3564860") || unsyncedCount(local, 11) != 1) return 26;
+        // A membership edit undone in Launchme forgets its local mark.
+        local.collections.members.erase("11:user-collections.favorite");
+        if (!pruneUnsynced(local, 11) || unsyncedCount(local, 11) != 0) return 27;
+        const std::string overlap = R"({"ok":true,"account":"11","collections":[],"hidden":[],"privateApps":[],"ack":[0],"unavailable":[0],"error":""})";
+        if (parseResult(11, {{Kind::hidden, {}, 10, true}}, overlap).snapshot) return 28;
+        const std::string create = R"({"ok":true,"account":"11","collections":[],"hidden":[],"privateApps":[],"ack":[],"unavailable":[0],"error":""})";
+        if (parseResult(11, {{Kind::create, "user-collections.uc-launchme-0123456789abcdef", 0, false, L"X"}}, create).snapshot) return 29;
+    }
     std::cout << "Steam outbox scoping, acknowledgements, snapshots and escaping passed\n";
 }

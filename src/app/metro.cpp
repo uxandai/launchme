@@ -8,6 +8,7 @@
 // a page's top row (metro_tabs_); the quick bar opens from its bottom row; there is no side
 // category menu. Geometry: src/ui/metro_layout.hpp.
 #include "launcher.hpp"
+#include "../ui/grid_layout.hpp"
 
 #include <algorithm>
 #include <unordered_map>
@@ -257,6 +258,7 @@ void Launcher::homePage(int amount) {
         const int current = psfiveActiveTab();
         const int next = std::clamp(current < 0 ? 0 : current + amount, 0, static_cast<int>(tabs.size()) - 1);
         if (next == current) { navigationBoundary(); return; }
+        psfive_intro_ = false; // Another tab by hand: its row comes in as usual, not as the start-up intro.
         psfiveSelectTab(next, psfive_top_ >= 0 && psfive_top_ < static_cast<int>(tabs.size()));
         return;
     }
@@ -289,6 +291,37 @@ void Launcher::homePage(int amount) {
     metroFocus(page.begin + std::min(categories_[page.category].selected, page.count - 1)); // Each page remembers its tile.
     metro_tabs_ = tabs;
     audio_.navigate();
+}
+
+// Metro and Flix with "Pasek kategorii": the library's strip at the top, in the middle (drawHomeTabs).
+// Metro's are its pages (the start page first), Flix's its rows; LB/RB (homePage) step through them.
+bool Launcher::homeTabsShown() const {
+    if (screen_ != ScreenMode::shelves || desktopActive() || cards_.empty()) return false;
+    if (metroActive()) return settings_.metro_category_tabs && !metro_pages_.empty() && metro_tiles_.size() == cards_.size();
+    if (flixActive()) return settings_.flix_category_tabs && flix_rows_.size() > 1;
+    return false;
+}
+std::vector<Launcher::LibraryTab> Launcher::homeTabs() const {
+    std::vector<LibraryTab> tabs;
+    const auto games = [&](size_t category) {
+        return category < categories_.size() ? static_cast<size_t>(std::count_if(categories_[category].games.begin(), categories_[category].games.end(),
+            [](const Game& game) { return isGame(game); })) : size_t{0};
+    };
+    if (metroActive()) for (const auto& page : metro_pages_)
+        tabs.push_back({{}, page.category ? categories_[page.category].title : std::wstring(tr(L"Start")), page.category ? games(page.category) : 0});
+    else for (const auto& row : flix_rows_)
+        if (row.category < categories_.size()) tabs.push_back({row.id, categories_[row.category].title, games(row.category)});
+    return tabs;
+}
+int Launcher::homeTabIndex() const { return static_cast<int>(metroActive() ? metro_page_ : flix_row_); }
+// A click on the strip: the neighbour clicked becomes the shown category.
+bool Launcher::homeTabsClick(float x, float y) {
+    if (!homeTabsShown() || menu_open_ || quick_open_ || friends_open_ || category_menu_open_) return false;
+    const auto offset = library_tabs::home::hit(x, y, renderer_.viewport().width);
+    if (!offset) return false;
+    if (metroActive()) metroFocusTabs(false); // As a click on Metro's own tab: the page's tile has the focus.
+    if (*offset) homePage(*offset);
+    return true;
 }
 
 void Launcher::metroFocusTabs(bool focus) {

@@ -1,4 +1,5 @@
 #include "steam_sync_state.hpp"
+#include <algorithm>
 #include <charconv>
 
 namespace steam_sync {
@@ -9,8 +10,53 @@ uint32_t appId(std::string_view text) {
     return result.ec == std::errc{} && result.ptr == text.data() + text.size() && id && !steamShortcutId(id) ? id : 0;
 }
 bool nativeCollection(std::string_view id) { return id.starts_with("user-collections.") && id != "user-collections.hidden"; }
+std::vector<Change> candidates(const LibraryState& state, uint64_t account);
+}
+std::string unsyncedKey(uint64_t account, const Change& c) {
+    if (c.kind == Kind::hidden) return std::to_string(account) + ":hidden:" + std::to_string(c.app);
+    if (c.kind == Kind::member) return std::to_string(account) + ':' + c.collection + ':' + std::to_string(c.app);
+    return {};
 }
 std::vector<Change> pending(const LibraryState& state, uint64_t account) {
+    auto out = candidates(state, account);
+    if (!state.steam_unsynced.empty()) std::erase_if(out, [&](const Change& c) {
+        const auto found = state.steam_unsynced.find(unsyncedKey(account, c));
+        return found != state.steam_unsynced.end() && found->second == c.value;
+    });
+    return out;
+}
+bool keepLocal(LibraryState& state, uint64_t account, const Change& c) {
+    const auto key = unsyncedKey(account, c);
+    if (key.empty()) return false;
+    if (c.kind == Kind::hidden && !c.value) {
+        const bool erased = state.steam_unsynced.erase(key) != 0;
+        return acknowledge(state, account, c) || erased;
+    }
+    // Only the edit that is still wanted: a newer contradictory one goes to Steam as usual.
+    const auto current = candidates(state, account);
+    if (std::find(current.begin(), current.end(), c) == current.end()) return false;
+    const auto found = state.steam_unsynced.find(key);
+    if (found != state.steam_unsynced.end() && found->second == c.value) return false;
+    state.steam_unsynced[key] = c.value;
+    return true;
+}
+bool pruneUnsynced(LibraryState& state, uint64_t account) {
+    const auto prefix = std::to_string(account) + ':';
+    std::map<std::string, bool> wanted;
+    for (const auto& c : candidates(state, account)) if (auto key = unsyncedKey(account, c); !key.empty()) wanted[std::move(key)] = c.value;
+    return std::erase_if(state.steam_unsynced, [&](const auto& entry) {
+        if (!entry.first.starts_with(prefix)) return false;
+        const auto found = wanted.find(entry.first);
+        return found == wanted.end() || found->second != entry.second;
+    }) != 0;
+}
+size_t unsyncedCount(const LibraryState& state, uint64_t account) {
+    const auto prefix = std::to_string(account) + ':';
+    return static_cast<size_t>(std::count_if(state.steam_unsynced.begin(), state.steam_unsynced.end(),
+        [&](const auto& entry) { return entry.first.starts_with(prefix); }));
+}
+namespace {
+std::vector<Change> candidates(const LibraryState& state, uint64_t account) {
     std::vector<Change> out;
     const auto prefix = std::to_string(account) + ':';
     for (const auto& scope : state.collections.creates) {
@@ -38,6 +84,7 @@ std::vector<Change> pending(const LibraryState& state, uint64_t account) {
         if (const auto app = appId(std::string_view(key).substr(hidden_prefix.size()))) hidden[app] = value;
     for (const auto& [app, value] : hidden) out.push_back({Kind::hidden, {}, app, value});
     return out;
+}
 }
 bool acknowledge(LibraryState& state, uint64_t account, const Change& c) {
     const auto scope = std::to_string(account) + ':' + c.collection;

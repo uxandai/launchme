@@ -210,7 +210,7 @@ public:
     // covers and the screenshot shown full screen.
     void resetPsfiveDetails(size_t shots, size_t similar);
     void setPsfiveShot(size_t index, ImageBytes pixels);
-    void setPsfiveSimilar(size_t index, ImageBytes pixels);
+    void setPsfiveSimilar(size_t index, ImageBytes pixels, CropFocus focus = {});
     bool hasPsfiveSimilar(size_t index) const;
     void setPsfiveShotFull(ImageBytes pixels);
     bool videoShown() const { return video_bitmap_ != nullptr; }
@@ -757,6 +757,8 @@ private:
     void drawLibraryCinematic();
     bool drawCinematicFacts(float x, float center_y, float width, float alpha);
     void drawLibraryTabs();     // Kinowy / Przegląd: the category strip.
+    void drawHomeTabs();        // Metro / Flix: the same strip, centred (ViewContext::home_tabs).
+    void drawCategoryStrip(const std::vector<ViewContext::LibraryTab>& tabs, float glide, bool home, float alpha, bool focused);
     void drawLibraryOverview(); // Przegląd: tiles, then drawOverviewPanel.
     void drawOverviewPanel();
     void drawLibraryDetailed();
@@ -802,7 +804,7 @@ private:
     void drawPsfiveMoreMenu();
     void drawPsfiveLabel();
     void drawPsfiveLogo(float lift); // Over "Graj" / "…"; the title in large type without a logo.
-    void drawPsfiveButtons();
+    void drawPsfiveButtons(bool frost = true); // frost: the grey glass blurs the picture under them.
     // The focused tile's light frame, a thin dark gap outside its edge (as on the PS5).
     void drawPsfiveFrame(float x, float y, float size, D2D1_COLOR_F tint, float alpha);
     // Frosted glass (src/ui/glass_renderer.cpp). frostCapture copies the scene drawn so far under

@@ -94,12 +94,20 @@ bool VideoPlayer::open(const std::filesystem::path& file, double volume, void* d
     engine->SetMuted(volume <= 0.0);
     if (FAILED(engine->Play())) return fail();
     engine_ = std::move(engine);
+    paused_ = false;
     return true;
+}
+
+void VideoPlayer::setPaused(bool paused) {
+    auto& engine_ = impl_->engine_;
+    if (!engine_ || paused == paused_) return;
+    if (SUCCEEDED(paused ? engine_->Pause() : engine_->Play())) paused_ = paused;
 }
 
 void VideoPlayer::stop() {
     auto& engine_ = impl_->engine_; auto& bitmap_ = impl_->bitmap_;
     auto& bitmap_width_ = impl_->bitmap_width_; auto& bitmap_height_ = impl_->bitmap_height_;
+    paused_ = false;
     if (!engine_) return;
     engine_->Pause();
     engine_->Shutdown();

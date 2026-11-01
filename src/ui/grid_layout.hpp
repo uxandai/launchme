@@ -181,6 +181,23 @@ inline std::optional<int> hit(float x, float y, float width, int current) {
     if (std::abs(offset) > 1.5f) return std::nullopt;
     return static_cast<int>(std::lround(offset - focusOffset(static_cast<float>(current))));
 }
+// The same strip on the Metro and Flix home screens (AppSettings::metro_category_tabs/flix_category_tabs):
+// at the top, in the middle of the screen, the active category always in the centre.
+namespace home {
+inline float slot(float width) { return std::clamp(width * 0.13f, 170.0f, 240.0f); }
+inline float center(float width) { return width * 0.5f; }
+inline settings_ui::Rect tab(float offset, float width) {
+    const float c = center(width) + offset * slot(width), half = slot(width) * 0.5f - 10;
+    return {c - half, top, c + half, top + height};
+}
+// Offset from the active category (-1, 0 or 1).
+inline std::optional<int> hit(float x, float y, float width) {
+    if (y < top || y >= top + height) return std::nullopt;
+    const float offset = (x - center(width)) / slot(width);
+    if (std::abs(offset) > 1.5f) return std::nullopt;
+    return static_cast<int>(std::lround(offset));
+}
+}
 }
 
 // Przegląd: the focused game's panel on the left (square cover, name, platform, facts, description, two

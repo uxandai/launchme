@@ -223,6 +223,7 @@ void Launcher::click(float mouse_x, float mouse_y, bool double_click) {
             return;
         }
     }
+    if (homeTabsClick(x, y)) return; // Metro / Flix "Pasek kategorii".
     if (metroActive()) { // A Metro tab: its page, focus on the page's tile.
         if (const int tab = renderer_.metroTabAt(x, y); tab >= 0 && static_cast<size_t>(tab) < metro_pages_.size()) {
             metroFocusTabs(false);
@@ -325,6 +326,10 @@ bool Launcher::hoverButton(float mouse_x, float mouse_y) const {
                (!companion_.chat.menu && !companion_.chat.confirm && (renderer_.companionPhoto().contains(x, y) || !renderer_.companionLinkAt(x, y).empty() || !renderer_.companionVideoAt(x, y).empty()));
     }
     if (metroActive() && !friends_open_ && !menu_open_ && !quick_open_ && renderer_.metroTabAt(x, y) >= 0) return true;
+    if (homeTabsShown() && !friends_open_ && !menu_open_ && !quick_open_ && !category_menu_open_) {
+        if (const auto offset = library_tabs::home::hit(x, y, view.width); offset && *offset &&
+            homeTabIndex() + *offset >= 0 && homeTabIndex() + *offset < static_cast<int>(homeTabs().size())) return true;
+    }
     if (screen_ == ScreenMode::plugin_page && !friends_open_) {
         const plugin_ui::Layout layout{view.width, view.height, false, plugin_page_.dialog};
         return layout.back(x, y) || layout.hit(plugin_page_, x, y) >= 0;

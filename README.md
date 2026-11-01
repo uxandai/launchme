@@ -84,7 +84,8 @@ Settings → System → Help → **Open folder** (the version row) opens it.
   entrance, frosted glass, button colour themes and several focus-outline styles. In Flix, resting
   on a game for a few seconds unfolds its poster into a wide card with its background, logo and facts,
   pushing the neighbouring tiles aside. In PSfive, Down from Play scrolls to the game's description, facts,
-  Steam screenshots and similar games from your library. All games, Glance, Tarot, the companion and an
+  Steam screenshots and similar games from your library, and starting on PSfive plays its start-up entrance.
+  Metro and Flix can show the library's category bar at the top (LB/RB). All games, Glance, Tarot, the companion and an
   *Add game* tile can lead or close the first row of every layout; Metro has a light theme, and the game menu
   can be a large dialog with an icon for each option.
 - **Wallpaper** (Settings → Interface → *Wallpaper*): a picture from Wallhaven or Danbooru (safe content only) or

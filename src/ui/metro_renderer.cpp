@@ -48,6 +48,8 @@ void Renderer::drawMetro() {
 // previous ones fade out to the left, the next ones follow in grey.
 void Renderer::drawMetroTabs() {
     const auto& tabs = context_->metro_tabs;
+    // "Pasek kategorii": the library's strip in the middle at the top takes the tabs' place (drawHomeTabs).
+    if (!context_->home_tabs.empty()) { metro_tab_rects_.clear(); return; }
     if (tabs.empty() || !metro_tab_font_) return;
     std::vector<float> lefts(tabs.size()), widths(tabs.size());
     float at = 0;

@@ -6,6 +6,7 @@
 #include "../ui/flix_layout.hpp"
 #include "../ui/xmb_layout.hpp"
 #include "../ui/grid_layout.hpp"
+#include "../ui/psfive_layout.hpp"
 #include "../library/steam_stats.hpp"
 
 #include <algorithm>
@@ -122,6 +123,15 @@ void Launcher::paint(bool overlay) {
         for (const auto& tab : tabs) context.library_tabs.push_back({tab.title, tab.count, tab.mark});
         context.library_tab = libraryTabIndex(tabs);
         if (library_tab_glide_.valid) context.library_tab_glide = library_tab_glide_.value.value;
+    }
+    if (homeTabsShown()) {
+        for (const auto& tab : homeTabs()) context.home_tabs.push_back({tab.title, tab.count, tab.mark});
+        // Metro's glides with its pages; Flix's with its own spring.
+        context.home_tab = metroActive() ? metro_tab_ : home_tab_glide_.valid ? home_tab_glide_.value.value : static_cast<float>(homeTabIndex());
+        context.home_tabs_focus = metroTabsFocused();
+        // Out of the way of the quick bar, the drawers and the menus, as Flix's top icons.
+        const float away = std::max({quick_progress_, friends_progress_, category_menu_progress_, menu_progress_});
+        context.home_tabs_alpha = homeOverlayAvailable(true) ? std::clamp(1.0f - away, 0.0f, 1.0f) : 0.0f;
     }
     if (libraryView() == library_view::View::list || libraryListPlus()) {
         const auto view = renderer_.viewport();
@@ -494,6 +504,12 @@ void Launcher::paint(bool overlay) {
         context.psfive = true;
         context.psfive_action = psfiveActions() ? psfive_action_ : -1;
         context.psfive_scale = psfiveScale();
+        if (psfiveIntro()) {
+            context.psfive_intro = psfive_layout::intro::chrome(arrived_);
+            // The home widgets (Glance, her tile) come in with the top bar, after the row.
+            context.glance_alpha *= context.psfive_intro;
+            if (context.companion) companion_view.tile_alpha *= context.psfive_intro;
+        }
         const auto tabs = psfiveTabs();
         const int tab_count = psfiveTabCount();
         for (const auto category : tabs)

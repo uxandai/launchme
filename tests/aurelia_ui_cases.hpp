@@ -257,6 +257,33 @@ int LauncherUiTest::aureliaIntegration(HWND window) {
     app.aureliaPage(P::dlc); app.aureliaPage(P::versions);
     if (!wait([&] { return !app.aurelia_ui_.busy; }) || app.aurelia_ui_.page != P::versions) return 10341;
     app.closeAurelia();
+    {
+        // A download in the Steam client is not Aurelia's: its polls keep the manifest's progress, so the
+        // row does not vanish and come back, and "queued" is announced once per download.
+        if (app.installed_library_.empty()) return 10420;
+        const auto saved = app.installed_library_.front();
+        auto& steam_side = app.installed_library_.front();
+        app.aurelia_downloads_.erase(steam_side.app_id);
+        steam_side.installation = {InstallPhase::downloading, 10, 100, true, false};
+        app.aureliaSyncInstallations();
+        if (!app.installed_library_.front().installation.active()) return 10421;
+        app.aureliaSyncInstallations({app.installed_library_.front().app_id}); // Aurelia's own, finished: cleared.
+        if (app.installed_library_.front().installation.active()) return 10422;
+        const auto announced = [&] {
+            return std::count_if(app.notifications_.begin(), app.notifications_.end(),
+                [](const auto& n) { return n.title == tr(L"Dodano do kolejki pobierania") && n.subtitle == L"Queued once"; });
+        };
+        app.notifications_.clear();
+        app.downloadQueued(L"Queued once");
+        app.notifications_.clear(); // Shown and gone; the same download drops out and back a moment later.
+        app.downloadQueued(L"Queued once");
+        if (announced() != 0) return 10423;
+        app.downloadFinished(L"Queued once", nullptr); app.notifications_.clear();
+        app.downloadQueued(L"Queued once"); // Downloaded again: news again.
+        if (announced() != 1) return 10424;
+        app.notifications_.clear();
+        app.installed_library_.front() = saved;
+    }
     // Odinstaluj from the game's menu: the question alone, through Aurelia only for a managed game.
     app.uninstallGame(game);
     if (!app.aurelia_ui_.open || !app.aurelia_ui_.confirmation || !app.aurelia_ui_.confirm_only) return 10380;

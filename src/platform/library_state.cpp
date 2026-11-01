@@ -103,6 +103,10 @@ bool parseRow(const std::string& line, LibraryState& result) {
             if (!field(row, key) || !key.starts_with("steam-user:") || key.find("/steam:") == key.npos ||
                 !(row >> hidden) || (hidden != 0 && hidden != 1)) return {};
             result.steam_hidden_pending[key] = hidden != 0;
+        } else if (kind == "steam-unsynced") {
+            std::string key; int value = 0;
+            if (!field(row, key) || key.empty() || !(row >> value) || (value != 0 && value != 1)) return {};
+            result.steam_unsynced[key] = value != 0;
         } else if (kind == "excluded-game") {
             std::string key, name;
             if (!field(row, key) || !exclusionKey(key) || !field(row, name)) return {};
@@ -232,6 +236,11 @@ bool saveLibraryState(const LibraryState& state, const std::filesystem::path& fi
     for (const auto& [key, hidden] : state.steam_hidden_pending) {
         if (!validField(key) || !key.starts_with("steam-user:") || key.find("/steam:") == key.npos) return false;
         output << "steam-hidden-pending " << std::quoted(encoded(key)) << ' ' << hidden << '\n';
+        if (!bounded()) return false;
+    }
+    for (const auto& [key, value] : state.steam_unsynced) {
+        if (key.empty() || !validField(key)) return false;
+        output << "steam-unsynced " << std::quoted(encoded(key)) << ' ' << value << '\n';
         if (!bounded()) return false;
     }
     return bounded() && atomic_file::writeDurable(file, std::move(output).str());

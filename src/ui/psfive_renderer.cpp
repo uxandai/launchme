@@ -30,8 +30,19 @@ void Renderer::drawPsfive() {
     beginScreenForeground();
     drawPsfiveTopBar();
     drawPsfiveLabel();
-    drawPsfiveLogo(lift);
-    drawPsfiveButtons(); // Last before the shade: its glass blurs everything drawn so far.
+    // The start-up intro (psfive_layout::intro): the logo and buttons fade in after the row, without
+    // their frosted glass meanwhile (it copies the target, which a pushed layer does not allow).
+    const float chrome = std::clamp(context_->psfive_intro, 0.0f, 1.0f);
+    if (chrome >= 0.999f) {
+        drawPsfiveLogo(lift);
+        drawPsfiveButtons(); // Last before the shade: its glass blurs everything drawn so far.
+    } else if (chrome > 0.004f) {
+        target_->PushLayer(D2D1::LayerParameters(D2D1::InfiniteRect(), nullptr, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
+                                                 D2D1::IdentityMatrix(), chrome), nullptr);
+        drawPsfiveLogo(lift);
+        drawPsfiveButtons(false);
+        target_->PopLayer();
+    }
     drawQuickShade();
     const auto row_clip = D2D1::RectF(psfive_layout::rowClipLeft(), 0, width, height);
     target_->PushAxisAlignedClip(row_clip, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
@@ -101,7 +112,7 @@ void Renderer::drawPsfiveLabel() {
     if (selected_ >= cards_->size()) return;
     const auto& card = (*cards_)[selected_];
     const auto& game = card.game;
-    const float alpha = smoothFade(detail_ * 2.5f) * card.opacity;
+    const float alpha = smoothFade(detail_ * 2.5f) * card.opacity * std::clamp(context_->psfive_intro, 0.0f, 1.0f);
     if (alpha < 0.01f || !psfive_name_font_) return;
     const float center = psfive_layout::labelCenter(context_->psfive_scale) + (card.y - psfive_layout::row_top);
     const float right = viewport_.width - psfive_layout::bar_margin;
@@ -123,7 +134,7 @@ void Renderer::drawPsfiveLabel() {
 void Renderer::drawPsfiveTopBar() {
     using namespace psfive_layout;
     const float width = viewport_.width;
-    const float opacity = context_->psfive_top_opacity;
+    const float opacity = context_->psfive_top_opacity * std::clamp(context_->psfive_intro, 0.0f, 1.0f);
     const bool with_clock = context_->psfive_clock_shown;
     // One opacity for the whole row. Only the focused tab is bold while navigating;
     // otherwise the shown category is bold, including a named overflow category.
@@ -239,7 +250,7 @@ void Renderer::drawPsfiveLogo(float lift) {
 // "Graj" (the game's primary action) and "…" (its menu) on grey frosted glass: the background
 // under them blurred and greyed. The focused one is white with dark ink, the white pill gliding
 // between them (ViewContext::psfive_action_glide). Both rise over the quick bar while it is open.
-void Renderer::drawPsfiveButtons() {
+void Renderer::drawPsfiveButtons(bool frost) {
     if (selected_ >= cards_->size()) return;
     const auto& game = (*cards_)[selected_].game;
     if (!isGame(game) || game.kind == GameKind::catalog) return;
@@ -253,7 +264,7 @@ void Renderer::drawPsfiveButtons() {
     const D2D1_ROUNDED_RECT pills[] = {pill(box(play_rect)), pill(box(more_rect))};
     Microsoft::WRL::ComPtr<ID2D1RoundedRectangleGeometry> glass[2];
     Microsoft::WRL::ComPtr<ID2D1GeometryGroup> both;
-    if (glass_level_ > 0.01f && SUCCEEDED(factory_->CreateRoundedRectangleGeometry(pills[0], glass[0].GetAddressOf())) &&
+    if (frost && glass_level_ > 0.01f && SUCCEEDED(factory_->CreateRoundedRectangleGeometry(pills[0], glass[0].GetAddressOf())) &&
         SUCCEEDED(factory_->CreateRoundedRectangleGeometry(pills[1], glass[1].GetAddressOf()))) {
         ID2D1Geometry* shapes[] = {glass[0].Get(), glass[1].Get()};
         if (SUCCEEDED(factory_->CreateGeometryGroup(D2D1_FILL_MODE_WINDING, shapes, 2, both.GetAddressOf())) && frostCapture(both.Get(), 12))

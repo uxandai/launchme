@@ -1442,6 +1442,21 @@ int LauncherUiTest::flix(HWND window) {
     if (std::abs(app.cards_[app.selected_].y - (flix_layout::focus_top + flix_layout::header)) > 1 ||
         std::abs(app.cards_[app.selected_].aspect - flix_layout::poster_aspect) > 0.001f) return 959;
     if (!capture(L"flix-rows.png")) return 960;
+    {
+        // "Pasek kategorii" (on by default): the rows' categories at the top in the middle; a click on
+        // the next one goes to its row, LB/RB as before.
+        if (!app.homeTabsShown() || app.homeTabs().size() != app.flix_rows_.size() || app.homeTabIndex() != static_cast<int>(app.flix_row_)) return 2792;
+        const auto row = app.flix_row_, at = app.selected_;
+        const auto next = library_tabs::home::tab(1, view.width);
+        app.mouse_transition_until_ = 0;
+        app.click((next.left + next.right) * 0.5f * view.scale, (next.top + next.bottom) * 0.5f * view.scale, false);
+        if (app.flix_row_ != row + 1) return 2793;
+        app.homePage(-1); settle();
+        if (app.flix_row_ != row || app.selected_ != at) return 2794;
+        app.settings_.flix_category_tabs = false;
+        if (app.homeTabsShown()) return 2795;
+        app.settings_.flix_category_tabs = true;
+    }
     // Resting a few seconds on a poster unfolds it into the wide card (background, logo, facts); the
     // tiles after it make room, and moving on folds it back.
     {

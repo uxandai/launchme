@@ -42,6 +42,7 @@ int main() {
     state.preferred_versions["portal 2"] = "gog:123";
     state.hidden = {"gog:123", "custom:one \"quoted\"", "steam-user:42/steam:620"};
     state.steam_hidden_pending = {{"steam-user:42/steam:620", true}, {"steam-user:43/steam:620", false}};
+    state.steam_unsynced = {{"42:hidden:3564860", true}, {"42:user-collections.favorite:3595150", false}};
     state.excluded_games = {{"gog:456", L"Zażółć \"GOG\""}, {"epic:456", L"Epic game"}};
     state.launch_arguments = {{"steam:620", L"-dx11 \"-name=Gość\" -skipintro"}};
     const auto file = root / L"library-state.ini";

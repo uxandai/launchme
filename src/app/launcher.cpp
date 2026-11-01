@@ -7,6 +7,7 @@
 #include "../ui/category_rail.hpp"
 #include "../ui/grid_layout.hpp"
 #include "../ui/drawer_clock.hpp"
+#include "../ui/psfive_layout.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -259,6 +260,7 @@ bool Launcher::initialize(HWND hwnd) {
     while (PeekMessageW(&ready_audio, hwnd_, audio_message, audio_message, PM_REMOVE))
         onAudio(std::unique_ptr<AudioMessage>(reinterpret_cast<AudioMessage*>(ready_audio.lParam)));
     runtime_started_ = true;
+    psfive_intro_ = true; // Starting on PSfive: its start-up intro (psfive_layout::intro), once.
     volume_monitor_.start(work_);
 #ifdef _WIN32
     controller_input_.initialize(hwnd);
@@ -615,6 +617,10 @@ void Launcher::tick() {
     constexpr float grow_entrance_end = 0.28f + 0.85f + 0.72f; // lead + longest delay + grow (below).
     if (entrance == AppSettings::TileEntrance::grow && selected_ != entrance_selected_ && arrived_ > 0.3f && arrived_ < grow_entrance_end)
         arrived_ = grow_entrance_end;
+    // PSfive at start-up (psfive_layout::intro): the same, a move ends the intro where the tiles are.
+    const bool psfive_intro = psfiveIntro();
+    if (psfive_intro && selected_ != entrance_selected_ && arrived_ > 0.3f && arrived_ < psfive_layout::intro::end)
+        arrived_ = psfive_layout::intro::end;
     entrance_selected_ = selected_;
     // One spring for the lift, rather than stacking the slow drawer fade and
     // card easing. About 95% of the 100px movement completes in 170ms.
@@ -716,6 +722,31 @@ void Launcher::tick() {
         const float emphasis = i == selected_ && !quick_open_ && !flixIconsFocused() && !(metro && metro_tabs_) && !psfive_buttons && !searchBackFocused() &&
             !(libraryControls() && (library_controls_.focus >= 0 || library_controls_.open() ||
                                     (libraryOverview() && library_controls_.action >= 0))) ? 1.0f : 0.0f; // Przegląd: its panel's buttons.
+        // PSfive at start-up: the row slides in from the right, small, tile after tile, then the first
+        // grows to its focused size and the others move aside for it (psfive_layout::intro).
+        if (psfive_intro && arrived_ < psfive_layout::intro::end) {
+            namespace intro = psfive_layout::intro;
+            const int offset = static_cast<int>(i) - static_cast<int>(selected_);
+            card.y = target_y;
+            if (offset < 0) { // Before the focus: out of view under the left margin; they come in after.
+                card.x = target_x; card.size = target_size; card.opacity = 0; card.emphasis = 0;
+                needs_paint = true;
+                continue;
+            }
+            const float scale = psfiveScale(), grown = intro::growth(arrived_);
+            const float small_size = psfive_layout::tileSize(false, scale);
+            // Its place in a row of small tiles, then its place once the first is large.
+            const float small_x = psfive_layout::anchorX(scale) + offset * (psfive_layout::tile + psfive_layout::gap) * scale;
+            const float rest_x = std::lerp(small_x, target_x, grown);
+            const float in = intro::slideIn(arrived_, offset);
+            card.x = std::lerp(rest_x + view.width * 0.75f, rest_x, in);
+            card.size = offset == 0 ? std::lerp(small_size, target_size, grown) : target_size;
+            card.opacity = std::clamp(in * 2.5f, 0.0f, 1.0f);
+            card.emphasis = emphasis * std::clamp(grown, 0.0f, 1.0f);
+            if (renderer_.hasCover(i) || renderer_.hasPoster(i)) card.cover_opacity = 1.0f;
+            needs_paint = true;
+            continue;
+        }
         // The entrance of a fresh screen (Interfejs → Pojawianie się kafli; arrived_ restarts with a new list).
         if (entrance == AppSettings::TileEntrance::grow) {
             // PS5-like: the screen first stands empty for a moment (only its background), then every
@@ -796,6 +827,10 @@ void Launcher::tick() {
     }
     // The fresh screen's wave has played: later rebuilds (another shelf, a filter) start at once.
     if (entrance_lead_ && !desktop && !cards_.empty() && arrived_ > 2.2f) entrance_lead_ = false;
+    // The start-up intro plays once: on the first PSfive row, not after another screen or category.
+    if (psfive_intro_ && ((psfive && !cards_.empty() && arrived_ >= psfive_layout::intro::end) ||
+        (!desktop_mode_ && settings_.home_layout == AppSettings::HomeLayout::psfive && screen_ != ScreenMode::shelves) ||
+        settings_.home_layout != AppSettings::HomeLayout::psfive)) psfive_intro_ = false;
     if (!desktop) animateFocus(dt, focus_x, focus_y, focus_w, focus_h, needs_paint);
     tickTour(dt, needs_paint);
     if (settingsOpen()) needs_paint |= settings_preview_.tick(GetTickCount64());

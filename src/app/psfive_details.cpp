@@ -299,10 +299,13 @@ void Launcher::tickPsfiveDetails(float dt, bool& needs_paint) {
     }
     // The similar games' covers from the artwork cache, asked for once when missing.
     for (size_t i = 0; i < psfive_similar_games_.size() && i < psfive_similar_bound_.size(); ++i) {
-        if (psfive_similar_bound_[i] && renderer_.hasPsfiveSimilar(i)) continue;
         const auto& game = psfive_similar_games_[i];
         const auto* art = art_.find(gameKey(game));
-        if (art && art->cover) { renderer_.setPsfiveSimilar(i, art->cover); psfive_similar_bound_[i] = true; needs_paint = true; }
+        if (psfive_similar_bound_[i] && renderer_.hasPsfiveSimilar(i)) {
+            if (art && art->cover) renderer_.setPsfiveSimilar(i, art->cover, art->focus); // A crop chosen or found later.
+            continue;
+        }
+        if (art && art->cover) { renderer_.setPsfiveSimilar(i, art->cover, art->focus); psfive_similar_bound_[i] = true; needs_paint = true; }
         else if (!psfive_similar_bound_[i]) { requestArt(game, CoverMessage::Kind::cover); psfive_similar_bound_[i] = true; }
     }
 }

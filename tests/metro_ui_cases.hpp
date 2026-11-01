@@ -19,6 +19,8 @@ int LauncherUiTest::metro(HWND window) {
     };
     const auto settle = [&] { for (int i = 0; i < 40; ++i) { app.last_frame_ -= std::chrono::milliseconds(50); app.tick(); } };
     app.settings_.home_layout = AppSettings::HomeLayout::metro;
+    // Metro's own lower-case tabs first; the "Pasek kategorii" strip (on by default) is checked below.
+    app.settings_.metro_category_tabs = false;
     // The store and console shortcuts' cells; Glance and Towarzyszka there: home_widgets_ui_cases.hpp.
     app.settings_.glance = app.settings_.companion = false;
     app.settings_.enabled_pc_sources.insert("gog"); // A Platformy PC page: Steam and GOG.
@@ -174,6 +176,23 @@ int LauncherUiTest::metro(HWND window) {
         break;
     }
     app.back();
+    {
+        // "Pasek kategorii" (on by default): the library's strip at the top in the middle, in place of
+        // the lower-case tabs; a click on the next category goes to its page.
+        if (!AppSettings{}.metro_category_tabs) return 2776;
+        app.settings_.metro_category_tabs = true; settle(); app.paint();
+        if (!app.homeTabsShown() || app.homeTabs().size() != app.metro_pages_.size() ||
+            app.renderer_.metroTabAt(metro_layout::left + 4, metro_layout::tabs_center) >= 0) return 2777;
+        const auto next = library_tabs::home::tab(1, view.width);
+        const size_t before = app.metro_page_;
+        app.mouse_transition_until_ = 0;
+        app.click((next.left + next.right) * 0.5f * view.scale, (next.top + next.bottom) * 0.5f * view.scale, false);
+        if (app.metro_page_ != before + 1 || app.metroTabsFocused()) return 2778;
+        settle();
+        if (!capture(L"metro-category-tabs.png")) return 2779;
+        app.homePage(-1); settle();
+        app.settings_.metro_category_tabs = false;
+    }
     // Mouse: a click on Biblioteka opens the library; on a game it only focuses it.
     settle();
     app.mouse_transition_until_ = 0;

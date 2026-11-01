@@ -54,11 +54,20 @@ std::wstring Launcher::steamSyncStatus() const {
     if (!steam_sync_error_.empty()) {
         if (steam_sync_error_ == "unavailable") return tr(L"Połączenie niedostępne. Steam wymaga opcji -cef-enable-debugging (port 8080).");
         if (steam_sync_error_ == "collection-missing" || steam_sync_error_ == "name-conflict") return tr(L"Konflikt kolekcji w Steam. Zmiany pozostają w kolejce.");
+        if (steam_sync_error_ == "not-ready") return tr(L"Steam jeszcze wczytuje bibliotekę. Zmiany pozostają w kolejce.");
+        if (steam_sync_error_ == "account-changed") return tr(L"W Steam zalogowane jest inne konto. Zmiany pozostają w kolejce.");
+        if (steam_sync_error_ == "privacy-unavailable") return tr(L"Steam nie wczytał jeszcze prywatności gier. Zmiany pozostają w kolejce.");
+        if (steam_sync_error_ == "unsupported" || steam_sync_error_ == "invalid-reply")
+            return tr(L"Ta wersja Steam nie przyjmuje zmian z launchme. Zmiany pozostają w kolejce.");
         return tr(L"Steam nie potwierdził zapisu. Zmiany pozostają w kolejce.");
     }
     if (!steam_sync::pending(library_state_, account_).empty()) return tr(L"Oczekiwanie na zapis w Steam…");
-    if (steam_sync_snapshot_ && steam_sync_snapshot_->account == account_)
-        return steam_sync_cloud_pending_ ? tr(L"Zapisano w Steam. Oczekiwanie na chmurę.") : tr(L"Połączono ze Steam");
+    if (steam_sync_snapshot_ && steam_sync_snapshot_->account == account_) {
+        if (steam_sync_cloud_pending_) return tr(L"Zapisano w Steam. Oczekiwanie na chmurę.");
+        return steam_sync::unsyncedCount(library_state_, account_)
+            ? tr(L"Połączono ze Steam. Zmiany gier, których Steam nie zna (np. usunięte dema), zostają tylko w launchme.")
+            : tr(L"Połączono ze Steam");
+    }
     return tr(L"Oczekiwanie na Steam…");
 }
 void Launcher::onSteamSync(std::unique_ptr<SteamSyncMessage> message) {
@@ -72,6 +81,11 @@ void Launcher::onSteamSync(std::unique_ptr<SteamSyncMessage> message) {
         steam_sync_snapshot_->private_apps != result.snapshot->private_apps;
     bool applied = false;
     for (const auto& change : result.applied) applied |= steam_sync::acknowledge(library_state_, account_, change);
+    // Apps Steam has no record of: the edit stays here only and no longer waits for Steam.
+    bool kept = false;
+    for (const auto& change : result.unavailable) kept |= steam_sync::keepLocal(library_state_, account_, change);
+    kept |= steam_sync::pruneUnsynced(library_state_, account_);
+    applied |= kept;
     library_state_dirty_ |= applied;
     steam_sync_snapshot_ = std::move(result.snapshot);
     collections_source_ = steam_sync_snapshot_->collections;

@@ -201,6 +201,9 @@ struct AppSettings {
     int default_view_console = 0, default_view_collection = 0, default_view_studio = 0;
     // Metro: the pages beside the focused one stand back at 80% until they take the focus.
     bool metro_3d = false;
+    // Metro / Flix: the library's category strip in the middle at the top (LB/RB, Page Up/Down change
+    // the category; Metro: in place of its own lower-case tabs).
+    bool metro_category_tabs = true, flix_category_tabs = true;
     enum class TileShape { squircle, rounded, square };
     TileShape tile_shape = TileShape::squircle;
     // Thin frames around dialogs, context menus and the walkthrough bubble/card.

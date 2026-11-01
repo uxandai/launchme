@@ -30,6 +30,9 @@ public:
     bool active() const;
     bool failed() const { return error_->load(); }
     void setVolume(double volume);
+    // Holds the picture (and the sound) where it is, decoding nothing meanwhile; false plays on from there.
+    void setPaused(bool paused);
+    bool paused() const { return paused_; }
     // The frame shown now when it changed since the last call: BGRA, stride width * 4,
     // scaled down to at most max_width pixels wide.
     bool frame(std::vector<uint8_t>& pixels, uint32_t& width, uint32_t& height, uint32_t max_width = 1280);
@@ -43,4 +46,5 @@ private:
     struct Impl; // The platform's engine and frame buffers.
     std::unique_ptr<Impl> impl_;
     std::shared_ptr<std::atomic_bool> error_ = std::make_shared<std::atomic_bool>(false);
+    bool paused_ = false; // open() and stop() reset it.
 };

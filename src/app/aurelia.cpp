@@ -242,9 +242,11 @@ void Launcher::aureliaApplyDownloads(const json::Value& data) {
     for (const auto app : aurelia_operations_) if (!next.contains(app)) {
         if (const auto old = aurelia_downloads_.find(app); old != aurelia_downloads_.end()) next.emplace(*old);
     }
-    const bool completed = std::any_of(aurelia_downloads_.begin(), aurelia_downloads_.end(), [&](const auto& item) { return !next.contains(item.first); });
+    std::set<uint32_t> released;
+    for (const auto& item : aurelia_downloads_) if (!next.contains(item.first)) released.insert(item.first);
+    const bool completed = !released.empty();
     aurelia_downloads_ = std::move(next);
-    aureliaSyncInstallations();
+    aureliaSyncInstallations(released);
     refreshDownloads();
     if (completed) aureliaRescan();
     InvalidateRect(hwnd_, nullptr, FALSE);
@@ -275,15 +277,19 @@ void Launcher::aureliaPoll(uint64_t now) {
     }
 }
 
-void Launcher::aureliaSyncInstallations() {
+// Aurelia's transfers over the scanned games. Only its own: a game the Steam client downloads keeps the
+// progress its manifest gives (clearing it here, every poll, made the download vanish and come back,
+// with a new "queued" notice each time). `released`: transfers Aurelia has just finished or dropped.
+void Launcher::aureliaSyncInstallations(const std::set<uint32_t>& released) {
     if (!aurelia_active_ || !account_) return;
     LibraryMessage snapshot; snapshot.account = account_; snapshot.installation_update = true; snapshot.excluded = excluded_ids_;
     snapshot.games = installed_library_;
     for (const auto& g : private_category_.games) if (aurelia::validGame(g) && g.visibility == GameVisibility::private_game) snapshot.private_games.push_back(g);
     for (auto* games : {&snapshot.games, &snapshot.private_games}) for (auto& game : *games) {
-        const auto found = aurelia_downloads_.find(game.app_id);
-        game.installation = found == aurelia_downloads_.end() ? Installation{} : found->second.progress;
-        if (game.installation.active()) game.installation.update = game.installed;
+        if (const auto found = aurelia_downloads_.find(game.app_id); found != aurelia_downloads_.end()) {
+            game.installation = found->second.progress;
+            if (game.installation.active()) game.installation.update = game.installed;
+        } else if (released.contains(game.app_id)) game.installation = {};
     }
     updateSteamInstallations(snapshot);
 }
@@ -337,7 +343,7 @@ void Launcher::aureliaOperation(aurelia::Request request, const Game& game) {
     const auto page_generation = aurelia_page_generation_;
     aureliaRequest(request, [request, game, transfer, page_generation](Launcher& app, aurelia::Reply reply) {
         app.aurelia_operations_.erase(request.app); app.aurelia_operations_.erase(game.app_id);
-        if (transfer) { app.aurelia_downloads_.erase(request.app); app.aureliaSyncInstallations(); app.refreshDownloads(); }
+        if (transfer) { app.aurelia_downloads_.erase(request.app); app.aureliaSyncInstallations({request.app}); app.refreshDownloads(); }
         if (request.command == C::cloud_sync) {
             auto& c = app.aurelia_cloud_[request.app]; c = aurelia::cloud(reply, true); c.checked = GetTickCount64();
             if (c.state != aurelia::CloudState::synced) { reply.ok = false; if (reply.error.empty()) reply.error = aurelia::cloudLabel(c.state); }

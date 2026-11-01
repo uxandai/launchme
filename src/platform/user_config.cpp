@@ -230,6 +230,8 @@ bool parseExtraSetting(AppSettings& settings, std::string_view key, std::string_
     if (key == "psfive_details") return flag(settings.psfive_details);
     if (key == "menu_dialog") return flag(settings.menu_dialog);
     if (key == "metro_light") return flag(settings.metro_light);
+    if (key == "metro_category_tabs") return flag(settings.metro_category_tabs);
+    if (key == "flix_category_tabs") return flag(settings.flix_category_tabs);
     if (key == "emulation_source") { settings.emulation_source = value == "steam" ? AppSettings::EmulationSource::steam : AppSettings::EmulationSource::roms; return true; }
     if (key == "emulation_roms") {
         const auto decoded = text_encoding::wide(value);
@@ -886,6 +888,8 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
     output << "video_folder=" << text_encoding::utf8Lenient(settings.video_folder.wstring()) << '\n';
     output << "console_colors=" << settings.console_colors << '\n';
     output << "metro_3d=" << settings.metro_3d << '\n';
+    output << "metro_category_tabs=" << settings.metro_category_tabs << '\n';
+    output << "flix_category_tabs=" << settings.flix_category_tabs << '\n';
     output << "game_action=" << (settings.accept_action == AppSettings::AcceptAction::details ? "details" : "launch") << '\n';
     output << "hidden_collections=";
     bool first = true;

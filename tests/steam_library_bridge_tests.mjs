@@ -46,9 +46,14 @@ function fixture() {
   r=await f.run({account:f.account,changes:[{kind:'member',collection:'user-collections.missing',app:620,value:true},
     {kind:'member',collection:'user-collections.favorite',app:620,value:true}]});
   assert.equal(r.error,'collection-missing'); assert.deepEqual([...r.ack],[1]);
-  const before=f.mutations();
+  // An app Steam has no record of (a removed demo) is reported apart and never holds the queue.
+  r=await f.run({account:f.account,changes:[{kind:'hidden',app:123,value:true},{kind:'member',collection:'user-collections.favorite',app:620,value:false}]});
+  assert.equal(r.error,''); assert.deepEqual([...r.unavailable],[0]); assert.deepEqual([...r.ack],[1]);
+  assert.equal(f.store.GetCollection('favorite').apps.has(620),false);
+  const removed=f.mutations();
   r=await f.run({account:f.account,changes:[{kind:'hidden',app:123,value:true}]});
-  assert.equal(r.error,'app-unavailable'); assert.equal(f.mutations(),before);
+  assert.equal(r.error,''); assert.deepEqual([...r.unavailable],[0]); assert.equal(f.mutations(),removed);
+  const before=removed;
   f.apps.m_privateAppsObserver.getCurrentResult=()=>({isSuccess:false});
   r=await f.run({account:f.account,changes:[{kind:'hidden',app:620,value:true}]});
   assert.equal(r.error,'privacy-unavailable'); assert.equal(f.mutations(),before);

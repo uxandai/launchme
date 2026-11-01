@@ -40,11 +40,22 @@ downloads_ui::Row rowOf(const Game& game, const Installation& install, bool epic
 }
 }
 
+namespace {
+constexpr uint64_t download_announce_quiet_ms = 60000; // Gone from Pobierania this long: a new download.
+}
+
 void Launcher::downloadQueued(const std::wstring& title) {
+    const auto now = GetTickCount64();
+    if (const auto found = download_announced_.find(title); found != download_announced_.end() && now - found->second < download_announce_quiet_ms) {
+        found->second = now;
+        return;
+    }
+    download_announced_[title] = now;
     showNotification(NotificationKind::launch, tr(L"Dodano do kolejki pobierania"), title);
 }
 
 void Launcher::downloadFinished(const std::wstring& title, const Game* game) {
+    download_announced_.erase(title); // The next download of it is news again.
     showNotification(NotificationKind::download, tr(L"Pobieranie zakończone"), title);
     // Reuse available artwork only. Ambiguous titles don't borrow another game's picture.
     const Game* matched = game;
@@ -257,7 +268,11 @@ void Launcher::pollDownloadArt() {
         download_art_poll_at_ = now + 1000;
         std::vector<downloads_ui::Row> rows;
         std::set<std::string> wanted;
-        for (const auto& game : collectDownloads(rows)) { wanted.insert(downloadArtTarget(game).key()); requestDownloadArt(game); }
+        for (const auto& game : collectDownloads(rows)) {
+            wanted.insert(downloadArtTarget(game).key()); requestDownloadArt(game);
+            if (const auto found = download_announced_.find(game.name); found != download_announced_.end()) found->second = now;
+        }
+        std::erase_if(download_announced_, [&](const auto& entry) { return now - entry.second >= download_announce_quiet_ms; });
         for (const auto& notice : notifications_) if (!notice.art_key.empty()) wanted.insert(notice.art_key);
         std::erase_if(download_art_queue_, [&](const auto& entry) { return !wanted.contains(entry.first); });
         std::erase_if(download_art_retry_at_, [&](const auto& entry) { return !wanted.contains(entry.first); });

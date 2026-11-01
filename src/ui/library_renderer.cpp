@@ -817,24 +817,42 @@ void Renderer::drawLibraryDetailed() {
 // starts at the left; its glass pill glides to the middle with the next selection. Key hints
 // are in the bottom bar. The strip fades with the bar as the grid scrolls.
 void Renderer::drawLibraryTabs() {
-    const auto& tabs = context_->library_tabs;
-    const float bar = libraryBarAlpha();
+    drawCategoryStrip(context_->library_tabs, context_->library_tab_glide.value_or(static_cast<float>(context_->library_tab)),
+                      false, libraryBarAlpha(), false);
+}
+
+// Metro and Flix (their "Pasek kategorii" option): the library's strip, centred on the screen.
+void Renderer::drawHomeTabs() {
+    drawCategoryStrip(context_->home_tabs, context_->home_tab, true, context_->home_tabs_alpha, context_->home_tabs_focus);
+}
+
+// `home`: centred with the active tab always in the middle (library_tabs::home), else the library's
+// placement (the first tab at the left). `focused`: the strip has the pad focus (Metro's Up).
+void Renderer::drawCategoryStrip(const std::vector<ViewContext::LibraryTab>& tabs, float glide, bool home, float bar, bool focused) {
     if (tabs.empty() || bar < 0.01f) return;
-    const float width = viewport_.width, slot = library_tabs::slot(width), cx = library_tabs::center(width);
-    const float glide = context_->library_tab_glide.value_or(static_cast<float>(context_->library_tab));
+    const float width = viewport_.width;
+    const float slot = home ? library_tabs::home::slot(width) : library_tabs::slot(width);
+    const float cx = home ? library_tabs::home::center(width) : library_tabs::center(width);
+    const float shift = home ? 0.0f : library_tabs::focusOffset(glide);
+    const auto tabAt = [&](float offset) { return home ? library_tabs::home::tab(offset, width) : library_tabs::tab(offset, width, glide); };
     const float cy = library_tabs::top + library_tabs::height * 0.5f;
-    const auto pill = library_tabs::tab(0, width, glide);
+    const auto pill = tabAt(0);
     const auto shape = D2D1::RoundedRect(box(pill), library_tabs::height * 0.5f, library_tabs::height * 0.5f);
     glassFill(glassPanel(shape, 12), D2D1::ColorF(0.16f, 0.17f, 0.19f, 0.78f), bar);
+    if (focused) {
+        Microsoft::WRL::ComPtr<ID2D1RoundedRectangleGeometry> outline;
+        if (SUCCEEDED(factory_->CreateRoundedRectangleGeometry(shape, outline.GetAddressOf())))
+            drawCoverOutline(outline.Get(), D2D1::ColorF(0.94f, 0.96f, 0.97f), bar, true);
+    }
     target_->PushAxisAlignedClip(D2D1::RectF(cx - 1.5f * slot, library_tabs::top - 2, cx + 1.5f * slot, library_tabs::top + library_tabs::height + 2),
                                  D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
     for (size_t i = 0; i < tabs.size(); ++i) {
         const float offset = static_cast<float>(i) - glide;
-        const float position = offset + library_tabs::focusOffset(glide);
+        const float position = offset + shift;
         if (std::abs(position) > 2.0f) continue;
         const float focus = std::clamp(1 - std::abs(offset), 0.0f, 1.0f);
         const float alpha = std::clamp(2.0f - std::abs(position), 0.0f, 1.0f) * bar;
-        const auto r = library_tabs::tab(offset, width, glide);
+        const auto r = tabAt(offset);
         if (!tabs[i].mark.empty() && hasPlatformMark(tabs[i].mark)) {
             // A studio's tab: its logo, with no name beside it.
             const float logo_w = platformMarkWidth(tabs[i].mark, 24, r.right - r.left - 40);
@@ -843,12 +861,15 @@ void Renderer::drawLibraryTabs() {
         }
         std::wstring title = tabs[i].title;
         if (!title.empty()) CharUpperBuffW(title.data(), static_cast<DWORD>(title.size()));
+        // A home page without games of its own (Metro's start) has no count.
+        const bool counted = !home || tabs[i].count;
         const std::wstring count = std::to_wstring(tabs[i].count);
-        const float count_width = std::ceil(textAdvance(count, toast_sub_font_.Get())) + 14;
-        const float room = r.right - r.left - 24 - count_width - 8;
+        const float count_width = counted ? std::ceil(textAdvance(count, toast_sub_font_.Get())) + 14 : 0.0f;
+        const float room = r.right - r.left - 24 - (counted ? count_width + 8 : 0.0f);
         const float title_width = std::min(room, std::ceil(textAdvance(title, button_font_.Get())) + 2);
-        const float x = (r.left + r.right) * 0.5f - (title_width + 8 + count_width) * 0.5f;
+        const float x = (r.left + r.right) * 0.5f - (title_width + (counted ? 8 + count_width : 0.0f)) * 0.5f;
         textLine(title, x, cy, title_width, button_font_.Get(), gray(std::lerp(0.6f, 0.98f, focus), alpha), DWRITE_TEXT_ALIGNMENT_LEADING);
+        if (!counted) continue;
         const float pill_left = x + title_width + 8;
         brush(gray(1, (0.08f + 0.08f * focus) * alpha));
         target_->FillRoundedRectangle(Renderer::pill(D2D1::RectF(pill_left, cy - 10, pill_left + count_width, cy + 10)), solid_.Get());

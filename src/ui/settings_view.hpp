@@ -124,7 +124,9 @@ enum class Id { font, home_layout, ui_accent, accent, uninstalled, emulation, co
                    emulation_system, emulation_more, emulation_emulator, emulation_detected, emulation_program,
                    emulation_program_reset, emulation_arguments, emulation_preview,
                    // DRM-free → Katalogi: the page of the scanned folders.
-                   drm_roots };
+                   drm_roots,
+                   // Metro / Flix → Pasek kategorii (AppSettings::metro_category_tabs / flix_category_tabs).
+                   metro_category_tabs, flix_category_tabs };
 inline bool hasOptionsButton(Id id) { return id == Id::plugin_enabled || id == Id::pc_platform; }
 // layout: drawn preview tiles in the row (one per home layout); Row::choice is the active one.
 // count: Row::value as a large number with a chevron; activating opens a sub-list.

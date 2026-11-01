@@ -35,7 +35,7 @@ async function(request) {
     const removed = Array.isArray(data.removed) && data.removed.includes(change.app);
     return change.value ? added && !removed : !added;
   };
-  const ack = [];
+  const ack = [], unavailable = [];
   let error = '';
   // Bounded serial writes: every operation uses the current collection object, never a whole stale snapshot.
   for (const [index, change] of request.changes.entries()) {
@@ -75,7 +75,9 @@ async function(request) {
     } else if (change.kind !== 'create') {
       if (!validID(change.app) || typeof change.value !== 'boolean') { error = 'unsupported'; continue; }
       const overview = apps.GetAppOverviewByAppID(change.app);
-      if (!overview || overview.BIsModOrShortcut()) { error = 'app-unavailable'; continue; }
+      // No record of the app (a removed demo, an ended playtest): Steam cannot apply it, ever.
+      // Reported apart, not as an error, so it never holds the rest of the queue.
+      if (!overview || overview.BIsModOrShortcut()) { unavailable.push(index); continue; }
       if (member(collection, change.app) === change.value) {
         // A previous fire-and-forget save may have failed after updating the UI. Retry that
         // persisted intent with an awaitable save, rather than getting stuck on the optimistic value.
@@ -125,7 +127,7 @@ async function(request) {
   if (privacy?.isSuccess !== true) return {ok:false,error:'privacy-unavailable'};
   const privateApps = [...apps.m_setPrivateApps].filter(validID);
   const cloud = window.cloudStorageInternalState;
-  return {ok:true,account:identity(),collections,hidden,privateApps,ack,error,
+  return {ok:true,account:identity(),collections,hidden,privateApps,ack,unavailable,error,
     cloudPending:!!cloud?.m_mapDirtyKeys?.get(1)?.size};
 }
 )STEAM_BRIDGE";

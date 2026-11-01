@@ -34,6 +34,10 @@ struct LibraryState {
     std::set<std::string> hidden;
     // Durable pending native Steam hide/show operations; false must survive a client outage too.
     std::map<std::string, bool> steam_hidden_pending;
+    // Steam edits that Steam itself cannot apply (an app it has no record of: a removed demo, an ended
+    // playtest). The edit stays in Launchme only and is not sent again while its value is unchanged.
+    // Key: steam_sync::unsyncedKey. Row: steam-unsynced "<key>" <0|1>.
+    std::map<std::string, bool> steam_unsynced;
     // Epic/GOG exclusions never join Ctrl+H. Retain titles for restoration even offline.
     std::map<std::string, std::wstring> excluded_games;
     // A Steam game's own launch options ("Opcje uruchamiania…"), by gameKey; passed through

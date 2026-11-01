@@ -280,6 +280,11 @@ struct ViewContext {
     std::wstring library_note; // Under the tabs: what the screen is (the board of studio logos).
     int library_tab = 0;
     std::optional<float> library_tab_glide;
+    // Metro and Flix home (their "Pasek kategorii" option): the same strip at the top in the middle.
+    // home_tab: the shown category's (fractional while gliding) index; home_tabs_focus: Metro's Up from the tiles.
+    std::vector<LibraryTab> home_tabs;
+    float home_tab = 0, home_tabs_alpha = 1;
+    bool home_tabs_focus = false;
     bool grid_back = false; // Library, Search, Store: Back (top left) has the keyboard/pad focus.
     const downloads_ui::State* downloads = nullptr; // ScreenMode::downloads; rows match the cards.
     int downloads_moving = 0; // Games transferring now: a count on the quick bar's Pobierania icon.
@@ -440,6 +445,7 @@ struct ViewContext {
     int psfive_tab = -1;                   // The shown category's tab (overflow uses "Więcej...").
     int psfive_tab_focus = -1;
     float psfive_top_opacity = 0.66f; // Whole navigation row: active 100%, inactive 66%.
+    float psfive_intro = 1; // The start-up intro (psfive_layout::intro): the top bar, logo and buttons fading in.
     std::optional<float> psfive_menu_glide; // Fractional category index; scroll uses category_scroll.
     bool psfive_clock_shown = true;
     std::wstring psfive_clock;   // The time in the top bar (drawer_clock::time).

@@ -22,6 +22,8 @@ struct Result {
     uint64_t account = 0;
     std::optional<Snapshot> snapshot;
     std::vector<Change> applied;
+    // Steam has no record of the app (removed demo, ended playtest, shortcut): it cannot apply these.
+    std::vector<Change> unavailable;
     // Stable diagnostics; never includes client output, account names or tokens.
     std::string error;
     bool cloud_pending = false;

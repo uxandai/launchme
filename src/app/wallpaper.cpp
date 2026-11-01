@@ -83,6 +83,11 @@ void Launcher::tickWallpaper(bool& needs_paint) {
         wallpaper_playing_ = wanted;
     }
     if (wallpaper_player_.failed()) { wallpaper_failed_ = wanted; stopWallpaperVideo(); return; }
+    // Behind Ustawienia the wallpaper is blurred: its frame stands still there (no decoding, no
+    // repaints), and plays on from the same place afterwards. The picker's preview always plays.
+    const bool still = settingsOpen() && wallpaper_preview_.empty() && renderer_.hasWallpaperVideo();
+    wallpaper_player_.setPaused(still);
+    if (still) return;
     // Frames only while the last frame drew it (or none has arrived yet): hidden under a game's
     // background it costs no copies and no repaints.
     if (!renderer_.wallpaperVisible() && renderer_.hasWallpaperVideo()) return;
