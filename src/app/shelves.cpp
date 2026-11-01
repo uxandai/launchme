@@ -220,7 +220,8 @@ void Launcher::buildShelves() {
     if (steam) for (const auto& shortcut : shortcut_library_) {
         if (roms && shortcut.platform != L"PC") continue;
         public_library_.push_back(shortcut);
-        emulated.push_back(&shortcut);
+        // A Steam shortcut to a PC program is no emulated game: in the library, not on Emulacja's consoles.
+        if (shortcut.platform != L"PC") emulated.push_back(&shortcut);
         if (!shortcut.rom.empty()) listed_roms.insert(emulation_scan::romKey(shortcut.rom));
     }
     if (roms) for (const auto& game : rom_library_)
@@ -305,9 +306,10 @@ void Launcher::buildShelves() {
     if (!settings_.enabled_pc_sources.empty() || custom_games) {
         Category pcs{tr(L"Platformy PC")};
         pcs.id = "pc-platforms";
+        // DRM-free: the scanned games and those added by hand, one tile.
         for (const auto source : {GameSource::steam, GameSource::gog, GameSource::battlenet, GameSource::ea, GameSource::ubisoft, GameSource::epic, GameSource::amazon,
-                                  GameSource::xbox, GameSource::multimc, GameSource::drmfree, GameSource::custom}) {
-            if (source == GameSource::custom ? !custom_games : source == GameSource::drmfree ? !drm_games :
+                                  GameSource::xbox, GameSource::multimc, GameSource::drmfree}) {
+            if (source == GameSource::drmfree ? !drm_games && !custom_games :
                 (source == GameSource::steam ? !steam : !settings_.enabled_pc_sources.contains(sourceSlug(source)))) continue;
             // Steam without an account here and none of its games: its tile would open an empty library.
             if (source == GameSource::steam && !account_ &&
@@ -326,6 +328,9 @@ void Launcher::buildShelves() {
     if (private_shelf_)
         for (const auto& game : private_category_.games)
             if (game.kind == GameKind::nonsteam) platform_games_[game.platform].push_back(game);
+    // A system's games are copies of the ROM lists: the same names as everywhere else (Zidentyfikuj,
+    // ROM titles, then the player's own title from Edytuj metadane).
+    for (auto& [platform, games] : platform_games_) { applyIdentifiedNames(games); applyMetadataTitles(games); }
     if (settings_.show_emulation && !platform_games_.empty()) {
         Category emulation{tr(L"Emulacja")};
         emulation.id = "emulation";
@@ -394,7 +399,7 @@ void Launcher::buildShelves() {
     for (auto& category : categories_) category.games = versions_.collapse(category.games, library_state_.preferred_versions, library_state_.first_seen);
     pc_library_.clear();
     if (pc_source_) for (const auto& game : public_library_)
-        if (game.source == *pc_source_ && game.kind != GameKind::nonsteam) pc_library_.push_back(game);
+        if (platformSource(game.source) == *pc_source_ && game.kind != GameKind::nonsteam) pc_library_.push_back(game);
     category_library_.clear();
     if (!library_category_.empty())
         for (const auto& category : categories_) if (category.id == library_category_) {

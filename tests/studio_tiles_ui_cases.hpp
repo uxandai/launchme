@@ -69,7 +69,11 @@ int LauncherUiTest::studioTiles(HWND window) {
         for (size_t i = 0; i < app.categories_.size(); ++i) if (app.categories_[i].id == id) return static_cast<int>(i);
         return -1;
     };
-    if (row("emulation") < 0 || app.categories_[static_cast<size_t>(row("emulation"))].games.size() != emulation_platforms.size()) return 9903;
+    // Every console but PC: a Steam shortcut to a PC program is a library game, not an emulated console.
+    if (row("emulation") < 0 || app.categories_[static_cast<size_t>(row("emulation"))].games.size() != emulation_platforms.size() - 1) return 9903;
+    for (const auto& tile : app.categories_[static_cast<size_t>(row("emulation"))].games) if (tile.platform == L"PC") return 9903;
+    if (app.platform_games_.contains(L"PC") ||
+        std::none_of(app.public_library_.begin(), app.public_library_.end(), [](const Game& game) { return game.platform == L"PC"; })) return 9903;
     // Logos: the studios' own, a light stand-in for the consoles and stores.
     const auto logoOf = [&](const Game& game) {
         if (game.kind == GameKind::platform && (game.platform.starts_with(L"publisher:") || game.platform.starts_with(L"developer:")))

@@ -178,6 +178,25 @@ int LauncherUiTest::manualGames(HWND window) {
     if (!capture(app, L"manual-game-metadata-tv.png")) return 9591;
     app.desktopMetaSave();
     if (app.metadataOpen() || app.detail_games_.empty() || app.detail_games_[0].name != L"Renamed by hand") return 9592;
+    // Another title keeps the game's identification (Zidentyfikuj: metadata\<key>.rawg.json); only what was
+    // looked up by the old title goes (HowLongToBeat's answer).
+    {
+        const auto config = userConfigDirectory();
+        const auto cache = text_encoding::wideLenient(gameCacheKey(game));
+        const auto identification = config / L"metadata" / (cache + L".rawg.json");
+        const auto hltb = config / L"plugins" / L"data" / L"launchme.howlongtobeat" / (cache + L".json");
+        std::filesystem::create_directories(identification.parent_path()); std::filesystem::create_directories(hltb.parent_path());
+        { std::ofstream(identification) << "{}"; std::ofstream(hltb) << "{}"; }
+        app.rawg_metadata_[key] = {};
+        app.openMetadata(game);
+        app.desktop_meta_.fields[0] = L"Renamed again";
+        app.desktopMetaSave();
+        std::error_code missing;
+        if (app.metadataOpen() || !std::filesystem::exists(identification, missing) || std::filesystem::exists(hltb, missing) ||
+            !app.rawg_metadata_.contains(key) || app.detail_games_[0].name != L"Renamed again") return 9593;
+        std::filesystem::remove(identification, missing);
+        app.rawg_metadata_.erase(key);
+    }
     app.back();
 
     // Usuń z biblioteki: the entry, its artwork and history go; its file (none here) is never touched.
@@ -197,6 +216,14 @@ int LauncherUiTest::manualGames(HWND window) {
         auto games = std::make_unique<LibraryMessage>(); games->account = 1; games->games.push_back(steam);
         desk.onLibrary(std::move(games));
         desk.showCategory(0); desk.desktopShowSection("all"); settle(desk);
+        // Games added by hand are DRM-free's: its section lists them, there is no section of their own.
+        {
+            desk.buildDesktopSidebar();
+            if (desk.desktopEntryIndex("source:drmfree") < 0 || desk.desktopEntryIndex("source:custom") >= 0) return 9594;
+            desk.desktopShowSection("source:drmfree"); settle(desk);
+            if (std::none_of(desk.cards_.begin(), desk.cards_.end(), [&](const GameCard& card) { return card.game.source_id == entry.id; })) return 9595;
+            desk.desktopShowSection("all"); settle(desk);
+        }
         const auto at = std::find_if(desk.cards_.begin(), desk.cards_.end(), [&](const GameCard& card) { return card.game.source_id == entry.id; });
         if (!desk.desktopActive() || at == desk.cards_.end()) return 9543;
         desk.desktopFocus(static_cast<size_t>(at - desk.cards_.begin()));

@@ -46,11 +46,12 @@ PcLibraryMessage readPcLibrary(const PcLibraryRequest& request, const std::funct
 
 void Launcher::openPcLibrary(GameSource source) {
     rememberPlace(); library_controls_ = {};
+    source = platformSource(source); // Gry dodane ręcznie: DRM-free's library.
     pc_source_ = source; library_console_.clear();
     library_category_.clear(); category_library_.clear();
     pc_library_.clear();
     for (const auto& game : public_library_)
-        if (game.source == source && game.kind != GameKind::nonsteam) pc_library_.push_back(game);
+        if (platformSource(game.source) == source && game.kind != GameKind::nonsteam) pc_library_.push_back(game);
     screen_ = ScreenMode::library;
     grid_scroll_ = 0;
     closeQuick();

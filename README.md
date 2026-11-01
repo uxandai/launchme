@@ -139,15 +139,19 @@ Settings → System → Help → **Open folder** (the version row) opens it.
   run on RetroArch), point at its program by hand and replace its launch arguments (`%ROM%`, `%CORE%`); the
   command a game starts with is shown below, and a RetroArch system without its core says so. PS4 (shadPS4),
   PS Vita (Vita3K) and ScummVM are among them; PS5 and Switch 2 start with a program you choose. Each system can
-  also have its own ROM folder in place of its subfolder of the main one.
+  also have its own ROM folder in place of its subfolder of the main one, and **Look for games again** reads it anew
+  (new games, updates, removed ones). Switch 2 dumps kept unpacked are one game per folder, started from the newest
+  update's `exefs\main`.
 - **Games added by hand** (Settings → Library → *DRM-free folders* → **Add game** → **Choose file** or **Choose
   folder**, the "+" tile, or a file or folder dropped on the desktop window): a program, shortcut or script is a PC
   game; a disc image or ROM is an emulated game with its console guessed and changeable (*Platform*), started by
   the system's emulator or by an *Emulator command* of its own (`%ROM%` for the file); a folder is a PS3 or Wii U
   game, one game's ROM folder or a PC game's folder with its program found; a whole ROM folder becomes the emulated
-  games' ROM folder, and a folder of many games joins the DRM-free folders. The list of these games is under
-  *DRM-free folders* → *Manually added games*. A game can also have no file at all, for one to play next or played
-  elsewhere; such a game reads **Choose file** and opens its editor at the file. The editor shows the poster its name
+  games' ROM folder, and a folder of many games joins the DRM-free folders. PC games added by hand are DRM-free
+  games: they share its tile, library and desktop section with the scanned ones; their list is under
+  *DRM-free folders* → *Manually added games*. A Switch 2 dump kept unpacked can be added by its folder or its
+  `exefs\main`. A game can also have no file at all, for one to play next or played
+  elsewhere; its button reads **Choose file** and opens its editor at the file. The editor shows the poster its name
   finds as you type, with **Identify game** under it; **Remove from library** (the game's menu, in red, after a
   question) removes the entry, never the game's files.
 - **Shortcuts** (the desktop window's game menu → *Shortcuts*; TV mode: the game's details → … → *Shortcuts*): a

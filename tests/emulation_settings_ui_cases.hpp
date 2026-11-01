@@ -175,6 +175,36 @@ int LauncherUiTest::emulationSettings(HWND window) {
     app.settingsActivate();
     if (!scanned() || !app.settings_.system_roms.empty() || rowOf(Id::emulation_system_folder_reset)) return 19957;
     for (const auto& game : app.rom_library_) if (game.platform == L"PS2" && game.name != L"Okami") return 19958;
+    // Szukaj gier ponownie: the folder read again (a game copied in meanwhile), with what the system holds now.
+    {
+        const auto added = roms / L"ps2" / L"Second Game.iso";
+        write(added, "iso");
+        if (!select(Id::emulation_system_rescan)) return 19959;
+        const auto notices = app.notifications_.size();
+        app.settingsActivate();
+        if (!scanned() || app.rom_system_counts_[L"ps2"] != 2 || app.notifications_.size() != notices + 1 ||
+            app.notifications_.back().subtitle != L"Gier: 2" || rowOf(Id::emulation_system_rescan)->description.find(L"Gier: 2") != 0) return 19960;
+        settle();
+        if (!capture(L"emulation-system-rescan.png")) return 19961;
+        std::error_code gone;
+        std::filesystem::remove(added, gone);
+        app.settingsActivate();
+        if (!scanned() || app.rom_system_counts_[L"ps2"] != 1) return 19962;
+    }
+    // A system's games (its tile's grid in Tryb TV) show the player's own title from Edytuj metadane.
+    {
+        const auto okami = std::find_if(app.rom_library_.begin(), app.rom_library_.end(), [](const Game& g) { return g.platform == L"PS2"; });
+        if (okami == app.rom_library_.end()) return 19963;
+        const auto key = gameKey(*okami);
+        app.metadataOverride(*okami); // The saved overrides read first, as the dialog does.
+        metadata::Override own; own.title = L"Okami HD";
+        app.metadata_overrides_.set(key, own);
+        app.buildShelves();
+        const auto& ps2_games = app.platform_games_[L"PS2"];
+        if (std::none_of(ps2_games.begin(), ps2_games.end(), [&](const Game& g) { return gameKey(g) == key && g.name == L"Okami HD"; })) return 19964;
+        app.metadata_overrides_.erase(key);
+        app.buildShelves();
+    }
     app.back();
 
     // PS1's emulator chosen by hand: RetroArch (not found: its page says so), then automatic again.

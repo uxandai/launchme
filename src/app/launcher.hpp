@@ -2388,6 +2388,7 @@ private:
     std::map<std::wstring, size_t> rom_system_counts_;
     bool emulation_all_systems_ = false;
     bool rom_folder_notice_ = false; // A ROM folder picked in Dodaj grę: its count when the scan ends.
+    std::wstring rom_rescan_system_;  // Szukaj gier ponownie on a system's page: its count when the scan ends.
     // Biblioteka → DRM-free → Gry dodane ręcznie (drm_free.cpp).
     void customGamesSettingsRows();
     // Dodaj grę → Wskaż folder (add_game.cpp): one game, a ROM folder, or a folder of games for DRM-free.

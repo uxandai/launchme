@@ -116,7 +116,7 @@ void Launcher::applyCustomGames() {
     buildShelves();
     const auto category = std::find_if(categories_.begin(), categories_.end(), [&](const Category& entry) { return entry.id == category_id; });
     if (category != categories_.end()) category_ = static_cast<size_t>(category - categories_.begin());
-    if (screen_ == ScreenMode::library && pc_source_ == GameSource::custom && custom_library_.empty()) { showCategory(category_); return; }
+    if (screen_ == ScreenMode::library && pc_source_ == GameSource::drmfree && pc_library_.empty()) { showCategory(category_); return; }
     if (screen_ == ScreenMode::search) updateSearch();
     else if (screen_ == ScreenMode::shelves || screen_ == ScreenMode::library) rebuildCards();
     else { InvalidateRect(hwnd_, nullptr, FALSE); return; }

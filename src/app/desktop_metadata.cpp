@@ -117,12 +117,16 @@ void Launcher::forgetTitleLookups(const std::string& key) {
     const auto config = userConfigDirectory();
     const auto name = text_encoding::wideLenient(cache_key);
     std::error_code error;
+    // Lookups made by the old title go (HowLongToBeat, the automatic RAWG answer, their misses); the
+    // game's identification (Zidentyfikuj, metadata\<key>.rawg.json) stays: it was chosen, not looked
+    // up by the title, and a new title must not undo it.
     for (const auto& file : {config / L"plugins" / L"data" / L"launchme.howlongtobeat" / (name + L".json"), config / L"knowledge" / L"rawg" / (name + L".json"),
-                             config / L"knowledge" / L"miss" / (name + L".rawg"), config / L"knowledge" / L"miss" / (name + L".hltb"),
-                             config / L"metadata" / (name + L".rawg.json")})
+                             config / L"knowledge" / L"miss" / (name + L".rawg"), config / L"knowledge" / L"miss" / (name + L".hltb")})
         std::filesystem::remove(file, error);
-    rawg_metadata_.erase(key);
-    gameIndexMerge(key, game_index::Source::rawg, {});
+    if (!std::filesystem::exists(config / L"metadata" / (name + L".rawg.json"), error)) {
+        rawg_metadata_.erase(key);
+        gameIndexMerge(key, game_index::Source::rawg, {});
+    }
     gameIndexMerge(key, game_index::Source::hltb, {});
     gameIndexTouch({key});
 }

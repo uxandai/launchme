@@ -117,6 +117,11 @@ bool romFolder(const std::filesystem::path& folder);
 std::wstring displayTitle(std::wstring_view raw); // "Legend of Zelda, The (Europe) [!]" -> "The Legend of Zelda".
 std::wstring romKey(const std::filesystem::path& rom); // Lower case, backslashes: compares ROM paths.
 uint32_t romAppId(const std::filesystem::path& rom);
+// A Switch 2 game kept as an unpacked folder: what starts it (the newest updates\<n>\exefs\main, else
+// base\exefs\main, else exefs\main, else <subfolder>\exefs\main, the highest number first); empty when none.
+std::filesystem::path switch2Main(const std::filesystem::path& game);
+// The game folder of a picked exefs\main (or a folder inside the dump); the path itself when it is no dump.
+std::filesystem::path switch2Folder(const std::filesystem::path& path);
 // An emulated game: GameKind::nonsteam (every emulation path treats it as such) from GameSource::custom
 // (launched by its own action, played time kept locally), keyed by its ROM.
 Game makeGame(const std::wstring& name, const std::wstring& platform, const std::filesystem::path& rom, GameAction action);

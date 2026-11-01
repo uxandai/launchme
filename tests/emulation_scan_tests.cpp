@@ -188,6 +188,45 @@ int main(int argc, char** argv) {
         choices.roms = {{"ps4", roms / L"ps4"}};
         setup = load(standalone, {}, choices);
         if (scan(setup).system_counts[L"ps4"] != 2) return 80;
+        // Switch 2 dumps kept unpacked: one game per folder, keyed by the folder, started from the newest
+        // updates\<n>\exefs\main, else base\exefs\main, else <n>\exefs\main, else exefs\main; a folder with
+        // no part of a ROM extension (only exefs\main) is found too.
+        {
+            const auto dumps = root / L"Switch 2 dumps";
+            write(dumps / L"KirbyAirRiders" / L"base" / L"exefs" / L"main", "nso");
+            write(dumps / L"KirbyAirRiders" / L"base" / L"romfs" / L"EffectScript.nso", "part");
+            write(dumps / L"KirbyAirRiders" / L"updates" / L"65536" / L"exefs" / L"main", "nso");
+            write(dumps / L"KirbyAirRiders" / L"updates" / L"131072" / L"exefs" / L"main", "nso");
+            write(dumps / L"Fire Emblem Fortunes Weave" / L"131072" / L"exefs" / L"main", "nso");
+            write(dumps / L"Fire Emblem Fortunes Weave" / L"131072" / L"exefs" / L"subsdk0", "nso");
+            write(dumps / L"Fire Emblem Fortunes Weave" / L"131072" / L"romfs" / L"data.bin", "data");
+            write(dumps / L"Loose" / L"exefs" / L"main", "nso");
+            write(dumps / L"Not a game" / L"readme.txt", "text");
+            choices = {};
+            choices.roms = {{"switch2", dumps}};
+            choices.overrides["switch2"] = {pcsx2, L"%ROM%"};
+            result = scan(load(standalone, {}, choices));
+            if (result.system_counts[L"switch2"] != 3) return 82;
+            const std::pair<const wchar_t*, std::filesystem::path> expected[] = {
+                {L"KirbyAirRiders", dumps / L"KirbyAirRiders" / L"updates" / L"131072" / L"exefs" / L"main"},
+                {L"Fire Emblem Fortunes Weave", dumps / L"Fire Emblem Fortunes Weave" / L"131072" / L"exefs" / L"main"},
+                {L"Loose", dumps / L"Loose" / L"exefs" / L"main"}};
+            for (const auto& [folder, main] : expected) {
+                const auto game = std::find_if(result.games.begin(), result.games.end(), [&](const Game& item) { return item.install_directory == dumps / folder; });
+                if (game == result.games.end() || game->rom != main || game->app_id != romAppId(dumps / folder)) return 83;
+            }
+            // From a picked exefs\main (or a folder inside the dump) back to the game's folder.
+            if (switch2Folder(dumps / L"KirbyAirRiders" / L"updates" / L"65536" / L"exefs" / L"main") != dumps / L"KirbyAirRiders" ||
+                switch2Folder(dumps / L"KirbyAirRiders" / L"base" / L"exefs" / L"main") != dumps / L"KirbyAirRiders" ||
+                switch2Folder(dumps / L"KirbyAirRiders" / L"base") != dumps / L"KirbyAirRiders" ||
+                switch2Folder(dumps / L"Fire Emblem Fortunes Weave" / L"131072" / L"exefs" / L"main") != dumps / L"Fire Emblem Fortunes Weave" ||
+                switch2Folder(dumps / L"Loose" / L"exefs" / L"main") != dumps / L"Loose" ||
+                switch2Folder(dumps / L"Loose") != dumps / L"Loose") return 84;
+            // Dodaj grę: the dump's folder (or its exefs) is a Switch 2 game started from its newest main.
+            const auto picked = folderGame(dumps / L"KirbyAirRiders" / L"base" / L"exefs");
+            if (!picked || picked->platform != L"Switch 2" || picked->rom != expected[0].second || picked->title != L"KirbyAirRiders") return 85;
+            if (folderGame(dumps / L"Not a game")) return 86;
+        }
         std::filesystem::remove_all(root, error);
     }
     std::cout << "emulation_scan passed\n";

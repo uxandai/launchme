@@ -178,6 +178,17 @@ Game makeGame(const Entry& entry, bool installed) {
         // Emulated: on its console's shelf, keyed by its ROM; the launcher fills in how it starts
         // (Launcher::emulationAction: its own command, else the platform's parser).
         auto game = emulation_scan::makeGame(entry.name, entry.platform, entry.path, {});
+        if (entry.platform == L"Switch 2" && !entry.path.empty()) {
+            // An unpacked dump (its folder or an exefs\main picked): started and keyed as the ROM
+            // folder's scan does it, so an update or a later scan keeps its identification.
+            const auto folder = emulation_scan::switch2Folder(entry.path);
+            if (auto main = emulation_scan::switch2Main(folder); !main.empty()) {
+                game = emulation_scan::makeGame(entry.name, entry.platform, main, {});
+                game.app_id = emulation_scan::romAppId(folder);
+                game.shortcut_id = (static_cast<uint64_t>(game.app_id) << 32) | 0x02000000ULL;
+                game.install_directory = folder;
+            }
+        }
         game.source_id = entry.id;
         game.installed = installed && !entry.path.empty();
         return game;

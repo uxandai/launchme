@@ -37,12 +37,12 @@ struct Rows {
 };
 constexpr auto order(Rows options) {
     return options.secondary_only ?
-        std::array{Item::details, Item::primary, Item::suspend, Item::aurelia, Item::plugin, Item::identify, Item::artwork, Item::retry, Item::close, Item::folder, Item::launch, Item::compat, Item::shortcuts, Item::steam_account, Item::metadata, Item::hide, Item::exclude, Item::uninstall, Item::remove} :
-        std::array{Item::primary, Item::suspend, Item::aurelia, Item::plugin, Item::details, Item::identify, Item::artwork, Item::retry, Item::close, Item::folder, Item::launch, Item::compat, Item::shortcuts, Item::steam_account, Item::metadata, Item::hide, Item::exclude, Item::uninstall, Item::remove};
+        std::array{Item::details, Item::primary, Item::suspend, Item::aurelia, Item::plugin, Item::artwork, Item::retry, Item::close, Item::folder, Item::launch, Item::compat, Item::shortcuts, Item::steam_account, Item::metadata, Item::identify, Item::hide, Item::exclude, Item::uninstall, Item::remove} :
+        std::array{Item::primary, Item::suspend, Item::aurelia, Item::plugin, Item::details, Item::artwork, Item::retry, Item::close, Item::folder, Item::launch, Item::compat, Item::shortcuts, Item::steam_account, Item::metadata, Item::identify, Item::hide, Item::exclude, Item::uninstall, Item::remove};
 }
 constexpr bool visible(Item entry, Rows options) {
     if (entry == Item::aurelia) return options.aurelia;
-    if (entry == Item::identify) return options.identify && !options.detail_options;
+    if (entry == Item::identify) return options.identify && !options.detail_options; // Details has its own Zidentyfikuj button.
     if (entry == Item::steam_account) return options.detail_options && options.steam_account;
     if (options.detail_options) return entry == Item::artwork || (entry == Item::launch && options.launch) || (entry == Item::compat && options.compat) ||
         (entry == Item::shortcuts && options.shortcuts) ||

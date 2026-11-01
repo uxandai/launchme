@@ -104,6 +104,16 @@ void Launcher::emulationSettingsRows() {
             folder_row.lines = 3;
             add(std::move(folder_row));
         }
+        {
+            // Its folder read again (new games, an update, games removed), with what it holds now.
+            const auto count = rom_system_counts_.find(rule->system);
+            std::wstring description = rom_scanning_ ? std::wstring(tr(L"Szukanie gier…")) :
+                std::wstring(tr(L"Gier: ")) + std::to_wstring(count == rom_system_counts_.end() ? 0 : count->second);
+            description += L" · " + std::wstring(tr(L"Czyta folder jeszcze raz: nowe gry, aktualizacje i usunięte."));
+            Row rescan{Id::emulation_system_rescan, Control::action, tr(L"Szukaj gier ponownie"), std::move(description), tr(L"Szukaj")};
+            rescan.key = key;
+            add(std::move(rescan));
+        }
         if (custom_folder) {
             Row reset{Id::emulation_system_folder_reset, Control::action, tr(L"Przywróć domyślny folder ROM-ów"),
                       tr(L"Użyj podfolderu tego systemu w głównym folderze ROM-ów."), tr(L"Przywróć")};
@@ -288,6 +298,15 @@ bool Launcher::emulationSettingsChoose(const Row& row) {
 
 // The action rows of the Emulacja page and its systems; false: not one of them.
 bool Launcher::emulationSettingsActivate(const Row& row) {
+    if (row.id == Id::emulation_system_rescan) {
+        const auto* rule = emulationRule(row.key);
+        if (!rule) { navigationBoundary(); return true; }
+        rom_rescan_system_ = rule->system;
+        audio_.context();
+        startRomScan();
+        buildSettingsRows(); // Szukanie gier… until the scan ends.
+        return true;
+    }
     if (row.id == Id::emulation_system_folder_reset) {
         settings_.system_roms.erase(row.key);
         settings_state_.selected[settings_state_.category] = std::max(0, settings_state_.row() - 1);

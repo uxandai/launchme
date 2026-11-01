@@ -2329,7 +2329,6 @@ constexpr Entry entries[] = {
     {L"Puste pole: wartość automatyczna. A wpisuje w pole, B zamyka.", L"An empty field uses the automatic value. A types into a field, B closes."},
     // Games added by hand without a file, their poster in the editor and Usuń z biblioteki (src/app/my_games.cpp).
     {L"Wskaż plik", L"Choose file"},
-    {L"WSKAŻ PLIK", L"CHOOSE FILE"},
     {L"Bez pliku gry", L"No game file"},
     {L"Usuń z biblioteki", L"Remove from library"},
     {L"Usuń z biblioteki…", L"Remove from library…"},
@@ -2818,6 +2817,10 @@ constexpr Entry entries[] = {
     {L"Nie wybrano folderu.", L"No folder selected."},
     {L"Wybierz katalog z grami tylko tego systemu. Zastępuje jego podfolder w głównym folderze ROM-ów.", L"Choose the folder containing games for this system only. It replaces its subfolder in the main ROM folder."},
     {L"Przywróć domyślny folder ROM-ów", L"Restore default ROM folder"},
+    {L"Szukaj gier ponownie", L"Look for games again"},
+    {L"Szukanie gier…", L"Looking for games…"},
+    {L"Gier: ", L"Games: "},
+    {L"Czyta folder jeszcze raz: nowe gry, aktualizacje i usunięte.", L"Reads the folder again: new games, updates and removed ones."},
     {L"Użyj podfolderu tego systemu w głównym folderze ROM-ów.", L"Use this system's subfolder in the main ROM folder."},
     {L"Wskaż własny program i jego parametry uruchamiania. Ten system jest konfigurowany ręcznie.", L"Choose your own program and its launch arguments. This system is configured manually."},
     {L"Program własny", L"Custom program"},

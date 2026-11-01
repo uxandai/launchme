@@ -144,11 +144,15 @@ inline std::wstring artworkTitle(const Game& game) {
 // Games launched straight from a file on disk (user-added or found in DRM-free folders):
 // not installed means the file is missing, never "install".
 inline bool localFileGame(GameSource source) { return source == GameSource::custom || source == GameSource::drmfree; }
+// The PC platform a game is listed under: games added by hand are DRM-free games too (one tile, library,
+// tab and desktop section; the scanned ones and those added by hand keep their own lists and editors).
+inline GameSource platformSource(GameSource source) { return source == GameSource::custom ? GameSource::drmfree : source; }
 // A game added by hand without its file yet (one to play next, or one played elsewhere): its action
 // asks for the file ("Wskaż plik") instead of reporting it missing.
 inline bool fileNotChosen(const Game& game) { return game.source == GameSource::custom && !game.source_id.empty() && game.play_action.target.empty(); }
 inline const wchar_t* missingFileLabel(const Game& game) { return fileNotChosen(game) ? tr(L"Wskaż plik") : tr(L"Brak pliku"); }
-inline const wchar_t* missingFileBadge(const Game& game) { return fileNotChosen(game) ? tr(L"WSKAŻ PLIK") : tr(L"BRAK PLIKU"); }
+// On the tile: nothing for a game without its file yet (its button and the hints say „Wskaż plik”).
+inline const wchar_t* missingFileBadge(const Game& game) { return fileNotChosen(game) ? L"" : tr(L"BRAK PLIKU"); }
 
 // Stand-in names of Steam titles whose name is not known yet. They are stored in
 // Game::name in the active language, so checks accept either language.
@@ -215,5 +219,5 @@ inline std::wstring activePlatformName(const Game& game) {
     if (!game.version_group.empty()) return {};
     if (uiTile(game)) return {};
     if (game.kind == GameKind::platform || game.kind == GameKind::nonsteam) return game.platform;
-    return sourceName(game.source);
+    return sourceName(platformSource(game.source));
 }

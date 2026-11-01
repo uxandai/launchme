@@ -107,13 +107,14 @@ void Launcher::buildDesktopSidebar() {
         add(EntryKind::hidden, Group::library, "hidden", tr(L"Ukryte"), private_category_.games.size(), glyph::hide);
     // Every store with games, in the TV mode's order; each copy under its own store.
     std::map<GameSource, size_t> per_source;
-    for (const auto& game : public_library_) if (shown(game) && game.kind != GameKind::nonsteam) ++per_source[game.source];
+    for (const auto& game : public_library_) if (shown(game) && game.kind != GameKind::nonsteam) ++per_source[platformSource(game.source)];
+    // DRM-free: the scanned games and those added by hand, one section.
     for (const auto source : {GameSource::steam, GameSource::gog, GameSource::epic, GameSource::battlenet, GameSource::ea, GameSource::ubisoft,
-                              GameSource::amazon, GameSource::xbox, GameSource::multimc, GameSource::drmfree, GameSource::custom}) {
+                              GameSource::amazon, GameSource::xbox, GameSource::multimc, GameSource::drmfree}) {
         const auto found = per_source.find(source);
         if (found == per_source.end() || !found->second) continue;
         auto& entry = add(EntryKind::source, Group::platforms, std::string("source:") + sourceSlug(source), sourceName(source), found->second,
-                          source == GameSource::custom ? glyph::game : source == GameSource::drmfree ? glyph::folder : glyph::shop);
+                          source == GameSource::drmfree ? glyph::folder : glyph::shop);
         entry.source = source;
         entry.brand = brand_icons::sourceKey(source); // Its mark instead of the icon.
     }
@@ -211,7 +212,7 @@ std::vector<Game> Launcher::desktopSource() const {
             if (settings_.show_uninstalled || game.installed || game.installation.active()) games.push_back(game);
         return games;
     case EntryKind::source:
-        for (const auto& game : public_library_) if (game.source == entry->source && game.kind != GameKind::nonsteam) games.push_back(game);
+        for (const auto& game : public_library_) if (platformSource(game.source) == entry->source && game.kind != GameKind::nonsteam) games.push_back(game);
         return games;
     case EntryKind::console:
         if (const auto found = platform_games_.find(entry->console); found != platform_games_.end()) return found->second;

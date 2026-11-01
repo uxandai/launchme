@@ -68,6 +68,12 @@ void Launcher::onRomScan(uint64_t generation, std::shared_ptr<const emulation_sc
             showNotification(NotificationKind::launch, tr(L"Folder ROM-ów"), tr(L"Gry emulowane: ") + std::to_wstring(games.size()));
         else showNotification(NotificationKind::error, tr(L"Folder ROM-ów"), tr(L"Nie znaleziono w nim gier."));
     }
+    if (!rom_rescan_system_.empty()) { // Szukaj gier ponownie: what the system holds now.
+        const auto system = std::exchange(rom_rescan_system_, std::wstring{});
+        const auto count = rom_system_counts_.find(system);
+        showNotification(NotificationKind::launch, emulationSystemTitle(system),
+                         tr(L"Gier: ") + std::to_wstring(count == rom_system_counts_.end() ? 0 : count->second));
+    }
     // Games added by hand start through the setup's parsers: their commands as it now finds them.
     rebuildCustomLibrary();
     std::sort(games.begin(), games.end(), [](const Game& a, const Game& b) { return gameKey(a) < gameKey(b); });

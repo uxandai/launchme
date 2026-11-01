@@ -132,19 +132,21 @@ int LauncherUiTest::customGames(HWND window) {
     app.back();
     if (!app.settingsOpen() || app.settings_state_.at(settings_ui::Page::custom_games) || app.settings_state_.row() != findRow(settings_ui::Id::custom_games) ||
         app.settings_rows_[app.settings_state_.row()].value != L"1" || findRow(settings_ui::Id::custom_game, id) >= 0) return 645;
-    // "Moje gry" tile after the store tiles in "Platformy PC"; it opens a store-like library.
+    // Games added by hand are DRM-free games: its tile after the store tiles in "Platformy PC" (also with
+    // no DRM-free folder), no tile of their own; it opens a store-like library.
     app.back(); app.back(); app.back();
     if (app.settingsOpen()) return 617;
     const auto pcs = category("pc-platforms");
     if (pcs == app.categories_.end() || pcs->games.back().kind != GameKind::pc_platform ||
-        pcs->games.back().source != GameSource::custom || pcs->games.back().name != L"Gry dodane ręcznie") return 618;
+        pcs->games.back().source != GameSource::drmfree || pcs->games.back().name != sourceName(GameSource::drmfree) ||
+        std::any_of(pcs->games.begin(), pcs->games.end(), [](const Game& tile) { return tile.source == GameSource::custom; })) return 618;
     const auto tile = pcs->games.size() - 1;
     app.showCategory(static_cast<size_t>(pcs - app.categories_.begin()));
     app.focusCard(tile);
     settle();
     if (!capture(L"custom-games-shelf.png")) return 642;
     app.launch();
-    if (app.screen_ != ScreenMode::library || app.pc_source_ != GameSource::custom || app.cards_.size() != 1 ||
+    if (app.screen_ != ScreenMode::library || app.pc_source_ != GameSource::drmfree || app.cards_.size() != 1 ||
         gameKey(app.cards_[0].game) != key || app.actionLabel(app.cards_[0].game) != L"Graj") return 619;
     settle();
     if (!capture(L"custom-games-library.png")) return 620;
@@ -225,7 +227,8 @@ int LauncherUiTest::customGames(HWND window) {
     {
         const auto tabs = app.libraryTabs();
         const int at = app.libraryTabIndex(tabs);
-        if (!app.libraryTabsShown() || tabs.empty() || tabs[static_cast<size_t>(at)].id != sourceSlug(GameSource::custom)) return 648;
+        if (!app.libraryTabsShown() || tabs.empty() || tabs[static_cast<size_t>(at)].id != sourceSlug(GameSource::drmfree) ||
+            std::any_of(tabs.begin(), tabs.end(), [](const auto& tab) { return tab.id == sourceSlug(GameSource::custom); })) return 648;
         if (tabs.size() > 1) {
             const auto view = app.libraryView();
             const int step = at > 0 ? -1 : 1;

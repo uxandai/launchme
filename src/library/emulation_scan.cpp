@@ -808,26 +808,28 @@ Result scan(const Setup& setup, bool show_hidden, const Cancelled& cancelled) {
             if (found.size() >= most_games) break;
         }
     }
-    // A Switch 2 dump: <game>\base and <game>\updates\<version>, each with exefs\main; the newest
-    // update's main starts it, else the base's (else the part chosen above).
-    const auto switch2Main = [](const std::filesystem::path& game) {
-        std::filesystem::path best;
-        unsigned long long newest = 0;
-        std::error_code error;
-        for (std::filesystem::directory_iterator it(game / L"updates", error), end; !error && it != end; it.increment(error)) {
-            const auto name = it->path().filename().wstring();
-            if (name.empty() || name.size() > 18 || !std::all_of(name.begin(), name.end(), [](wchar_t ch) { return ch >= L'0' && ch <= L'9'; })) continue;
-            const auto version = std::wcstoull(name.c_str(), nullptr, 10);
-            const auto main = it->path() / L"exefs" / L"main";
-            if ((best.empty() || version > newest) && fileExists(main)) { best = main; newest = version; }
-        }
-        if (best.empty()) for (const auto* base : {L"base", L"."})
-            if (const auto main = (game / base / L"exefs" / L"main").lexically_normal(); fileExists(main)) { best = main; break; }
-        return best;
-    };
+    // A Switch 2 dump starts from an exefs\main (switch2Main), else the part chosen above.
     for (const auto& [key, place] : unpacked) {
         auto& entry = found[place.first];
         if (entry.rule->system == L"switch2") if (auto main = switch2Main(place.second); !main.empty()) entry.rom = std::move(main);
+    }
+    // Switch 2 dumps with no part of a ROM extension (only exefs\main, its sdk and romfs): every folder
+    // of the system holding an exefs\main is a game too.
+    for (const auto& rule : setup.rules) {
+        if (rule.system != L"switch2" || rule.folder.empty() || !folderExists(rule.folder) || found.size() >= most_games) continue;
+        std::error_code error;
+        for (std::filesystem::directory_iterator it(rule.folder, error), end; !error && it != end && found.size() < most_games; it.increment(error)) {
+            std::error_code kind;
+            if (!it->is_directory(kind)) continue;
+            const auto folder = it->path();
+            const auto folder_key = romKey(folder);
+            if (unpacked.contains(folder_key)) continue;
+            auto main = switch2Main(folder);
+            if (main.empty() || !claimed.insert(romKey(main)).second) continue;
+            unpacked.emplace(folder_key, std::pair{found.size(), folder});
+            found.push_back({std::move(main), folder.filename().wstring(), rule.platform, &rule, folder});
+            systems.insert(rule.platform);
+        }
     }
     // Loose files at the top of the ROM folder (a Switch .nsp left beside the system folders): the
     // parser of the system its extension belongs to.
@@ -973,6 +975,14 @@ std::optional<FolderGame> folderGame(const std::filesystem::path& folder) {
     std::error_code error;
     for (std::filesystem::directory_iterator it(folder / L"code", error), end; !error && it != end; it.increment(error))
         if (lower(it->path().extension().wstring()) == L".rpx") return FolderGame{it->path(), L"Wii U", displayTitle(name)};
+    // An unpacked Switch dump (exefs\main under base, updates\<n>, <n> or the folder itself), picked as
+    // its folder or one inside it: Switch 2, or Switch inside a switch folder (the editor's Platforma row
+    // can change it).
+    if (const auto game = switch2Folder(folder); folderExists(game))
+        if (auto main = switch2Main(game); !main.empty()) {
+            const auto platform = guessPlatform(main) == L"Switch" ? std::wstring(L"Switch") : std::wstring(L"Switch 2");
+            return FolderGame{std::move(main), platform, displayTitle(game.filename().wstring())};
+        }
     // A folder holding one game: its playlist or cue sheet first, else its only ROM.
     std::vector<std::filesystem::path> roms;
     for (std::filesystem::directory_iterator it(folder, error), end; !error && it != end; it.increment(error)) {
@@ -1072,6 +1082,50 @@ std::wstring romKey(const std::filesystem::path& rom) {
 }
 
 uint32_t romAppId(const std::filesystem::path& rom) { return steam_shortcuts::appId(romKey(rom), L"launchme-rom"); }
+
+namespace {
+// A version folder of a dump ("65536", "131072"): digits only, at most 18 of them.
+std::optional<unsigned long long> versionFolder(const std::filesystem::path& folder) {
+    const auto name = folder.filename().wstring();
+    if (name.empty() || name.size() > 18 || !std::all_of(name.begin(), name.end(), [](wchar_t ch) { return ch >= L'0' && ch <= L'9'; })) return std::nullopt;
+    return std::wcstoull(name.c_str(), nullptr, 10);
+}
+// The <folder>\<sub>\exefs\main of the highest numbered sub (else the first by name); empty when none.
+std::filesystem::path childMain(const std::filesystem::path& folder, bool numbered_only) {
+    std::filesystem::path best, named;
+    unsigned long long newest = 0;
+    std::error_code error;
+    for (std::filesystem::directory_iterator it(folder, error), end; !error && it != end; it.increment(error)) {
+        const auto main = it->path() / L"exefs" / L"main";
+        if (!fileExists(main)) continue;
+        if (const auto version = versionFolder(it->path())) { if (best.empty() || *version > newest) { best = main; newest = *version; } }
+        else if (!numbered_only && (named.empty() || lower(main.wstring()) < lower(named.wstring()))) named = main;
+    }
+    return best.empty() ? named : best;
+}
+}
+
+std::filesystem::path switch2Main(const std::filesystem::path& game) {
+    if (auto main = childMain(game / L"updates", true); !main.empty()) return main;
+    for (const auto* base : {L"base", L"."})
+        if (auto main = (game / base / L"exefs" / L"main").lexically_normal(); fileExists(main)) return main;
+    return childMain(game, false); // <game>\131072\exefs\main and the like.
+}
+
+std::filesystem::path switch2Folder(const std::filesystem::path& path) {
+    auto folder = path.lexically_normal();
+    while (!folder.empty() && !folder.has_filename()) folder = folder.parent_path(); // "K:\games\x\" -> "K:\games\x".
+    const auto named = [](const std::filesystem::path& item, std::wstring_view name) { return lower(item.filename().wstring()) == name; };
+    if (named(folder, L"main") && named(folder.parent_path(), L"exefs")) folder = folder.parent_path();
+    const bool from_exefs = named(folder, L"exefs");
+    if (from_exefs) folder = folder.parent_path();
+    // <game>\base, <game>\updates\<n>, <game>\<n> (seen from its exefs): the game is the folder above.
+    if (named(folder, L"base")) return folder.parent_path();
+    if (named(folder.parent_path(), L"updates") && versionFolder(folder)) return folder.parent_path().parent_path();
+    if (from_exefs && versionFolder(folder)) return folder.parent_path();
+    if (named(folder, L"updates")) return folder.parent_path();
+    return folder;
+}
 
 Game makeGame(const std::wstring& name, const std::wstring& platform, const std::filesystem::path& rom, GameAction action) {
     Game game;

@@ -123,7 +123,7 @@ enum class Id { font, home_layout, ui_accent, accent, uninstalled, emulation, co
                    // chosen by hand and its reset, the launch arguments and the command they make.
                    emulation_system, emulation_more, emulation_emulator, emulation_detected, emulation_program,
                     emulation_program_reset, emulation_arguments, emulation_preview,
-                    emulation_system_folder, emulation_system_folder_reset,
+                    emulation_system_folder, emulation_system_folder_reset, emulation_system_rescan,
                    // DRM-free → Katalogi: the page of the scanned folders.
                    drm_roots,
                    // Metro / Flix → Pasek kategorii (AppSettings::metro_category_tabs / flix_category_tabs).

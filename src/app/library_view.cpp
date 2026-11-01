@@ -70,7 +70,7 @@ std::vector<Launcher::LibraryTab> Launcher::libraryTabs() const {
         if (const auto* stores = shelf("pc-platforms")) for (const auto& tile : stores->games) {
             if (tile.kind != GameKind::pc_platform) continue;
             const auto games = static_cast<size_t>(std::count_if(public_library_.begin(), public_library_.end(),
-                [&](const Game& game) { return game.source == tile.source && game.kind != GameKind::nonsteam && isGame(game); }));
+                [&](const Game& game) { return platformSource(game.source) == tile.source && game.kind != GameKind::nonsteam && isGame(game); }));
             if (games || tile.source == *pc_source_) tabs.push_back({sourceSlug(tile.source), tile.name, games});
         }
         return tabs;
@@ -468,10 +468,11 @@ void Launcher::restorePlace() {
                                      GameSource::xbox, GameSource::multimc, GameSource::drmfree, GameSource::custom})
             if (saved.source == sourceSlug(candidate)) source = candidate;
         // User-added and DRM-free games are loaded before the first shelves; stores wait for their scan.
-        const bool user_games = source == GameSource::custom || source == GameSource::drmfree;
+        // Gry dodane ręcznie (an older bookmark) is DRM-free's library now.
+        if (source) source = platformSource(*source);
+        const bool user_games = source == GameSource::drmfree;
         if (!source) { restore_pending_ = false; return; }
-        const bool empty = source == GameSource::custom ? custom_library_.empty() :
-                           source == GameSource::drmfree ? drm_library_.empty() || !settings_.enabled_pc_sources.contains(saved.source) :
+        const bool empty = source == GameSource::drmfree ? (drm_library_.empty() || !settings_.enabled_pc_sources.contains(sourceSlug(GameSource::drmfree))) && custom_library_.empty() :
                            *source != GameSource::steam && !settings_.enabled_pc_sources.contains(saved.source);
         if (empty) { restore_pending_ = false; return; }
         if (*source != GameSource::steam && !user_games && !pc_initial_ready_) return;

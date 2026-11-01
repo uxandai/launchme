@@ -29,6 +29,11 @@ void fillProgram(custom_game_ui::State& ui, const std::filesystem::path& folder,
     ui.fields[directory_field] = (found.working_directory.empty() ? folder : found.working_directory).wstring();
     if (unnamed) ui.fields[name_field] = (found.title.empty() ? drm_free::cleanTitle(folder.filename().wstring()).text : found.title).substr(0, custom_games::max_name);
 }
+// A Switch dump's exefs\main (no extension): its game folder is what is added.
+bool exefsMain(const std::filesystem::path& path) {
+    const auto lowered = [](std::wstring text) { for (auto& ch : text) ch = static_cast<wchar_t>(std::towlower(ch)); return text; };
+    return lowered(path.filename().wstring()) == L"main" && lowered(path.parent_path().filename().wstring()) == L"exefs";
+}
 // The consoles the Platforma row walks: every emulation platform but the shortcut-only ones.
 std::vector<std::wstring> platformChoices() {
     std::vector<std::wstring> result;
@@ -40,7 +45,7 @@ std::vector<std::wstring> platformChoices() {
 
 bool Launcher::addableFile(const std::filesystem::path& path) const {
     std::error_code error;
-    return programFile(path) || emulation_scan::romFile(path) || std::filesystem::is_directory(path, error);
+    return programFile(path) || emulation_scan::romFile(path) || exefsMain(path) || std::filesystem::is_directory(path, error);
 }
 
 void Launcher::customEditorApplyFile(const std::filesystem::path& picked) {
@@ -60,8 +65,8 @@ void Launcher::customEditorApplyFile(const std::filesystem::path& picked) {
         if (unnamed) ui.fields[name_field] = title.substr(0, custom_games::max_name);
     };
     std::error_code error;
-    if (std::filesystem::is_directory(picked, error)) {
-        if (const auto game = emulation_scan::folderGame(picked)) { emulated(game->rom, game->platform, game->title); }
+    if (exefsMain(picked) || std::filesystem::is_directory(picked, error)) {
+        if (const auto game = emulation_scan::folderGame(exefsMain(picked) ? picked.parent_path() : picked)) { emulated(game->rom, game->platform, game->title); }
         else {
             const auto found = drm_free::detect(picked);
             if (found.executable.empty()) {
