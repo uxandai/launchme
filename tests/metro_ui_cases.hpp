@@ -183,7 +183,7 @@ int LauncherUiTest::metro(HWND window) {
         app.settings_.metro_category_tabs = true; settle(); app.paint();
         if (!app.homeTabsShown() || app.homeTabs().size() != app.metro_pages_.size() ||
             app.renderer_.metroTabAt(metro_layout::left + 4, metro_layout::tabs_center) >= 0) return 2777;
-        const auto next = library_tabs::home::tab(1, view.width);
+        const auto next = library_tabs::home::tab(1, view.width, static_cast<float>(app.metro_page_));
         const size_t before = app.metro_page_;
         app.mouse_transition_until_ = 0;
         app.click((next.left + next.right) * 0.5f * view.scale, (next.top + next.bottom) * 0.5f * view.scale, false);

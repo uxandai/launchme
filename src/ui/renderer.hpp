@@ -759,6 +759,7 @@ private:
     void drawLibraryTabs();     // Kinowy / Przegląd: the category strip.
     void drawHomeTabs();        // Metro / Flix: the same strip, centred (ViewContext::home_tabs).
     void drawCategoryStrip(const std::vector<ViewContext::LibraryTab>& tabs, float glide, bool home, float alpha, bool focused);
+    float drawShoulderHint(bool next, float edge, float cy, float alpha); // Beside the strip; `edge` the side facing it.
     void drawLibraryOverview(); // Przegląd: tiles, then drawOverviewPanel.
     void drawOverviewPanel();
     void drawLibraryDetailed();
@@ -853,6 +854,8 @@ private:
     float focusInset(float width) const { return focus_gap_ == AppSettings::FocusGap::inside ? width * 1.5f : 0.0f; }
     // Small glyph caps (button hints, LB/RB, key captions): a light translucent pill, no outline.
     void drawKeyCap(D2D1_RECT_F r, float alpha = 1, bool enabled = true);
+    // The caption's colour on a key cap: light on the glass ones, dark on the white ones (ViewContext::hint_white).
+    D2D1_COLOR_F keyCapInk(float alpha) const;
     // Black on white: the platform's logo (its alpha as the ink) or its name; returns the width.
     float drawPsfiveBadge(const std::wstring& platform, float x, float center_y, float alpha);
     // Desktop mode (src/ui/desktop_renderer.cpp and its desktop_*_renderer.cpp siblings).

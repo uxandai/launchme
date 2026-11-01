@@ -33,7 +33,7 @@ static std::wstring shoulderCaption(HintDevice device) {
 
 float Renderer::drawHintGlyph(const InputHint& hint, float x, float cy, float alpha) {
     const auto device = context_->hint_device;
-    const auto ink = gray(0.94f, alpha);
+    const auto ink = keyCapInk(alpha); // Light on glass key caps, dark on white ones.
     // Key caps and pad buttons: pills (circles) of light glass, no outline.
     const auto pill = [&](float width, const std::wstring& caption) {
         drawKeyCap(D2D1::RectF(x, cy - 11.5f, x + width, cy + 11.5f), alpha);

@@ -118,6 +118,12 @@ void Launcher::paint(bool overlay) {
         // A Steam game's store details are on their way (the worker always answers, empty on failure).
         context.preview_waiting = steamArtwork(game) && game.app_id && !preview_.find(game);
     }
+    context.hint_white = settings_.hint_style == AppSettings::HintStyle::white;
+    if (libraryTabsShown() || homeTabsShown()) {
+        // The small LB/RB (PgUp/PgDn) caps beside the strip, as the bottom-right hints.
+        context.strip_hints = settings_.input_hints;
+        context.hint_device = hintDevice();
+    }
     if (libraryTabsShown()) {
         const auto tabs = libraryTabs();
         for (const auto& tab : tabs) context.library_tabs.push_back({tab.title, tab.count, tab.mark});
@@ -126,12 +132,17 @@ void Launcher::paint(bool overlay) {
     }
     if (homeTabsShown()) {
         for (const auto& tab : homeTabs()) context.home_tabs.push_back({tab.title, tab.count, tab.mark});
-        // Metro's glides with its pages; Flix's with its own spring.
+        // Metro's glides with its pages; Flix's and PSfive's with their own spring.
         context.home_tab = metroActive() ? metro_tab_ : home_tab_glide_.valid ? home_tab_glide_.value.value : static_cast<float>(homeTabIndex());
-        context.home_tabs_focus = metroTabsFocused();
+        context.home_tabs_focus = metroTabsFocused() || (psfiveTopFocused() && psfive_top_ < psfiveTabCount());
         // Out of the way of the quick bar, the drawers and the menus, as Flix's top icons.
         const float away = std::max({quick_progress_, friends_progress_, category_menu_progress_, menu_progress_});
         context.home_tabs_alpha = homeOverlayAvailable(true) ? std::clamp(1.0f - away, 0.0f, 1.0f) : 0.0f;
+        if (psfiveActive()) {
+            // PSfive's top bar: the strip in place of its tabs, dimmed with the bar and faded in after the start-up row.
+            context.home_tabs_alpha = std::clamp(psfive_top_opacity_.value, 0.66f, 1.0f) * (psfiveIntro() ? psfive_layout::intro::chrome(arrived_) : 1.0f);
+            if (!psfiveTopAvailable()) context.home_tabs_alpha *= std::clamp(1.0f - away, 0.0f, 1.0f);
+        }
     }
     if (libraryView() == library_view::View::list || libraryListPlus()) {
         const auto view = renderer_.viewport();

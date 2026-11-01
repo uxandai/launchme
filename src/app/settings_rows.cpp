@@ -192,6 +192,8 @@ void Launcher::buildSettingsRows() {
                 add({Id::psfive_details, Control::toggle, tr(L"Szczegóły pod rzędem"),
                     tr(L"W dół z przycisków Graj / …: opis, informacje, zrzuty ekranu i podobne gry. Menu otwiera się wtedy ruchem w górę nad zakładkami."),
                     {}, settings_.psfive_details});
+                add({Id::psfive_category_tabs, Control::toggle, tr(L"Pasek kategorii"),
+                    tr(L"Kategorie jak w bibliotece, na środku u góry, zamiast zakładek; zmieniają je LB/RB albo Page Up/Down."), {}, settings_.psfive_category_tabs});
             }
             break;
         }
@@ -333,6 +335,9 @@ void Launcher::buildSettingsRows() {
             hints.value = hints.choices[hints.choice].label;
             add(std::move(hints));
         }
+        choiceRow(Id::hint_style, tr(L"Wygląd podpowiedzi"),
+                  tr(L"Klawisze i przyciski pada w podpowiedziach, także przy paskach kategorii: szklane albo białe z ciemnym napisem."),
+                  hint_styles, static_cast<int>(settings_.hint_style));
         section(tr(L"Widoki biblioteki w trybie TV"));
         {
             // A console's, a collection's and a publisher's library without a view of its own; its badge

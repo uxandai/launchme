@@ -118,7 +118,7 @@ void Launcher::animateFocus(float dt, float target_x, float target_y, float targ
     glideIndex(settings_choice_glide_, settingsPicking(), settings_state_.choice);
     if (libraryTabsShown()) glideIndex(library_tab_glide_, true, libraryTabIndex(libraryTabs()));
     else library_tab_glide_.valid = false;
-    glideIndex(home_tab_glide_, homeTabsShown() && flixActive(), homeTabIndex());
+    glideIndex(home_tab_glide_, homeTabsShown() && !metroActive(), homeTabIndex());
     glideIndex(library_choice_glide_, libraryControls() && (library_controls_.open() ||
         library_views_progress_ > 0.003f || library_menu_progress_ > 0.003f), library_controls_.choice);
     // Półka: Cover Flow's centre glides to the focused cover without overshooting (a cover never

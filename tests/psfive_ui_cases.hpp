@@ -30,6 +30,7 @@ int LauncherUiTest::psfive(HWND window) {
     app.settings_.psfive_size = AppSettings::XmbSize::normal;
     app.settings_.psfive_clock = true;
     app.settings_.psfive_details = false; // The quick bar under the buttons; the sheet under the row has its own block.
+    app.settings_.psfive_category_tabs = false; // Its own tabs; "Pasek kategorii" has its own block.
     app.local_time_ = [] { SYSTEMTIME now{}; now.wYear = 2026; now.wMonth = 10; now.wDay = 7; now.wHour = 12; return now; };
     auto library = std::make_unique<LibraryMessage>();
     library->account = 1;
@@ -87,20 +88,42 @@ int LauncherUiTest::psfive(HWND window) {
     if (!capture(L"psfive-row.png")) return 4907;
     {
         // Started on PSfive (psfive_layout::intro): an empty screen, the row sliding in from the right,
-        // small, tile after tile; then the first one grows to its focused size. About 3 s.
+        // small, tile after tile; then the first one grows to its focused size. About 1.7 s.
         app.psfive_intro_ = true; app.arrived_ = 0;
         const auto step = [&](int frames) { for (int i = 0; i < frames; ++i) { app.last_frame_ -= std::chrono::milliseconds(50); app.tick(); } };
-        step(6); // 0.3 s: still the bare background.
+        step(4); // 0.2 s: still the bare background.
         if (!app.psfiveIntro() || app.cards_[0].opacity > 0.01f || app.cards_[3].opacity > 0.01f) return 4870;
-        step(24); // 1.5 s: the first tile in place but small; a later one still on its way from the right.
+        step(15); // 0.95 s: the first tile in place but small; a later one still on its way from the right.
         if (std::abs(app.cards_[0].x - layout::tabs_left) > 1 || std::abs(app.cards_[0].size - layout::tileSize(false)) > 1 ||
             app.cards_[0].emphasis > 0.01f || app.cards_[8].x < layout::tileLeft(8) + 100) return 4871;
         if (!capture(L"psfive-intro-row.png")) return 4872;
-        step(14); // 2.2 s: the first growing, the row moving aside.
+        step(8); // 1.35 s: the first growing, the row moving aside.
         if (app.cards_[0].size <= layout::tileSize(false) + 1 || !capture(L"psfive-intro-grow.png")) return 4873;
-        step(20); // 3.2 s: done, as the row rests.
+        step(10); // 1.85 s: done, as the row rests.
         if (app.psfive_intro_ || std::abs(app.cards_[0].size - 182.0f) > 1 || std::abs(app.cards_[1].x - layout::tileLeft(1)) > 1 ||
             app.cards_[0].emphasis < 0.99f) return 4874;
+    }
+    {
+        // "Pasek kategorii" (on by default): every category on the library's strip in the middle at the
+        // top, in place of the three tabs and "Więcej..."; Up from the row focuses it, LB/RB step on,
+        // a click on the next category shows it.
+        if (!AppSettings{}.psfive_category_tabs || app.category_ != 0) return 4875;
+        app.settings_.psfive_category_tabs = true; settle(); app.paint();
+        if (!app.homeTabsShown() || app.homeTabs().size() != app.categories_.size() ||
+            app.psfiveTabCount() != static_cast<int>(app.categories_.size()) || app.renderer_.psfiveTabAt(layout::tabs_left + 4, layout::top_center) >= 0) return 4876;
+        if (!capture(L"psfive-category-tabs.png")) return 4877;
+        app.psfiveVertical(-1);
+        if (!app.psfiveTopFocused() || app.psfive_top_ != 0) return 4878;
+        app.homePage(1); app.homePage(1); app.homePage(1); settle();
+        if (app.category_ != 3 || app.category_menu_open_ || app.psfive_top_ != 3 || !capture(L"psfive-category-tabs-focus.png")) return 4879;
+        app.psfiveFocusTop(-1); app.showCategory(0); settle(); app.paint();
+        const auto next = library_tabs::home::tab(1, view.width, 0);
+        app.mouse_transition_until_ = 0;
+        app.click((next.left + next.right) * 0.5f * view.scale, (next.top + next.bottom) * 0.5f * view.scale, false);
+        if (app.category_ != 1 || app.psfiveTopFocused()) return 4880;
+        app.showCategory(0); settle();
+        app.settings_.psfive_category_tabs = false; settle(); app.paint();
+        if (app.homeTabsShown() || app.renderer_.psfiveTabAt(layout::tabs_left + 4, layout::top_center) != 0) return 4881;
     }
     // A 12-hour clock's longest times fit its box (they were cut off, #3).
     for (const auto* time : {L"12:00 PM", L"12:59 AM", L"10:08 PM"}) {

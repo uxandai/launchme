@@ -138,7 +138,9 @@ void Renderer::drawPsfiveTopBar() {
     const bool with_clock = context_->psfive_clock_shown;
     // One opacity for the whole row. Only the focused tab is bold while navigating;
     // otherwise the shown category is bold, including a named overflow category.
-    const auto& tabs = context_->psfive_tabs;
+    // "Pasek kategorii": the library's strip in the middle (drawHomeTabs) instead of these tabs.
+    static const std::vector<std::wstring> none;
+    const auto& tabs = context_->home_tabs.empty() ? context_->psfive_tabs : none;
     psfive_tab_rects_.assign(tabs.size(), {});
     float x = tabs_left;
     const float available = topItem(top_widgets, width, with_clock).left - 48 - tabs_left;

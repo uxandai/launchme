@@ -285,6 +285,8 @@ struct ViewContext {
     std::vector<LibraryTab> home_tabs;
     float home_tab = 0, home_tabs_alpha = 1;
     bool home_tabs_focus = false;
+    bool strip_hints = false; // The small LB/RB (PgUp/PgDn) caps beside a category strip (Podpowiedzi przycisków on).
+    bool hint_white = false;  // Interfejs → Wygląd podpowiedzi: white key caps with dark ink instead of glass.
     bool grid_back = false; // Library, Search, Store: Back (top left) has the keyboard/pad focus.
     const downloads_ui::State* downloads = nullptr; // ScreenMode::downloads; rows match the cards.
     int downloads_moving = 0; // Games transferring now: a count on the quick bar's Pobierania icon.

@@ -111,7 +111,7 @@ void Launcher::focusCategoryRail(bool focus) {
 void Launcher::openCategoryMenu() {
     if (categoryRailActive()) { focusCategoryRail(true); return; }
     if (metroActive() || snitchActive()) return; // Metro has tabs; snitch has no categories.
-    if (psfiveActive() && categories_.size() <= psfive_layout::visible_tabs) return;
+    if (psfiveActive() && (categories_.size() <= psfive_layout::visible_tabs || psfiveStrip())) return; // The strip has every category.
     if (categories_.size() < 2 || pending_launch_) return;
     dismissMenu();
     if (friends_open_) closeFriends();

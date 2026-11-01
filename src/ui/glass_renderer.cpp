@@ -235,6 +235,12 @@ D2D1_COLOR_F Renderer::drawButton(D2D1_RECT_F r, float focus, float alpha, bool 
 
 void Renderer::drawKeyCap(D2D1_RECT_F r, float alpha, bool enabled) {
     if (alpha <= 0.004f) return;
-    brush(gray(1, (enabled ? 0.2f : 0.07f) * alpha));
+    // Interfejs → Wygląd podpowiedzi: light glass, or white with dark ink.
+    if (context_ && context_->hint_white) brush(gray(0.96f, (enabled ? 0.95f : 0.4f) * alpha));
+    else brush(gray(1, (enabled ? 0.2f : 0.07f) * alpha));
     target_->FillRoundedRectangle(pill(r), solid_.Get());
+}
+
+D2D1_COLOR_F Renderer::keyCapInk(float alpha) const {
+    return context_ && context_->hint_white ? gray(0.07f, alpha) : gray(0.94f, alpha);
 }

@@ -232,6 +232,12 @@ bool parseExtraSetting(AppSettings& settings, std::string_view key, std::string_
     if (key == "metro_light") return flag(settings.metro_light);
     if (key == "metro_category_tabs") return flag(settings.metro_category_tabs);
     if (key == "flix_category_tabs") return flag(settings.flix_category_tabs);
+    if (key == "psfive_category_tabs") return flag(settings.psfive_category_tabs);
+    if (key == "hint_style") {
+        if (value == "glass") settings.hint_style = AppSettings::HintStyle::glass;
+        else if (value == "white") settings.hint_style = AppSettings::HintStyle::white;
+        return true;
+    }
     if (key == "emulation_source") { settings.emulation_source = value == "steam" ? AppSettings::EmulationSource::steam : AppSettings::EmulationSource::roms; return true; }
     if (key == "emulation_roms") {
         const auto decoded = text_encoding::wide(value);
@@ -890,6 +896,8 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
     output << "metro_3d=" << settings.metro_3d << '\n';
     output << "metro_category_tabs=" << settings.metro_category_tabs << '\n';
     output << "flix_category_tabs=" << settings.flix_category_tabs << '\n';
+    output << "psfive_category_tabs=" << settings.psfive_category_tabs << '\n';
+    output << "hint_style=" << (settings.hint_style == AppSettings::HintStyle::white ? "white" : "glass") << '\n';
     output << "game_action=" << (settings.accept_action == AppSettings::AcceptAction::details ? "details" : "launch") << '\n';
     output << "hidden_collections=";
     bool first = true;

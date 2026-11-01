@@ -1447,7 +1447,7 @@ int LauncherUiTest::flix(HWND window) {
         // the next one goes to its row, LB/RB as before.
         if (!app.homeTabsShown() || app.homeTabs().size() != app.flix_rows_.size() || app.homeTabIndex() != static_cast<int>(app.flix_row_)) return 2792;
         const auto row = app.flix_row_, at = app.selected_;
-        const auto next = library_tabs::home::tab(1, view.width);
+        const auto next = library_tabs::home::tab(1, view.width, static_cast<float>(row));
         app.mouse_transition_until_ = 0;
         app.click((next.left + next.right) * 0.5f * view.scale, (next.top + next.bottom) * 0.5f * view.scale, false);
         if (app.flix_row_ != row + 1) return 2793;

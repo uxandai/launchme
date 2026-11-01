@@ -10,6 +10,7 @@
 // (on by default) scrolls to the game's details and the quick bar opens from above the tabs.
 #include "launcher.hpp"
 #include "../ui/psfive_layout.hpp"
+#include "../ui/grid_layout.hpp"
 
 #include <algorithm>
 #include <cstdlib>
@@ -57,13 +58,17 @@ void Launcher::psfiveFocusAction(int action) {
     if (hwnd_) InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
+// Its own top bar: three categories and "Więcej..."; with "Pasek kategorii" (psfiveStrip) every
+// category is a tab of the strip in the middle, with no overflow.
 std::vector<size_t> Launcher::psfiveTabs() const {
     std::vector<size_t> tabs;
-    for (size_t i = 0; i < std::min(categories_.size(), psfive_layout::visible_tabs); ++i) tabs.push_back(i);
+    const size_t shown = psfiveStrip() ? categories_.size() : std::min(categories_.size(), psfive_layout::visible_tabs);
+    for (size_t i = 0; i < shown; ++i) tabs.push_back(i);
     return tabs;
 }
 
 int Launcher::psfiveTabCount() const {
+    if (psfiveStrip()) return static_cast<int>(categories_.size());
     return static_cast<int>(std::min(categories_.size(), psfive_layout::visible_tabs + 1));
 }
 
@@ -91,7 +96,7 @@ void Launcher::psfiveFocusTop(int item) {
     if (next >= 0) psfive_action_ = -1;
     if (next == psfive_top_) return;
     psfive_top_ = next;
-    if (next == static_cast<int>(psfive_layout::visible_tabs) && next < psfiveTabCount()) openCategoryMenu();
+    if (!psfiveStrip() && next == static_cast<int>(psfive_layout::visible_tabs) && next < psfiveTabCount()) openCategoryMenu();
     if (hwnd_) InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
@@ -175,7 +180,7 @@ void Launcher::psfiveVertical(int amount) {
     const bool details = settings_.psfive_details;
     if (psfiveTopFocused()) { // The top bar: Down back to the row.
         if (amount > 0) {
-            if (psfive_top_ == static_cast<int>(psfive_layout::visible_tabs) && psfive_top_ < psfiveTabCount()) openCategoryMenu();
+            if (!psfiveStrip() && psfive_top_ == static_cast<int>(psfive_layout::visible_tabs) && psfive_top_ < psfiveTabCount()) openCategoryMenu();
             else { psfiveFocusTop(-1); audio_.navigate(); }
         }
         else if (details) openQuick(); // Up past the very top: the menu.
@@ -230,7 +235,8 @@ void Launcher::psfiveHover(float x, float y) {
     }
     const auto view = renderer_.viewport();
     const int tab = renderer_.psfiveTabAt(x, y);
-    const bool top = tab >= 0 || psfive_layout::hitTop(x, y, view.width, settings_.psfive_clock) >= 0 ||
+    const bool strip = psfiveStrip() && library_tabs::home::hit(x, y, view.width, homeTabIndex()).has_value();
+    const bool top = tab >= 0 || strip || psfive_layout::hitTop(x, y, view.width, settings_.psfive_clock) >= 0 ||
         (settings_.psfive_clock && psfive_layout::clock(view.width).contains(x, y));
     if (top != psfive_top_hover_) { psfive_top_hover_ = top; InvalidateRect(hwnd_, nullptr, FALSE); }
     const bool more = categories_.size() > psfive_layout::visible_tabs &&
@@ -252,6 +258,7 @@ bool Launcher::psfiveClick(float x, float y, bool double_click) {
     if (!double_click && psfiveDetailsClick(x, y)) return true; // The details sheet's strips.
     if (psfiveDetailsShown()) return true; // Nothing under the sheet takes clicks.
     const auto view = renderer_.viewport();
+    if (psfiveStrip() && homeTabsClick(x, y)) return true; // "Pasek kategorii" in place of the tabs.
     // Category tabs show their row; the overflow opens beneath its tab.
     if (const int tab = renderer_.psfiveTabAt(x, y); tab >= 0) {
         if (!double_click) {

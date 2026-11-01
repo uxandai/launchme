@@ -204,6 +204,7 @@ struct AppSettings {
     // Metro / Flix: the library's category strip in the middle at the top (LB/RB, Page Up/Down change
     // the category; Metro: in place of its own lower-case tabs).
     bool metro_category_tabs = true, flix_category_tabs = true;
+    bool psfive_category_tabs = true; // PSfive: the strip in place of its three tabs and "Więcej...".
     enum class TileShape { squircle, rounded, square };
     TileShape tile_shape = TileShape::squircle;
     // Thin frames around dialogs, context menus and the walkthrough bubble/card.
@@ -218,6 +219,9 @@ struct AppSettings {
     // Their symbols: from the active pad's family, or always one console's.
     enum class HintGlyphs { automatic, xbox, playstation, nintendo };
     HintGlyphs hint_glyphs = HintGlyphs::automatic;
+    // Their key caps (and the small ones beside the category strips): light glass, or white with dark ink.
+    enum class HintStyle { glass, white };
+    HintStyle hint_style = HintStyle::glass;
     // The starting game's background and logo for a few seconds (src/ui/launch_animation.hpp). Always
     // on and no longer saved or shown in Ustawienia; tests switch it off to launch without it.
     bool launch_animation = true;

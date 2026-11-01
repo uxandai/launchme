@@ -162,10 +162,11 @@ inline std::pair<size_t, size_t> visibleRange(size_t count, float width, float h
 // Category tabs in the library's top bar, in place of its title (every view): the shown category
 // (in a store's or a console's library: the store or console) and its neighbours. The first tab
 // starts at the left; later selections sit in the middle. Between Back and the filters
-// (library_ui::Layout: filters().left - 24 = width - 504).
+// (library_ui::Layout: filters().left - 24 = width - 504), with room on both sides for the small
+// LB/RB (PgUp/PgDn) hints (hint_room: Renderer::drawCategoryStrip).
 namespace library_tabs {
-constexpr float top = 35, height = 40, left = 72;
-inline float right(float width) { return width - 504; }
+constexpr float top = 35, height = 40, hint_room = 64, left = 72 + hint_room;
+inline float right(float width) { return width - 504 - hint_room; }
 inline float slot(float width) { return std::clamp((right(width) - left) / 3, 190.0f, 320.0f); } // Between tab centres.
 inline float center(float width) { return left + 1.5f * slot(width); }
 inline float focusOffset(float current) { return std::clamp(current, 0.0f, 1.0f) - 1; }
@@ -181,21 +182,22 @@ inline std::optional<int> hit(float x, float y, float width, int current) {
     if (std::abs(offset) > 1.5f) return std::nullopt;
     return static_cast<int>(std::lround(offset - focusOffset(static_cast<float>(current))));
 }
-// The same strip on the Metro and Flix home screens (AppSettings::metro_category_tabs/flix_category_tabs):
-// at the top, in the middle of the screen, the active category always in the centre.
+// The same strip on the Metro, Flix and PSfive home screens (AppSettings::*_category_tabs): at the
+// top in the middle of the screen, three tabs as in the library (the first one at the left, later
+// selections in the middle).
 namespace home {
-inline float slot(float width) { return std::clamp(width * 0.13f, 170.0f, 240.0f); }
+inline float slot(float width) { return std::clamp(width * 0.11f, 160.0f, 210.0f); }
 inline float center(float width) { return width * 0.5f; }
-inline settings_ui::Rect tab(float offset, float width) {
-    const float c = center(width) + offset * slot(width), half = slot(width) * 0.5f - 10;
+inline settings_ui::Rect tab(float offset, float width, float current) {
+    const float c = center(width) + (offset + focusOffset(current)) * slot(width), half = slot(width) * 0.5f - 10;
     return {c - half, top, c + half, top + height};
 }
-// Offset from the active category (-1, 0 or 1).
-inline std::optional<int> hit(float x, float y, float width) {
+// Offset from the active category.
+inline std::optional<int> hit(float x, float y, float width, int current) {
     if (y < top || y >= top + height) return std::nullopt;
     const float offset = (x - center(width)) / slot(width);
     if (std::abs(offset) > 1.5f) return std::nullopt;
-    return static_cast<int>(std::lround(offset));
+    return static_cast<int>(std::lround(offset - focusOffset(static_cast<float>(current))));
 }
 }
 }

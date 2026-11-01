@@ -814,28 +814,48 @@ void Renderer::drawLibraryDetailed() {
 }
 
 // The category tabs in the top bar, in place of the title (every view). The first active tab
-// starts at the left; its glass pill glides to the middle with the next selection. Key hints
-// are in the bottom bar. The strip fades with the bar as the grid scrolls.
+// starts at the left; its glass pill glides to the middle with the next selection. The strip
+// fades with the bar as the grid scrolls.
 void Renderer::drawLibraryTabs() {
     drawCategoryStrip(context_->library_tabs, context_->library_tab_glide.value_or(static_cast<float>(context_->library_tab)),
                       false, libraryBarAlpha(), false);
 }
 
-// Metro and Flix (their "Pasek kategorii" option): the library's strip, centred on the screen.
+// Metro, Flix and PSfive (their "Pasek kategorii" option): the library's strip in the middle of the screen.
 void Renderer::drawHomeTabs() {
     drawCategoryStrip(context_->home_tabs, context_->home_tab, true, context_->home_tabs_alpha, context_->home_tabs_focus);
 }
 
-// `home`: centred with the active tab always in the middle (library_tabs::home), else the library's
-// placement (the first tab at the left). `focused`: the strip has the pad focus (Metro's Up).
+// The small LB / RB (L1 / R1, L / R, PgUp / PgDn) key caps beside the strip.
+float Renderer::drawShoulderHint(bool next, float edge, float cy, float alpha) {
+    const auto device = context_->hint_device;
+    const wchar_t* caption = device == HintDevice::keyboard ? (next ? L"PgDn" : L"PgUp") :
+                             device == HintDevice::playstation ? (next ? L"R1" : L"L1") :
+                             device == HintDevice::nintendo ? (next ? L"R" : L"L") : (next ? L"RB" : L"LB");
+    const float w = std::max(30.0f, std::ceil(textAdvance(caption, friend_section_font_.Get())) + 18);
+    const float x = next ? edge : edge - w;
+    drawKeyCap(D2D1::RectF(x, cy - 11.5f, x + w, cy + 11.5f), alpha);
+    textLine(caption, x, cy, w, friend_section_font_.Get(), keyCapInk(alpha), DWRITE_TEXT_ALIGNMENT_CENTER);
+    return w;
+}
+
+// `home`: centred on the screen (library_tabs::home), else in the library's top bar. Both show three
+// tabs, the first one at the left and later selections in the middle. `focused`: the strip has the
+// pad focus (Metro's and PSfive's Up from the tiles).
 void Renderer::drawCategoryStrip(const std::vector<ViewContext::LibraryTab>& tabs, float glide, bool home, float bar, bool focused) {
     if (tabs.empty() || bar < 0.01f) return;
     const float width = viewport_.width;
     const float slot = home ? library_tabs::home::slot(width) : library_tabs::slot(width);
     const float cx = home ? library_tabs::home::center(width) : library_tabs::center(width);
-    const float shift = home ? 0.0f : library_tabs::focusOffset(glide);
-    const auto tabAt = [&](float offset) { return home ? library_tabs::home::tab(offset, width) : library_tabs::tab(offset, width, glide); };
+    const float shift = library_tabs::focusOffset(glide);
+    const auto tabAt = [&](float offset) { return home ? library_tabs::home::tab(offset, width, glide) : library_tabs::tab(offset, width, glide); };
     const float cy = library_tabs::top + library_tabs::height * 0.5f;
+    if (context_->strip_hints && tabs.size() > 1) {
+        // Dimmer where there is nothing more that way.
+        const float first = std::clamp(glide, 0.0f, 1.0f), last = std::clamp(static_cast<float>(tabs.size() - 1) - glide, 0.0f, 1.0f);
+        drawShoulderHint(false, cx - 1.5f * slot - 8, cy, bar * std::lerp(0.4f, 1.0f, first));
+        drawShoulderHint(true, cx + 1.5f * slot + 8, cy, bar * std::lerp(0.4f, 1.0f, last));
+    }
     const auto pill = tabAt(0);
     const auto shape = D2D1::RoundedRect(box(pill), library_tabs::height * 0.5f, library_tabs::height * 0.5f);
     glassFill(glassPanel(shape, 12), D2D1::ColorF(0.16f, 0.17f, 0.19f, 0.78f), bar);

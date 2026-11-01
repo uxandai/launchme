@@ -41,14 +41,14 @@ inline float sizeScale(int size) { return 0.8f + std::clamp(size, 0, 2) * 0.2f; 
 
 // The launcher starting on PSfive (as a PS5 boots to its home): an empty screen, then the row slides
 // in from the right, small, one tile after another; once it is in place the first tile grows to its
-// focused size (the row moving aside for it) and the top bar, logo and buttons fade in. About 3 s.
+// focused size (the row moving aside for it) and the top bar, logo and buttons fade in. About 1.7 s.
 // Seconds since the row's cards arrived (Launcher::arrived_).
 namespace intro {
-constexpr float lead = 0.4f;     // Nothing but the background.
-constexpr float stagger = 0.12f; // Between two tiles' starts; the tiles past `staggered` start together.
+constexpr float lead = 0.25f;    // Nothing but the background.
+constexpr float stagger = 0.07f; // Between two tiles' starts; the tiles past `staggered` start together.
 constexpr int staggered = 9;
-constexpr float slide = 1.0f;    // One tile's way in.
-constexpr float grow_at = 2.05f, grow = 0.8f;
+constexpr float slide = 0.6f;    // One tile's way in.
+constexpr float grow_at = 1.2f, grow = 0.5f;
 constexpr float end = grow_at + grow;
 inline float smooth(float t) { t = std::clamp(t, 0.0f, 1.0f); return t * t * (3 - 2 * t); }
 // 0..1 of the way in for the tile `offset` places after the first (ease-out: fast, then settling).
@@ -65,7 +65,7 @@ inline float growth(float seconds) {
     return 1 + (overshoot + 1) * u * u * u + overshoot * u * u;
 }
 // The top bar, the name, the logo and the buttons.
-inline float chrome(float seconds) { return smooth((seconds - (grow_at - 0.25f)) / 0.9f); }
+inline float chrome(float seconds) { return smooth((seconds - (grow_at - 0.2f)) / 0.6f); }
 }
 inline float tileSize(bool focused, float scale = 1) { return (focused ? focus_tile : tile) * scale; }
 inline float anchorX(float /*scale*/ = 1) { return tabs_left; } // Tile size never changes the left alignment.

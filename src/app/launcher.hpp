@@ -1943,6 +1943,7 @@ private:
     bool metroTabsFocused() const { return metroActive() && metro_tabs_; }
     // Metro / Flix "Pasek kategorii" (AppSettings::metro_category_tabs / flix_category_tabs), src/app/metro.cpp.
     bool homeTabsShown() const;
+    bool psfiveStrip() const; // PSfive with "Pasek kategorii": the strip instead of its own tabs.
     std::vector<LibraryTab> homeTabs() const;
     int homeTabIndex() const;
     bool homeTabsClick(float x, float y);

@@ -327,7 +327,7 @@ bool Launcher::hoverButton(float mouse_x, float mouse_y) const {
     }
     if (metroActive() && !friends_open_ && !menu_open_ && !quick_open_ && renderer_.metroTabAt(x, y) >= 0) return true;
     if (homeTabsShown() && !friends_open_ && !menu_open_ && !quick_open_ && !category_menu_open_) {
-        if (const auto offset = library_tabs::home::hit(x, y, view.width); offset && *offset &&
+        if (const auto offset = library_tabs::home::hit(x, y, view.width, homeTabIndex()); offset && *offset &&
             homeTabIndex() + *offset >= 0 && homeTabIndex() + *offset < static_cast<int>(homeTabs().size())) return true;
     }
     if (screen_ == ScreenMode::plugin_page && !friends_open_) {

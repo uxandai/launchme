@@ -299,28 +299,37 @@ bool Launcher::homeTabsShown() const {
     if (screen_ != ScreenMode::shelves || desktopActive() || cards_.empty()) return false;
     if (metroActive()) return settings_.metro_category_tabs && !metro_pages_.empty() && metro_tiles_.size() == cards_.size();
     if (flixActive()) return settings_.flix_category_tabs && flix_rows_.size() > 1;
+    if (psfiveActive()) return psfiveStrip() && !categories_.empty();
     return false;
 }
+bool Launcher::psfiveStrip() const { return settings_.psfive_category_tabs && psfiveActive(); }
 std::vector<Launcher::LibraryTab> Launcher::homeTabs() const {
     std::vector<LibraryTab> tabs;
     const auto games = [&](size_t category) {
         return category < categories_.size() ? static_cast<size_t>(std::count_if(categories_[category].games.begin(), categories_[category].games.end(),
             [](const Game& game) { return isGame(game); })) : size_t{0};
     };
-    if (metroActive()) for (const auto& page : metro_pages_)
-        tabs.push_back({{}, page.category ? categories_[page.category].title : std::wstring(tr(L"Start")), page.category ? games(page.category) : 0});
-    else for (const auto& row : flix_rows_)
-        if (row.category < categories_.size()) tabs.push_back({row.id, categories_[row.category].title, games(row.category)});
+    if (metroActive()) {
+        for (const auto& page : metro_pages_)
+            tabs.push_back({{}, page.category ? categories_[page.category].title : std::wstring(tr(L"Start")), page.category ? games(page.category) : 0});
+    } else if (flixActive()) {
+        for (const auto& row : flix_rows_)
+            if (row.category < categories_.size()) tabs.push_back({row.id, categories_[row.category].title, games(row.category)});
+    } else {
+        for (size_t i = 0; i < categories_.size(); ++i) tabs.push_back({categories_[i].id, categories_[i].title, games(i)}); // PSfive: every category.
+    }
     return tabs;
 }
-int Launcher::homeTabIndex() const { return static_cast<int>(metroActive() ? metro_page_ : flix_row_); }
+int Launcher::homeTabIndex() const { return static_cast<int>(metroActive() ? metro_page_ : flixActive() ? flix_row_ : category_); }
 // A click on the strip: the neighbour clicked becomes the shown category.
 bool Launcher::homeTabsClick(float x, float y) {
     if (!homeTabsShown() || menu_open_ || quick_open_ || friends_open_ || category_menu_open_) return false;
-    const auto offset = library_tabs::home::hit(x, y, renderer_.viewport().width);
+    const auto offset = library_tabs::home::hit(x, y, renderer_.viewport().width, homeTabIndex());
     if (!offset) return false;
     if (metroActive()) metroFocusTabs(false); // As a click on Metro's own tab: the page's tile has the focus.
-    if (*offset) homePage(*offset);
+    if (psfiveActive()) psfiveFocusTop(-1);    // PSfive: the row has the focus, as after a click on its tab.
+    const int next = homeTabIndex() + *offset;
+    if (*offset && next >= 0 && next < static_cast<int>(homeTabs().size())) homePage(*offset);
     return true;
 }
 

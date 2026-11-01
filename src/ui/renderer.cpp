@@ -577,7 +577,7 @@ void Renderer::paint(const std::vector<GameCard>& cards, size_t selected, bool s
                 drawPlatformBadge();
                 drawLibraryControls();
                 if (context.flix_icons && context.screen == ScreenMode::shelves) drawFlixIcons();
-                if (!context.home_tabs.empty() && context.screen == ScreenMode::shelves && (context.flix || context.metro)) drawHomeTabs();
+                if (!context.home_tabs.empty() && context.screen == ScreenMode::shelves && (context.flix || context.metro || context.psfive)) drawHomeTabs();
                 if (context.glance_shortcut) drawGlanceShortcut();
                 if (context.companion && (context.companion->tile || context.companion->pill)) drawCompanionTile();
             }

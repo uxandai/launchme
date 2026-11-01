@@ -597,6 +597,8 @@ void Launcher::settingsChoose(const Row& row) {
     else if (row.id == Id::button_color) settings_.button_rgb = choice.color;
     else if (row.id == Id::button_idle)
         settings_.button_idle = static_cast<AppSettings::ButtonIdle>(std::clamp(settings_state_.choice, 0, static_cast<int>(button_idles.size()) - 1));
+    else if (row.id == Id::hint_style)
+        settings_.hint_style = static_cast<AppSettings::HintStyle>(std::clamp(settings_state_.choice, 0, static_cast<int>(hint_styles.size()) - 1));
     else if (row.id == Id::tile_entrance)
         settings_.tile_entrance = static_cast<AppSettings::TileEntrance>(std::clamp(settings_state_.choice, 0, static_cast<int>(tile_entrances.size()) - 1));
     else if (row.id == Id::focus_gap)
@@ -727,8 +729,9 @@ void Launcher::settingsToggle(const Row& row) {
         settings_.metro_3d = !settings_.metro_3d;
         settingsChanged(); audio_.context(); return; // Visual only: the tiles ease to their new targets.
     }
-    else if (row.id == Id::metro_category_tabs || row.id == Id::flix_category_tabs) {
-        auto& value = row.id == Id::metro_category_tabs ? settings_.metro_category_tabs : settings_.flix_category_tabs;
+    else if (row.id == Id::metro_category_tabs || row.id == Id::flix_category_tabs || row.id == Id::psfive_category_tabs) {
+        auto& value = row.id == Id::metro_category_tabs ? settings_.metro_category_tabs :
+                      row.id == Id::flix_category_tabs ? settings_.flix_category_tabs : settings_.psfive_category_tabs;
         value = !value;
         settingsChanged(); audio_.context(); return; // Visual only: the strip or Metro's tabs at the top.
     }

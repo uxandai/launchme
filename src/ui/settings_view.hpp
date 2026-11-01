@@ -126,7 +126,9 @@ enum class Id { font, home_layout, ui_accent, accent, uninstalled, emulation, co
                    // DRM-free → Katalogi: the page of the scanned folders.
                    drm_roots,
                    // Metro / Flix → Pasek kategorii (AppSettings::metro_category_tabs / flix_category_tabs).
-                   metro_category_tabs, flix_category_tabs };
+                   metro_category_tabs, flix_category_tabs, psfive_category_tabs,
+                   // Okna i podpowiedzi → Wygląd podpowiedzi (AppSettings::hint_style).
+                   hint_style };
 inline bool hasOptionsButton(Id id) { return id == Id::plugin_enabled || id == Id::pc_platform; }
 // layout: drawn preview tiles in the row (one per home layout); Row::choice is the active one.
 // count: Row::value as a large number with a chevron; activating opens a sub-list.
@@ -215,6 +217,7 @@ inline constexpr std::array<const wchar_t*, 8> button_color_names{
 // Indexed like AppSettings::ButtonIdle.
 inline constexpr std::array<const wchar_t*, 3> button_idles{trKey(L"Szare szkło (domyślne)"), trKey(L"W kolorze przycisku"), trKey(L"Ciemne")};
 // Indexed like AppSettings::TileEntrance.
+inline constexpr std::array<const wchar_t*, 2> hint_styles{trKey(L"Szklane"), trKey(L"Białe")}; // AppSettings::HintStyle.
 inline constexpr std::array<const wchar_t*, 3> tile_entrances{trKey(L"Powiększanie po kolei"), trKey(L"Wysuwanie z dołu"), trKey(L"Bez animacji")};
 // Indexed like AppSettings::FocusGap.
 inline constexpr std::array<const wchar_t*, 3> focus_gaps{trKey(L"Brak"), trKey(L"Obrys odsunięty na zewnątrz"), trKey(L"Grafika odsunięta do środka")};
