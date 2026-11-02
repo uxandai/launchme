@@ -96,6 +96,26 @@ int main(int argc, char** argv) {
     request.text = L"linux"; request.folder = L"/games/steam";
     CHECK(aurelia::arguments(request) == std::vector<std::wstring>({L"--json", L"install", L"902", L"--platform", L"linux", L"--library", L"/games/steam"}));
 #endif
+    // Steam's collections, read only (pull, list, show <id>; never push or sync); an id is only letters,
+    // digits, '-' and '_'.
+    request = {C::collections_pull}; CHECK(aurelia::arguments(request) == std::vector<std::wstring>({L"--json", L"collections", L"pull"}));
+    request = {C::collections_list}; CHECK(aurelia::arguments(request) == std::vector<std::wstring>({L"--json", L"collections", L"list"}));
+    request = {C::collections_show}; request.text = L"uc-1a2b"; CHECK(aurelia::arguments(request) == std::vector<std::wstring>({L"--json", L"collections", L"show", L"uc-1a2b"}));
+    request.text = L"--force"; CHECK(aurelia::arguments(request).empty());
+    request.text = L"a b"; CHECK(aurelia::arguments(request).empty());
+    request.text.clear(); CHECK(aurelia::arguments(request).empty());
+    {
+        const auto list = aurelia::collectionList(*json::parse(R"({"namespace_version":3,"collections":[{"id":"favorite","name":"","dynamic":false},{"id":"uc-x","name":"RPG","dynamic":false},{"id":"uc-d","name":"Dyn","dynamic":true}]})"));
+        CHECK(list && list->size() == 2 && (*list)[0].id == "user-collections.favorite" && (*list)[1].id == "user-collections.uc-x" && (*list)[1].name == L"RPG");
+        CHECK(!aurelia::collectionList(*json::parse(R"({"collections":[{"id":"../x","name":"Bad"}]})")));
+        CHECK(!aurelia::collectionList(*json::parse(R"([])")));
+        const auto members = aurelia::collectionMembers(*json::parse(R"({"id":"uc-x","app_ids":[620,902]})"));
+        CHECK(members && *members == std::vector<uint32_t>({620, 902}));
+        CHECK(!aurelia::collectionMembers(*json::parse(R"({"app_ids":[0]})")) && !aurelia::collectionMembers(*json::parse(R"({"app_ids":"620"})")));
+        // Aurelia is the library when it is on and replaces Steam, or no Steam client is signed in here.
+        CHECK(aurelia::librarySource(true, false, false) && aurelia::librarySource(true, true, true) && !aurelia::librarySource(true, false, true) &&
+              !aurelia::librarySource(false, true, false));
+    }
     request = {C::presence}; request.text = L"bogus"; CHECK(aurelia::arguments(request).empty());
     request = {C::move, 902}; request.folder = L"relative"; CHECK(aurelia::arguments(request).empty());
     CHECK(aurelia::arguments({C::uninstall, 0}).empty());

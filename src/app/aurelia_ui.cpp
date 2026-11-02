@@ -51,6 +51,7 @@ bool Launcher::aureliaManaged(const Game& game) const {
     if (!aurelia_active_ || !aurelia::validGame(game)) return false;
     // A borrowed game needs the Steam client to authorise its licence: with one here, it keeps it.
     if (game.family_shared && !aurelia_library_source_) return false;
+    if (aurelia_library_source_ && !aurelia_steam_client_) return true; // No Steam client: every game through Aurelia.
     const auto id = std::to_string(game.app_id);
     return settings_.aurelia_default ? !settings_.aurelia_steam.contains(id) : settings_.aurelia_standalone.contains(id);
 }
@@ -149,7 +150,11 @@ void Launcher::aureliaRows() {
         }
         toggle(A::toggle, tr(L"Rozszerzona integracja Aurelia"), settings_.aurelia);
         toggle(A::cloud_toggle, tr(L"Zapisy w chmurze"), settings_.aurelia_cloud).locked = !settings_.aurelia;
-        toggle(A::default_launch, tr(L"Domyślnie zarządzaj grami przez Aurelię"), settings_.aurelia_default).locked = !settings_.aurelia;
+        {
+            auto& replaces = toggle(A::default_launch, tr(L"Aurelia jako zamiennik Steam"), settings_.aurelia_default);
+            replaces.description = tr(L"Konto, gry, kolekcje i czas gry z Aurelii; gry bez klienta Steam.");
+            replaces.locked = !settings_.aurelia;
+        }
         add(A::helper, s.installed ? tr(L"Sprawdź aktualizację") : tr(L"Zainstaluj Aurelię"),
             aurelia_helper_busy_ ? tr(L"Pobieranie…") : aurelia_version_).locked = aurelia_helper_busy_;
         add(A::repository, tr(L"Repozytorium Aurelii"), L"GitHub");

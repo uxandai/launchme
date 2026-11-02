@@ -121,7 +121,8 @@ std::vector<Game> Launcher::collectDownloads(std::vector<downloads_ui::Row>& row
         Game game; game.app_id = id; game.name = transfer.name.empty() ? std::to_wstring(id) : transfer.name; game.installed = false;
         for (const auto& known : installed_library_) if (known.app_id == id && aurelia::validGame(known)) { game = known; break; }
         if ((!private_shelf_ && excluded_ids_.contains(id)) || locallyHidden(game)) continue;
-        add(game, transfer.progress);
+        auto progress = transfer.progress; progress.aurelia = true; // Its label: Pobieranie w Aurelii.
+        add(game, progress);
         if (!found.empty()) {
             auto& row = found.back().second; row.store = L"Aurelia";
             if (transfer.speed) {

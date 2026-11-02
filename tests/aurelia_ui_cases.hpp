@@ -45,7 +45,12 @@ int LauncherUiTest::aureliaIntegration(HWND window) {
         switch (r.command) {
         case C::health: return fake->bad_health ? ok(R"({"unexpected":true})") : ok(std::string("{\"logged_in\":") +
             (fake->logged_in ? "true" : "false") + ",\"steam_id\":" + std::to_string(fake->account.load()) + ",\"account\":\"Aurelia fixture\"}");
-        case C::library: return ok(R"([{"app_id":902,"name":"The Moonlit Archive","is_installed":true,"is_owned":true,"install_path":"D:\\SteamLibrary\\Fixture"},{"app_id":906,"name":"Library worker fixture","is_installed":false,"is_owned":true}])");
+        case C::library: return ok(R"([{"app_id":902,"name":"The Moonlit Archive","is_installed":true,"is_owned":true,"install_path":"D:\\SteamLibrary\\Fixture","playtime_forever_minutes":125},{"app_id":906,"name":"Library worker fixture","is_installed":false,"is_owned":true}])");
+        // Steam's collections as Aurelia keeps them: Ulubione, Ukryte, one of the player's, a dynamic one (no list).
+        case C::collections_list: return ok(R"({"namespace_version":7,"collections":[{"id":"favorite","name":"","kind":"built-in","dynamic":false,"count":1},{"id":"hidden","name":"","kind":"built-in","dynamic":false,"count":1},{"id":"uc-moon","name":"Moonlit","kind":"static","dynamic":false,"count":1},{"id":"uc-dyn","name":"Recent RPGs","kind":"dynamic","dynamic":true,"count":0}]})");
+        case C::collections_show:
+            return r.text == L"favorite" ? ok(R"({"id":"favorite","app_ids":[902]})") : r.text == L"hidden" ? ok(R"({"id":"hidden","app_ids":[907]})") :
+                   r.text == L"uc-moon" ? ok(R"({"id":"uc-moon","app_ids":[902,906]})") : aurelia::Reply{false, false, {}, L"Unknown collection"};
         case C::available: return ok(R"({"app_id":902,"available":true,"pinned":true})");
         case C::login_qr:
             // Steam's challenge, then (once the test "scans" it) the approval; a cancel line ends it.
@@ -249,7 +254,10 @@ int LauncherUiTest::aureliaIntegration(HWND window) {
     app.aureliaOperation({C::install, 902}, game);
     if (!wait([&] { return fake->download && app.aurelia_downloads_.contains(902) && app.aurelia_downloads_[902].progress.percent() == 50; })) return 10328;
     app.closeAurelia(); std::vector<downloads_ui::Row> rows;
-    if (app.collectDownloads(rows).size() != 1 || rows.front().store != L"Aurelia") return 10329;
+    const auto downloading = app.collectDownloads(rows);
+    if (downloading.size() != 1 || rows.front().store != L"Aurelia") return 10329;
+    // Its own label, not Steam's: Aurelia downloads it.
+    if (std::wstring(primaryActionLabel(downloading.front())) != L"Pobieranie w Aurelii") return 10418;
     app.openAurelia(&game); if (!wait([&] { return !app.aurelia_ui_.busy; })) return 10330;
     app.aureliaActivate({{}, {}, {}, A::cancel});
     if (!wait([&] { return app.aurelia_operations_.empty(); }) || !fake->stop_download) return 10331;
@@ -345,19 +353,41 @@ int LauncherUiTest::aureliaIntegration(HWND window) {
     app.closeFriends(); app.desktop_mode_ = false;
     // Disabling is persisted, but the running session remains coherent until restart.
     app.toggleAurelia(); if (app.settings_.aurelia || !app.aurelia_active_) return 10346;
-    app.aurelia_library_source_ = true; // No Steam client in this fixture: Aurelia's list is the library.
+    // No Steam client signed in here (the fixture's STEAM_DIR is empty): the real decision makes Aurelia's
+    // list the library, with its account, collections (Ulubione, Ukryte; a dynamic one has no list) and play
+    // time; "Aurelia jako zamiennik Steam" does the same with a Steam client. Only pull, list and show are used.
+    if (app.aurelia_steam_client_ || !aurelia::librarySource(app.aurelia_active_, false, app.aurelia_steam_client_) ||
+        aurelia::librarySource(app.aurelia_active_, false, true) || !aurelia::librarySource(app.aurelia_active_, true, true) ||
+        aurelia::librarySource(false, true, false)) return 10419;
+    app.aurelia_library_source_ = aurelia::librarySource(app.aurelia_active_, app.settings_.aurelia_default, app.aurelia_steam_client_);
     app.startAureliaLibraryWorker();
-    if (!wait([&] { return app.installed_library_.size() == 2 && fake->count(C::library) > 0; })) return 10349;
-    // Only a managed game goes through Aurelia: the others dispatch the Steam client.
+    if (!wait([&] { return app.installed_library_.size() == 2 && fake->count(C::library) > 0 && !app.settings_collections_.empty(); })) return 10349;
+    {
+        const auto collection = [&](const char* id) -> const SteamCollection* {
+            for (const auto& c : app.settings_collections_) if (c.id == id) return &c;
+            return nullptr;
+        };
+        const auto* moon = collection("user-collections.uc-moon");
+        if (fake->count(C::collections_pull) < 1 || !moon || moon->name != L"Moonlit" || moon->app_ids != std::vector<uint32_t>{902, 906} ||
+            !collection("user-collections.favorite") || collection("user-collections.uc-dyn") || collection("user-collections.hidden") ||
+            !app.excluded_ids_.contains(907)) return 10425;
+        for (const auto& call : fake->calls)
+            if (call.command == C::collections_show && call.text != L"favorite" && call.text != L"hidden" && call.text != L"uc-moon") return 10426;
+        const auto moonlit = std::find_if(app.installed_library_.begin(), app.installed_library_.end(), [](const Game& g) { return g.app_id == 902; });
+        if (moonlit == app.installed_library_.end() || app.gamePlaytime(*moonlit, std::nullopt) != 125u || app.account_ != 76561198000000001ULL) return 10427;
+    }
+    // Without a Steam client every game goes through Aurelia, chosen for it or not: never steam://. With a
+    // Steam client (and Aurelia not replacing it) only the games chosen for Aurelia do.
     dispatched.clear(); Game routed{902, L"Routing fixture"}; routed.installed = true;
     app.settings_.aurelia_standalone.clear();
-    app.launchGame(routed); app.finishLaunch();
-    if (dispatched != std::vector<std::wstring>{L"steam://rungameid/902"} || fake->count(C::play)) return 10352;
-    app.game_sessions_.clear(); app.game_activity_jobs_->active.clear();
-    app.settings_.aurelia_standalone.insert("902"); dispatched.clear();
+    app.aurelia_steam_client_ = true;
+    if (app.aureliaManaged(routed)) return 10352;
+    app.aurelia_steam_client_ = false;
+    if (!app.aureliaManaged(routed)) return 10352;
     app.settings_.aurelia_cloud_skip.insert("902"); // Its saves are not synced around play (on by default).
     app.launchGame(routed);
     if (!wait([&] { return !app.aurelia_playing_.contains(902); }) || !dispatched.empty() || fake->last(C::play).steam) return 10353;
+    app.settings_.aurelia_standalone.insert("902");
     app.settings_.aurelia_cloud_skip.erase("902");
     const auto before_play = fake->count(C::play);
     app.launchGame(routed);
@@ -378,5 +408,19 @@ int LauncherUiTest::aureliaIntegration(HWND window) {
     app.friend_chat_.input = L"Private account draft";
     fake->account = 76561198000000003ULL; app.aureliaRescan();
     if (!wait([&] { return app.account_ == 76561198000000003ULL; }) || !app.friend_chat_drafts_.empty() || app.friend_chat_.open) return 10360;
+    // Steam's page: "Aurelia jako zamiennik Steam" says what it takes over, in four lines.
+    {
+        app.closeFriendChat(); app.closeFriends();
+        app.settings_.aurelia = true;
+        app.openSettings(); app.openPlatformSettings(GameSource::steam);
+        const auto row = std::find_if(app.settings_rows_.begin(), app.settings_rows_.end(), [](const auto& r) { return r.id == settings_ui::Id::aurelia_default; });
+        if (row == app.settings_rows_.end() || row->title != L"Aurelia jako zamiennik Steam" || row->lines != 4 ||
+            row->description.find(L"Family Sharing") == std::wstring::npos) return 10428;
+        app.settings_state_.options = true;
+        app.settings_state_.selected[app.settings_state_.category] = static_cast<int>(row - app.settings_rows_.begin()); app.ensureSettingVisible();
+        for (int i = 0; i < 20; ++i) { app.last_frame_ -= std::chrono::milliseconds(50); app.tick(); }
+        if (!capture(L"aurelia-steam-replacement-settings.png")) return 10429;
+        app.back();
+    }
     return 0;
 }

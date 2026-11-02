@@ -101,8 +101,14 @@ void Launcher::pcSettingsRows() {
             {}, settings_.steam_install_dialog});
         Row integration{Id::aurelia, Control::toggle, tr(L"Rozszerzona integracja Aurelia"), aurelia_ui::notice(), {}, settings_.aurelia};
         integration.section = L"Aurelia"; add(std::move(integration));
-        Row managed{Id::aurelia_default, Control::toggle, tr(L"Domyślnie zarządzaj grami przez Aurelię"),
-            tr(L"Instalacja, aktualizacje i uruchamianie bez klienta Steam. Wyjątki ustawisz przy grze."), {}, settings_.aurelia_default};
+        // Aurelia instead of the Steam client: the library comes from it too (after a restart, as the
+        // library worker starts once), and every game installs, updates and starts through it.
+        std::wstring replaces = tr(L"Konto, posiadane i zainstalowane gry, kolekcje, ukryte i czas gry z Aurelii; instalacja, aktualizacje i uruchamianie bez klienta Steam. Wyjątki ustawisz przy grze.");
+        replaces += L"\n" + std::wstring(tr(L"Gry z Family Sharing na Windows wymagają klienta Steam. Biblioteka przełącza się po ponownym uruchomieniu Launchme."));
+        if (settings_.aurelia && settings_.aurelia_default != aurelia_library_source_ && aurelia_steam_client_)
+            replaces += L"\n" + std::wstring(tr(L"Wymaga ponownego uruchomienia Launchme"));
+        Row managed{Id::aurelia_default, Control::toggle, tr(L"Aurelia jako zamiennik Steam"), std::move(replaces), {}, settings_.aurelia_default};
+        managed.lines = 4;
         managed.locked = !settings_.aurelia; add(std::move(managed));
         Row cloud{Id::aurelia_cloud, Control::toggle, tr(L"Zapisy w chmurze"),
             tr(L"Stan i synchronizacja zapisów gier zarządzanych przez Aurelię."), {}, settings_.aurelia_cloud};

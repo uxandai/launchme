@@ -569,6 +569,7 @@ constexpr Entry entries[] = {
     {L"Instalacja GOG", L"Instalação GOG"},
     {L"Instalacja Battle.net", L"Instalação Battle.net"},
     {L"Pobieranie w Steam", L"Baixando no Steam"},
+    {L"Pobieranie w Aurelii", L"Baixando no Aurelia"},
     {L"Dodaj", L"Adicionar"},
     {L"Niedostępne w sklepie", L"Indisponível na loja"},
     {L"Wstrzymaj", L"Suspender"},

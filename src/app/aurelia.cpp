@@ -16,8 +16,11 @@ void Launcher::initializeAurelia() {
     aurelia_active_ = settings_.aurelia;
     aurelia_installation_ = aurelia::installed(helperRoot());
     aurelia_version_ = aurelia_installation_.version;
+    // Without a Steam client signed in here, or with "Aurelia jako zamiennik Steam", Aurelia is the library
+    // (its account, games, collections and play time); read once: the library worker is started for it.
+    aurelia_steam_client_ = !installedSteamExecutable().empty() && activeSteamId(findSteamRoot()) != 0;
 #ifndef LAUNCHME_UI_TEST
-    aurelia_library_source_ = aurelia_active_ && findSteamRoot().empty();
+    aurelia_library_source_ = aurelia::librarySource(aurelia_active_, settings_.aurelia_default, aurelia_steam_client_);
     if (!aurelia_installation_.executable.empty()) aurelia_transport_ = aurelia::transport({aurelia_installation_.executable, userConfigDirectory() / L"aurelia"});
     aurelia_get_ = httpGet;
     aurelia_installer_ = [](const auto& release, const auto& cancel, const auto& progress) { return aurelia::installRelease(helperRoot(), release, cancel, progress); };
@@ -115,6 +118,7 @@ void Launcher::startAureliaLibraryWorker() {
         // account borrows through Steam Family Sharing (every 10 minutes; the Steam client has the rest).
         bool first = true;
         uint64_t family_at = 0, family_account = 0;
+        uint64_t collections_at = 0, collections_account = 0; // Steam's collections pulled through Aurelia.
         while (alive->load()) {
             const auto generation = epoch->load();
             const auto cancel = [=] { return !alive->load() || epoch->load() != generation; };
@@ -150,9 +154,29 @@ void Launcher::startAureliaLibraryWorker() {
                         if (activeSteamId(root) == account) {
                             message->excluded = excludedSteamApps(root); message->collections = readSteamCollections(root);
                             message->shortcuts = scanSteamShortcuts(root); applyCollectionPlatforms(message->shortcuts, message->collections);
-                            for (auto& g : message->games) if (message->excluded.contains(g.app_id)) { g.visibility = GameVisibility::private_game; message->private_games.push_back(g); }
-                            std::erase_if(message->games, [&](const Game& g) { return message->excluded.contains(g.app_id); });
+                        } else {
+                            // No Steam client of this account: Steam's collections (Ulubione and Ukryte among them)
+                            // through Aurelia, pulled from the cloud now and then (read only: never pushed back).
+                            if (authenticated && (account != collections_account || GetTickCount64() >= collections_at)) {
+                                invoke({C::collections_pull}, cancel, {});
+                                collections_account = account; collections_at = GetTickCount64() + 10 * 60 * 1000;
+                            }
+                            if (const auto listed = invoke({C::collections_list}, cancel, {}); listed.ok)
+                                if (auto list = aurelia::collectionList(listed.data))
+                                    for (auto& collection : *list) {
+                                        aurelia::Request show{C::collections_show};
+                                        show.text = text_encoding::wide(collection.id.substr(std::string_view("user-collections.").size()));
+                                        const auto members = invoke(show, cancel, {});
+                                        const auto ids = members.ok ? aurelia::collectionMembers(members.data) : std::nullopt;
+                                        if (!ids) continue;
+                                        if (collection.id == "user-collections.hidden") { message->excluded.insert(ids->begin(), ids->end()); continue; }
+                                        collection.app_ids = *ids;
+                                        message->collections.push_back(std::move(collection));
+                                    }
                         }
+                        // Hidden in Steam: with the store's own hidden games (Ctrl+H shows them).
+                        for (auto& g : message->games) if (message->excluded.contains(g.app_id)) { g.visibility = GameVisibility::private_game; message->private_games.push_back(g); }
+                        std::erase_if(message->games, [&](const Game& g) { return message->excluded.contains(g.app_id); });
                     }
                 }
                 std::optional<std::vector<Game>> family;
@@ -288,6 +312,7 @@ void Launcher::aureliaSyncInstallations(const std::set<uint32_t>& released) {
     for (auto* games : {&snapshot.games, &snapshot.private_games}) for (auto& game : *games) {
         if (const auto found = aurelia_downloads_.find(game.app_id); found != aurelia_downloads_.end()) {
             game.installation = found->second.progress;
+            game.installation.aurelia = true;
             if (game.installation.active()) game.installation.update = game.installed;
         } else if (released.contains(game.app_id)) game.installation = {};
     }

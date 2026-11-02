@@ -49,11 +49,18 @@ daemons.
 
 ## Games and downloads
 
-When enabled, Aurelia supplies the account (owned games, metadata, achievements) and friends. When the
-Steam client is installed on this PC, its own library scan keeps running as before (installations from every
-remembered account, preloads, collections, shortcuts) and Aurelia only adds what it knows; without a local
-Steam client Aurelia's library is used. Other stores continue using their own adapters. Artwork, news,
-ratings and other independent services keep their existing providers.
+When enabled, Aurelia supplies metadata, achievements and friends. When a Steam client with a signed-in
+account is installed on this PC, its own library scan keeps running as before (installations from every
+remembered account, preloads, collections, shortcuts) and Aurelia only adds what it knows.
+
+**Aurelia as a Steam replacement** (Settings → Library → Steam), or no Steam client signed in here: Aurelia is
+the library. The account is the one signed in to Aurelia (no `loginusers.vdf` is needed); owned and installed
+games and their play time come from `aurelia list`; Steam's collections, Favorites and hidden games from
+`aurelia collections pull/list/show` (read only: Launchme never pushes them back; dynamic collections have no
+list offline). Recently played comes from Launchme's own history. Every game installs, updates and starts
+through Aurelia (exceptions per game while a Steam client is here); the library switches after Launchme
+restarts. Other stores continue using their own adapters. Artwork, news, ratings and other independent
+services keep their existing providers.
 
 **Steam Family Sharing.** Games borrowed from the account's Steam Family (`is_family_shared` and not owned in
 `aurelia list --json`) appear in the library, marked *Family shared*. With a local Steam client, Aurelia's family

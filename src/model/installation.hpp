@@ -11,6 +11,7 @@ struct Installation {
     bool live = false;
     // An update (or validation) of a game that was already installed, not a new installation.
     bool update = false;
+    bool aurelia = false; // Downloaded by Aurelia, not the Steam client ("Pobieranie w Aurelii").
     bool active() const { return phase != InstallPhase::none; }
     bool moving() const { return active() && phase != InstallPhase::paused && phase != InstallPhase::queued; }
     std::optional<int> percent() const {

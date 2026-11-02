@@ -206,7 +206,7 @@ inline const wchar_t* primaryActionLabel(const Game& game) {
     if (game.preloaded) return tr(L"Wstępnie pobrana");
     if (game.installation.active()) return game.source == GameSource::gog ? tr(L"Instalacja GOG") :
         game.source == GameSource::epic ? tr(L"Instalacja Epic") : game.source == GameSource::amazon ? tr(L"Instalacja Amazon") :
-        game.source == GameSource::battlenet ? tr(L"Instalacja Battle.net") : tr(L"Pobieranie w Steam");
+        game.source == GameSource::battlenet ? tr(L"Instalacja Battle.net") : game.installation.aurelia ? tr(L"Pobieranie w Aurelii") : tr(L"Pobieranie w Steam");
     if (game.installed) return tr(L"Uruchom");
     if (localFileGame(game.source)) return missingFileLabel(game);
     if (game.source == GameSource::gog && !game.account_id.empty()) return tr(L"Instaluj");

@@ -519,7 +519,9 @@ void Launcher::pollReturnFocus() {
 // larger of Launchme's count and the store's (a launcher like Prism counts every session too);
 // "Edytuj metadane" sets a value counted on from there.
 std::optional<uint32_t> Launcher::automaticPlaytime(const Game& game, std::optional<uint32_t> steam) const {
-    return steamArtwork(game) ? steam : std::optional<uint32_t>(std::max(localPlaytime(game), game.store_playtime_minutes));
+    // A Steam game: Steam's own count, else Aurelia's (its library gives the account's play time).
+    if (steamArtwork(game)) return steam ? steam : game.store_playtime_minutes ? std::optional<uint32_t>(game.store_playtime_minutes) : std::nullopt;
+    return std::optional<uint32_t>(std::max(localPlaytime(game), game.store_playtime_minutes));
 }
 std::optional<uint32_t> Launcher::gamePlaytime(const Game& game, std::optional<uint32_t> steam) const {
     const auto automatic = automaticPlaytime(game, steam);

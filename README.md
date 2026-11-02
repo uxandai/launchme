@@ -173,8 +173,11 @@ Settings → System → Help → **Open folder** (the version row) opens it.
   the account name and password. It manages only the games you choose (or all, by default)
   and adds managed Steam downloads, cloud saves synced before and after playing, cloud-save status and conflict
   resolution, Steam Family Sharing games, DLC, manifest pinning/downgrades, beta branches, Workshop and native
-  live friends chat in both desktop and TV modes. Primarily for single-player/offline games; some games, especially multiplayer,
-  DRM and Steamworks titles, may require the Steam client. See the [Aurelia guide](docs/AURELIA.md).
+  live friends chat in both desktop and TV modes. *Aurelia as a Steam replacement* (or no Steam client here) makes
+  it the library too: the account, owned and installed games, collections, hidden games and play time come from
+  Aurelia. Primarily for single-player/offline games; some games, especially multiplayer,
+  DRM and Steamworks titles, may require the Steam client (Family Sharing games on Windows always do). See the
+  [Aurelia guide](docs/AURELIA.md).
 - **Artwork**: SteamGridDB covers, heroes (the sharp 3840 px ones first), logos and posters with OCR-assisted cropping,
   a variant browser (*Change artwork*: its *Source* list adds the Steam store, GOG, Xbox / Microsoft Store,
   Nintendo eShop, GameTDB, TitleDB, TheGamesDB and Wikimedia Commons, each switched on or off in Settings → Media &

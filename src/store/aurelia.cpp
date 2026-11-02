@@ -1,6 +1,8 @@
 #include "aurelia.hpp"
 #include "../platform/text_encoding.hpp"
 #include <algorithm>
+#include <cctype>
+#include <cwctype>
 #include <charconv>
 #include <set>
 
@@ -44,7 +46,8 @@ std::vector<std::wstring> arguments(const Request& r) {
     case C::login_qr: case C::login_password:
     case C::health: case C::login: case C::logout: case C::reconnect: case C::library: case C::libraries:
     case C::friends: case C::presence: case C::chat_history: case C::chat_send: case C::chat_live:
-    case C::downloads: case C::running: case C::workshop_install: case C::workshop_subscribe: case C::workshop_unsubscribe: break;
+    case C::downloads: case C::running: case C::workshop_install: case C::workshop_subscribe: case C::workshop_unsubscribe:
+    case C::collections_pull: case C::collections_list: case C::collections_show: break;
     default: if (!r.app) return {};
     }
     const auto app = std::to_wstring(r.app), id = std::to_wstring(r.id);
@@ -122,6 +125,12 @@ std::vector<std::wstring> arguments(const Request& r) {
     case C::workshop_install: if (!r.id) return {}; add({L"workshop", L"install", id}); break;
     case C::workshop_subscribe: if (!r.id) return {}; add({L"workshop", L"subscribe", id, L"--install"}); break;
     case C::workshop_unsubscribe: if (!r.id) return {}; add({L"workshop", L"unsubscribe", id}); break;
+    case C::collections_pull: add({L"collections", L"pull"}); break;
+    case C::collections_list: add({L"collections", L"list"}); break;
+    case C::collections_show:
+        if (r.text.empty() || r.text.size() > 64 || !std::iswalnum(r.text.front()) || !std::all_of(r.text.begin(), r.text.end(), [](wchar_t ch) { // Never an option.
+                return (ch >= L'a' && ch <= L'z') || (ch >= L'A' && ch <= L'Z') || (ch >= L'0' && ch <= L'9') || ch == L'-' || ch == L'_'; })) return {};
+        add({L"collections", L"show", r.text}); break;
     }
     if (std::any_of(args.begin(), args.end(), [](const auto& a) { return a.find(L'\0') != a.npos; })) return {};
     return args;
@@ -142,6 +151,29 @@ std::optional<std::vector<Game>> library(const json::Value& value, uint64_t acco
         g.account_id = std::to_string(account);
         g.store_playtime_minutes = static_cast<uint32_t>(std::min<uint64_t>(UINT32_MAX, integer(item.get("playtime_forever_minutes")).value_or(0)));
         result.push_back(std::move(g));
+    }
+    return result;
+}
+std::optional<std::vector<SteamCollection>> collectionList(const json::Value& value) {
+    const auto* items = value.get("collections");
+    if (!items || items->type != Type::array || items->elements.size() > 10000) return {};
+    std::vector<SteamCollection> result;
+    for (const auto& item : items->elements) {
+        const auto id = text(item, "id"), name = text(item, "name");
+        if (id.empty() || id.size() > 64 || !std::isalnum(static_cast<unsigned char>(id.front())) || !std::all_of(id.begin(), id.end(), [](char ch) { return std::isalnum(static_cast<unsigned char>(ch)) || ch == '-' || ch == '_'; })) return {};
+        if (flag(item, "dynamic")) continue; // Steam computes its games; they cannot be listed.
+        result.push_back({wideLenient(name), {}, "user-collections." + id});
+    }
+    return result;
+}
+std::optional<std::vector<uint32_t>> collectionMembers(const json::Value& value) {
+    const auto* ids = value.get("app_ids");
+    if (!ids || ids->type != Type::array || ids->elements.size() > 100000) return {};
+    std::vector<uint32_t> result;
+    for (const auto& item : ids->elements) {
+        const auto id = integer(&item);
+        if (!id || !*id || *id > UINT32_MAX) return {};
+        result.push_back(static_cast<uint32_t>(*id));
     }
     return result;
 }

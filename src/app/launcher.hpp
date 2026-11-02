@@ -913,6 +913,7 @@ private:
     // Aurelia's list is the Steam library only without a local Steam client (initializeAurelia);
     // otherwise its worker only follows the session, woken by its own signal.
     bool aurelia_library_source_ = false;
+    bool aurelia_steam_client_ = false; // A Steam client with a signed-in account here (at start).
     std::shared_ptr<WakeSignal> aurelia_rescan_ = std::make_shared<WakeSignal>();
     void aureliaRescan() { steam_rescan_->wake(); aurelia_rescan_->wake(); }
     uint64_t aurelia_account_ = 0, aurelia_poll_at_ = 0, aurelia_cloud_at_ = 0;

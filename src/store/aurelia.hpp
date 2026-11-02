@@ -6,6 +6,7 @@
 #include "../friends/steam_friends.hpp"
 #include "../library/steam_achievements.hpp"
 #include "../model/game_details.hpp"
+#include "../library/collections.hpp"
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -46,6 +47,9 @@ enum class Command {
     play, launch_targets, running, stop, available, cloud_list, cloud_sync, dlc, enable_dlc, disable_dlc,
     manifests, pin, unpin, downgrade, branches, set_branch, move,
     workshop_browse, workshop_status, workshop_install, workshop_subscribe, workshop_unsubscribe,
+    // Steam's collections, read only: pull fetches the cloud's into Aurelia's store (never push or sync,
+    // which change the account), list names them, show (text: its id) gives one's games.
+    collections_pull, collections_list, collections_show,
     standalone // Host-side workflow; never passed directly to the CLI.
 };
 struct Request {
@@ -100,6 +104,15 @@ std::optional<uint64_t> integer(const json::Value* value);
 std::string text(const json::Value& value, std::string_view key);
 bool flag(const json::Value& value, std::string_view key);
 std::optional<std::vector<Game>> library(const json::Value& value, uint64_t account);
+// `collections list`: Steam's collections as Aurelia keeps them, without their games; the dynamic ones
+// (filter-based: Steam computes them) are left out. Ids as Launchme's ("user-collections.<id>").
+std::optional<std::vector<SteamCollection>> collectionList(const json::Value& value);
+// `collections show <id>`: that collection's games.
+std::optional<std::vector<uint32_t>> collectionMembers(const json::Value& value);
+// Aurelia is the library (account, owned and installed games, collections, play time) instead of the
+// Steam client: it is on and either replaces Steam for every game ("Aurelia jako zamiennik Steam") or
+// there is no Steam client signed in here (no steam.exe or no account in loginusers.vdf).
+inline bool librarySource(bool active, bool replaces_steam, bool steam_signed_in) { return active && (replaces_steam || !steam_signed_in); }
 FriendsResult friends(const json::Value& value);
 SteamAchievements achievements(const json::Value& value);
 GameDetails details(const json::Value& value);
