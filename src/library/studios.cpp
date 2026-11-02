@@ -16,6 +16,7 @@ const std::vector<Studio> table{
     {"accolade", L"Accolade", L"publisher_accolade.png", {}, {L"accolade"}},
     {"activision", L"Activision", L"publisher_activision.png", {}, {L"activision"}},
     {"amazon-games", L"Amazon Games", L"publisher_amazon_games.png", {L"amazon game studios"}, {L"amazon games"}},
+    {"annapurna", L"Annapurna Interactive", L"publisher_annapurna.png", {}, {L"annapurna"}},
     {"atari", L"Atari", L"publisher_atari.png", {}, {L"atari"}},
     {"bandai-namco", L"Bandai Namco", L"publisher_bandai_namco.png", {}, {L"bandai namco", L"namco bandai", L"bandai"}},
     {"namco", L"Namco", L"publisher_namco.png", {}, {L"namco"}},

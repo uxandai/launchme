@@ -406,7 +406,7 @@ void Launcher::controllerInput(const PadReading& state) {
         pad_start_.swallow(buttons & XINPUT_GAMEPAD_START);
         controller_buttons_ = buttons; controller_direction_ = 0;
         if (guide == HoldGesture::Event::press || guide == HoldGesture::Event::hold) {
-            toggleGameOverlay();
+            toggleGameOverlay(true); // The pad opens on the widgets; Shift+Tab opens the bar.
             if (guide == HoldGesture::Event::hold && gameOverlayOpen()) { openPowerMenu(); invalidateGameOverlay(); }
         }
         return;

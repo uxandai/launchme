@@ -557,6 +557,10 @@ void Launcher::settingsChoose(const Row& row) {
     else if (row.id == Id::game_fps) { // Off, the average, or with the 1% low.
         settings_.game_fps = settings_state_.choice > 0;
         if (settings_state_.choice > 0) settings_.game_fps_low = settings_state_.choice == 2;
+        auto& pins = settings_.hud_pins; // Turning the widget on shows it over the game at once.
+        const auto found = std::find(pins.begin(), pins.end(), "fps");
+        if (settings_state_.choice > 0 && found == pins.end()) pins.push_back("fps");
+        else if (settings_state_.choice == 0 && found != pins.end()) pins.erase(found);
     }
     else if (row.id == Id::trailer_space)
         settings_.trailer_space_mb = trailer_spaces[std::clamp<size_t>(settings_state_.choice, 0, trailer_spaces.size() - 1)];

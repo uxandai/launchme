@@ -173,12 +173,12 @@ void Launcher::dismissGameOverlay() {
     invalidateGameOverlay();
 }
 
-void Launcher::toggleGameOverlay() {
+void Launcher::toggleGameOverlay(bool widgets_first) {
     if (!settings_.guide_overlay || !settings_.guide_menu) return;
     if (gameOverlayOpen()) { overlayKey(VK_HOME); return; }
     if (overlay_backend_.foreground() == hwnd_) { openGuideMenu(); return; }
     const auto snapshot = overlay_backend_.read ? overlay_backend_.read() : overlay_monitor_.snapshot();
-    if (snapshot.target && overlay_backend_.foreground() == snapshot.target->window) openGameOverlay(*snapshot.target);
+    if (snapshot.target && overlay_backend_.foreground() == snapshot.target->window) openGameOverlay(*snapshot.target, widgets_first);
 }
 
 void Launcher::openOverlayDrawer() {
@@ -190,7 +190,7 @@ void Launcher::openOverlayDrawer() {
     audio_.drawer();
 }
 
-bool Launcher::openGameOverlay(const GameWindow& target) {
+bool Launcher::openGameOverlay(const GameWindow& target, bool widgets_first) {
     if (!settings_.guide_overlay || !settings_.guide_menu || !overlay_backend_.valid(target)) return false;
     cancelGameFocus();
     if (!game_overlay_) {
@@ -238,7 +238,7 @@ bool Launcher::openGameOverlay(const GameWindow& target) {
         }
     }
     // The widgets are what Guide is opened for in a game: shown at once, Back leaves them for the bar.
-    if (settings_.guide_open_widgets) { openOverlayDrawer(); invalidateGameOverlay(); }
+    if (widgets_first && settings_.guide_open_widgets) { openOverlayDrawer(); invalidateGameOverlay(); }
     // Opening Guide never freezes the game. Some titles keep reading XInput in
     // the background; focus alone cannot universally block their controller.
     audio_.quick();

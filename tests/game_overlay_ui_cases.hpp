@@ -316,7 +316,7 @@ int LauncherUiTest::gameOverlay(HWND window) {
     if (app.gameOverlayOpen()) return 1880;
     // By default Guide in a game opens on the widgets, without a second click on the bar.
     app.settings_.guide_open_widgets = true;
-    if (!app.openGameOverlay(target) || !app.friends_open_) return 1991;
+    if (!app.openGameOverlay(target, true) || !app.friends_open_) return 1991;
     app.dismissGameOverlay(); animate();
     app.settings_.guide_open_widgets = false;
     if (app.gameOverlayOpen()) return 1992;

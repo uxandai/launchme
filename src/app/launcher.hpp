@@ -720,7 +720,7 @@ public:
     void foregroundChanged(HWND window);
     void foregroundScanDue();
     void pollGuideInput();
-    void toggleGameOverlay();
+    void toggleGameOverlay(bool widgets_first = false);
     void guideKeyboardHotkey();
     bool gameOverlayOpen() const { return overlay_target_.has_value(); }
     HWND frameWindow() const { return gameOverlayOpen() && game_overlay_ ? game_overlay_->handle() : hwnd_; }
@@ -1183,7 +1183,7 @@ private:
     bool guideHotkeyWanted() const;
     void updateGuideHotkey();
     void pollGameOverlay();
-    bool openGameOverlay(const GameWindow& target);
+    bool openGameOverlay(const GameWindow& target, bool widgets_first = false);
     void openOverlayDrawer();
     void closeGameOverlay(bool return_to_game);
     void dismissGameOverlay();

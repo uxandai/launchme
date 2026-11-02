@@ -296,7 +296,7 @@ struct AppSettings {
     // already own that button on this PC.
     bool guide_menu = true;
     bool guide_overlay = false; // Experimental: Guide over a foreground game.
-    bool guide_open_widgets = true; // Guide over a game opens on the widgets (Back leaves them for the bar).
+    bool guide_open_widgets = true; // Guide over a game opens on the widgets (pad only; Shift+Tab always shows the bar).
     bool game_fps = false, game_fps_low = false; // Read-only widget in the right drawer.
     std::vector<std::string> hud_pins; // Widgets kept on the game's screen: "fps", "cpu", "gpu" (Guide over games).
     std::vector<widgets::Preference> widget_layout; // Stable IDs, including temporarily disabled plugins.
