@@ -88,6 +88,67 @@ void Launcher::pollGuideInput() {
     updateGuideHotkey();
     controller();
     tickGameOverlay(GetTickCount64());
+    updateHud();
+}
+
+void Launcher::toggleHudPin(const std::string& id) {
+    auto& pins = settings_.hud_pins;
+    const auto found = std::find(pins.begin(), pins.end(), id);
+    if (found != pins.end()) pins.erase(found); else pins.push_back(id);
+    settings_dirty_ = true; next_hud_at_ = 0;
+    audio_.context(); invalidateGameOverlay();
+    if (hwnd_) InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+LRESULT Launcher::hudMessage(HWND window, UINT message, WPARAM wparam, LPARAM lparam) {
+    if (message == WM_PAINT && hud_window_) {
+        ViewContext context;
+        context.fps_widget = settings_.game_fps; context.fps_low = settings_.game_fps_low;
+        context.game_fps = overlay_snapshot_.fps;
+        context.dashboard.sensors = sensors_;
+        context.hud_pins = settings_.hud_pins;
+        hud_window_->renderer().paintHud(context);
+        return 0;
+    }
+    return DefWindowProcW(window, message, wparam, lparam);
+}
+
+void Launcher::updateHud() {
+    // Over the game in front (Guide closed): the pinned widgets in a corner. Never interactive.
+    const auto target = overlay_snapshot_.target;
+    const bool want = runtime_started_ && guideOverlayOn() && !settings_.hud_pins.empty() && !gameOverlayOpen() && target &&
+        overlay_backend_.foreground() == target->window;
+    if (!want) {
+        if (hud_window_ && hud_visible_) hud_window_->hide();
+        hud_visible_ = false;
+        if (hud_polling_) { hud_polling_ = false; if (!friends_open_) stopDashboardPoll(); }
+        return;
+    }
+    const auto now = GetTickCount64();
+    if (now < next_hud_at_) return;
+    next_hud_at_ = now + 500;
+    if (!hud_window_) {
+        auto window = std::make_unique<OverlayWindow>();
+        if (!window->create(true, [this](HWND w, UINT m, WPARAM p, LPARAM l) { return hudMessage(w, m, p, l); })) return;
+        hud_window_ = std::move(window);
+        hud_window_->appearance(settings_);
+    }
+    const auto& pins = settings_.hud_pins;
+    const bool sensors = std::find(pins.begin(), pins.end(), "cpu") != pins.end() || std::find(pins.begin(), pins.end(), "gpu") != pins.end();
+    if (sensors && !hud_polling_) { hud_polling_ = true; startDashboardPoll(); }
+    else if (!sensors && hud_polling_) { hud_polling_ = false; if (!friends_open_) stopDashboardPoll(); }
+    std::wstring signature;
+    for (const auto& pin : pins) signature += std::wstring(pin.begin(), pin.end()) + L',';
+    signature += std::to_wstring(static_cast<int>(overlay_snapshot_.fps.status)) + L',' +
+        std::to_wstring(static_cast<int>(overlay_snapshot_.fps.fps + 0.5)) + L',' + std::to_wstring(static_cast<int>(overlay_snapshot_.fps.low + 0.5)) + L',' +
+        std::to_wstring(sensors_.cpu.value_or(-1)) + L',' + std::to_wstring(sensors_.gpu.value_or(-1));
+    if (!hud_visible_) {
+        hud_signature_ = signature;
+        hud_visible_ = hud_window_->show(monitorRect(target->window), false);
+    } else if (signature != hud_signature_) {
+        hud_signature_ = signature;
+        hud_window_->invalidate();
+    }
 }
 
 void Launcher::tickGameOverlay(uint64_t now) {
@@ -176,6 +237,8 @@ bool Launcher::openGameOverlay(const GameWindow& target) {
             trackSession(target.key, *game, {target.process});
         }
     }
+    // The widgets are what Guide is opened for in a game: shown at once, Back leaves them for the bar.
+    if (settings_.guide_open_widgets) { openOverlayDrawer(); invalidateGameOverlay(); }
     // Opening Guide never freezes the game. Some titles keep reading XInput in
     // the background; focus alone cannot universally block their controller.
     audio_.quick();
@@ -202,6 +265,10 @@ void Launcher::closeGameOverlay(bool return_to_game) {
 }
 
 void Launcher::overlayDashboard() {
+    // Whatever the launcher was doing behind the game (tray, background priority, released graphics)
+    // ends before it is shown, so the page opens live instead of as a frozen frame.
+    leaveTray(); pollBackgroundMode(false); restoreMemory();
+    still_since_ = std::chrono::steady_clock::now(); frame_limit_ = 240;
     overlay_backend_.focus(hwnd_);
     closeGameOverlay(false);
     if (settingsOpen()) saveSettings();

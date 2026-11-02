@@ -175,6 +175,58 @@ void Renderer::drawDashboardTile(int index, float drawer_left, bool focus_frame)
     text(title, left, foot + 64, inner, 24, friend_status_font_.Get(), gray(0.70f));
     text(value, left, foot + 89, inner, caption.empty() ? 56.0f : 32.0f, tile_value_font_.Get(), value_ink);
     if (!caption.empty()) text(caption, left, foot + 126, inner, 22, toast_sub_font_.Get(), gray(0.58f));
+    // A dot for a widget kept on the game's screen (a click on the tile pins it, another one lets it go).
+    const char* pin = context_->fps_widget && index == dashboard::tile_count + static_cast<int>(context_->plugin_widgets.size()) ? "fps" :
+        index == static_cast<int>(dashboard::Tile::cpu) ? "cpu" : index == static_cast<int>(dashboard::Tile::gpu) ? "gpu" : nullptr;
+    if (pin && std::find(context_->hud_pins.begin(), context_->hud_pins.end(), pin) != context_->hud_pins.end()) {
+        brush(uiAccent(0.95f));
+        target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(r.right - tile_padding - 5, r.top + tile_padding + 5), 5, 5), solid_.Get());
+    }
+}
+
+bool Renderer::paintHud(const ViewContext& context) {
+    PAINTSTRUCT ps{}; BeginPaint(hwnd_, &ps);
+    bool painted = false;
+    if (createTarget()) {
+        updateViewport();
+        context_ = &context;
+        target_->BeginDraw();
+        target_->SetTransform(D2D1::Matrix3x2F::Scale(viewport_.scale, viewport_.scale));
+        target_->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE);
+        target_->Clear(D2D1::ColorF(0, 0, 0, 0));
+        struct Line { std::wstring label, value; bool hot = false; };
+        std::vector<Line> lines;
+        for (const auto& id : context.hud_pins) {
+            if (id == "fps" && context.fps_widget) {
+                const auto& reading = context.game_fps;
+                Line line{L"FPS", reading.status == game_fps::Status::ready ? fpsNumber(reading.fps) : std::wstring(L"—")};
+                if (reading.status == game_fps::Status::ready && context.fps_low && reading.low > 0) line.value += L"   1% " + fpsNumber(reading.low);
+                lines.push_back(std::move(line));
+            } else if (id == "cpu" || id == "gpu") {
+                const auto celsius = id == "cpu" ? context.dashboard.sensors.cpu : context.dashboard.sensors.gpu;
+                lines.push_back({id == "cpu" ? L"CPU" : L"GPU", sensors::format(celsius), celsius && *celsius >= hot_celsius});
+            }
+        }
+        if (!lines.empty()) {
+            constexpr float x = 24, y = 24, width = 250, row = 34, pad = 12;
+            const float height = static_cast<float>(lines.size()) * row + 2 * pad;
+            brush(D2D1::ColorF(0.04f, 0.045f, 0.05f, 0.62f));
+            target_->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(x, y, x + width, y + height), 12, 12), solid_.Get());
+            float top = y + pad;
+            for (const auto& line : lines) {
+                text(line.label, x + pad + 2, top, 64, row, friend_status_font_.Get(), gray(0.70f));
+                text(line.value, x + pad + 66, top, width - 2 * pad - 66, row, friend_status_font_.Get(),
+                     line.hot ? palette::danger() : gray(0.97f));
+                top += row;
+            }
+        }
+        const auto result = target_->EndDraw();
+        context_ = nullptr;
+        if (SUCCEEDED(result)) painted = layered_surface_.present(hwnd_);
+        else discardTarget();
+    }
+    EndPaint(hwnd_, &ps);
+    return painted;
 }
 
 // Up to five online friends as overlapping circles, right-aligned; the first sits on top.

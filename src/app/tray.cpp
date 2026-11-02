@@ -41,7 +41,7 @@ void Launcher::removeTrayIcon() {
 }
 
 void Launcher::hideToTray(const std::wstring& game) {
-    if (!settings_.hide_while_playing || in_tray_ || closing_ || !hwnd_) return;
+    if (!settings_.hide_while_playing || guideOverlayOn() || in_tray_ || closing_ || !hwnd_) return;
     tray_game_ = game;
     if (!tray_icon_ && !addTrayIcon()) return; // No icon, no way back: the window stays where it is.
     in_tray_ = true;
@@ -69,10 +69,12 @@ void Launcher::pollTray() {
     if (in_tray_) {
         // The game's end has its own return (onGameActivity → returnFromGame); this catches the rest:
         // a game suspended from Guide, a start that failed, the setting turned off meanwhile.
-        if (!settings_.hide_while_playing || (!anyActiveSession() && !pending_launch_)) leaveTray();
+        if (!settings_.hide_while_playing || guideOverlayOn() || (!anyActiveSession() && !pending_launch_)) leaveTray();
         return;
     }
-    if (!settings_.hide_while_playing || pending_launch_ || gameOverlayOpen() || exit_prompt_) return;
+    // With Guide over games the launcher stays a normal window: Library/Settings from the Guide must
+    // land in a live launcher, not in a hidden or throttled one.
+    if (!settings_.hide_while_playing || guideOverlayOn() || pending_launch_ || gameOverlayOpen() || exit_prompt_) return;
     // A game started here, confirmed running: once it (or anything else) holds the foreground, so the
     // launcher's hand-off of the focus to the game window is over.
     const auto playing = std::find_if(launched_here_.begin(), launched_here_.end(), [&](const std::string& key) {

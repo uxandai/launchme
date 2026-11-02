@@ -49,6 +49,7 @@ class Renderer {
 public:
     bool initialize(HWND hwnd, bool layered = false);
     bool paintOverlay(const ViewContext& context);
+    bool paintHud(const ViewContext& context); // The pinned widgets, small, in a corner of the game's screen.
     void setDrawerStyle(DrawerStyle style) { drawer_style_ = style; }
     void setFontFamily(std::wstring family);
     void setCoverAccent(uint32_t rgb) { cover_accent_ = rgb; }

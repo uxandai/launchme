@@ -1198,6 +1198,14 @@ private:
         return gameOverlayOpen() && (window == overlay_target_->window || (game_overlay_ && window == game_overlay_->handle()));
     }
     LRESULT overlayMessage(HWND window, UINT message, WPARAM wparam, LPARAM lparam);
+    // Widgets kept on the game's screen (AppSettings::hud_pins): a click-through window over the game's monitor.
+    void updateHud();
+    void toggleHudPin(const std::string& id);
+    LRESULT hudMessage(HWND window, UINT message, WPARAM wparam, LPARAM lparam);
+    std::unique_ptr<OverlayWindow> hud_window_;
+    bool hud_visible_ = false, hud_polling_ = false;
+    uint64_t next_hud_at_ = 0;
+    std::wstring hud_signature_;
     int dashboardTileCount() const;
     Viewport drawerViewport() const { return gameOverlayOpen() && game_overlay_ ? game_overlay_->renderer().viewport() : renderer_.viewport(); }
     void invalidateGameOverlay() { if (gameOverlayOpen() && game_overlay_) game_overlay_->invalidate(); }
@@ -1408,6 +1416,7 @@ private:
     // The tray (src/app/tray.cpp). hideToTray: only with the setting on and the icon added. leaveTray:
     // the icon goes and the window is shown again without taking the foreground: on top, or right
     // behind `behind` (a program that keeps the screen).
+    bool guideOverlayOn() const { return settings_.guide_overlay && settings_.guide_menu; }
     void hideToTray(const std::wstring& game);
     void leaveTray(HWND behind = nullptr);
     // Each tick: hides once a game started here runs and something else (the game) is in front;

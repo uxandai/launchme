@@ -217,6 +217,7 @@ struct ViewContext {
     int guide_close_confirm = -1; // -1 closed, 0 close, 1 cancel.
     float guide_opacity = 1;
     bool fps_widget = false, fps_low = false;
+    std::vector<std::string> hud_pins; // Dashboard tiles kept on the game's screen ("fps", "cpu", "gpu").
     game_fps::Reading game_fps;
     const plugin_ui::Page* plugin_page = nullptr;
     const plugin_ui::Page* plugin_drawer = nullptr;

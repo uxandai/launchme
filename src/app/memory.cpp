@@ -35,7 +35,9 @@ bool Launcher::launcherHidden() const {
 
 void Launcher::pollMemory() {
     const bool behind = launcherHidden();
-    pollBackgroundMode(behind && anyActiveSession());
+    // Guide over games: the launcher is a Guide target at any moment, so it keeps its priority and
+    // frame rate (the video may stop, nothing else).
+    pollBackgroundMode(behind && anyActiveSession() && !guideOverlayOn());
     const bool hidden = settings_.low_memory && behind;
     if (!hidden) {
         memory_hidden_since_ = 0;

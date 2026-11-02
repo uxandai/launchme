@@ -132,7 +132,9 @@ enum class Id { font, home_layout, ui_accent, accent, uninstalled, emulation, co
                    // Okna i podpowiedzi → Wygląd podpowiedzi (AppSettings::hint_style).
                    hint_style,
                    // Biblioteka → Uruchamianie: FPS widget's one-time ETW permission (src/platform/etw_access.cpp).
-                   fps_access };
+                   fps_access,
+                   // Sterowanie → Przycisk Guide: Guide in a game opens on the widgets.
+                   guide_open_widgets };
 inline bool hasOptionsButton(Id id) { return id == Id::plugin_enabled || id == Id::pc_platform; }
 // layout: drawn preview tiles in the row (one per home layout); Row::choice is the active one.
 // count: Row::value as a large number with a chevron; activating opens a sub-list.

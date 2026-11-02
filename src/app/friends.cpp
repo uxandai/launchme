@@ -138,7 +138,7 @@ void Launcher::stopDashboardPoll() {
 }
 
 void Launcher::onDashboard(std::unique_ptr<DashboardMessage> message) {
-    if (!friends_open_ || message->generation != dashboard_jobs_->generation.load()) return;
+    if ((!friends_open_ && !hud_polling_) || message->generation != dashboard_jobs_->generation.load()) return;
     if (message->sensors == sensors_ && message->discord_running == discord_running_) return;
     sensors_ = message->sensors;
     discord_running_ = message->discord_running;
@@ -152,7 +152,7 @@ void Launcher::closeFriends() {
     if (plugin_command_pending_) { ++plugin_command_generation_; plugin_command_pending_ = false; }
     friends_open_ = false;
     friends_token_->store(++friends_generation_);
-    stopDashboardPoll();
+    if (!hud_polling_) stopDashboardPoll(); // Pinned temperatures keep their reader.
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
@@ -289,7 +289,7 @@ void Launcher::dashboardActivate(int tile) {
         dashboardEnsureVisible(); drawer_glide_.valid = false;
         audio_.navigate(); invalidateGameOverlay(); InvalidateRect(hwnd_, nullptr, FALSE); return;
     }
-    if (settings_.game_fps && tile == dashboardTileCount() - 1) return; // FPS is read-only, like temperatures.
+    if (settings_.game_fps && tile == dashboardTileCount() - 1) { toggleHudPin("fps"); return; } // Pinned on the game's screen, or let go.
     if (tile >= dashboard::tile_count) { const auto action = plugin_widgets_[tile - dashboard::tile_count]; pluginAction(action); return; }
     switch (static_cast<dashboard::Tile>(tile)) {
     case dashboard::Tile::steam:
@@ -301,8 +301,8 @@ void Launcher::dashboardActivate(int tile) {
         InvalidateRect(hwnd_, nullptr, FALSE);
         break;
     case dashboard::Tile::discord: openDiscord(); break;
-    case dashboard::Tile::cpu:
-    case dashboard::Tile::gpu: break; // Read-only values.
+    case dashboard::Tile::cpu: toggleHudPin("cpu"); break; // Pinned on the game's screen, or let go.
+    case dashboard::Tile::gpu: toggleHudPin("gpu"); break;
     case dashboard::Tile::profile:
         if (gameOverlayOpen()) break; // Over a game the page would open behind it.
         openProfile(); // Closes the drawer and opens over the screen beneath it.

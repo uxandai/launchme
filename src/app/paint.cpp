@@ -45,6 +45,7 @@ void Launcher::paint(bool overlay) {
     GameDetails local_preview, local_details;
     if (closing_) context.exit_progress = exit_progress_;
     context.fps_widget = settings_.game_fps;
+    context.hud_pins = settings_.hud_pins;
     context.fps_low = settings_.game_fps_low;
     context.game_fps = overlay_snapshot_.fps;
     if (profiler_.overlay()) {

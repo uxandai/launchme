@@ -681,6 +681,7 @@ void Launcher::settingsToggle(const Row& row) {
         settings_.guide_overlay = !settings_.guide_overlay;
         if (settings_.guide_overlay) settings_.guide_menu = true;
     }
+    else if (row.id == Id::guide_open_widgets) settings_.guide_open_widgets = !settings_.guide_open_widgets;
     else if (row.id == Id::game_fps) settings_.game_fps = !settings_.game_fps;
     else if (row.id == Id::game_fps_low) settings_.game_fps_low = !settings_.game_fps_low;
     else if (row.id == Id::steam_controller) {

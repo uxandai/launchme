@@ -317,6 +317,8 @@ constexpr Entry entries[] = {
     {L"Najwolniejsze 1% klatek z ostatnich 60 sekund gry.", L"O 1% de quadros mais lentos dos últimos 60 segundos de jogo."},
     {L"FPS gry", L"FPS do jogo"},
     {L"Brak uprawnień ETW", L"Acesso ao ETW negado"},
+    {L"Widgety od razu w grze", L"Widgets direto no jogo"},
+    {L"Guide w grze otwiera się na widgetach (FPS, temperatury, plugin). Kliknięcie FPS lub temperatury przypina je na ekranie gry, ponowne kliknięcie zdejmuje.", L"O Guide em um jogo abre nos widgets (FPS, temperaturas, plugins). Clicar em FPS ou numa temperatura fixa na tela do jogo; clicar de novo remove."},
     {L"Uprawnienia pomiaru FPS", L"Permissão de medição de FPS"},
     {L"Dodaje Twoje konto do grupy Użytkownicy dzienników wydajności (jedno potwierdzenie administratora). Launchme nadal działa bez podniesionych uprawnień.", L"Adiciona sua conta ao grupo Usuários de log de desempenho (uma confirmação de administrador). O Launchme continua rodando sem privilégios elevados."},
     {L"Nadaj", L"Conceder"},

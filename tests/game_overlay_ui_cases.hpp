@@ -27,7 +27,7 @@ int LauncherUiTest::gameOverlay(HWND window) {
     app.quick_resume_.focus = [&](const auto&) { ++game_switches; return true; };
     app.quick_resume_.suspend = [&](auto&) { ++suspends; return process_freeze::Result::denied; };
     if (app.openGameOverlay(target) || app.game_overlay_ || shows) return 1801; // Opt-in.
-    app.settings_.guide_overlay = true;
+    app.settings_.guide_overlay = true; app.settings_.guide_open_widgets = false; // The bar-first flow below.
     if (app.actionLabel(game) != L"Wróć" || app.menuRows().suspend) return 1802;
     // Keep the existing running-game action, even with Quick Resume off.
     if (!app.switchToGame(game) || game_switches != 1 || suspends) return 1803;
@@ -124,10 +124,13 @@ int LauncherUiTest::gameOverlay(HWND window) {
     if (app.overlay_motion_.drawer != 1 || app.overlay_motion_.bar != 0) return 1854;
     app.overlayKey(VK_DOWN); app.overlayKey(VK_DOWN); // FPS below the four built-ins.
     if (app.dashboard_tile_ != 5) return 1809;
-    const bool dirty = app.settings_dirty_;
+    // A click on FPS pins it on the game's screen; another one lets it go.
+    app.settings_.hud_pins.clear(); app.settings_dirty_ = false;
     app.overlayKey(VK_RETURN);
-    if (app.settings_dirty_ != dirty || !app.gameOverlayOpen()) return 1810; // Read-only, no hidden pin toggle.
-    if (!capture(L"game-guide-widgets.png")) return 1811;
+    if (!app.gameOverlayOpen() || !app.settings_dirty_ || app.settings_.hud_pins != std::vector<std::string>{"fps"}) return 1810;
+    if (!capture(L"game-guide-widgets.png")) return 1811; // With the pin's dot.
+    app.overlayKey(VK_RETURN);
+    if (!app.gameOverlayOpen() || !app.settings_.hud_pins.empty()) return 1990;
     app.overlay_snapshot_.fps = {game_fps::Status::denied};
     if (!capture(L"game-guide-fps-denied.png")) return 1834;
     app.overlay_snapshot_ = snapshot;
@@ -190,7 +193,8 @@ int LauncherUiTest::gameOverlay(HWND window) {
     if (!app.friends_open_ || app.overlay_selected_ != widgets_index || focused != window) return 1887;
     const auto tile = friends_layout::dashboard::tile(1600 - friends_layout::drawer_width, 4);
     app.overlayClick((tile.left + tile.right) * 0.5f, (tile.top + tile.bottom) * 0.5f);
-    if (app.settings_dirty_ != dirty || !app.friends_open_) return 1817; // Mouse is read-only too.
+    if (app.settings_.hud_pins != std::vector<std::string>{"fps"} || !app.friends_open_) return 1817; // The mouse pins it as well.
+    app.settings_.hud_pins.clear();
     const int before = focuses;
     foreground = reinterpret_cast<HWND>(static_cast<UINT_PTR>(0x5678));
     app.overlayMessage(app.game_overlay_->handle(), WM_ACTIVATE, WA_INACTIVE, reinterpret_cast<LPARAM>(foreground));
@@ -310,6 +314,12 @@ int LauncherUiTest::gameOverlay(HWND window) {
     selectWidgets(); app.overlayKey(VK_RETURN); animate();
     app.overlayKeyboard(VK_TAB, false, true); animate(); // Focused-window fallback also closes Widgets.
     if (app.gameOverlayOpen()) return 1880;
+    // By default Guide in a game opens on the widgets, without a second click on the bar.
+    app.settings_.guide_open_widgets = true;
+    if (!app.openGameOverlay(target) || !app.friends_open_) return 1991;
+    app.dismissGameOverlay(); animate();
+    app.settings_.guide_open_widgets = false;
+    if (app.gameOverlayOpen()) return 1992;
 
     // Options remains a local shortcut in Launchme's main window, short and held.
     foreground = window;

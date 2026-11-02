@@ -776,6 +776,9 @@ void Launcher::buildSettingsRows() {
                                        tr(L"Menu, przytrzymanie: zasilanie. Wyłącz, jeśli Steam przejmuje ten przycisk."), {}, settings_.guide_menu});
         add({Id::guide_overlay, Control::toggle, tr(L"Guide w grach"),
             tr(L"Wyłącz Guide w Xbox Game Bar oraz Guide Button Focuses Steam w ustawieniach kontrolera Steam. Gry w oknie lub bez ramek."), {}, settings_.guide_overlay});
+        add({Id::guide_open_widgets, Control::toggle, tr(L"Widgety od razu w grze"),
+            tr(L"Guide w grze otwiera się na widgetach (FPS, temperatury, plugin). Kliknięcie FPS lub temperatury przypina je na ekranie gry, ponowne kliknięcie zdejmuje."),
+            {}, settings_.guide_open_widgets});
         section(tr(L"Zaawansowane"));
         add({Id::steam_controller, Control::toggle, tr(L"Steam Controller bez Steam"),
             tr(L"Kontroler Steam (2026) bezpośrednio przez HID, bez Steam Input i ViGEm. Gdy Steam działa, steruje nim Steam."), {},

@@ -292,6 +292,18 @@ AppSettings parseAppSettings(std::string_view text) {
         auto value = trim(line.substr(equal + 1));
         if (parseLookSetting(settings, key, value)) continue; // Kept apart: MSVC caps one if/else chain's depth.
         if (parseExtraSetting(settings, key, value)) continue;
+        if (key == "guide_open_widgets") { if (value == "0" || value == "1") settings.guide_open_widgets = value == "1"; continue; }
+        if (key == "hud_pins") { // Widgets kept on the game's screen, at most the three that exist.
+            while (!value.empty() && settings.hud_pins.size() < 3) {
+                const auto comma = value.find(',');
+                const auto id = trim(value.substr(0, comma));
+                if ((id == "fps" || id == "cpu" || id == "gpu") &&
+                    std::find(settings.hud_pins.begin(), settings.hud_pins.end(), id) == settings.hud_pins.end())
+                    settings.hud_pins.emplace_back(id);
+                value = comma == value.npos ? std::string_view{} : value.substr(comma + 1);
+            }
+            continue;
+        }
         if (key == "xbox_own_install") { if (value == "0" || value == "1") settings.xbox_own_install = value == "1"; continue; }
         if (key == "texture_compression") { if (value == "0" || value == "1") settings.texture_compression = value == "1"; continue; }
         // Before 0.4.6 (opt-in under the low memory mode): on stays on; off takes the new default.
@@ -736,6 +748,7 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
            << "quick_resume=" << settings.quick_resume << '\n'
            << "guide_menu=" << settings.guide_menu << '\n'
            << "guide_overlay=" << settings.guide_overlay << '\n'
+           << "guide_open_widgets=" << settings.guide_open_widgets << '\n'
            << "game_fps=" << settings.game_fps << '\n'
            << "game_fps_low=" << settings.game_fps_low << '\n'
            << "steam_controller=" << settings.steam_controller << '\n'
@@ -975,6 +988,9 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
         output << source;
         first_platform = false;
     }
+    output << '\n';
+    output << "hud_pins=";
+    for (size_t i = 0; i < settings.hud_pins.size(); ++i) output << (i ? "," : "") << settings.hud_pins[i];
     output << '\n';
     output << "widget_layout=";
     for (size_t i = 0; i < settings.widget_layout.size(); ++i) {
