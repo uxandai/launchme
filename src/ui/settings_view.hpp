@@ -67,7 +67,7 @@ enum class Id { font, home_layout, ui_accent, accent, uninstalled, emulation, co
                    // System → Aktualizacje: Launchme's own update (src/app/updates.cpp) and whether to look for one.
                    update, update_check,
                    // Platformy PC → MultiMC / Prism: the launcher picked by hand (portable MultiMC).
-                   multimc_path, studio_publishers, studio_developers, studio_min_games, studio_hidden, studio_hidden_entry, studio_show_all,
+                   multimc_path, studio_publishers, studio_developers, studio_companies, studio_min_games, studio_hidden, studio_hidden_entry, studio_show_all,
                    updated_row, discovery_row, home_tab_icons, flix_rail, excluded_games, excluded_game, excluded_restore_all,
                    // System → Wydajność: the low memory mode (AppSettings::low_memory) and Kompresja grafik
                    // (AppSettings::texture_compression).
@@ -132,7 +132,7 @@ enum class Id { font, home_layout, ui_accent, accent, uninstalled, emulation, co
                    // Okna i podpowiedzi → Wygląd podpowiedzi (AppSettings::hint_style).
                    hint_style,
                    // Biblioteka → Uruchamianie: FPS widget's one-time ETW permission (src/platform/etw_access.cpp).
-                   fps_access,
+                   fps_access, fps_graph, fps_limiter, fps_limit, fps_limit_precise, fps_limit_mode, fps_badges, hud_layout, hud_label_colors, hud_size, cpu_temp_source, hud_pin, fps_game_limit, fps_limiter_status,
                    // Sterowanie → Przycisk Guide: Guide in a game opens on the widgets.
                    guide_open_widgets };
 inline bool hasOptionsButton(Id id) { return id == Id::plugin_enabled || id == Id::pc_platform; }
@@ -160,6 +160,7 @@ enum class Page {
     artwork_sources, // Media i dane → Źródła grafik: the galleries of "Zmień grafikę", each on or off.
     // Biblioteka → Emulacja: the ROM folder, the emulators and the console row; one system (key: its folder).
     emulation, emulation_system,
+    fps_limiter, // Funkcje -> FPS i limiter: the widget, its graph, the frame limiter and the limits of single games.
     hidden_studios, // Biblioteka → Ukryci wydawcy i developerzy: each one with a switch to show it again.
     excluded_games, // Biblioteka → Widoczność → Wykluczone gry: each title with Przywróć.
     drm_roots // DRM-free → Katalogi: adding a folder and every folder with its removal.
@@ -184,7 +185,7 @@ inline float layoutFirst(int focus, float visible) {
 inline constexpr std::array<const wchar_t*, 3> xmb_sizes{trKey(L"Mały"), trKey(L"Domyślny"), trKey(L"Duży")};
 inline constexpr std::array<const wchar_t*, 2> flix_sizes{trKey(L"Domyślny"), trKey(L"Duży")}; // AppSettings::FlixSize.
 // Stepped sliders: the number of positions (0 = a continuous slider).
-inline int sizeSteps(Id id) { return id == Id::xmb_size || id == Id::psfive_size || id == Id::companion_reply_length ? 3 : id == Id::flix_size ? 2 : 0; }
+inline int sizeSteps(Id id) { return id == Id::xmb_size || id == Id::psfive_size || id == Id::companion_reply_length ? 3 : id == Id::flix_size ? 2 : id == Id::hud_size ? 6 : 0; }
 // Indexed like AppSettings::AcceptAction.
 inline constexpr std::array<const wchar_t*, 2> accept_actions{trKey(L"Uruchom / instaluj"), trKey(L"Szczegóły")};
 inline constexpr std::array<int, 4> video_delays{1, 3, 5, 10};

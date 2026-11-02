@@ -281,6 +281,8 @@ struct AppSettings {
     // ones ("publisher:capcom") and the player's order (the rest: most games first).
     bool show_publishers = true;
     bool show_developers = true;
+    // Firmy: one list of both, a studio once however it took part (it replaces the two above, which are then off).
+    bool show_companies = false;
     int studio_min_games = 3;
     std::unordered_set<std::string> hidden_studios;
     std::vector<std::string> studio_order;
@@ -298,7 +300,19 @@ struct AppSettings {
     bool guide_overlay = false; // Experimental: Guide over a foreground game.
     bool guide_open_widgets = true; // Guide over a game opens on the widgets (pad only; Shift+Tab always shows the bar).
     bool game_fps = false, game_fps_low = false; // Read-only widget in the right drawer.
-    std::vector<std::string> hud_pins; // Widgets kept on the game's screen: "fps", "cpu", "gpu" (Guide over games).
+    std::vector<std::string> hud_pins;
+    // Ustawienia -> FPS i limiter. The limiter loads a library into the game, so it is opt-in.
+    bool fps_graph = false;           // Frame-time graph in the FPS widget and on the game's screen.
+    bool fps_limiter = false;
+    int fps_limit = 0;                // 0: none; else frames per second.
+    bool fps_limit_precise = true;    // Smoother pacing for a little more CPU.
+    int fps_limit_mode = 0;           // 0: smooth (frames wait for their slot); 1: adaptive (low latency, as even).
+    bool fps_badges = true;           // LIMIT / SMOOTH chips on the pinned widgets while the limiter works.
+    int hud_layout = 0;               // The widget on the game's screen: 0 a list, 1 a strip (one line).
+    bool hud_label_colors = false;    // Coloured FPS / CPU / GPU / RAM / VRAM labels instead of grey.
+    int hud_size = 100;               // Percent of the largest size: 50..100.
+    int cpu_temp_source = 0;          // 0: MSI Afterburner when it runs, else Windows; 1: Windows only.
+    std::map<std::string, int> fps_game_limits; // gameKey -> limit; 0: no limit for that game. Absent: the global one. // Widgets kept on the game's screen: "fps", "cpu", "gpu" (Guide over games).
     std::vector<widgets::Preference> widget_layout; // Stable IDs, including temporarily disabled plugins.
     // Experimental: read the 2026 Steam Controller over HID while Steam is not running.
     bool steam_controller = false;

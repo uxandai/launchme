@@ -66,6 +66,27 @@ int LauncherUiTest::studioLibraries(HWND window) {
         publishers[1].studio->id != "capcom" || publishers[2].studio->id != "sega") return 9802;
     if (developers.size() != 2 || developers[0].studio->id != "capcom" || developers[0].games.size() != 2 || developers[1].studio->id != "ubisoft") return 9803;
 
+    // Firmy: both lists as one. Capcom and Ubisoft made and published their games: each logo and each game once.
+    {
+        app.settings_.show_companies = true; app.settings_.show_publishers = app.settings_.show_developers = false;
+        app.refreshStudios(); app.buildShelves();
+        if (publishers.size() != 3 || !developers.empty() || publishers[0].studio->id != "capcom" || publishers[0].games.size() != 2 ||
+            publishers[1].studio->id != "ubisoft" || publishers[1].games.size() != 2 || publishers[2].studio->id != "sega") return 9830;
+        int companies = 0, separate = 0;
+        for (const auto& category : app.categories_) {
+            if (category.id == "publishers" && category.title == L"Firmy" && category.games.size() == 3) ++companies;
+            if (category.id == "developers") ++separate;
+        }
+        if (companies != 1 || separate) return 9831;
+        // A hidden developer entry hides the company too; the two lists are back when Firmy goes off.
+        app.settings_.hidden_studios.insert("developer:sega"); app.refreshStudios();
+        if (publishers.size() != 2) return 9832;
+        app.settings_.hidden_studios.clear();
+        app.settings_.show_companies = false; app.settings_.show_publishers = app.settings_.show_developers = true;
+        app.refreshStudios(); app.buildShelves();
+        if (publishers.size() != 3 || developers.size() != 2) return 9833;
+    }
+
     // The home: a row of logos for each, after the others.
     const auto row = [&](const char* id) -> int {
         for (size_t i = 0; i < app.categories_.size(); ++i) if (app.categories_[i].id == id) return static_cast<int>(i);

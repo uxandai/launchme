@@ -468,6 +468,26 @@ int main() {
                                           "system_roms.Bad Id=D:\\roms\nsystem_roms.ps2=relative\nsystem_roms.ps5=D:\\games\nsystem_roms.ps5=\n");
         if (!odd.emulator_overrides.empty() || !odd.system_emulator.empty() || !odd.system_roms.empty() || !saveAppSettings(config, file)) return 59;
     }
+    {
+        // FPS i limiter: the switches, the global limit and the limits of single games survive a save; nonsense does not load.
+        AppSettings limiter;
+        limiter.fps_graph = true; limiter.fps_limiter = true; limiter.fps_limit = 90; limiter.fps_limit_precise = false;
+        limiter.fps_game_limits = {{"steam:42", 30}, {"epic:a:b", 0}};
+        limiter.show_companies = true;
+        limiter.fps_limit_mode = 1; limiter.fps_badges = false; limiter.hud_pins = {"fps", "ram", "vram", "cpu", "gpu"};
+        limiter.hud_layout = 1; limiter.hud_label_colors = true; limiter.hud_size = 70; limiter.cpu_temp_source = 1;
+        const auto other = file.parent_path() / L"limiter_settings.ini";
+        if (!saveAppSettings(limiter, other)) return 62;
+        const auto restored = loadAppSettings(other);
+        if (!restored.fps_graph || !restored.fps_limiter || restored.fps_limit != 90 || restored.fps_limit_precise ||
+            restored.fps_game_limits != limiter.fps_game_limits || !restored.show_companies ||
+            restored.fps_limit_mode != 1 || restored.fps_badges || restored.hud_pins != limiter.hud_pins) return 60;
+        if (restored.hud_layout != 1 || !restored.hud_label_colors || restored.hud_size != 70 || restored.cpu_temp_source != 1) return 63;
+        const auto strange = parseAppSettings("hud_size=20\nhud_layout=7\ncpu_temp_source=x\n");
+        if (strange.hud_size != 100 || strange.hud_layout != 0 || strange.cpu_temp_source != 0) return 64;
+        const auto odd = parseAppSettings("fps_limit=5\nfps_game_limit=7:x\nfps_game_limit=60\nfps_game_limit=abc:y\nfps_limit=99999\nfps_limiter=2\n");
+        if (odd.fps_limit != 0 || !odd.fps_game_limits.empty() || odd.fps_limiter) return 61;
+    }
     // Deny replacement while the old file is open: the failed save must preserve it.
     const auto locked = CreateFileW(file.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (locked == INVALID_HANDLE_VALUE) return 5;

@@ -99,19 +99,21 @@ bool grant() {
     // its well-known SID. The user is passed by SID too; both come from the system, not from text.
     const std::wstring command =
         L"-NoProfile -NonInteractive -WindowStyle Hidden -Command \"Add-LocalGroupMember -SID '" +
-        std::wstring(log_users_sid) + L"' -Member (New-Object Security.Principal.SecurityIdentifier '" + sid +
-        L"') -ErrorAction Stop\"";
+        std::wstring(log_users_sid) + L"' -Member '" + sid + L"' -ErrorAction Stop\"";
     SHELLEXECUTEINFOW info{sizeof(info)};
     info.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NOASYNC;
     info.lpVerb = L"runas";
     info.lpFile = L"powershell.exe";
     info.lpParameters = command.c_str();
     info.nShow = SW_HIDE;
-    // Returns once the prompt is answered; the change itself lands a moment later, and state()
-    // shows it the next time the settings page is built.
     if (!ShellExecuteExW(&info)) return false; // Also when the prompt was declined.
-    if (info.hProcess) CloseHandle(info.hProcess);
-    return true;
+    if (!info.hProcess) return false;
+    // PowerShell starts in a second or so; its exit code says whether the group really took the user
+    // (a wrong command used to look like success: the prompt was answered, nothing changed).
+    DWORD code = 1;
+    const bool finished = WaitForSingleObject(info.hProcess, 20000) == WAIT_OBJECT_0 && GetExitCodeProcess(info.hProcess, &code);
+    CloseHandle(info.hProcess);
+    return finished && code == 0;
 }
 
 }

@@ -67,6 +67,7 @@ std::wstring Launcher::settingsPageTitle(const settings_ui::PageFrame* frame) co
     case Page::service_keys: return tr(L"Klucze usług");
     case Page::sounds: return tr(L"Dźwięki interfejsu");
     case Page::screensaver: return tr(L"Wygaszacz ekranu");
+    case Page::fps_limiter: return tr(L"FPS i limiter");
     case Page::companion_model: return tr(L"Model AI");
     case Page::companion_voice: return tr(L"Głos (ElevenLabs)");
     case Page::companion_remote: return tr(L"Dostęp z telefonu");
@@ -479,6 +480,8 @@ void Launcher::buildSettingsRows() {
             tr(L"Gry wydawców z logo: rząd na ekranie głównym i sekcja okna desktopowego."), {}, settings_.show_publishers});
         add({Id::studio_developers, Control::toggle, tr(L"Developerzy"),
             tr(L"Gry twórców z logo: rząd na ekranie głównym i sekcja okna desktopowego."), {}, settings_.show_developers});
+        add({Id::studio_companies, Control::toggle, tr(L"Firmy"),
+            tr(L"Wydawcy i developerzy w jednej liście, bez powtórzeń logo i kategorii. Zastępuje dwa powyższe."), {}, settings_.show_companies});
         if (studiosShown()) {
             Row least{Id::studio_min_games, Control::choice, tr(L"Najmniej gier"),
                       tr(L"Studio pokazuje się, gdy ma tyle gier w bibliotece. Kolejność: najwięcej gier najpierw.")};
@@ -792,6 +795,130 @@ void Launcher::buildSettingsRows() {
         for (auto& row : companionSettingsRows()) add(std::move(row)); // Her rows bring their own sections.
         break;
     case settings_ui::Category::system: {
+        if (settings_state_.at(Page::fps_limiter)) {
+            {
+                static constexpr std::array<const wchar_t*, 3> fps{trKey(L"Wyłączony"), trKey(L"Średnie FPS"), trKey(L"FPS i 1% low")};
+                section(tr(L"Widget FPS"));
+                choiceRow(Id::game_fps, tr(L"Widget FPS gry"),
+                          tr(L"Eksperymentalny pomiar PresentMon / ETW. Wymaga uprawnień do śledzenia wydajności. 1% low: najwolniejsze klatki z ostatnich 60 sekund."),
+                          fps, !settings_.game_fps ? 0 : settings_.game_fps_low ? 2 : 1);
+            }
+            if (settings_.game_fps) {
+                // The trace needs the user in "Performance Log Users" once; the launcher itself stays unelevated.
+                switch (etw_access::state()) {
+                case etw_access::State::missing:
+                    add({Id::fps_access, Control::action, tr(L"Uprawnienia pomiaru FPS"),
+                        tr(L"Dodaje Twoje konto do grupy Użytkownicy dzienników wydajności (jedno potwierdzenie administratora). Launchme nadal działa bez podniesionych uprawnień."),
+                        tr(L"Nadaj")});
+                    break;
+                case etw_access::State::pending_sign_in:
+                    add({Id::fps_access, Control::action, tr(L"Uprawnienia pomiaru FPS"),
+                        tr(L"Nadane. Wyloguj się z Windows i zaloguj ponownie, aby pomiar zadziałał."), L""});
+                    break;
+                default: break;
+                }
+                add({Id::fps_graph, Control::toggle, tr(L"Wykres czasu klatek"),
+                    tr(L"Ostatnie sześć sekund w kaflu FPS i w widgecie na ekranie gry: skoki oznaczają przycięcia."), {}, settings_.fps_graph});
+            }
+            // What the widget over the game shows. Each switch only shows or hides a line: measuring starts when a line needs it.
+            section(tr(L"Widget na ekranie gry"));
+            {
+                struct Pin { const char* id; const wchar_t* title; const wchar_t* description; };
+                const Pin pins[] = {
+                    {"fps", trKey(L"FPS"), trKey(L"Liczba klatek na sekundę (wymaga włączonego widgetu FPS powyżej).")},
+                    {"cpu", trKey(L"Temperatura CPU"), trKey(L"Z czujników strefy termicznej Windows. Na części komputerów stacjonarnych płyta ich nie udostępnia i widać kreskę.")},
+                    {"gpu", trKey(L"Temperatura GPU"), trKey(L"Z danych karty graficznej (sterownik WDDM), bez dodatkowych programów.")},
+                    {"ram", trKey(L"Pamięć RAM"), trKey(L"Zajęta i zainstalowana pamięć systemu. Nie ma w Windows czujnika temperatury RAM bez sterownika, dlatego pokazujemy zajętość.")},
+                    {"vram", trKey(L"Pamięć karty (VRAM)"), trKey(L"Zajęta pamięć karty graficznej i jej rozmiar. Karta zintegrowana bez własnej pamięci pokaże kreskę.")},
+                };
+                for (const auto& pin : pins) {
+                    if (std::string_view(pin.id) == "fps" && !settings_.game_fps) continue;
+                    Row row{Id::hud_pin, Control::toggle, tr(pin.title), tr(pin.description)};
+                    row.key = pin.id;
+                    row.checked = std::find(settings_.hud_pins.begin(), settings_.hud_pins.end(), pin.id) != settings_.hud_pins.end();
+                    row.lines = 3;
+                    add(std::move(row));
+                }
+            }
+            {
+                static constexpr std::array<const wchar_t*, 2> layouts{trKey(L"Lista (pionowo)"), trKey(L"Pasek (w jednej linii)")};
+                choiceRow(Id::hud_layout, tr(L"Układ widgetu"),
+                          tr(L"Lista: jedna pozycja pod drugą w lewym górnym rogu. Pasek: wszystko w jednej linii z odstępami, zajmuje mniej miejsca i mniej przesłania grę."),
+                          layouts, settings_.hud_layout);
+                settings_rows_.back().lines = 2;
+                add({Id::hud_label_colors, Control::toggle, tr(L"Kolorowe etykiety"),
+                    tr(L"FPS, CPU, GPU, RAM i VRAM w różnych kolorach zamiast szarych: łatwiej je odróżnić jednym spojrzeniem."), {}, settings_.hud_label_colors});
+                const int percent = std::clamp(settings_.hud_size, 50, 100);
+                add({Id::hud_size, Control::slider, tr(L"Rozmiar widgetu"),
+                    tr(L"Całe okno widgetu na ekranie gry, razem z tekstem. 100% to największy rozmiar, najmniejszy to 50%."),
+                    std::to_wstring(percent) + L"%", false, (percent - 50) / 50.0f});
+#ifdef _WIN32
+                static constexpr std::array<const wchar_t*, 2> sources{trKey(L"Automatycznie (Afterburner, gdy działa)"), trKey(L"Tylko czujniki Windows")};
+                choiceRow(Id::cpu_temp_source, tr(L"Źródło temperatury CPU"),
+                          tr(L"Windows bez sterownika zwykle nie podaje temperatury procesora. Jeśli działa MSI Afterburner, launchme odczyta z niego tylko tę jedną liczbę (jego pamięć współdzielona, nic nie jest wstrzykiwane). Resztę mierzy sam."),
+                          sources, settings_.cpu_temp_source);
+                settings_rows_.back().lines = 3;
+#endif
+            }
+#ifdef _WIN32
+            section(tr(L"Limiter klatek"));
+            Row limiter{Id::fps_limiter, Control::toggle, tr(L"Limiter klatek"),
+                tr(L"Ładuje małą bibliotekę launchme do uruchomionej gry (64-bitowej, DirectX 10/11/12), która równo rozkłada klatki. Gry z anti-cheat są pomijane; w grach online używasz tego na własne ryzyko.")};
+            limiter.checked = settings_.fps_limiter;
+            limiter.lines = 4;
+            add(std::move(limiter));
+            if (settings_.fps_limiter) {
+                static constexpr int limits[] = {0, 30, 40, 45, 60, 72, 90, 120, 144, 165, 240};
+                Row global{Id::fps_limit, Control::choice, tr(L"Limit globalny"), tr(L"Dla każdej gry bez własnego limitu.")};
+                for (const int limit : limits) {
+                    global.choices.push_back({limit ? std::to_wstring(limit) + L" FPS" : std::wstring(tr(L"Bez limitu"))});
+                    if (limit == settings_.fps_limit) global.choice = static_cast<int>(global.choices.size()) - 1;
+                }
+                if (std::find(std::begin(limits), std::end(limits), settings_.fps_limit) == std::end(limits)) {
+                    global.choices.push_back({std::to_wstring(settings_.fps_limit) + L" FPS"});
+                    global.choice = static_cast<int>(global.choices.size()) - 1;
+                }
+                global.value = global.choices[global.choice].label;
+                add(std::move(global));
+                {
+                    static constexpr std::array<const wchar_t*, 2> modes{trKey(L"Równe klatki (smooth)"), trKey(L"Niskie opóźnienie (adaptacyjny)")};
+                    choiceRow(Id::fps_limit_mode, tr(L"Tryb limitera"),
+                              tr(L"Równe klatki: każda klatka czeka na swoje miejsce przed wyświetleniem, najrówniejsze tempo, ale dokłada opóźnienie (przy 60 FPS zwykle kilkanaście ms). Niskie opóźnienie: gra zaczyna następną klatkę tak późno, jak jeszcze zdąży, więc tempo jest równe, a sterowanie świeższe. Mniej sprawdzony tryb: przy nagłych skokach obciążenia może zgubić miejsce."),
+                              modes, settings_.fps_limit_mode);
+                    settings_rows_.back().lines = 5;
+                }
+                add({Id::fps_badges, Control::toggle, tr(L"Plakietki limitera"),
+                    tr(L"Na widgecie w grze: LIMIT i tryb (SMOOTH albo LOW LATENCY), gdy limiter działa w tej grze."), {}, settings_.fps_badges});
+                add({Id::fps_limit_precise, Control::toggle, tr(L"Dokładne wygładzanie"),
+                    tr(L"Ostatnie milisekundy każdej klatki czeka aktywnie: najrówniejsze tempo klatek, trochę więcej procesora."),
+                    {}, settings_.fps_limit_precise});
+                add({Id::fps_limiter_status, Control::action, tr(L"Gra na pierwszym planie"), limiterStatus(), L""});
+                // Games with their own limit, and the one in front, whatever it has.
+                std::vector<std::string> keys;
+                for (const auto& [game, limit] : settings_.fps_game_limits) { (void)limit; keys.push_back(game); }
+                if (overlay_snapshot_.target && std::find(keys.begin(), keys.end(), overlay_snapshot_.target->key) == keys.end())
+                    keys.push_back(overlay_snapshot_.target->key);
+                if (!keys.empty()) section(tr(L"Limity gier"));
+                for (const auto& game : keys) {
+                    Row row{Id::fps_game_limit, Control::choice, libraryGameName(game), tr(L"Własny limit tej gry zamiast globalnego.")};
+                    row.key = game;
+                    row.choices.push_back({tr(L"Jak globalny")});
+                    row.choices.push_back({tr(L"Bez limitu")});
+                    for (const int limit : limits) if (limit) row.choices.push_back({std::to_wstring(limit) + L" FPS"});
+                    const auto own = settings_.fps_game_limits.find(game);
+                    row.choice = 0;
+                    if (own != settings_.fps_game_limits.end()) {
+                        const auto at = std::find(std::begin(limits), std::end(limits), own->second);
+                        if (at != std::end(limits)) row.choice = 1 + static_cast<int>(at - std::begin(limits)); // 0 -> "Bez limitu".
+                        else { row.choices.push_back({std::to_wstring(own->second) + L" FPS"}); row.choice = static_cast<int>(row.choices.size()) - 1; }
+                    }
+                    row.value = row.choices[row.choice].label;
+                    add(std::move(row));
+                }
+            }
+#endif
+            break;
+        }
         if (settings_state_.at(Page::screensaver)) {
             add({Id::screensaver, Control::toggle, tr(L"Wygaszacz ekranu"),
                 tr(L"Grafiki gier zapisane na dysku, gdy launcher jest bezczynny."), {}, settings_.screensaver});
@@ -838,27 +965,10 @@ void Launcher::buildSettingsRows() {
         // Experimental features are features too: the same list, their descriptions say what is new.
         add({Id::quick_resume, Control::toggle, tr(L"Szybkie wznawianie"),
             tr(L"Wstrzymaj grę w jej menu i wróć do niej później. Gry online mogą się rozłączyć."), {}, settings_.quick_resume});
-        {
-            static constexpr std::array<const wchar_t*, 3> fps{trKey(L"Wyłączony"), trKey(L"Średnie FPS"), trKey(L"FPS i 1% low")};
-            choiceRow(Id::game_fps, tr(L"Widget FPS gry"),
-                      tr(L"Eksperymentalny pomiar PresentMon / ETW. Wymaga uprawnień do śledzenia wydajności. 1% low: najwolniejsze klatki z ostatnich 60 sekund."),
-                      fps, !settings_.game_fps ? 0 : settings_.game_fps_low ? 2 : 1);
-        }
-        if (settings_.game_fps) {
-            // The trace needs the user in "Performance Log Users" once; the launcher itself stays unelevated.
-            switch (etw_access::state()) {
-            case etw_access::State::missing:
-                add({Id::fps_access, Control::action, tr(L"Uprawnienia pomiaru FPS"),
-                    tr(L"Dodaje Twoje konto do grupy Użytkownicy dzienników wydajności (jedno potwierdzenie administratora). Launchme nadal działa bez podniesionych uprawnień."),
-                    tr(L"Nadaj")});
-                break;
-            case etw_access::State::pending_sign_in:
-                add({Id::fps_access, Control::action, tr(L"Uprawnienia pomiaru FPS"),
-                    tr(L"Nadane. Wyloguj się z Windows i zaloguj ponownie, aby pomiar zadziałał."), L""});
-                break;
-            default: break;
-            }
-        }
+        pageRow(Page::fps_limiter, tr(L"FPS i limiter"),
+                tr(L"Widget FPS, wykres czasu klatek i limiter klatek (globalny lub osobno dla gry)."),
+                settings_.fps_limiter && settings_.fps_limit ? std::to_wstring(settings_.fps_limit) + L" FPS" :
+                settings_.game_fps ? std::wstring(tr(L"Widget włączony")) : std::wstring(tr(L"Wyłączony")));
         section(tr(L"Wydajność"));
         add({Id::low_memory, Control::toggle, tr(L"Tryb niskiego zużycia RAM"),
             tr(L"Grafiki w rozmiarze z ekranu i mniej trzymanych w pamięci; gdy gra działa, launcher oddaje pamięć."),

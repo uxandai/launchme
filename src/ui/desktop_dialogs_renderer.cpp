@@ -400,7 +400,8 @@ void Renderer::drawDesktopPrompts() {
         const auto danger = [&](int i) { return i >= 0 && i < static_cast<int>(context_->power_danger.size()) && context_->power_danger[static_cast<size_t>(i)]; };
         float bands = 0;
         for (int i = 0; i < static_cast<int>(labels.size()); ++i) if (gap(i)) bands += band;
-        const auto p = desktopDialogFrame(view, 360, sheet_header + 20 + static_cast<float>(labels.size()) * item_h + bands, tr(L"Zasilanie"), false);
+        const auto p = desktopDialogFrame(view, 360, sheet_header + 20 + static_cast<float>(labels.size()) * item_h + bands,
+            context_->power_title.empty() ? std::wstring(tr(L"Zasilanie")) : context_->power_title, false);
         float y = p.top + sheet_header + 10;
         for (int i = 0; i < static_cast<int>(labels.size()); ++i) {
             if (gap(i)) {

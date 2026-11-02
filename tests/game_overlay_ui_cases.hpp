@@ -124,12 +124,39 @@ int LauncherUiTest::gameOverlay(HWND window) {
     if (app.overlay_motion_.drawer != 1 || app.overlay_motion_.bar != 0) return 1854;
     app.overlayKey(VK_DOWN); app.overlayKey(VK_DOWN); // FPS below the four built-ins.
     if (app.dashboard_tile_ != 5) return 1809;
-    // A click on FPS pins it on the game's screen; another one lets it go.
+    // A click on FPS opens the widget's options, as a power menu does: the first row shows or hides it on the game's screen.
     app.settings_.hud_pins.clear(); app.settings_dirty_ = false;
     app.overlayKey(VK_RETURN);
-    if (!app.gameOverlayOpen() || !app.settings_dirty_ || app.settings_.hud_pins != std::vector<std::string>{"fps"}) return 1810;
-    if (!capture(L"game-guide-widgets.png")) return 1811; // With the pin's dot.
-    app.overlayKey(VK_RETURN);
+    if (!app.gameOverlayOpen() || !app.powerMenuOpen() || !app.hud_menu_ || app.settings_.hud_pins.size() != 0) return 1810;
+    if (app.hud_menu_rows_.size() != 6 || app.hud_menu_rows_.front().action != Launcher::HudAction::visibility ||
+        app.hud_menu_rows_.back().action != Launcher::HudAction::close || !app.hud_menu_rows_.back().gap) return 9860;
+    if (!capture(L"game-guide-hud-options.png")) return 1811;
+    app.overlayKey(VK_RETURN); // "Pokaż FPS": pinned, the dialog stays and its row now offers to hide it.
+    if (!app.powerMenuOpen() || !app.settings_dirty_ || app.settings_.hud_pins != std::vector<std::string>{"fps"} ||
+        app.hud_menu_rows_.front().label != std::wstring(tr(L"Ukryj FPS na ekranie gry"))) return 9861;
+    app.overlayKey(VK_DOWN); app.overlayKey(VK_RETURN); // Layout: a strip.
+    if (app.settings_.hud_layout != 1) return 9862;
+    app.overlayKey(VK_DOWN); app.overlayKey(VK_RETURN); // Coloured labels.
+    if (!app.settings_.hud_label_colors) return 9863;
+    app.overlayKey(VK_DOWN); app.overlayKey(VK_RETURN); // Size: 100 -> 90.
+    if (app.settings_.hud_size != 90) return 9864;
+    for (int i = 0; i < 4; ++i) app.overlayKey(VK_RETURN); // 80, 70, 60, 50.
+    if (app.settings_.hud_size != 50) return 9865;
+    app.overlayKey(VK_RETURN); // ... and round to the largest again.
+    if (app.settings_.hud_size != 100) return 9866;
+    app.overlayKey(VK_DOWN); app.overlayKey(VK_RETURN); // Frame graph.
+    if (!app.settings_.fps_graph) return 9867;
+    app.overlayKey(VK_DOWN); app.overlayKey(VK_RETURN); // Zamknij.
+    if (!app.gameOverlayOpen() || app.powerMenuOpen() || app.hud_menu_) return 9868;
+    if (!capture(L"game-guide-widgets.png")) return 9869; // With the pin's dot.
+    app.settings_.fps_graph = true; // The curve in the tile: a steady 8 ms with one hitch.
+    app.overlay_snapshot_.fps.graph.assign(96, 8.3f);
+    for (int i = 60; i < 64; ++i) app.overlay_snapshot_.fps.graph[i] = 52.0f;
+    app.invalidateGameOverlay();
+    if (!capture(L"game-guide-fps-graph.png")) return 2003;
+    app.settings_.fps_graph = false; app.overlay_snapshot_.fps.graph.clear();
+    app.settings_.hud_layout = 0; app.settings_.hud_label_colors = false; app.settings_.hud_size = 100;
+    app.toggleHudPin("fps"); // Let go again, as the old click did.
     if (!app.gameOverlayOpen() || !app.settings_.hud_pins.empty()) return 1990;
     app.overlay_snapshot_.fps = {game_fps::Status::denied};
     if (!capture(L"game-guide-fps-denied.png")) return 1834;
@@ -193,7 +220,14 @@ int LauncherUiTest::gameOverlay(HWND window) {
     if (!app.friends_open_ || app.overlay_selected_ != widgets_index || focused != window) return 1887;
     const auto tile = friends_layout::dashboard::tile(1600 - friends_layout::drawer_width, 4);
     app.overlayClick((tile.left + tile.right) * 0.5f, (tile.top + tile.bottom) * 0.5f);
-    if (app.settings_.hud_pins != std::vector<std::string>{"fps"} || !app.friends_open_) return 1817; // The mouse pins it as well.
+    if (!app.hud_menu_ || !app.powerMenuOpen() || !app.friends_open_) return 1817; // The mouse opens the options too...
+    {
+        const power_menu::Geometry options{1600, 900, app.powerMenuGaps()};
+        const auto row = options.row(0);
+        app.overlayClick((row.left + row.right) * 0.5f, (row.top + row.bottom) * 0.5f); // ...and its first row pins the widget.
+    }
+    if (app.settings_.hud_pins != std::vector<std::string>{"fps"} || !app.powerMenuOpen()) return 9873;
+    app.closePowerMenu();
     app.settings_.hud_pins.clear();
     const int before = focuses;
     foreground = reinterpret_cast<HWND>(static_cast<UINT_PTR>(0x5678));
@@ -320,6 +354,57 @@ int LauncherUiTest::gameOverlay(HWND window) {
     app.dismissGameOverlay(); animate();
     app.settings_.guide_open_widgets = false;
     if (app.gameOverlayOpen()) return 1992;
+
+    // Ustawienia → System → FPS i limiter: the widget, its graph, the limiter and the limits of single games.
+    {
+        using settings_ui::Id;
+        app.settings_.game_fps = true; app.settings_.fps_limiter = true; app.settings_.fps_limit = 60; app.settings_.fps_graph = true;
+        app.overlay_snapshot_ = snapshot;
+        app.screen_ = ScreenMode::settings;
+        app.settings_state_.selectCategory(static_cast<int>(settings_ui::Category::system));
+        app.buildSettingsRows();
+        if (!app.revealSetting(Id::fps_limiter) || !app.settings_state_.at(settings_ui::Page::fps_limiter)) return 1994;
+        const auto find = [&](Id id) { return std::find_if(app.settings_rows_.begin(), app.settings_rows_.end(), [&](const auto& row) { return row.id == id; }); };
+        for (const auto id : {Id::game_fps, Id::fps_graph, Id::fps_limiter, Id::fps_limit, Id::fps_limit_precise, Id::fps_limiter_status, Id::fps_game_limit})
+            if (find(id) == app.settings_rows_.end()) return 1995;
+        // What the widget over the game shows: a switch for each line, and the limiter's mode and badges.
+        if (find(Id::fps_limit_mode) == app.settings_rows_.end() || find(Id::fps_badges) == app.settings_rows_.end() ||
+            std::count_if(app.settings_rows_.begin(), app.settings_rows_.end(), [](const auto& row) { return row.id == Id::hud_pin; }) != 5) return 2004;
+        for (const auto id : {Id::hud_layout, Id::hud_label_colors, Id::hud_size, Id::cpu_temp_source})
+            if (find(id) == app.settings_rows_.end()) return 9870;
+        app.settings_state_.choice = 1; app.settingsChoose(*find(Id::hud_layout));
+        app.settingsToggle(*find(Id::hud_label_colors));
+        if (!app.revealSetting(Id::hud_size)) return 9871;
+        app.settingsSetLevel(0.0f);
+        if (app.settings_.hud_size != 50 || app.settings_.hud_layout != 1 || !app.settings_.hud_label_colors) return 9872;
+        app.settings_.hud_layout = 0; app.settings_.hud_label_colors = false; app.settings_.hud_size = 100;
+        app.settings_.hud_pins.clear();
+        const auto ram = std::find_if(app.settings_rows_.begin(), app.settings_rows_.end(), [](const auto& row) { return row.id == Id::hud_pin && row.key == "ram"; });
+        app.settingsToggle(*ram);
+        if (app.settings_.hud_pins != std::vector<std::string>{"ram"}) return 2005;
+        app.settingsToggle(*std::find_if(app.settings_rows_.begin(), app.settings_rows_.end(), [](const auto& row) { return row.id == Id::hud_pin && row.key == "ram"; }));
+        if (!app.settings_.hud_pins.empty()) return 2006;
+        app.settings_state_.choice = 1; app.settingsChoose(*find(Id::fps_limit_mode));
+        if (app.settings_.fps_limit_mode != 1) return 2007;
+        app.settings_.fps_limit_mode = 0;
+        auto own = find(Id::fps_game_limit);
+        if (own->key != target.key || own->choice != 0 || own->choices.size() != 12 || find(Id::fps_limit)->value != L"60 FPS") return 1996;
+        app.settings_state_.choice = 4; // "45 FPS": like global, none, 30, 40, 45.
+        app.settingsChoose(*own);
+        if (own = find(Id::fps_game_limit); app.settings_.fps_game_limits[target.key] != 45 || own->value != L"45 FPS") return 1997;
+        if (app.gameFpsLimit(target.key) != 45) return 1998;
+        app.settings_state_.choice = 1; app.settingsChoose(*find(Id::fps_game_limit)); // None for this game.
+        if (app.gameFpsLimit(target.key) != 0 || app.settings_.fps_game_limits.at(target.key) != 0) return 1999;
+        app.settings_state_.choice = 0; app.settingsChoose(*find(Id::fps_game_limit)); // Like the global one again.
+        if (app.gameFpsLimit(target.key) != 60 || !app.settings_.fps_game_limits.empty()) return 2000;
+        app.notifications_.clear();
+        if (!app.renderer_.captureForTest(captures / L"fps-limiter-settings.png", [&] { app.paint(); })) return 2001;
+        app.settings_.fps_limiter = false;
+        if (app.gameFpsLimit(target.key) != 0) return 2002; // Off: nothing is limited.
+        app.settings_.game_fps = false; app.settings_.fps_graph = false;
+        app.closeSettingsPage();
+        app.screen_ = ScreenMode::shelves;
+    }
 
     // Options remains a local shortcut in Launchme's main window, short and held.
     foreground = window;

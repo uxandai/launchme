@@ -201,6 +201,7 @@ void Launcher::openPowerMenu() {
     if (identifyOpen()) return;
     if (exit_prompt_ || pending_launch_) return;
     dismissMenu(); closeQuick(); closeCategoryMenu(); closeFriends(); cancelEnterHold();
+    hud_menu_ = false;
     power_items_ = power_menu::items(power_actions_());
     if (gameOverlayOpen()) std::erase(power_items_, power_menu::Item::tv_mode); // Over a game: the window stays as it is.
     power_menu_ = 0;
@@ -210,12 +211,13 @@ void Launcher::openPowerMenu() {
 
 void Launcher::closePowerMenu() {
     power_menu_.reset();
+    hud_menu_ = false; hud_menu_rows_.clear();
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
 void Launcher::powerMenuMove(int amount) {
-    if (!power_menu_ || power_items_.empty()) return;
-    const int next = std::clamp(*power_menu_ + amount, 0, static_cast<int>(power_items_.size()) - 1);
+    if (!power_menu_ || !powerMenuCount()) return;
+    const int next = std::clamp(*power_menu_ + amount, 0, static_cast<int>(powerMenuCount()) - 1);
     if (next == *power_menu_) { navigationBoundary(); return; }
     power_menu_ = next;
     audio_.navigate();
@@ -223,6 +225,7 @@ void Launcher::powerMenuMove(int amount) {
 }
 
 void Launcher::powerMenuAccept() {
+    if (hud_menu_) { hudMenuAccept(); return; }
     if (!power_menu_ || *power_menu_ >= static_cast<int>(power_items_.size())) return;
     const auto item = power_items_[*power_menu_];
     closePowerMenu();
@@ -253,7 +256,7 @@ void Launcher::powerMenuClick(float x, float y) {
 
 power_menu::Geometry Launcher::powerMenuGeometry() const {
     const auto view = renderer_.viewport();
-    return {view.width, view.height, power_menu::gaps(power_items_)};
+    return {view.width, view.height, powerMenuGaps()};
 }
 
 // --- Gamepad ----------------------------------------------------------------

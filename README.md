@@ -213,7 +213,7 @@ Settings → System → Help → **Open folder** (the version row) opens it.
   dot and a moving border saying whether it is connected; pairing and connecting from the same tiles.
 - **Profile** (the drawer's *Profile* widget): this week's play time, games and launches with a chart, the latest
   achievements, a year of achievement history, the games closest to 100 % and every platform with its hours.
-- **In-game Guide overlay** (experimental): back to the dashboard, close the game, optional FPS from PresentMon.
+- **In-game Guide overlay** (experimental): back to the dashboard, close the game, optional FPS and frame-time graph from PresentMon, a widget over the game (list or one-line strip, coloured labels, size; CPU temperature from MSI Afterburner when it runs), and an opt-in frame limiter (loads a small DLL into the game; skipped for games with an anti-cheat).
 - **Plugins** (ZIP + native DLL): HowLongToBeat (completion times in game details) and Achievements
   (after [SuccessStory](https://github.com/Lacro59/playnite-successstory-plugin), MIT) ship with the Windows build;
   write your own with the [Plugin SDK](docs/plugins/README.md) (Windows DLLs; the host also loads Linux `.so` plugins).

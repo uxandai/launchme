@@ -145,6 +145,17 @@ file(CONFIGURE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/companion.rc" CONTENT "${LAUN
 set_source_files_properties("${CMAKE_CURRENT_BINARY_DIR}/companion.rc" PROPERTIES OBJECT_DEPENDS "${LAUNCHME_COMPANION_SPRITES};${LAUNCHME_RES_DIR}/remote/index.html")
 target_sources(launchme PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/companion.rc")
 install(TARGETS launchme RUNTIME DESTINATION . COMPONENT Runtime)
+
+# Frame limiter: a small library loaded into a game on the player's request, never by default
+# (src/limiter/limiter_hook.cpp, src/platform/frame_limiter.cpp). It stands alone: it lives inside games.
+add_library(launchme_limiter SHARED src/limiter/limiter_hook.cpp)
+target_compile_features(launchme_limiter PRIVATE cxx_std_20)
+target_compile_definitions(launchme_limiter PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+target_compile_options(launchme_limiter PRIVATE /W4 /EHsc /utf-8)
+set_property(TARGET launchme_limiter PROPERTY MSVC_RUNTIME_LIBRARY "${LAUNCHME_RUNTIME}")
+target_link_libraries(launchme_limiter PRIVATE d3d11 dxgi)
+add_dependencies(launchme launchme_limiter)
+install(TARGETS launchme_limiter RUNTIME DESTINATION . COMPONENT Runtime)
 # GPL-3.0-or-later: the license text travels with every copy of the program.
 install(FILES LICENSE DESTINATION . RENAME LICENSE.txt COMPONENT Runtime)
 add_custom_target(launchme_audio ALL
@@ -494,6 +505,11 @@ add_test(NAME low_memory_mode COMMAND launcher_ui_tests --low-memory)
         SOURCES tests/collections_tests.cpp src/library/collections.cpp src/library/visibility.cpp src/net/json.cpp)
     launchme_executable(friends_layout_tests TEST friends_sidebar_navigation
         SOURCES tests/friends_layout_tests.cpp)
+    launchme_executable(frame_limiter_tests TEST frame_limiter_paces_presents
+        SOURCES tests/frame_limiter_tests.cpp LIBS d3d11 dxgi)
+    add_dependencies(frame_limiter_tests launchme_limiter)
+    add_custom_command(TARGET frame_limiter_tests POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:launchme_limiter>" "$<TARGET_FILE_DIR:frame_limiter_tests>/")
     launchme_executable(sensors_tests TEST dashboard_temperature_sensors
         SOURCES tests/sensors_tests.cpp src/platform/sensors.cpp
         LIBS pdh)

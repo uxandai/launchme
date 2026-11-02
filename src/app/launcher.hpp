@@ -82,6 +82,7 @@
 #include "../ui/browser_window.hpp"
 #include "../ui/guide_motion.hpp"
 #include "../platform/game_overlay_monitor.hpp"
+#include "../platform/frame_limiter.hpp"
 #ifndef _WIN32
 #include "../library/compat_tools.hpp"
 #include "../library/launch_options_store.hpp"
@@ -1200,10 +1201,18 @@ private:
     LRESULT overlayMessage(HWND window, UINT message, WPARAM wparam, LPARAM lparam);
     // Widgets kept on the game's screen (AppSettings::hud_pins): a click-through window over the game's monitor.
     void updateHud();
+    // Ustawienia -> FPS i limiter: the limit for the game in front, and what the limiter says about it.
+    void updateLimiter();
+    int gameFpsLimit(const std::string& game_key) const;
+    std::vector<std::wstring> hudBadges() const;
+    std::wstring limiterStatus() const;
+    std::wstring libraryGameName(const std::string& game_key) const;
     void toggleHudPin(const std::string& id);
     LRESULT hudMessage(HWND window, UINT message, WPARAM wparam, LPARAM lparam);
     std::unique_ptr<OverlayWindow> hud_window_;
     bool hud_visible_ = false, hud_polling_ = false;
+    mutable frame_limiter::Controller limiter_;
+    frame_limiter::State limiter_seen_ = frame_limiter::State::off;
     uint64_t next_hud_at_ = 0;
     std::wstring hud_signature_;
     int dashboardTileCount() const;
@@ -1381,6 +1390,14 @@ private:
     void powerMenuMove(int amount);
     void powerMenuAccept();
     void powerMenuClick(float x, float y);
+    // The widget on the game's screen: its options in the power menu's layer (src/app/hud_menu.cpp).
+    enum class HudAction { visibility, layout, colors, size, graph, close };
+    struct HudMenuRow { HudAction action; std::wstring label; wchar_t icon; bool gap; };
+    void openHudMenu(const std::string& pin);
+    void buildHudMenu();
+    void hudMenuAccept();
+    size_t powerMenuCount() const;           // Rows of whichever dialog the layer shows.
+    std::vector<bool> powerMenuGaps() const; // power_menu::gaps of those rows.
     power_menu::Geometry powerMenuGeometry() const; // Tryb TV's Zasilanie on the current canvas.
     // Steam scan, installation/account poller and artwork downloaders (src/app/library_worker.cpp).
     void startLibraryWorker();
@@ -1641,7 +1658,7 @@ private:
     void openPlatform(const std::wstring& name);
     // Wydawcy and Developerzy (src/app/studio_libraries.cpp): the studios with a logo, from the game index.
     bool refreshStudios();                       // True when the studios or the perfect games changed.
-    bool studiosShown() const { return settings_.show_publishers || settings_.show_developers; }
+    bool studiosShown() const { return settings_.show_publishers || settings_.show_developers || settings_.show_companies; }
     // Settings → Biblioteka: Wydawcy, Developerzy, the Steam rows, a hidden studio shown again, the tab
     // icons; false: not one of them.
     bool studioSettingsToggle(const settings_ui::Row& row);
@@ -2683,6 +2700,9 @@ private:
     // Power menu: selected row while open, rows offered on this machine.
     std::optional<int> power_menu_;
     std::vector<power_menu::Item> power_items_;
+    bool hud_menu_ = false;       // The layer shows hud_menu_rows_ (for hud_menu_pin_'s tile) instead of power_items_.
+    std::string hud_menu_pin_;
+    std::vector<HudMenuRow> hud_menu_rows_;
     // Injectable so UI tests never sleep or shut down the machine.
     std::function<std::vector<PowerAction>()> power_actions_ = availablePowerActions;
     std::function<bool(PowerAction)> power_ = performPowerAction;
@@ -2708,6 +2728,8 @@ private:
     DiscordBackend discord_;
     // Empty = the real PDH/D3DKMT reader, created on the poll worker. Tests inject a fixture.
     std::function<sensors::Reading()> read_sensors_;
+    // Whether the poll worker takes the CPU temperature from MSI Afterburner (AppSettings::cpu_temp_source).
+    std::shared_ptr<std::atomic<bool>> afterburner_cpu_ = std::make_shared<std::atomic<bool>>(true);
     // Injectable so UI tests format a fixed moment.
     std::function<SYSTEMTIME()> local_time_ = [] { SYSTEMTIME now{}; GetLocalTime(&now); return now; };
     uint64_t clock_minute_ = 0;   // drawer_clock::minute() of the painted time.

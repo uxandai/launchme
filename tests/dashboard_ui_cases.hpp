@@ -99,6 +99,8 @@ int LauncherUiTest::dashboard(HWND window) {
     // Read-only tiles do nothing; the list is not open and nothing was launched.
     app.dashboardActivate(static_cast<int>(board::Tile::gpu));
     if (app.friends_list_ || !dashboard_launches.empty() || !app.friendsOpen()) return 711;
+    if (!app.hud_menu_ || !app.powerMenuOpen()) return 9874; // ...but the widget's options open.
+    app.closePowerMenu();
     app.dashboard_tile_ = static_cast<int>(board::Tile::steam);
 
     // A/Enter on Steam friends opens the list inside the drawer; Back returns, Back closes.

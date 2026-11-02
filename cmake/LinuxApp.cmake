@@ -57,11 +57,12 @@ list(REMOVE_ITEM LAUNCHME_UI_SHARED
     src/platform/frame_clock.cpp         # frame_clock_linux.cpp
     src/platform/layered_surface.cpp     # layered_surface_linux.cpp: no layered windows (overlay_window_linux.cpp)
     src/platform/game_overlay_monitor.cpp # game_overlay_monitor_linux.cpp
+    src/platform/frame_limiter.cpp       # frame_limiter_linux.cpp
     src/platform/steam_downloads.cpp     # steam_downloads_linux.cpp
     src/platform/power.cpp               # power_linux.cpp
     src/platform/discord.cpp             # discord_linux.cpp
     src/platform/file_dialog.cpp)        # file_dialog_linux.cpp
-list(APPEND LAUNCHME_UI_SHARED src/platform/frame_clock_linux.cpp src/platform/file_dialog_linux.cpp src/platform/layered_surface_linux.cpp)
+list(APPEND LAUNCHME_UI_SHARED src/platform/frame_limiter_linux.cpp src/platform/frame_clock_linux.cpp src/platform/file_dialog_linux.cpp src/platform/layered_surface_linux.cpp)
 message(STATUS "Linux app: shared sources outside the core: ${LAUNCHME_UI_SHARED}")
 
 function(launchme_ui_library name)

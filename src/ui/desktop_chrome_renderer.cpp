@@ -178,7 +178,7 @@ void Renderer::drawDesktopSidebar(const Layout& layout, const View& view) {
         if (row.heading) {
             const bool collapsed = view.collapsed[static_cast<size_t>(row.group)];
             const float collapse_t = view.collapse_progress[static_cast<size_t>(row.group)];
-            textLine(upper(tr(groups[static_cast<int>(row.group)])), r.left + 10, cy + 2, r.right - r.left - 60, desktop_label_font_.Get(),
+            textLine(upper(tr(row.group == Group::publishers && view.companies ? trKey(L"Firmy") : groups[static_cast<int>(row.group)])), r.left + 10, cy + 2, r.right - r.left - 60, desktop_label_font_.Get(),
                      gray(hover ? 0.78f : 0.55f));
             // Always shown (faint at rest), so a group visibly folds; brighter under the pointer.
             desktopGlyph(glyph::chevron_down,

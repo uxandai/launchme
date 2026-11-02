@@ -3,6 +3,7 @@
 #include "../src/platform/sensors.hpp"
 
 #include <array>
+#include <cstring>
 #include <iostream>
 #include <limits>
 #include <string>
@@ -37,6 +38,29 @@ int main() {
     b.gpu = 60;
     if (a == b) return 7;
 
+    // MSI Afterburner's shared memory: a header and entries; only the CPU temperature is taken from it.
+    {
+        constexpr size_t entry = 5 * 260 + 4 * 4, header = 20, count = 3;
+        std::array<unsigned char, header + count * entry> block{};
+        const auto put32 = [&](size_t at, uint32_t value) { std::memcpy(block.data() + at, &value, 4); };
+        put32(0, 0x4D41484D); put32(4, 0x00020000); put32(8, header); put32(12, count); put32(16, entry);
+        const auto source = [&](size_t i, const char* name, float value) {
+            std::memcpy(block.data() + header + i * entry, name, std::strlen(name));
+            std::memcpy(block.data() + header + i * entry + 5 * 260, &value, 4);
+        };
+        source(0, "GPU temperature", 61.0f);
+        source(1, "CPU1 temperature", 48.0f);
+        source(2, "CPU temperature", 57.0f);
+        sensors::Reading reading;
+        if (!sensors::parseAfterburner(block.data(), block.size(), reading) || reading.cpu != 57 || reading.gpu) return 13;
+        put32(0, 0xDEAD); // Afterburner closed.
+        sensors::Reading closed;
+        if (sensors::parseAfterburner(block.data(), block.size(), closed) || closed.cpu) return 14;
+        put32(0, 0x4D41484D); put32(12, 1000); // Entries beyond the block.
+        if (sensors::parseAfterburner(block.data(), block.size(), closed)) return 15;
+        if (sensors::parseAfterburner(block.data(), 10, closed) || sensors::parseAfterburner(nullptr, 100, closed)) return 16;
+    }
+
     // The real reader must never throw or report implausible values; missing sensors are fine.
     sensors::Reader reader;
     for (int poll = 0; poll < 2; ++poll) {
@@ -44,6 +68,11 @@ int main() {
         if (!reading.sampled) return 8;
         for (const auto& value : {reading.cpu, reading.gpu})
             if (value && (*value < 0 || *value > sensors::plausible_max)) return 9;
+        // Memory in use: gigabytes with a decimal below ten, whole above; a dash without both numbers.
+        if (sensors::formatMemory(5222, 8192) != L"5.1 / 8 GB" || sensors::formatMemory(12000, 32768) != L"12 / 32 GB" ||
+            sensors::formatMemory(std::nullopt, 8192) != L"—" || sensors::formatMemory(100, 0) != L"—") return 10;
+        if (reading.ram_total && (!reading.ram_used || *reading.ram_used > *reading.ram_total)) return 11;
+        if (reading.vram_total && (!reading.vram_used || *reading.vram_used > *reading.vram_total)) return 12;
         std::cout << "CPU " << (reading.cpu ? std::to_string(*reading.cpu) + " C" : "no sensor")
                   << ", GPU " << (reading.gpu ? std::to_string(*reading.gpu) + " C" : "no sensor") << '\n';
     }

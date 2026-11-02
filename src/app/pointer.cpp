@@ -285,7 +285,7 @@ bool Launcher::hoverButton(float mouse_x, float mouse_y) const {
     switch (modal) {
     case Modal::none: break;
     case Modal::exit_prompt: return exit_prompt::Layout{view.width, view.height}.hit(x, y) >= 0;
-    case Modal::power_menu: return power_menu::Geometry{view.width, view.height, power_menu::gaps(power_items_)}.hit(x, y) >= 0;
+    case Modal::power_menu: return power_menu::Geometry{view.width, view.height, powerMenuGaps()}.hit(x, y) >= 0;
     case Modal::tour: {
         const tour::Layout layout{view.width, view.height, tourCardAtBottom(), tour::Layout::firstFor(static_cast<int>(settings_.home_layout))};
         return layout.hitButton(x, y, tour_.step > 0) >= 0 ||

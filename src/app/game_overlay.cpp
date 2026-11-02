@@ -36,9 +36,9 @@ void Launcher::configureGameOverlay() {
     if (runtime_started_) {
         if (guide && !guide_timer_active_) guide_timer_active_ = SetTimer(hwnd_, guide_timer, 16, nullptr) != 0;
         else if (!guide && guide_timer_active_) { KillTimer(hwnd_, guide_timer); guide_timer_active_ = false; }
-        if (guide || settings_.game_fps) overlay_monitor_.start(work_);
+        if (guide || settings_.game_fps || settings_.fps_limiter) overlay_monitor_.start(work_);
     }
-    overlay_monitor_.configure(guide || settings_.game_fps, settings_.game_fps, overlay_target_ ? overlay_target_->window : nullptr);
+    overlay_monitor_.configure(guide || settings_.game_fps || settings_.fps_limiter, settings_.game_fps, overlay_target_ ? overlay_target_->window : nullptr);
     if (game_overlay_) game_overlay_->appearance(settings_);
     dashboard_tile_ = std::min(dashboard_tile_, dashboardTileCount() - 1);
     next_overlay_poll_ = 0;
@@ -103,20 +103,36 @@ void Launcher::toggleHudPin(const std::string& id) {
 LRESULT Launcher::hudMessage(HWND window, UINT message, WPARAM wparam, LPARAM lparam) {
     if (message == WM_PAINT && hud_window_) {
         ViewContext context;
-        context.fps_widget = settings_.game_fps; context.fps_low = settings_.game_fps_low;
+        context.fps_widget = settings_.game_fps; context.fps_low = settings_.game_fps_low; context.fps_graph = settings_.fps_graph;
         context.game_fps = overlay_snapshot_.fps;
         context.dashboard.sensors = sensors_;
         context.hud_pins = settings_.hud_pins;
+        context.hud_badges = hudBadges();
+        context.hud_layout = settings_.hud_layout;
+        context.hud_label_colors = settings_.hud_label_colors;
+        context.hud_scale = settings_.hud_size / 100.0f;
         hud_window_->renderer().paintHud(context);
         return 0;
     }
     return DefWindowProcW(window, message, wparam, lparam);
 }
 
+// "LIMIT 60" and the mode, while the limiter really works in the game in front.
+std::vector<std::wstring> Launcher::hudBadges() const {
+    std::vector<std::wstring> badges;
+    const auto& target = overlay_snapshot_.target;
+    if (!settings_.fps_badges || !target) return badges;
+    const int limit = gameFpsLimit(target->key);
+    if (!limit || limiter_.state(target->process.pid) != frame_limiter::State::active) return badges;
+    badges.push_back(L"LIMIT " + std::to_wstring(limit));
+    badges.push_back(settings_.fps_limit_mode == 1 ? L"LOW LATENCY" : L"SMOOTH");
+    return badges;
+}
+
 void Launcher::updateHud() {
     // Over the game in front (Guide closed): the pinned widgets in a corner. Never interactive.
     const auto target = overlay_snapshot_.target;
-    const bool want = runtime_started_ && guideOverlayOn() && !settings_.hud_pins.empty() && !gameOverlayOpen() && target &&
+    const bool want = runtime_started_ && guideOverlayOn() && (!settings_.hud_pins.empty() || !hudBadges().empty()) && !gameOverlayOpen() && target &&
         overlay_backend_.foreground() == target->window;
     if (!want) {
         if (hud_window_ && hud_visible_) hud_window_->hide();
@@ -134,14 +150,22 @@ void Launcher::updateHud() {
         hud_window_->appearance(settings_);
     }
     const auto& pins = settings_.hud_pins;
-    const bool sensors = std::find(pins.begin(), pins.end(), "cpu") != pins.end() || std::find(pins.begin(), pins.end(), "gpu") != pins.end();
+    const bool sensors = std::any_of(pins.begin(), pins.end(), [](const std::string& pin) { return pin == "cpu" || pin == "gpu" || pin == "ram" || pin == "vram"; });
     if (sensors && !hud_polling_) { hud_polling_ = true; startDashboardPoll(); }
     else if (!sensors && hud_polling_) { hud_polling_ = false; if (!friends_open_) stopDashboardPoll(); }
     std::wstring signature;
     for (const auto& pin : pins) signature += std::wstring(pin.begin(), pin.end()) + L',';
     signature += std::to_wstring(static_cast<int>(overlay_snapshot_.fps.status)) + L',' +
         std::to_wstring(static_cast<int>(overlay_snapshot_.fps.fps + 0.5)) + L',' + std::to_wstring(static_cast<int>(overlay_snapshot_.fps.low + 0.5)) + L',' +
-        std::to_wstring(sensors_.cpu.value_or(-1)) + L',' + std::to_wstring(sensors_.gpu.value_or(-1));
+        std::to_wstring(sensors_.cpu.value_or(-1)) + L',' + std::to_wstring(sensors_.gpu.value_or(-1)) + L',' +
+        std::to_wstring(sensors_.ram_used.value_or(-1) / 64) + L',' + std::to_wstring(sensors_.vram_used.value_or(-1) / 64);
+    for (const auto& badge : hudBadges()) signature += L',' + badge;
+    signature += L';' + std::to_wstring(settings_.hud_layout) + std::to_wstring(settings_.hud_label_colors) + L',' + std::to_wstring(settings_.hud_size);
+    if (settings_.fps_graph) { // A new curve every half second.
+        uint32_t hash = 17;
+        for (const float value : overlay_snapshot_.fps.graph) hash = hash * 31 + static_cast<uint32_t>(value * 4);
+        signature += L',' + std::to_wstring(hash);
+    }
     if (!hud_visible_) {
         hud_signature_ = signature;
         hud_visible_ = hud_window_->show(monitorRect(target->window), false);
@@ -259,7 +283,7 @@ void Launcher::closeGameOverlay(bool return_to_game) {
     if (return_to_game && overlay_backend_.valid(target)) overlay_backend_.focus(target.window);
     if (game_overlay_) game_overlay_->hide();
     pad_start_.swallow(false); controller_direction_ = 0;
-    overlay_monitor_.configure((settings_.guide_overlay && settings_.guide_menu) || settings_.game_fps, settings_.game_fps);
+    overlay_monitor_.configure((settings_.guide_overlay && settings_.guide_menu) || settings_.game_fps || settings_.fps_limiter, settings_.game_fps);
     next_overlay_poll_ = 0;
     updateGuideHotkey();
 }
@@ -367,7 +391,7 @@ void Launcher::overlayClick(float x, float y) {
         if (row >= 0) { overlay_close_confirm_ = row; confirmOverlayClose(); }
         else if (!layout.picker(2).contains(x, y)) overlay_close_confirm_.reset();
     } else if (power_menu_) {
-        const power_menu::Geometry layout{view.width, view.height, power_menu::gaps(power_items_)};
+        const power_menu::Geometry layout{view.width, view.height, powerMenuGaps()};
         const int row = layout.hit(x, y);
         if (row >= 0) { power_menu_ = row; powerMenuAccept(); } else closePowerMenu();
     } else if (friends_open_) {
@@ -459,6 +483,54 @@ LRESULT Launcher::overlayMessage(HWND window, UINT message, WPARAM wparam, LPARA
     return DefWindowProcW(window, message, wparam, lparam);
 }
 
+// The limit for one game: its own (0: none), else the global one. 0 also while the limiter is off.
+int Launcher::gameFpsLimit(const std::string& game_key) const {
+    if (!settings_.fps_limiter) return 0;
+    const auto own = settings_.fps_game_limits.find(game_key);
+    return own != settings_.fps_game_limits.end() ? own->second : settings_.fps_limit;
+}
+
+std::wstring Launcher::libraryGameName(const std::string& game_key) const {
+    for (const auto* games : {&public_library_, &private_category_.games}) {
+        const auto found = std::find_if(games->begin(), games->end(), [&](const Game& value) { return gameKey(value) == game_key; });
+        if (found != games->end()) return found->name;
+    }
+    return std::wstring(game_key.begin(), game_key.end());
+}
+
+void Launcher::updateLimiter() {
+    const auto& target = overlay_snapshot_.target;
+#ifndef LAUNCHME_UI_TEST // The tests' windows have invented process IDs: nothing may be loaded into a real process.
+    if (target) limiter_.apply(target->process.pid, gameFpsLimit(target->key), settings_.fps_limit_precise, static_cast<uint32_t>(settings_.fps_limit_mode));
+#endif
+    limiter_.heartbeat();
+    // The page reports the state of the game in front: rebuilt when it moves on (loading -> active).
+    const auto state = target ? limiter_.state(target->process.pid) : frame_limiter::State::off;
+    if (state != limiter_seen_) {
+        limiter_seen_ = state;
+        if (settingsOpen() && settings_state_.at(settings_ui::Page::fps_limiter)) { buildSettingsRows(); InvalidateRect(hwnd_, nullptr, FALSE); }
+    }
+}
+
+std::wstring Launcher::limiterStatus() const {
+    using frame_limiter::State;
+    if (!settings_.fps_limiter) return tr(L"Wyłączony.");
+    const auto& target = overlay_snapshot_.target;
+    if (!target) return tr(L"Brak uruchomionej gry z biblioteki. Limit zadziała po jej starcie.");
+    const int limit = gameFpsLimit(target->key);
+    const std::wstring name = libraryGameName(target->key);
+    switch (limiter_.state(target->process.pid)) {
+    case State::active: return name + L": " + (limit ? tr(L"limit ") + std::to_wstring(limit) + L" FPS" : std::wstring(tr(L"bez limitu")));
+    case State::starting: return name + L": " + (limit ? tr(L"ładowanie…") : std::wstring(tr(L"bez limitu")));
+    case State::no_dxgi: return name + tr(L": gra nie używa DXGI (Vulkan, OpenGL lub Direct3D 9), limit nie działa.");
+    case State::unsupported: return name + tr(L": gra 32-bitowa albo brak biblioteki limitera.");
+    case State::anticheat: return name + tr(L": gra ma anti-cheat, limiter jej nie rusza.");
+    case State::denied: return name + tr(L": gra działa z wyższymi uprawnieniami niż launchme.");
+    case State::failed: return name + tr(L": nie udało się załadować biblioteki.");
+    default: return name + L": " + (limit ? tr(L"ładowanie…") : std::wstring(tr(L"bez limitu")));
+    }
+}
+
 void Launcher::pollGameOverlay() {
     const auto now = GetTickCount64();
     if (now < next_overlay_poll_) return;
@@ -473,4 +545,5 @@ void Launcher::pollGameOverlay() {
         if (!overlay_backend_.valid(*overlay_target_) || (foreground && !overlayForeground(foreground))) closeGameOverlay(false);
     }
     updateGuideHotkey();
+    updateLimiter();
 }

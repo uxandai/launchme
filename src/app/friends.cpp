@@ -109,7 +109,8 @@ void Launcher::startDashboardPoll() {
     queue->wake.notify_all();
     const auto alive = alive_;
     const auto hwnd = hwnd_;
-    work_.start([queue, generation, alive, hwnd, read = read_sensors_, running = discord_.running] {
+    afterburner_cpu_->store(settings_.cpu_temp_source == 0);
+    work_.start([queue, generation, alive, hwnd, read = read_sensors_, running = discord_.running, afterburner = afterburner_cpu_] {
         const auto current = [&] { return alive->load() && queue->generation.load() == generation; };
         std::unique_ptr<sensors::Reader> reader;
         while (current()) {
@@ -119,6 +120,11 @@ void Launcher::startDashboardPoll() {
             else {
                 if (!reader) reader = std::make_unique<sensors::Reader>();
                 message->sensors = reader->read();
+                // Windows has no CPU temperature without a driver; MSI Afterburner, when it runs, has one.
+                if (afterburner->load()) {
+                    sensors::Reading other;
+                    if (sensors::readAfterburner(other) && other.cpu) message->sensors.cpu = other.cpu;
+                }
             }
             message->discord_running = running && running();
             if (!current()) return;
@@ -289,7 +295,7 @@ void Launcher::dashboardActivate(int tile) {
         dashboardEnsureVisible(); drawer_glide_.valid = false;
         audio_.navigate(); invalidateGameOverlay(); InvalidateRect(hwnd_, nullptr, FALSE); return;
     }
-    if (settings_.game_fps && tile == dashboardTileCount() - 1) { toggleHudPin("fps"); return; } // Pinned on the game's screen, or let go.
+    if (settings_.game_fps && tile == dashboardTileCount() - 1) { openHudMenu("fps"); return; } // Its options: show or hide it on the game's screen, layout, colours, size.
     if (tile >= dashboard::tile_count) { const auto action = plugin_widgets_[tile - dashboard::tile_count]; pluginAction(action); return; }
     switch (static_cast<dashboard::Tile>(tile)) {
     case dashboard::Tile::steam:
@@ -301,8 +307,8 @@ void Launcher::dashboardActivate(int tile) {
         InvalidateRect(hwnd_, nullptr, FALSE);
         break;
     case dashboard::Tile::discord: openDiscord(); break;
-    case dashboard::Tile::cpu: toggleHudPin("cpu"); break; // Pinned on the game's screen, or let go.
-    case dashboard::Tile::gpu: toggleHudPin("gpu"); break;
+    case dashboard::Tile::cpu: openHudMenu("cpu"); break;
+    case dashboard::Tile::gpu: openHudMenu("gpu"); break;
     case dashboard::Tile::profile:
         if (gameOverlayOpen()) break; // Over a game the page would open behind it.
         openProfile(); // Closes the drawer and opens over the screen beneath it.

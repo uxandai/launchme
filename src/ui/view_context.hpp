@@ -216,7 +216,11 @@ struct ViewContext {
     bool guide_overlay = false;
     int guide_close_confirm = -1; // -1 closed, 0 close, 1 cancel.
     float guide_opacity = 1;
-    bool fps_widget = false, fps_low = false;
+    bool fps_widget = false, fps_low = false, fps_graph = false;
+    int hud_layout = 0;               // 0: a list, 1: a strip.
+    bool hud_label_colors = false;
+    float hud_scale = 1.0f;           // AppSettings::hud_size / 100.
+    std::vector<std::wstring> hud_badges; // "LIMIT 60", "SMOOTH": chips on the widget over the game.
     std::vector<std::string> hud_pins; // Dashboard tiles kept on the game's screen ("fps", "cpu", "gpu").
     game_fps::Reading game_fps;
     const plugin_ui::Page* plugin_page = nullptr;
@@ -383,6 +387,9 @@ struct ViewContext {
     std::vector<std::wstring> power_labels;
     std::vector<bool> power_gaps, power_danger; // power_menu::gaps / danger of each row.
     std::vector<wchar_t> power_icons;           // power_menu::icon of each row.
+    // The layer's header when it is not Zasilanie (the widget's options): title, subtitle, icon; empty / 0: Zasilanie's.
+    std::wstring power_title, power_subtitle;
+    wchar_t power_header_icon = 0;
     // Default home (AppSettings::shelves_hero_facts): the focused game's facts centred under its logo
     // (capitalised heading, value); the platform's mark is drawn for hero_platform. Empty: off.
     struct HeroFact { std::wstring heading, value; };

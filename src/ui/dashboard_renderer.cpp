@@ -109,6 +109,9 @@ void Renderer::drawDashboardTile(int index, float drawer_left, bool focus_frame)
         return;
     }
     drawDashboardGlyph(index, left, r.top + tile_padding, gray(0.95f, focused ? 1.0f : 0.84f));
+    if (context_->fps_widget && context_->fps_graph && index == dashboard::tile_count + static_cast<int>(context_->plugin_widgets.size()) &&
+        context_->game_fps.status == game_fps::Status::ready)
+        drawFrameGraph(left + 44, r.top + tile_padding, std::max(40.0f, inner - 44 - 22), 30, context_->game_fps.graph);
 
     std::wstring title, value, caption;
     auto value_ink = gray(0.97f);
@@ -184,6 +187,29 @@ void Renderer::drawDashboardTile(int index, float drawer_left, bool focus_frame)
     }
 }
 
+void Renderer::drawFrameGraph(float x, float y, float width, float height, const std::vector<float>& frame_ms) {
+    if (frame_ms.size() < 2) return;
+    // A fixed scale from the typical frame (2.5x its median, in steps of 5 ms): a spike runs to the top and is
+    // clipped there, instead of the whole curve shrinking each time one comes.
+    std::vector<float> sorted;
+    for (const float value : frame_ms) if (value > 0) sorted.push_back(value);
+    if (sorted.empty()) return;
+    std::nth_element(sorted.begin(), sorted.begin() + sorted.size() / 2, sorted.end());
+    const float median = sorted[sorted.size() / 2];
+    const float top = std::clamp(std::ceil(median * 2.5f / 5.0f) * 5.0f, 20.0f, 100.0f);
+    brush(gray(1, 0.06f));
+    target_->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(x, y, x + width, y + height), 4, 4), solid_.Get());
+    const float step = width / static_cast<float>(frame_ms.size() - 1);
+    const auto point = [&](size_t i) {
+        return D2D1::Point2F(x + step * static_cast<float>(i), y + height - height * std::min(frame_ms[i], top) / top);
+    };
+    for (size_t i = 1; i < frame_ms.size(); ++i) {
+        if (frame_ms[i] <= 0 || frame_ms[i - 1] <= 0) continue;
+        brush(std::max(frame_ms[i], frame_ms[i - 1]) > 33.3f ? palette::danger() : uiAccent(0.95f));
+        target_->DrawLine(point(i - 1), point(i), solid_.Get(), 1.6f);
+    }
+}
+
 bool Renderer::paintHud(const ViewContext& context) {
     PAINTSTRUCT ps{}; BeginPaint(hwnd_, &ps);
     bool painted = false;
@@ -191,33 +217,104 @@ bool Renderer::paintHud(const ViewContext& context) {
         updateViewport();
         context_ = &context;
         target_->BeginDraw();
-        target_->SetTransform(D2D1::Matrix3x2F::Scale(viewport_.scale, viewport_.scale));
+        const float scale = std::clamp(context.hud_scale, 0.5f, 1.0f); // AppSettings::hud_size; 1 is the largest.
+        target_->SetTransform(D2D1::Matrix3x2F::Scale(viewport_.scale * scale, viewport_.scale * scale));
         target_->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE);
         target_->Clear(D2D1::ColorF(0, 0, 0, 0));
-        struct Line { std::wstring label, value; bool hot = false; };
+        struct Line { std::wstring label, value; bool hot = false; bool graph = false; std::string id; };
         std::vector<Line> lines;
-        for (const auto& id : context.hud_pins) {
-            if (id == "fps" && context.fps_widget) {
+        // A fixed order, whatever order they were switched on in.
+        for (const char* id_text : {"fps", "cpu", "gpu", "ram", "vram"}) {
+            const std::string id = id_text;
+            if (std::find(context.hud_pins.begin(), context.hud_pins.end(), id) == context.hud_pins.end()) continue;
+            if (id == "ram") {
+                lines.push_back({L"RAM", sensors::formatMemory(context.dashboard.sensors.ram_used, context.dashboard.sensors.ram_total), false, false, id});
+            } else if (id == "vram") {
+                lines.push_back({L"VRAM", sensors::formatMemory(context.dashboard.sensors.vram_used, context.dashboard.sensors.vram_total), false, false, id});
+            } else if (id == "fps" && context.fps_widget) {
                 const auto& reading = context.game_fps;
                 Line line{L"FPS", reading.status == game_fps::Status::ready ? fpsNumber(reading.fps) : std::wstring(L"—")};
                 if (reading.status == game_fps::Status::ready && context.fps_low && reading.low > 0) line.value += L"   1% " + fpsNumber(reading.low);
+                line.graph = context.fps_graph && reading.status == game_fps::Status::ready;
+                line.id = id;
                 lines.push_back(std::move(line));
             } else if (id == "cpu" || id == "gpu") {
                 const auto celsius = id == "cpu" ? context.dashboard.sensors.cpu : context.dashboard.sensors.gpu;
-                lines.push_back({id == "cpu" ? L"CPU" : L"GPU", sensors::format(celsius), celsius && *celsius >= hot_celsius});
+                lines.push_back({id == "cpu" ? L"CPU" : L"GPU", sensors::format(celsius), celsius && *celsius >= hot_celsius, false, id});
             }
         }
-        if (!lines.empty()) {
-            constexpr float x = 24, y = 24, width = 250, row = 34, pad = 12;
-            const float height = static_cast<float>(lines.size()) * row + 2 * pad;
-            brush(D2D1::ColorF(0.04f, 0.045f, 0.05f, 0.62f));
-            target_->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(x, y, x + width, y + height), 12, 12), solid_.Get());
-            float top = y + pad;
-            for (const auto& line : lines) {
-                text(line.label, x + pad + 2, top, 64, row, friend_status_font_.Get(), gray(0.70f));
-                text(line.value, x + pad + 66, top, width - 2 * pad - 66, row, friend_status_font_.Get(),
-                     line.hot ? palette::danger() : gray(0.97f));
-                top += row;
+        if (!lines.empty() || !context.hud_badges.empty()) {
+            const float x = 24 / scale, y = 24 / scale;
+            // Chips like the button prompts: a light pill with the label (LIMIT 60, SMOOTH).
+            const auto chipWidth = [&](const std::wstring& badge) { return textAdvance(badge, friend_section_font_.Get()) + 18; };
+            const auto drawChip = [&](const std::wstring& badge, float left, float center, float width) {
+                drawKeyCap(D2D1::RectF(left, center - 11.5f, left + width, center + 11.5f), 1.0f);
+                textLine(badge, left, center, width, friend_section_font_.Get(), keyCapInk(1.0f), DWRITE_TEXT_ALIGNMENT_CENTER);
+            };
+            const auto labelInk = [&](const Line& line) -> D2D1_COLOR_F {
+                if (!context.hud_label_colors) return gray(0.70f);
+                if (line.id == "fps") return D2D1::ColorF(0.46f, 0.88f, 0.56f);
+                if (line.id == "cpu") return D2D1::ColorF(0.46f, 0.71f, 1.0f);
+                if (line.id == "gpu") return D2D1::ColorF(0.74f, 0.58f, 1.0f);
+                if (line.id == "ram") return D2D1::ColorF(1.0f, 0.75f, 0.38f);
+                return D2D1::ColorF(1.0f, 0.56f, 0.76f);
+            };
+            if (context.hud_layout == 1) {
+                // A strip: one line, the items apart by a wide gap, the chips last.
+                constexpr float pad = 14, row = 30, gap = 24, label_gap = 8, graph_width = 120, graph_height = 24, chip_gap = 8;
+                struct Cell { float label, value; };
+                std::vector<Cell> cells;
+                float width = 2 * pad;
+                for (size_t i = 0; i < lines.size(); ++i) {
+                    const auto& line = lines[i];
+                    cells.push_back({textAdvance(line.label, friend_status_font_.Get()) + 6, textAdvance(line.value, friend_status_font_.Get()) + 6});
+                    width += cells.back().label + label_gap + cells.back().value + (line.graph ? 10 + graph_width : 0) + (i ? gap : 0);
+                }
+                for (size_t i = 0; i < context.hud_badges.size(); ++i)
+                    width += chipWidth(context.hud_badges[i]) + (i || !lines.empty() ? (i ? chip_gap : gap) : 0);
+                brush(D2D1::ColorF(0.04f, 0.045f, 0.05f, 0.62f));
+                target_->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(x, y, x + width, y + row + 14), 12, 12), solid_.Get());
+                const float center = y + (row + 14) * 0.5f;
+                float left = x + pad;
+                for (size_t i = 0; i < lines.size(); ++i) {
+                    const auto& line = lines[i];
+                    if (i) left += gap;
+                    textLine(line.label, left, center, cells[i].label, friend_status_font_.Get(), labelInk(line)); // Cap-centred on the strip's line, like the chips.
+                    left += cells[i].label + label_gap;
+                    textLine(line.value, left, center, cells[i].value, friend_status_font_.Get(), line.hot ? palette::danger() : gray(0.97f));
+                    left += cells[i].value;
+                    if (line.graph) { left += 10; drawFrameGraph(left, center - graph_height * 0.5f, graph_width, graph_height, context.game_fps.graph); left += graph_width; }
+                }
+                for (size_t i = 0; i < context.hud_badges.size(); ++i) {
+                    if (i || !lines.empty()) left += i ? chip_gap : gap;
+                    const float chip = chipWidth(context.hud_badges[i]);
+                    drawChip(context.hud_badges[i], left, center, chip);
+                    left += chip;
+                }
+            } else {
+                constexpr float width = 250, row = 34, pad = 12;
+                constexpr float graph_height = 44, chip_row = 34;
+                float height = static_cast<float>(lines.size()) * row + 2 * pad;
+                for (const auto& line : lines) if (line.graph) height += graph_height + 6;
+                if (!context.hud_badges.empty()) height += chip_row - (lines.empty() ? 0.0f : 4.0f);
+                brush(D2D1::ColorF(0.04f, 0.045f, 0.05f, 0.62f));
+                target_->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(x, y, x + width, y + height), 12, 12), solid_.Get());
+                float top = y + pad;
+                for (const auto& line : lines) {
+                    text(line.label, x + pad + 2, top, 64, row, friend_status_font_.Get(), labelInk(line));
+                    text(line.value, x + pad + 66, top, width - 2 * pad - 66, row, friend_status_font_.Get(),
+                         line.hot ? palette::danger() : gray(0.97f));
+                    top += row;
+                    if (line.graph) { drawFrameGraph(x + pad, top + 2, width - 2 * pad, graph_height, context.game_fps.graph); top += graph_height + 6; }
+                }
+                float chip_x = x + pad;
+                const float chip_cy = top + (lines.empty() ? 0.0f : -4.0f) + chip_row * 0.5f;
+                for (const auto& badge : context.hud_badges) {
+                    const float chip_width = chipWidth(badge);
+                    if (chip_x + chip_width > x + width - pad) break;
+                    drawChip(badge, chip_x, chip_cy, chip_width);
+                    chip_x += chip_width + 8;
+                }
             }
         }
         const auto result = target_->EndDraw();

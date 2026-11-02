@@ -217,6 +217,7 @@ void Launcher::settingsSetLevel(float level) {
     case Id::flix_size: settings_.flix_size = level >= 0.5f ? AppSettings::FlixSize::large : AppSettings::FlixSize::normal; break;
     case Id::psfive_size: settings_.psfive_size = static_cast<AppSettings::XmbSize>(static_cast<int>(std::round(level * 2))); break;
     case Id::companion_reply_length: settings_.companion_reply_length = static_cast<companion::ReplyLength>(static_cast<int>(std::round(level * 2))); break;
+    case Id::hud_size: settings_.hud_size = 50 + 10 * static_cast<int>(std::round(level * 5)); break; // 50..100 %, in tens.
     case Id::glow_level: settings_.glow_level = std::round(level * 20) / 10.0f; settingsChanged(); return; // Visual only.
     case Id::background_grid: settings_.background_grid = std::round(level * 20) / 20.0f; settingsChanged(); return;
     default: return;

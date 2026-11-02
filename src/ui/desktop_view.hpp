@@ -318,6 +318,7 @@ struct MetaLayout {
 
 struct View {
     const std::vector<Entry>* entries = nullptr;
+    bool companies = false; // Firmy: the publishers' group holds both, and is named so.
     std::vector<Row> rows;
     std::array<bool, group_count> collapsed{};
     std::array<float, group_count> collapse_progress{}; // 0 open … 1 folded: the heading chevron turns.

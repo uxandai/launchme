@@ -1,3 +1,4 @@
+#include <algorithm>
 #include "../src/model/game_fps.hpp"
 #include "../src/ui/quick_menu.hpp"
 #include "../src/ui/guide_motion.hpp"
@@ -25,6 +26,10 @@ int main() {
     for (int i = 0; i < 200; ++i) { time += i == 50 ? 0.1 : 0.01; history.present(7, time); }
     result = history.read(time);
     if (!near(result.fps, 100) || !near(result.low, 2.0 / 0.11)) return 5;
+    // The curve: 96 slices over six seconds; the hitch lifts its slice (a mean of 62 ms of frames) and the steady parts read 10 ms.
+    if (result.graph.size() != 96) return 20;
+    const auto peak = *std::max_element(result.graph.begin(), result.graph.end());
+    if (peak < 20 || peak > 101 || result.graph.back() < 9.9f || result.graph.back() > 10.1f) return 21;
     history.present(7, time); history.present(7, time - 1);
     history.present(7, std::numeric_limits<double>::quiet_NaN());
     if (history.read(time) != result) return 6;

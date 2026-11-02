@@ -40,6 +40,7 @@ set(LAUNCHME_APP_SOURCES
     src/app/input.cpp
     src/app/keyboard.cpp
     src/app/game_overlay.cpp
+    src/app/hud_menu.cpp
     src/app/focus_motion.cpp
     src/app/settings.cpp
     src/app/settings_rows.cpp
@@ -354,6 +355,7 @@ set(LAUNCHME_APP_SOURCES
     src/platform/game_activity.cpp
     src/platform/game_overlay_monitor.cpp
     src/platform/etw_access.cpp
+    src/platform/frame_limiter.cpp
     src/platform/layered_surface.cpp
     src/platform/process_freeze.cpp
     src/platform/steam_downloads.cpp

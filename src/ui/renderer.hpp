@@ -588,6 +588,8 @@ private:
     void drawDashboardTile(int index, float drawer_left, bool focus_frame = true);
     void drawDashboardGlyph(int tile, float x, float y, D2D1_COLOR_F ink);
     void drawTileAvatars(float right, float center_y);
+    // Frame times (ms, oldest first) as a line in a box; the scale steps 16.7 / 33.3 / 66.7 / 100 ms, spikes past 33 ms in red.
+    void drawFrameGraph(float x, float y, float width, float height, const std::vector<float>& frame_ms);
     void drawCategoryMenu();
     void drawCategoryRail();
     void drawQuickShade();

@@ -244,6 +244,7 @@ bool parseExtraSetting(AppSettings& settings, std::string_view key, std::string_
     if (key == "psfive_category_tabs") return flag(settings.psfive_category_tabs);
     if (key == "show_publishers") return flag(settings.show_publishers);
     if (key == "show_developers") return flag(settings.show_developers);
+    if (key == "show_companies") return flag(settings.show_companies);
     if (key == "studio_min_games") {
         if (value == "1" || value == "2" || value == "3" || value == "5") settings.studio_min_games = value[0] - '0';
         return true;
@@ -294,13 +295,41 @@ AppSettings parseAppSettings(std::string_view text) {
         if (parseExtraSetting(settings, key, value)) continue;
         if (key == "guide_open_widgets") { if (value == "0" || value == "1") settings.guide_open_widgets = value == "1"; continue; }
         if (key == "hud_pins") { // Widgets kept on the game's screen, at most the three that exist.
-            while (!value.empty() && settings.hud_pins.size() < 3) {
+            while (!value.empty() && settings.hud_pins.size() < 5) {
                 const auto comma = value.find(',');
                 const auto id = trim(value.substr(0, comma));
-                if ((id == "fps" || id == "cpu" || id == "gpu") &&
+                if ((id == "fps" || id == "cpu" || id == "gpu" || id == "ram" || id == "vram") &&
                     std::find(settings.hud_pins.begin(), settings.hud_pins.end(), id) == settings.hud_pins.end())
                     settings.hud_pins.emplace_back(id);
                 value = comma == value.npos ? std::string_view{} : value.substr(comma + 1);
+            }
+            continue;
+        }
+        if (key == "hud_layout") { if (value == "0" || value == "1") settings.hud_layout = value[0] - '0'; continue; }
+        if (key == "cpu_temp_source") { if (value == "0" || value == "1") settings.cpu_temp_source = value[0] - '0'; continue; }
+        if (key == "hud_label_colors") { if (value == "0" || value == "1") settings.hud_label_colors = value == "1"; continue; }
+        if (key == "hud_size") {
+            if (!value.empty() && value.size() <= 3 && std::all_of(value.begin(), value.end(), [](char c) { return c >= '0' && c <= '9'; })) {
+                const int percent = std::stoi(std::string(value));
+                if (percent >= 50 && percent <= 100) settings.hud_size = percent;
+            }
+            continue;
+        }
+        if (key == "fps_graph") { if (value == "0" || value == "1") settings.fps_graph = value == "1"; continue; }
+        if (key == "fps_badges") { if (value == "0" || value == "1") settings.fps_badges = value == "1"; continue; }
+        if (key == "fps_limit_mode") { if (value == "0" || value == "1") settings.fps_limit_mode = value[0] - '0'; continue; }
+        if (key == "fps_limiter") { if (value == "0" || value == "1") settings.fps_limiter = value == "1"; continue; }
+        if (key == "fps_limit_precise") { if (value == "0" || value == "1") settings.fps_limit_precise = value == "1"; continue; }
+        if (key == "fps_limit" || key == "fps_game_limit") { // "60", or "60:<game key>" for one game.
+            const auto colon = key == "fps_game_limit" ? value.find(':') : std::string_view::npos;
+            const auto number = value.substr(0, colon);
+            int limit = -1;
+            if (!number.empty() && number.size() <= 4 && std::all_of(number.begin(), number.end(), [](char c) { return c >= '0' && c <= '9'; }))
+                limit = std::stoi(std::string(number));
+            if (limit == 0 || (limit >= 10 && limit <= 1000)) {
+                if (key == "fps_limit") settings.fps_limit = limit;
+                else if (colon != std::string_view::npos && colon + 1 < value.size() && settings.fps_game_limits.size() < 1000)
+                    settings.fps_game_limits[std::string(value.substr(colon + 1))] = limit;
             }
             continue;
         }
@@ -933,6 +962,7 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
     output << "psfive_category_tabs=" << settings.psfive_category_tabs << '\n';
     output << "show_publishers=" << settings.show_publishers << '\n';
     output << "show_developers=" << settings.show_developers << '\n';
+    output << "show_companies=" << settings.show_companies << '\n';
     output << "studio_min_games=" << settings.studio_min_games << '\n';
     output << "show_updated_row=" << settings.show_updated_row << '\n';
     output << "show_discovery_row=" << settings.show_discovery_row << '\n';
@@ -992,6 +1022,17 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
     output << "hud_pins=";
     for (size_t i = 0; i < settings.hud_pins.size(); ++i) output << (i ? "," : "") << settings.hud_pins[i];
     output << '\n';
+    output << "fps_graph=" << settings.fps_graph << '\n'
+           << "fps_limiter=" << settings.fps_limiter << '\n'
+           << "fps_limit=" << settings.fps_limit << '\n'
+           << "fps_limit_precise=" << settings.fps_limit_precise << '\n'
+           << "fps_limit_mode=" << settings.fps_limit_mode << '\n'
+           << "fps_badges=" << settings.fps_badges << '\n'
+           << "hud_layout=" << settings.hud_layout << '\n'
+           << "hud_label_colors=" << settings.hud_label_colors << '\n'
+           << "hud_size=" << settings.hud_size << '\n'
+           << "cpu_temp_source=" << settings.cpu_temp_source << '\n';
+    for (const auto& [game, limit] : settings.fps_game_limits) output << "fps_game_limit=" << limit << ':' << game << '\n';
     output << "widget_layout=";
     for (size_t i = 0; i < settings.widget_layout.size(); ++i) {
         if (i) output << ',';

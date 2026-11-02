@@ -22,6 +22,20 @@ bool Launcher::settingsExtraToggle(const Row& row) {
         settingsChanged(); audio_.context(); // Visual only: the renderer reads the places.
         return true;
     }
+    if (row.id == Id::hud_pin) { // Shown or hidden on the game's screen (src/app/game_overlay.cpp).
+        toggleHudPin(row.key);
+        settingsChanged(); audio_.context();
+        return true;
+    }
+    if (row.id == Id::fps_graph || row.id == Id::fps_limiter || row.id == Id::fps_limit_precise || row.id == Id::fps_badges ||
+        row.id == Id::hud_label_colors) {
+        auto& flag = row.id == Id::fps_graph ? settings_.fps_graph : row.id == Id::fps_limiter ? settings_.fps_limiter :
+                     row.id == Id::fps_badges ? settings_.fps_badges : row.id == Id::hud_label_colors ? settings_.hud_label_colors :
+                     settings_.fps_limit_precise;
+        flag = !flag;
+        settingsChanged(); audio_.context(); // The limiter's rows appear and go; the monitor follows the switch.
+        return true;
+    }
     if (row.id == Id::add_game_tile) {
         settings_.add_game_tile = !settings_.add_game_tile;
         settingsChanged(true); audio_.context(); // The first row changes.
@@ -49,6 +63,29 @@ bool Launcher::settingsExtraChoose(const Row& row) {
         settings_.studio_min_games = studio_min_counts[static_cast<size_t>(std::clamp(settings_state_.choice, 0, static_cast<int>(studio_min_counts.size()) - 1))];
         settings_state_.editing = false;
         settingsChanged(true); // The shelves again: their studios with it.
+        return true;
+    }
+    if (row.id == Id::hud_layout || row.id == Id::cpu_temp_source) {
+        auto& value = row.id == Id::hud_layout ? settings_.hud_layout : settings_.cpu_temp_source;
+        value = std::clamp(settings_state_.choice, 0, 1);
+        if (row.id == Id::cpu_temp_source) afterburner_cpu_->store(value == 0);
+        settings_state_.editing = false;
+        settingsChanged();
+        return true;
+    }
+    if (row.id == Id::fps_limit_mode) {
+        settings_.fps_limit_mode = std::clamp(settings_state_.choice, 0, 1);
+        settings_state_.editing = false;
+        settingsChanged();
+        return true;
+    }
+    if (row.id == Id::fps_limit || row.id == Id::fps_game_limit) { // The limiter's limits (src/platform/frame_limiter.hpp).
+        const int limit = _wtoi(row.choices[static_cast<size_t>(settings_state_.choice)].label.c_str()); // "60 FPS"; "Bez limitu" reads 0.
+        if (row.id == Id::fps_limit) settings_.fps_limit = limit;
+        else if (settings_state_.choice == 0) settings_.fps_game_limits.erase(row.key); // "Jak globalny".
+        else settings_.fps_game_limits[row.key] = limit;
+        settings_state_.editing = false;
+        settingsChanged();
         return true;
     }
     if (row.id != Id::home_tiles) return false;

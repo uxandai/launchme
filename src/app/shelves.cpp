@@ -353,7 +353,7 @@ void Launcher::buildShelves() {
     for (const auto role : {studios::Role::publisher, studios::Role::developer}) {
         const auto& list = studio_groups_[static_cast<size_t>(role)];
         if (list.empty()) continue;
-        Category row{role == studios::Role::publisher ? tr(L"Wydawcy") : tr(L"Developerzy")};
+        Category row{role == studios::Role::publisher ? (settings_.show_companies ? tr(L"Firmy") : tr(L"Wydawcy")) : tr(L"Developerzy")};
         row.id = role == studios::Role::publisher ? "publishers" : "developers";
         for (const auto& entry : list) row.games.push_back(studioTile(role, entry));
         categories_.push_back(std::move(row));

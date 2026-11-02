@@ -45,6 +45,10 @@ void Launcher::paint(bool overlay) {
     GameDetails local_preview, local_details;
     if (closing_) context.exit_progress = exit_progress_;
     context.fps_widget = settings_.game_fps;
+    context.fps_graph = settings_.fps_graph;
+    context.hud_layout = settings_.hud_layout;
+    context.hud_label_colors = settings_.hud_label_colors;
+    context.hud_scale = settings_.hud_size / 100.0f;
     context.hud_pins = settings_.hud_pins;
     context.fps_low = settings_.game_fps_low;
     context.game_fps = overlay_snapshot_.fps;
@@ -94,7 +98,9 @@ void Launcher::paint(bool overlay) {
     }
     // The board of logos has no order, filter or view of its own: what it is says a line under its tabs.
     context.library_controls = libraryControls() && !studioBoard() ? &library_controls_ : nullptr;
-    if (studioBoard()) context.library_note = library_category_ == "publishers" ?
+    if (studioBoard()) context.library_note = settings_.show_companies ?
+        tr(L"Wydawcy i developerzy gier z Twojej biblioteki, którzy mają logo. Wybierz logo, aby zobaczyć ich gry.") :
+        library_category_ == "publishers" ?
         tr(L"Wydawcy gier z Twojej biblioteki, którzy mają logo. Wybierz logo, aby zobaczyć ich gry.") :
         tr(L"Twórcy gier z Twojej biblioteki, którzy mają logo. Wybierz logo, aby zobaczyć ich gry.");
     context.library_menu_progress = library_menu_progress_;
@@ -366,12 +372,18 @@ void Launcher::paint(bool overlay) {
     }
     if (power_menu_) {
         context.power_menu = *power_menu_;
-        for (const auto item : power_items_) {
+        if (hud_menu_) {
+            for (const auto& row : hud_menu_rows_) { context.power_labels.push_back(row.label); context.power_icons.push_back(row.icon); }
+            context.power_title = tr(L"Widget na ekranie gry");
+            context.power_subtitle = tr(L"Co i jak pokazuje się w grze");
+            context.power_header_icon = 0xE7B3;
+        }
+        for (const auto item : hud_menu_ ? std::vector<power_menu::Item>{} : power_items_) {
             context.power_labels.emplace_back(power_menu::label(item, desktop_mode_));
             context.power_danger.push_back(power_menu::danger(item));
             context.power_icons.push_back(power_menu::icon(item));
         }
-        context.power_gaps = power_menu::gaps(power_items_);
+        context.power_gaps = powerMenuGaps();
     }
     if (screen_ == ScreenMode::shelves && cards_.empty()) {
         context.empty_reason = emptyLibraryReason();

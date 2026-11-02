@@ -32,8 +32,22 @@ bool Launcher::refreshStudios() {
                 if (record->achievements_total && record->achievements_unlocked >= record->achievements_total) perfect.insert(key);
             }
         });
-        if (settings_.show_publishers) groups[static_cast<size_t>(studios::Role::publisher)] = studios::group(publishers);
-        if (settings_.show_developers) groups[static_cast<size_t>(studios::Role::developer)] = studios::group(developers);
+        if (settings_.show_companies) {
+            // One list: a studio that both made and published a game counts once. It takes the publishers' place.
+            std::map<std::string, studios::GameNames> merged;
+            for (auto* list : {&publishers, &developers})
+                for (auto& entry : *list) {
+                    auto& names = merged[entry.key];
+                    names.key = entry.key;
+                    names.names.insert(names.names.end(), entry.names.begin(), entry.names.end());
+                }
+            std::vector<studios::GameNames> companies;
+            for (auto& [key, names] : merged) companies.push_back(std::move(names));
+            groups[static_cast<size_t>(studios::Role::publisher)] = studios::group(companies);
+        } else {
+            if (settings_.show_publishers) groups[static_cast<size_t>(studios::Role::publisher)] = studios::group(publishers);
+            if (settings_.show_developers) groups[static_cast<size_t>(studios::Role::developer)] = studios::group(developers);
+        }
     }
     // What the profile saw complete (other stores' achievements through plugins).
     for (const auto& [key, progress] : history_.progress)
@@ -46,7 +60,12 @@ bool Launcher::refreshStudios() {
     for (int role = 0; role < studios::role_count; ++role) {
         auto& list = groups[static_cast<size_t>(role)];
         const auto keyOf = [&](const studios::Entry& entry) { return studios::key(static_cast<studios::Role>(role), entry.studio->id); };
-        std::erase_if(list, [&](const studios::Entry& entry) { return settings_.hidden_studios.contains(keyOf(entry)) || entry.games.size() < least; });
+        // Firmy: hidden as a publisher or as a developer is hidden.
+        const auto hidden = [&](const studios::Entry& entry) {
+            return settings_.hidden_studios.contains(keyOf(entry)) ||
+                (settings_.show_companies && settings_.hidden_studios.contains(studios::key(studios::Role::developer, entry.studio->id)));
+        };
+        std::erase_if(list, [&](const studios::Entry& entry) { return hidden(entry) || entry.games.size() < least; });
         std::stable_sort(list.begin(), list.end(), [&](const studios::Entry& a, const studios::Entry& b) {
             const auto left = positions.find(keyOf(a)), right = positions.find(keyOf(b));
             const size_t first = left == positions.end() ? SIZE_MAX : left->second, second = right == positions.end() ? SIZE_MAX : right->second;
@@ -137,6 +156,20 @@ bool Launcher::studioSettingsToggle(const settings_ui::Row& row) {
         if (!settings_.hidden_studios.erase(row.key)) return true;
         settingsChanged(true); audio_.context();
         if (settings_.hidden_studios.empty() && settings_state_.at(settings_ui::Page::hidden_studios)) closeSettingsPage();
+        return true;
+    }
+    if (row.id == Id::studio_companies) { // Both lists become one; off, both are back.
+        settings_.show_companies = !settings_.show_companies;
+        settings_.show_publishers = settings_.show_developers = !settings_.show_companies;
+        desktop_section_ = "all";
+        settingsChanged(true); audio_.context();
+        return true;
+    }
+    if ((row.id == Id::studio_publishers || row.id == Id::studio_developers) && settings_.show_companies) {
+        settings_.show_companies = false; // The two lists replace Firmy; only the one asked for comes back.
+        (row.id == Id::studio_publishers ? settings_.show_publishers : settings_.show_developers) = true;
+        desktop_section_ = "all";
+        settingsChanged(true); audio_.context();
         return true;
     }
     bool* flag = row.id == Id::studio_publishers ? &settings_.show_publishers : row.id == Id::studio_developers ? &settings_.show_developers :

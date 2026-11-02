@@ -13,6 +13,7 @@ enum class Status { disabled, waiting, collecting, ready, denied, failed };
 struct Reading {
     Status status = Status::disabled;
     double fps = 0, low = 0;
+    std::vector<float> graph; // Frame times in ms, oldest first, evenly spread over the last six seconds.
     bool operator==(const Reading&) const = default;
 };
 
@@ -36,6 +37,30 @@ public:
         frames.push_back(seconds);
         while (frames.size() > 32768 || (frames.size() > 1 && frames.front() < seconds - 60)) frames.pop_front();
     }
+    // The last six seconds as 96 equal slices: each holds the mean frame time of the frames shown in it, a slice
+    // without a frame repeats the one before.
+    static std::vector<float> graphOf(const std::deque<double>& frames) {
+        constexpr int points = 96;
+        constexpr double span = 6.0;
+        std::vector<float> graph(points, 0.0f);
+        if (frames.size() < 2) return graph;
+        const double start = frames.back() - span;
+        std::vector<double> sum(points, 0.0);
+        std::vector<int> count(points, 0);
+        auto it = std::lower_bound(frames.begin(), frames.end(), start);
+        if (it == frames.begin()) ++it;
+        for (; it != frames.end(); ++it) {
+            const int slice = std::clamp(static_cast<int>((*it - start) / span * points), 0, points - 1);
+            sum[slice] += *it - *(it - 1);
+            ++count[slice];
+        }
+        float last = 0;
+        for (int i = 0; i < points; ++i) {
+            if (count[i]) last = static_cast<float>(sum[i] / count[i] * 1000.0);
+            graph[i] = last;
+        }
+        return graph;
+    }
     Reading read(double now) const {
         const std::deque<double>* best = nullptr;
         size_t best_count = 0;
@@ -51,6 +76,7 @@ public:
         const double span = frames.back() - frames[frames.size() - best_count];
         if (span < 0.2) return {Status::collecting};
         Reading result{Status::ready, (best_count - 1) / span};
+        result.graph = graphOf(frames);
         std::vector<double> intervals;
         for (size_t i = 1; i < frames.size(); ++i)
             if (frames[i - 1] >= now - 60) intervals.push_back(frames[i] - frames[i - 1]);

@@ -68,10 +68,10 @@ void Renderer::drawPowerMenu() {
     {
         const float cx = header_left + 40, cy = panel.top + 66;
         brush(color(1, 1, 1, 0.08f)); target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), 40, 40), solid_.Get());
-        desktopGlyph(power_menu::icon(power_menu::Item::shutdown), cx, cy, 34, color(0.95f, 0.95f, 0.95f));
+        desktopGlyph(context_->power_header_icon ? context_->power_header_icon : power_menu::icon(power_menu::Item::shutdown), cx, cy, 34, color(0.95f, 0.95f, 0.95f));
         const float title_left = header_left + 104;
-        textLine(tr(L"Zasilanie"), title_left, panel.top + 52, panel.right - title_left - 30, psfive_name_font_.Get(), color(0.97f, 0.97f, 0.97f));
-        textLine(tr(L"Launcher i komputer"), title_left, panel.top + 81, panel.right - title_left - 30, settings_body_font_.Get(), color(0.6f, 0.6f, 0.6f));
+        textLine(context_->power_title.empty() ? std::wstring(tr(L"Zasilanie")) : context_->power_title, title_left, panel.top + 52, panel.right - title_left - 30, psfive_name_font_.Get(), color(0.97f, 0.97f, 0.97f));
+        textLine(context_->power_subtitle.empty() ? std::wstring(tr(L"Launcher i komputer")) : context_->power_subtitle, title_left, panel.top + 81, panel.right - title_left - 30, settings_body_font_.Get(), color(0.6f, 0.6f, 0.6f));
     }
     // A hairline in the middle of each band separates the groups.
     for (int i = 1; i < count; ++i) {

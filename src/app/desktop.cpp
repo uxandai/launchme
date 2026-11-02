@@ -636,6 +636,7 @@ const GameDetails& Launcher::desktopDetails(const Game& game, bool& loading) {
 
 void Launcher::desktopView(desktop_ui::View& view) {
     view.entries = &desktop_entries_;
+    view.companies = settings_.show_companies;
     view.rows = desktopRows();
     view.collapsed = desktop_collapsed_;
     for (int g = 0; g < group_count; ++g)
