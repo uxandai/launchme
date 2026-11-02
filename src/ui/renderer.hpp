@@ -561,6 +561,7 @@ private:
     void drawExitTransition(float progress); // Frozen frame, subtle bow and one descending light.
     void drawPicker(const std::wstring& title, const std::vector<std::wstring>& labels, int selected);
     void drawPowerMenu(); // Zasilanie in Tryb TV (power_menu::Geometry).
+    void drawRowSwitch(float right, float center_y, bool on); // The widget options' switch (Tryb TV).
     void drawEmptyState();
     void drawFooter();
     void drawPlatformBadge();

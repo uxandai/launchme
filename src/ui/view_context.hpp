@@ -389,6 +389,10 @@ struct ViewContext {
     std::vector<wchar_t> power_icons;           // power_menu::icon of each row.
     // The layer's header when it is not Zasilanie (the widget's options): title, subtitle, icon; empty / 0: Zasilanie's.
     std::wstring power_title, power_subtitle;
+    // The widget options' rows: a switch on the right (-1: none, 0 off, 1 on) or a value with arrows; scrolled (rows hidden above / below).
+    std::vector<int> power_switches;
+    std::vector<std::wstring> power_values;
+    bool power_wide = false, power_more_above = false, power_more_below = false;
     wchar_t power_header_icon = 0;
     // Default home (AppSettings::shelves_hero_facts): the focused game's facts centred under its logo
     // (capitalised heading, value); the platform's mark is drawn for hero_platform. Empty: off.

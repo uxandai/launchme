@@ -36,7 +36,9 @@ bool Launcher::desktopModalClick(float mouse_x, float mouse_y, bool double_click
     if (double_click && hit.kind != K::field) return true;
     switch (topModal()) {
     case Modal::power_menu:
-        if (hit.kind == K::row && hit.index >= 0 && hit.index < static_cast<int>(powerMenuCount())) { power_menu_ = hit.index; powerMenuAccept(); }
+        if (hit.kind == K::row && hit.index >= 0 && hit.index + (hud_menu_ ? hud_menu_first_ : 0) < static_cast<int>(powerMenuCount())) {
+            power_menu_ = hit.index + (hud_menu_ ? hud_menu_first_ : 0); powerMenuAccept();
+        }
         else if (hit.kind != K::dialog) closePowerMenu(); // ✕ or beside it.
         return true;
     case Modal::exit_prompt:

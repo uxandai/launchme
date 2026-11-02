@@ -28,10 +28,10 @@ bool Launcher::settingsExtraToggle(const Row& row) {
         return true;
     }
     if (row.id == Id::fps_graph || row.id == Id::fps_limiter || row.id == Id::fps_limit_precise || row.id == Id::fps_badges ||
-        row.id == Id::hud_label_colors) {
+        row.id == Id::hud_label_colors || row.id == Id::hud_enabled) {
         auto& flag = row.id == Id::fps_graph ? settings_.fps_graph : row.id == Id::fps_limiter ? settings_.fps_limiter :
                      row.id == Id::fps_badges ? settings_.fps_badges : row.id == Id::hud_label_colors ? settings_.hud_label_colors :
-                     settings_.fps_limit_precise;
+                     row.id == Id::hud_enabled ? settings_.hud_enabled : settings_.fps_limit_precise;
         flag = !flag;
         settingsChanged(); audio_.context(); // The limiter's rows appear and go; the monitor follows the switch.
         return true;

@@ -1391,11 +1391,15 @@ private:
     void powerMenuAccept();
     void powerMenuClick(float x, float y);
     // The widget on the game's screen: its options in the power menu's layer (src/app/hud_menu.cpp).
-    enum class HudAction { visibility, layout, colors, size, graph, close };
-    struct HudMenuRow { HudAction action; std::wstring label; wchar_t icon; bool gap; };
-    void openHudMenu(const std::string& pin);
+    enum class HudAction { master, pin, graph, layout, colors, size, limiter, limit, mode, close };
+    struct HudMenuRow { HudAction action; std::wstring label; wchar_t icon; bool gap; std::string key; int toggle = -1; std::wstring value; }; // toggle: -1 none, 0 off, 1 on; value: shown with arrows.
+    static constexpr int hud_menu_window = 8; // Rows shown at once; more scroll.
+    void openHudMenu();
     void buildHudMenu();
-    void hudMenuAccept();
+    void hudMenuApply(int direction); // 0: choose; -1 / +1: Left / Right.
+    void hudMenuFollow();
+    int hudMenuVisible() const;
+    power_menu::Geometry powerMenuGeometryFor(float width, float height) const;
     size_t powerMenuCount() const;           // Rows of whichever dialog the layer shows.
     std::vector<bool> powerMenuGaps() const; // power_menu::gaps of those rows.
     power_menu::Geometry powerMenuGeometry() const; // Tryb TV's Zasilanie on the current canvas.
@@ -2700,8 +2704,8 @@ private:
     // Power menu: selected row while open, rows offered on this machine.
     std::optional<int> power_menu_;
     std::vector<power_menu::Item> power_items_;
-    bool hud_menu_ = false;       // The layer shows hud_menu_rows_ (for hud_menu_pin_'s tile) instead of power_items_.
-    std::string hud_menu_pin_;
+    int hud_menu_first_ = 0;      // The first row of the window shown.
+    bool hud_menu_ = false;       // The layer shows hud_menu_rows_ (the widget's options) instead of power_items_.
     std::vector<HudMenuRow> hud_menu_rows_;
     // Injectable so UI tests never sleep or shut down the machine.
     std::function<std::vector<PowerAction>()> power_actions_ = availablePowerActions;

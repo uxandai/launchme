@@ -50,7 +50,7 @@ void Renderer::drawPicker(const std::wstring& title, const std::vector<std::wstr
 void Renderer::drawPowerMenu() {
     const auto& labels = context_->power_labels;
     const int count = static_cast<int>(labels.size());
-    power_menu::Geometry layout{viewport_.width, viewport_.height, context_->power_gaps};
+    power_menu::Geometry layout{viewport_.width, viewport_.height, context_->power_gaps, context_->power_wide ? 150.0f : 0.0f};
     if (static_cast<int>(layout.gaps.size()) != count) layout.gaps.assign(static_cast<size_t>(count), false);
     const auto p = layout.panel();
     const auto panel = D2D1::RectF(p.left, p.top, p.right, p.bottom);
@@ -98,8 +98,38 @@ void Renderer::drawPowerMenu() {
         brush(focus > 0.5f ? color(0, 0, 0, 0.08f) : color(1, 1, 1, 0.07f));
         target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), radius, radius), solid_.Get());
         if (i < static_cast<int>(context_->power_icons.size())) desktopGlyph(context_->power_icons[static_cast<size_t>(i)], cx, cy, radius * 0.87f, tone);
-        textLine(labels[static_cast<size_t>(i)], cx + radius + 21, cy, box.right - cx - radius - 43, category_font_.Get(), tone);
+        // The widget options: a switch on the right, or the value between two arrows.
+        const bool has_switch = i < static_cast<int>(context_->power_switches.size()) && context_->power_switches[static_cast<size_t>(i)] >= 0;
+        const std::wstring value = i < static_cast<int>(context_->power_values.size()) ? context_->power_values[static_cast<size_t>(i)] : std::wstring{};
+        float reserve = 0;
+        if (has_switch) {
+            reserve = 84;
+            drawRowSwitch(box.right - 28, cy, context_->power_switches[static_cast<size_t>(i)] == 1);
+        } else if (!value.empty()) {
+            const float width = textAdvance(value, category_font_.Get());
+            const float right = box.right - 48;
+            reserve = width + 96;
+            textLine(value, right - width, cy, width + 2, category_font_.Get(), tone);
+            const auto ink = color(std::lerp(0.78f, dark.r, focus), std::lerp(0.78f, dark.g, focus), std::lerp(0.78f, dark.b, focus), 0.9f);
+            line(right - width - 20, cy - 7, right - width - 27, cy, ink, 2); line(right - width - 27, cy, right - width - 20, cy + 7, ink, 2);
+            line(right + 18, cy - 7, right + 25, cy, ink, 2); line(right + 25, cy, right + 18, cy + 7, ink, 2);
+        }
+        textLine(labels[static_cast<size_t>(i)], cx + radius + 21, cy, box.right - cx - radius - 43 - reserve, category_font_.Get(), tone);
     }
+    // Rows beyond the window: a small chevron at its edge.
+    if (context_->power_more_above) { line(panel.right - 60, layout.row(0).top - 14, panel.right - 52, layout.row(0).top - 20, color(1, 1, 1, 0.5f), 2); line(panel.right - 52, layout.row(0).top - 20, panel.right - 44, layout.row(0).top - 14, color(1, 1, 1, 0.5f), 2); }
+    if (context_->power_more_below) { const float y = layout.row(count - 1).bottom + 14; line(panel.right - 60, y, panel.right - 52, y + 6, color(1, 1, 1, 0.5f), 2); line(panel.right - 52, y + 6, panel.right - 44, y, color(1, 1, 1, 0.5f), 2); }
+}
+
+// A switch like Settings' (52 x 28), its right edge at `right`.
+void Renderer::drawRowSwitch(float right, float center_y, bool on) {
+    const auto accent = uiAccent();
+    const auto off = color(0.23f, 0.23f, 0.23f, 1.0f);
+    const float t = on ? 1.0f : 0.0f;
+    brush(D2D1::ColorF(std::lerp(off.r, accent.r, t), std::lerp(off.g, accent.g, t), std::lerp(off.b, accent.b, t), 1.0f));
+    target_->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(right - 52, center_y - 14, right, center_y + 14), 14, 14), solid_.Get());
+    { const float knob = on ? 0.08f : 0.67f; brush(color(knob, knob, knob, 1.0f)); }
+    target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(right - (on ? 14.0f : 38.0f), center_y), 10, 10), solid_.Get());
 }
 
 void Renderer::drawExitPrompt() {

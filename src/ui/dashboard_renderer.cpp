@@ -221,26 +221,29 @@ bool Renderer::paintHud(const ViewContext& context) {
         target_->SetTransform(D2D1::Matrix3x2F::Scale(viewport_.scale * scale, viewport_.scale * scale));
         target_->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE);
         target_->Clear(D2D1::ColorF(0, 0, 0, 0));
-        struct Line { std::wstring label, value; bool hot = false; bool graph = false; std::string id; };
+        struct Line { std::wstring label, value; bool hot = false; bool graph = false; std::string id;
+                    bool graph_ready = false; std::wstring reserve; }; // graph: the slot is kept; reserve: the widest value, so nothing moves.
         std::vector<Line> lines;
         // A fixed order, whatever order they were switched on in.
         for (const char* id_text : {"fps", "cpu", "gpu", "ram", "vram"}) {
             const std::string id = id_text;
             if (std::find(context.hud_pins.begin(), context.hud_pins.end(), id) == context.hud_pins.end()) continue;
             if (id == "ram") {
-                lines.push_back({L"RAM", sensors::formatMemory(context.dashboard.sensors.ram_used, context.dashboard.sensors.ram_total), false, false, id});
+                lines.push_back({L"RAM", sensors::formatMemory(context.dashboard.sensors.ram_used, context.dashboard.sensors.ram_total), false, false, id, false, L"88 / 88 GB"});
             } else if (id == "vram") {
-                lines.push_back({L"VRAM", sensors::formatMemory(context.dashboard.sensors.vram_used, context.dashboard.sensors.vram_total), false, false, id});
+                lines.push_back({L"VRAM", sensors::formatMemory(context.dashboard.sensors.vram_used, context.dashboard.sensors.vram_total), false, false, id, false, L"88 / 88 GB"});
             } else if (id == "fps" && context.fps_widget) {
                 const auto& reading = context.game_fps;
                 Line line{L"FPS", reading.status == game_fps::Status::ready ? fpsNumber(reading.fps) : std::wstring(L"—")};
                 if (reading.status == game_fps::Status::ready && context.fps_low && reading.low > 0) line.value += L"   1% " + fpsNumber(reading.low);
-                line.graph = context.fps_graph && reading.status == game_fps::Status::ready;
+                line.graph = context.fps_graph; // The curve appears a few seconds into the game: its place is there from the start.
+                line.graph_ready = context.fps_graph && reading.status == game_fps::Status::ready;
+                line.reserve = context.fps_low ? L"888   1% 888" : L"888";
                 line.id = id;
                 lines.push_back(std::move(line));
             } else if (id == "cpu" || id == "gpu") {
                 const auto celsius = id == "cpu" ? context.dashboard.sensors.cpu : context.dashboard.sensors.gpu;
-                lines.push_back({id == "cpu" ? L"CPU" : L"GPU", sensors::format(celsius), celsius && *celsius >= hot_celsius, false, id});
+                lines.push_back({id == "cpu" ? L"CPU" : L"GPU", sensors::format(celsius), celsius && *celsius >= hot_celsius, false, id, false, L"888 °C"});
             }
         }
         if (!lines.empty() || !context.hud_badges.empty()) {
@@ -267,7 +270,7 @@ bool Renderer::paintHud(const ViewContext& context) {
                 float width = 2 * pad;
                 for (size_t i = 0; i < lines.size(); ++i) {
                     const auto& line = lines[i];
-                    cells.push_back({textAdvance(line.label, friend_status_font_.Get()) + 6, textAdvance(line.value, friend_status_font_.Get()) + 6});
+                    cells.push_back({textAdvance(line.label, friend_status_font_.Get()) + 6, std::max(textAdvance(line.value, friend_status_font_.Get()), textAdvance(line.reserve, friend_status_font_.Get())) + 6});
                     width += cells.back().label + label_gap + cells.back().value + (line.graph ? 10 + graph_width : 0) + (i ? gap : 0);
                 }
                 for (size_t i = 0; i < context.hud_badges.size(); ++i)
@@ -283,7 +286,7 @@ bool Renderer::paintHud(const ViewContext& context) {
                     left += cells[i].label + label_gap;
                     textLine(line.value, left, center, cells[i].value, friend_status_font_.Get(), line.hot ? palette::danger() : gray(0.97f));
                     left += cells[i].value;
-                    if (line.graph) { left += 10; drawFrameGraph(left, center - graph_height * 0.5f, graph_width, graph_height, context.game_fps.graph); left += graph_width; }
+                    if (line.graph) { left += 10; if (line.graph_ready) drawFrameGraph(left, center - graph_height * 0.5f, graph_width, graph_height, context.game_fps.graph); left += graph_width; }
                 }
                 for (size_t i = 0; i < context.hud_badges.size(); ++i) {
                     if (i || !lines.empty()) left += i ? chip_gap : gap;
@@ -305,7 +308,7 @@ bool Renderer::paintHud(const ViewContext& context) {
                     text(line.value, x + pad + 66, top, width - 2 * pad - 66, row, friend_status_font_.Get(),
                          line.hot ? palette::danger() : gray(0.97f));
                     top += row;
-                    if (line.graph) { drawFrameGraph(x + pad, top + 2, width - 2 * pad, graph_height, context.game_fps.graph); top += graph_height + 6; }
+                    if (line.graph) { if (line.graph_ready) drawFrameGraph(x + pad, top + 2, width - 2 * pad, graph_height, context.game_fps.graph); top += graph_height + 6; }
                 }
                 float chip_x = x + pad;
                 const float chip_cy = top + (lines.empty() ? 0.0f : -4.0f) + chip_row * 0.5f;

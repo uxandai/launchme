@@ -309,7 +309,7 @@ void Launcher::focusContext(ViewContext& context) const {
     if (library_choice_glide_.valid) context.library_choice_glide = library_choice_glide_.value.value;
     if (library_flow_.valid && libraryBookshelf()) context.library_flow = library_flow_.value.value;
     if (exit_prompt_ && exit_glide_.valid) context.picker_glide = exit_glide_.value.value;
-    else if (power_menu_ && power_glide_.valid) context.picker_glide = power_glide_.value.value;
+    else if (power_menu_ && power_glide_.valid) context.picker_glide = power_glide_.value.value - (hud_menu_ ? static_cast<float>(hud_menu_first_) : 0.0f);
     const auto box = [](const SpringBox& spring) {
         return ViewContext::GlideBox{spring.left.value, spring.top.value, spring.right.value, spring.bottom.value};
     };

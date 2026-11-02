@@ -305,6 +305,7 @@ AppSettings parseAppSettings(std::string_view text) {
             }
             continue;
         }
+        if (key == "hud_enabled") { if (value == "0" || value == "1") settings.hud_enabled = value == "1"; continue; }
         if (key == "hud_layout") { if (value == "0" || value == "1") settings.hud_layout = value[0] - '0'; continue; }
         if (key == "cpu_temp_source") { if (value == "0" || value == "1") settings.cpu_temp_source = value[0] - '0'; continue; }
         if (key == "hud_label_colors") { if (value == "0" || value == "1") settings.hud_label_colors = value == "1"; continue; }
@@ -538,6 +539,7 @@ AppSettings parseAppSettings(std::string_view text) {
                 settings.glass = std::clamp(level, 0.0f, 1.0f);
         }
         else if (key == "steam_silent_launch" && (value == "0" || value == "1")) settings.steam_silent_launch = value == "1";
+        else if (key == "steam_hide_launch_window" && (value == "0" || value == "1")) settings.steam_hide_launch_window = value == "1";
         else if (key == "steam_account_switch" && (value == "0" || value == "1")) settings.steam_account_switch = value == "1";
         else if (key == "steam_install_dialog" && (value == "0" || value == "1")) settings.steam_install_dialog = value == "1";
         else if (key == "game_videos" && (value == "0" || value == "1")) settings.game_videos = value == "1";
@@ -936,6 +938,7 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
                                  settings.hint_glyphs == AppSettings::HintGlyphs::playstation ? "playstation" :
                                  settings.hint_glyphs == AppSettings::HintGlyphs::nintendo ? "nintendo" : "auto") << '\n';
     output << "steam_silent_launch=" << settings.steam_silent_launch << '\n';
+    output << "steam_hide_launch_window=" << settings.steam_hide_launch_window << '\n';
     output << "xbox_own_install=" << settings.xbox_own_install << '\n';
     output << "hide_while_playing=" << settings.hide_while_playing << '\n';
     output << "steam_account_switch=" << settings.steam_account_switch << '\n';
@@ -1028,6 +1031,7 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
            << "fps_limit_precise=" << settings.fps_limit_precise << '\n'
            << "fps_limit_mode=" << settings.fps_limit_mode << '\n'
            << "fps_badges=" << settings.fps_badges << '\n'
+           << "hud_enabled=" << settings.hud_enabled << '\n'
            << "hud_layout=" << settings.hud_layout << '\n'
            << "hud_label_colors=" << settings.hud_label_colors << '\n'
            << "hud_size=" << settings.hud_size << '\n'

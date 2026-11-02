@@ -124,30 +124,71 @@ int LauncherUiTest::gameOverlay(HWND window) {
     if (app.overlay_motion_.drawer != 1 || app.overlay_motion_.bar != 0) return 1854;
     app.overlayKey(VK_DOWN); app.overlayKey(VK_DOWN); // FPS below the four built-ins.
     if (app.dashboard_tile_ != 5) return 1809;
-    // A click on FPS opens the widget's options, as a power menu does: the first row shows or hides it on the game's screen.
-    app.settings_.hud_pins.clear(); app.settings_dirty_ = false;
+    // A click on FPS (CPU, GPU) opens the widget's options, as a power menu does: the master switch on top, then each line and the look.
+    app.settings_.hud_pins.clear(); app.settings_dirty_ = false; app.settings_.hud_enabled = true;
     app.overlayKey(VK_RETURN);
     if (!app.gameOverlayOpen() || !app.powerMenuOpen() || !app.hud_menu_ || app.settings_.hud_pins.size() != 0) return 1810;
-    if (app.hud_menu_rows_.size() != 6 || app.hud_menu_rows_.front().action != Launcher::HudAction::visibility ||
-        app.hud_menu_rows_.back().action != Launcher::HudAction::close || !app.hud_menu_rows_.back().gap) return 9860;
+    using HudAction = Launcher::HudAction;
+    const auto hudRow = [&](HudAction action, const char* key = "") {
+        for (size_t i = 0; i < app.hud_menu_rows_.size(); ++i)
+            if (app.hud_menu_rows_[i].action == action && app.hud_menu_rows_[i].key == key) return static_cast<int>(i);
+        return -1;
+    };
+    const auto hudPick = [&](HudAction action, const char* key = "") {
+        const int row = hudRow(action, key);
+        if (row < 0) return false;
+        app.power_menu_ = row; app.overlayKey(VK_RETURN);
+        return true;
+    };
+    if (app.hud_menu_rows_.size() != 12 || hudRow(HudAction::master) != 0 || hudRow(HudAction::pin, "fps") != 1 ||
+        app.hud_menu_rows_.back().action != HudAction::close || !app.hud_menu_rows_.back().gap) return 9860;
     if (!capture(L"game-guide-hud-options.png")) return 1811;
-    app.overlayKey(VK_RETURN); // "Pokaż FPS": pinned, the dialog stays and its row now offers to hide it.
-    if (!app.powerMenuOpen() || !app.settings_dirty_ || app.settings_.hud_pins != std::vector<std::string>{"fps"} ||
-        app.hud_menu_rows_.front().label != std::wstring(tr(L"Ukryj FPS na ekranie gry"))) return 9861;
-    app.overlayKey(VK_DOWN); app.overlayKey(VK_RETURN); // Layout: a strip.
-    if (app.settings_.hud_layout != 1) return 9862;
-    app.overlayKey(VK_DOWN); app.overlayKey(VK_RETURN); // Coloured labels.
-    if (!app.settings_.hud_label_colors) return 9863;
-    app.overlayKey(VK_DOWN); app.overlayKey(VK_RETURN); // Size: 100 -> 90.
-    if (app.settings_.hud_size != 90) return 9864;
-    for (int i = 0; i < 4; ++i) app.overlayKey(VK_RETURN); // 80, 70, 60, 50.
+    if (!hudPick(HudAction::pin, "fps") || !hudPick(HudAction::pin, "cpu")) return 9861; // The dialog stays open.
+    if (!app.powerMenuOpen() || !app.settings_dirty_ || app.settings_.hud_pins != std::vector<std::string>{"fps", "cpu"} ||
+        app.hud_menu_rows_[1].toggle != 1 || app.hud_menu_rows_[2].toggle != 1 || app.hud_menu_rows_[3].toggle != 0) return 9875;
+    if (!hudPick(HudAction::layout) || app.settings_.hud_layout != 1) return 9862; // A strip.
+    if (!hudPick(HudAction::colors) || !app.settings_.hud_label_colors) return 9863;
+    if (!hudPick(HudAction::size) || app.settings_.hud_size != 90) return 9864; // 100 -> 90.
+    for (int i = 0; i < 4; ++i) hudPick(HudAction::size); // 80, 70, 60, 50.
     if (app.settings_.hud_size != 50) return 9865;
-    app.overlayKey(VK_RETURN); // ... and round to the largest again.
+    hudPick(HudAction::size); // ... and round to the largest again.
     if (app.settings_.hud_size != 100) return 9866;
-    app.overlayKey(VK_DOWN); app.overlayKey(VK_RETURN); // Frame graph.
-    if (!app.settings_.fps_graph) return 9867;
-    app.overlayKey(VK_DOWN); app.overlayKey(VK_RETURN); // Zamknij.
+    if (!hudPick(HudAction::graph) || !app.settings_.fps_graph) return 9867;
+    // Left / Right: a switch off and on, a value one step; the dialog scrolls past its eight rows.
+    app.power_menu_ = hudRow(HudAction::colors); app.overlayKey(VK_LEFT);
+    if (app.settings_.hud_label_colors) return 9880;
+    app.overlayKey(VK_RIGHT);
+    if (!app.settings_.hud_label_colors) return 9881;
+    app.power_menu_ = hudRow(HudAction::size); app.overlayKey(VK_LEFT); app.overlayKey(VK_LEFT);
+    if (app.settings_.hud_size != 80) return 9882;
+    app.overlayKey(VK_RIGHT); app.overlayKey(VK_RIGHT); app.overlayKey(VK_RIGHT);
+    if (app.settings_.hud_size != 100) return 9883; // Not past the largest.
+    app.settings_.fps_limiter = false;
+    app.power_menu_ = hudRow(HudAction::limiter); app.overlayKey(VK_RIGHT);
+    if (!app.settings_.fps_limiter || hudRow(HudAction::limit) < 0 || hudRow(HudAction::mode) < 0) return 9884; // Its limit and mode appear.
+    app.power_menu_ = hudRow(HudAction::limit);
+    for (int i = 0; i < 4; ++i) app.overlayKey(VK_RIGHT); // Bez limitu, 30, 40, 45, 60.
+    const int limited = app.overlay_snapshot_.target ? app.gameFpsLimit(app.overlay_snapshot_.target->key) : app.settings_.fps_limit;
+    if (limited != 60) return 9885;
+    app.overlayKey(VK_RIGHT); app.overlayKey(VK_RIGHT);
+    if ((app.overlay_snapshot_.target ? app.gameFpsLimit(app.overlay_snapshot_.target->key) : app.settings_.fps_limit) != 90) return 9886;
+    app.overlayKey(VK_LEFT);
+    if ((app.overlay_snapshot_.target ? app.gameFpsLimit(app.overlay_snapshot_.target->key) : app.settings_.fps_limit) != 72) return 9887;
+    app.power_menu_ = hudRow(HudAction::mode); app.overlayKey(VK_RIGHT);
+    if (app.settings_.fps_limit_mode != 1) return 9888;
+    app.overlayKey(VK_LEFT);
+    if (app.settings_.fps_limit_mode != 0) return 9889;
+    if (app.hud_menu_first_ == 0 || !capture(L"game-guide-hud-options-scrolled.png")) return 9890; // The window followed the row.
+    app.settings_.fps_limiter = false; app.settings_.fps_game_limits.clear(); app.settings_.fps_limit = 0; app.buildHudMenu();
+    // The master switch hides every row below it and the widget altogether; the lines are remembered.
+    if (!hudPick(HudAction::master) || app.settings_.hud_enabled || app.hud_menu_rows_.size() != 3 ||
+        app.settings_.hud_pins != std::vector<std::string>{"fps", "cpu"} || *app.power_menu_ != 0) return 9876;
+    if (!capture(L"game-guide-hud-options-off.png")) return 9877;
+    if (!hudPick(HudAction::master) || !app.settings_.hud_enabled || app.hud_menu_rows_.size() != 12) return 9878;
+    app.settings_.hud_pins.clear(); app.settings_.hud_layout = 0; app.settings_.hud_label_colors = false; app.settings_.fps_graph = false;
+    if (!hudPick(HudAction::close)) return 9879;
     if (!app.gameOverlayOpen() || app.powerMenuOpen() || app.hud_menu_) return 9868;
+    app.toggleHudPin("fps"); // The dot on the tile.
     if (!capture(L"game-guide-widgets.png")) return 9869; // With the pin's dot.
     app.settings_.fps_graph = true; // The curve in the tile: a steady 8 ms with one hitch.
     app.overlay_snapshot_.fps.graph.assign(96, 8.3f);
@@ -222,9 +263,9 @@ int LauncherUiTest::gameOverlay(HWND window) {
     app.overlayClick((tile.left + tile.right) * 0.5f, (tile.top + tile.bottom) * 0.5f);
     if (!app.hud_menu_ || !app.powerMenuOpen() || !app.friends_open_) return 1817; // The mouse opens the options too...
     {
-        const power_menu::Geometry options{1600, 900, app.powerMenuGaps()};
-        const auto row = options.row(0);
-        app.overlayClick((row.left + row.right) * 0.5f, (row.top + row.bottom) * 0.5f); // ...and its first row pins the widget.
+        const auto options = app.powerMenuGeometryFor(1600, 900);
+        const auto row = options.row(1);
+        app.overlayClick((row.left + row.right) * 0.5f, (row.top + row.bottom) * 0.5f); // ...and a click on the FPS row pins it.
     }
     if (app.settings_.hud_pins != std::vector<std::string>{"fps"} || !app.powerMenuOpen()) return 9873;
     app.closePowerMenu();
@@ -370,7 +411,7 @@ int LauncherUiTest::gameOverlay(HWND window) {
         // What the widget over the game shows: a switch for each line, and the limiter's mode and badges.
         if (find(Id::fps_limit_mode) == app.settings_rows_.end() || find(Id::fps_badges) == app.settings_rows_.end() ||
             std::count_if(app.settings_rows_.begin(), app.settings_rows_.end(), [](const auto& row) { return row.id == Id::hud_pin; }) != 5) return 2004;
-        for (const auto id : {Id::hud_layout, Id::hud_label_colors, Id::hud_size, Id::cpu_temp_source})
+        for (const auto id : {Id::hud_enabled, Id::hud_layout, Id::hud_label_colors, Id::hud_size, Id::cpu_temp_source})
             if (find(id) == app.settings_rows_.end()) return 9870;
         app.settings_state_.choice = 1; app.settingsChoose(*find(Id::hud_layout));
         app.settingsToggle(*find(Id::hud_label_colors));

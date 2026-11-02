@@ -510,6 +510,8 @@ add_test(NAME low_memory_mode COMMAND launcher_ui_tests --low-memory)
     add_dependencies(frame_limiter_tests launchme_limiter)
     add_custom_command(TARGET frame_limiter_tests POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:launchme_limiter>" "$<TARGET_FILE_DIR:frame_limiter_tests>/")
+    launchme_executable(steam_launch_window_tests TEST steam_launching_window_detection
+        SOURCES tests/steam_launch_window_tests.cpp src/platform/steam_launch_window.cpp)
     launchme_executable(sensors_tests TEST dashboard_temperature_sensors
         SOURCES tests/sensors_tests.cpp src/platform/sensors.cpp
         LIBS pdh)

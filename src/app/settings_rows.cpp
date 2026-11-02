@@ -822,6 +822,8 @@ void Launcher::buildSettingsRows() {
             }
             // What the widget over the game shows. Each switch only shows or hides a line: measuring starts when a line needs it.
             section(tr(L"Widget na ekranie gry"));
+            add({Id::hud_enabled, Control::toggle, tr(L"Widget w grze"),
+                tr(L"Włącznik główny. Wyłączony: na ekranie gry nie ma żadnego widgetu, niezależnie od przełączników poniżej (te zostają zapamiętane)."), {}, settings_.hud_enabled});
             {
                 struct Pin { const char* id; const wchar_t* title; const wchar_t* description; };
                 const Pin pins[] = {

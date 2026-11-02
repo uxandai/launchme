@@ -295,7 +295,7 @@ void Launcher::dashboardActivate(int tile) {
         dashboardEnsureVisible(); drawer_glide_.valid = false;
         audio_.navigate(); invalidateGameOverlay(); InvalidateRect(hwnd_, nullptr, FALSE); return;
     }
-    if (settings_.game_fps && tile == dashboardTileCount() - 1) { openHudMenu("fps"); return; } // Its options: show or hide it on the game's screen, layout, colours, size.
+    if (settings_.game_fps && tile == dashboardTileCount() - 1) { openHudMenu(); return; } // The widget's options: the master switch, each line, the look.
     if (tile >= dashboard::tile_count) { const auto action = plugin_widgets_[tile - dashboard::tile_count]; pluginAction(action); return; }
     switch (static_cast<dashboard::Tile>(tile)) {
     case dashboard::Tile::steam:
@@ -307,8 +307,8 @@ void Launcher::dashboardActivate(int tile) {
         InvalidateRect(hwnd_, nullptr, FALSE);
         break;
     case dashboard::Tile::discord: openDiscord(); break;
-    case dashboard::Tile::cpu: openHudMenu("cpu"); break;
-    case dashboard::Tile::gpu: openHudMenu("gpu"); break;
+    case dashboard::Tile::cpu: openHudMenu(); break;
+    case dashboard::Tile::gpu: openHudMenu(); break;
     case dashboard::Tile::profile:
         if (gameOverlayOpen()) break; // Over a game the page would open behind it.
         openProfile(); // Closes the drawer and opens over the screen beneath it.

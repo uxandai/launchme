@@ -355,6 +355,7 @@ set(LAUNCHME_APP_SOURCES
     src/platform/game_activity.cpp
     src/platform/game_overlay_monitor.cpp
     src/platform/etw_access.cpp
+    src/platform/steam_launch_window.cpp
     src/platform/frame_limiter.cpp
     src/platform/layered_surface.cpp
     src/platform/process_freeze.cpp

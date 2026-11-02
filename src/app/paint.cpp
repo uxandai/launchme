@@ -371,9 +371,16 @@ void Launcher::paint(bool overlay) {
         context.prompt_labels = {tr(L"Przenieś") + (L" (" + megabytes + L" MB)"), std::wstring(tr(L"Zostaw w starym folderze")), std::wstring(tr(L"Anuluj"))};
     }
     if (power_menu_) {
-        context.power_menu = *power_menu_;
+        context.power_menu = *power_menu_ - (hud_menu_ ? hud_menu_first_ : 0);
         if (hud_menu_) {
-            for (const auto& row : hud_menu_rows_) { context.power_labels.push_back(row.label); context.power_icons.push_back(row.icon); }
+            for (int i = 0; i < hudMenuVisible(); ++i) {
+                const auto& row = hud_menu_rows_[static_cast<size_t>(hud_menu_first_ + i)];
+                context.power_labels.push_back(row.label); context.power_icons.push_back(row.icon);
+                context.power_switches.push_back(row.toggle); context.power_values.push_back(row.value);
+            }
+            context.power_wide = true;
+            context.power_more_above = hud_menu_first_ > 0;
+            context.power_more_below = hud_menu_first_ + hud_menu_window < static_cast<int>(hud_menu_rows_.size());
             context.power_title = tr(L"Widget na ekranie gry");
             context.power_subtitle = tr(L"Co i jak pokazuje się w grze");
             context.power_header_icon = 0xE7B3;

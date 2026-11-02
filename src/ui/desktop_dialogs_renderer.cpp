@@ -400,7 +400,7 @@ void Renderer::drawDesktopPrompts() {
         const auto danger = [&](int i) { return i >= 0 && i < static_cast<int>(context_->power_danger.size()) && context_->power_danger[static_cast<size_t>(i)]; };
         float bands = 0;
         for (int i = 0; i < static_cast<int>(labels.size()); ++i) if (gap(i)) bands += band;
-        const auto p = desktopDialogFrame(view, 360, sheet_header + 20 + static_cast<float>(labels.size()) * item_h + bands,
+        const auto p = desktopDialogFrame(view, context_->power_wide ? 500.0f : 360.0f, sheet_header + 20 + static_cast<float>(labels.size()) * item_h + bands,
             context_->power_title.empty() ? std::wstring(tr(L"Zasilanie")) : context_->power_title, false);
         float y = p.top + sheet_header + 10;
         for (int i = 0; i < static_cast<int>(labels.size()); ++i) {
@@ -414,7 +414,17 @@ void Renderer::drawDesktopPrompts() {
                 const auto red = palette::dangerStrong(focused ? 0.16f : 0.1f);
                 desktopFill(r, 8, danger(i) ? red : gray(1, focused ? 0.08f : 0.05f));
             }
-            textLine(labels[static_cast<size_t>(i)], r.left + 14, middle(r), r.right - r.left - 28, desktop_font_.Get(),
+            // The widget options: a switch on the right, or the value.
+            float reserve = 0;
+            if (i < static_cast<int>(context_->power_switches.size()) && context_->power_switches[static_cast<size_t>(i)] >= 0) {
+                reserve = 56;
+                desktopSwitch({r.right - 54, middle(r) - 11, r.right - 14, middle(r) + 11}, static_cast<float>(context_->power_switches[static_cast<size_t>(i)]), false, over ? 1.0f : 0.0f);
+            } else if (i < static_cast<int>(context_->power_values.size()) && !context_->power_values[static_cast<size_t>(i)].empty()) {
+                const auto& value = context_->power_values[static_cast<size_t>(i)];
+                reserve = textAdvance(value, desktop_font_.Get()) + 40;
+                textLine(L"\u2039  " + value + L"  \u203A", r.right - 14 - reserve, middle(r), reserve, desktop_font_.Get(), palette::muted(), DWRITE_TEXT_ALIGNMENT_TRAILING);
+            }
+            textLine(labels[static_cast<size_t>(i)], r.left + 14, middle(r), r.right - r.left - 28 - reserve, desktop_font_.Get(),
                      danger(i) ? palette::danger() : palette::text());
             desktopModalHot({Kind::row, i}, r);
             y += item_h;

@@ -93,6 +93,15 @@ void Launcher::pcSettingsRows() {
         add({Id::steam_silent_launch, Control::toggle, tr(L"Ciche uruchamianie Steam"),
             tr(L"Steam zostaje w zasobniku i nie przejmuje fokusu, launcher przekazuje go oknu gry. Okna Steam mogą zostać w tle."),
             {}, settings_.steam_silent_launch});
+#ifdef _WIN32
+        {
+            Row hide{Id::steam_hide_launch_window, Control::toggle, tr(L"Ukryj okno „Uruchamianie…” Steam"),
+                tr(L"Steam pokazuje na kilka sekund małe okno „Uruchamianie…” tuż przed grą. Launchme chowa je zaraz po otwarciu (tylko to jedno okienko, tylko po starcie gry z launchme)."),
+                {}, settings_.steam_hide_launch_window};
+            hide.lines = 2;
+            add(std::move(hide));
+        }
+#endif
         add({Id::steam_account_switch, Control::toggle, tr(L"Przełączanie kont Steam"),
             tr(L"Gra zainstalowana z innego konta zapamiętanego w Steam: Steam uruchamia się ponownie na tym koncie, potem gra."),
             {}, settings_.steam_account_switch});

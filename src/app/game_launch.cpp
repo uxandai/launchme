@@ -5,6 +5,7 @@
 #include "launcher_internal.hpp"
 #include "../ui/launch_animation.hpp"
 #include "../platform/text_encoding.hpp"
+#include "../platform/steam_launch_window.hpp"
 #ifndef _WIN32
 #include "../model/launch_options_catalog.hpp"
 #include "../platform/wine_runner.hpp"
@@ -240,6 +241,11 @@ void Launcher::finishLaunch() {
 #ifndef _WIN32
     // A Windows program runs through umu/Proton/Wine with the game's options in its prefix.
     if (compatGame(pending_game_)) action.compat = launch_options_store::compatLaunch(pending_game_);
+#endif
+#ifndef LAUNCHME_UI_TEST
+    // Steam's "Uruchamianie…" window opens a second or two after steam.exe gets the command.
+    if (settings_.steam_hide_launch_window && pending_game_.source == GameSource::steam && action.kind == ActionKind::play)
+        steam_launch_window::watch(30000, alive_);
 #endif
     auto result = execute_(hwnd_, action);
     if (result <= 32 && result != launch_error::cancelled && action.keep_focus) {

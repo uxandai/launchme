@@ -220,12 +220,13 @@ void Launcher::powerMenuMove(int amount) {
     const int next = std::clamp(*power_menu_ + amount, 0, static_cast<int>(powerMenuCount()) - 1);
     if (next == *power_menu_) { navigationBoundary(); return; }
     power_menu_ = next;
+    hudMenuFollow();
     audio_.navigate();
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
 void Launcher::powerMenuAccept() {
-    if (hud_menu_) { hudMenuAccept(); return; }
+    if (hud_menu_) { hudMenuApply(0); return; }
     if (!power_menu_ || *power_menu_ >= static_cast<int>(power_items_.size())) return;
     const auto item = power_items_[*power_menu_];
     closePowerMenu();
@@ -241,7 +242,8 @@ void Launcher::powerMenuAccept() {
 }
 
 void Launcher::powerMenuKey(WPARAM key, bool repeated) {
-    if (key == VK_UP || key == VK_LEFT || key == 'W' || key == 'A') powerMenuMove(-1);
+    if (hud_menu_ && (key == VK_LEFT || key == VK_RIGHT || key == 'A' || key == 'D')) hudMenuApply(key == VK_LEFT || key == 'A' ? -1 : 1); // A value, a switch.
+    else if (key == VK_UP || key == VK_LEFT || key == 'W' || key == 'A') powerMenuMove(-1);
     else if (key == VK_DOWN || key == VK_RIGHT || key == 'S' || key == 'D') powerMenuMove(1);
     else if ((key == VK_RETURN || key == VK_SPACE) && !repeated) powerMenuAccept();
     else if (key == VK_ESCAPE || key == VK_BACK) closePowerMenu();
@@ -250,13 +252,13 @@ void Launcher::powerMenuKey(WPARAM key, bool repeated) {
 void Launcher::powerMenuClick(float x, float y) {
     const auto layout = powerMenuGeometry();
     const int choice = layout.hit(x, y);
-    if (choice >= 0) { power_menu_ = choice; powerMenuAccept(); }
+    if (choice >= 0) { power_menu_ = choice + (hud_menu_ ? hud_menu_first_ : 0); powerMenuAccept(); }
     else if (!layout.panel().contains(x, y)) closePowerMenu();
 }
 
 power_menu::Geometry Launcher::powerMenuGeometry() const {
     const auto view = renderer_.viewport();
-    return {view.width, view.height, powerMenuGaps()};
+    return powerMenuGeometryFor(view.width, view.height);
 }
 
 // --- Gamepad ----------------------------------------------------------------
@@ -575,6 +577,10 @@ bool Launcher::modalPad(const PadReading& state, WORD buttons, ULONGLONG now) {
         }
         controller_direction_ = direction;
         const bool power = modal == Modal::power_menu;
+        if (power && hud_menu_) { // The widget's options: Left / Right change the row's value or switch.
+            if (pressed(XINPUT_GAMEPAD_DPAD_LEFT)) { noteUserInput(); hudMenuApply(-1); }
+            else if (pressed(XINPUT_GAMEPAD_DPAD_RIGHT)) { noteUserInput(); hudMenuApply(1); }
+        }
         if (pressed(XINPUT_GAMEPAD_A)) { noteUserInput(); if (power) powerMenuAccept(); else exitPromptAccept(); }
         else if (pressed(XINPUT_GAMEPAD_B)) { noteUserInput(); if (power) closePowerMenu(); else exitPromptKey(VK_ESCAPE, false); }
         controller_buttons_ = buttons;

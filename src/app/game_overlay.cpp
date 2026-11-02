@@ -132,7 +132,7 @@ std::vector<std::wstring> Launcher::hudBadges() const {
 void Launcher::updateHud() {
     // Over the game in front (Guide closed): the pinned widgets in a corner. Never interactive.
     const auto target = overlay_snapshot_.target;
-    const bool want = runtime_started_ && guideOverlayOn() && (!settings_.hud_pins.empty() || !hudBadges().empty()) && !gameOverlayOpen() && target &&
+    const bool want = runtime_started_ && guideOverlayOn() && settings_.hud_enabled && (!settings_.hud_pins.empty() || !hudBadges().empty()) && !gameOverlayOpen() && target &&
         overlay_backend_.foreground() == target->window;
     if (!want) {
         if (hud_window_ && hud_visible_) hud_window_->hide();
@@ -391,9 +391,9 @@ void Launcher::overlayClick(float x, float y) {
         if (row >= 0) { overlay_close_confirm_ = row; confirmOverlayClose(); }
         else if (!layout.picker(2).contains(x, y)) overlay_close_confirm_.reset();
     } else if (power_menu_) {
-        const power_menu::Geometry layout{view.width, view.height, powerMenuGaps()};
+        const auto layout = powerMenuGeometryFor(view.width, view.height);
         const int row = layout.hit(x, y);
-        if (row >= 0) { power_menu_ = row; powerMenuAccept(); } else closePowerMenu();
+        if (row >= 0) { power_menu_ = row + (hud_menu_ ? hud_menu_first_ : 0); powerMenuAccept(); } else closePowerMenu();
     } else if (friends_open_) {
         const float left = view.width - friends_layout::drawer_width;
         if (x < left) closeFriends();

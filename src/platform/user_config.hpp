@@ -228,6 +228,9 @@ struct AppSettings {
     // Steam games start through steam.exe -silent (a Steam started for them stays in the tray) and
     // Steam gets no foreground permission; Launchme hands focus to the game window itself.
     bool steam_silent_launch = false;
+    // Steam's small "Uruchamianie…" window (about three seconds, a moment before the game's own) is hidden as it opens
+    // (src/platform/steam_launch_window.hpp).
+    bool steam_hide_launch_window = true;
     // Xbox account games: Instaluj downloads a GDK title with Launchme's Xodus-based helper into a
     // chosen folder (experimental) instead of handing it to the Xbox app (store/xbox_account.hpp).
     bool xbox_own_install = false;
@@ -308,6 +311,7 @@ struct AppSettings {
     bool fps_limit_precise = true;    // Smoother pacing for a little more CPU.
     int fps_limit_mode = 0;           // 0: smooth (frames wait for their slot); 1: adaptive (low latency, as even).
     bool fps_badges = true;           // LIMIT / SMOOTH chips on the pinned widgets while the limiter works.
+    bool hud_enabled = true;          // Master switch of the widget on the game's screen: off, nothing is shown there.
     int hud_layout = 0;               // The widget on the game's screen: 0 a list, 1 a strip (one line).
     bool hud_label_colors = false;    // Coloured FPS / CPU / GPU / RAM / VRAM labels instead of grey.
     int hud_size = 100;               // Percent of the largest size: 50..100.

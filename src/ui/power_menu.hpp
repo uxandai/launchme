@@ -65,6 +65,7 @@ inline std::vector<bool> gaps(const std::vector<Item>& items) {
 struct Geometry {
     float width = 1600, height = 900;
     std::vector<bool> gaps;
+    float extra_width = 0; // The widget options' dialog is wider than Zasilanie.
     static constexpr float max_width = 760, padding = 26, band = 18, header = 132;
     static constexpr float tall_step = 78, tall_height = 70;
     int count() const { return static_cast<int>(gaps.size()); }
@@ -82,7 +83,7 @@ struct Geometry {
     float rowHeight() const { return rowStep() - (tall_step - tall_height); }
     settings_ui::Rect panel() const {
         const float h = header + count() * rowStep() + bandsAbove(count() - 1) + padding;
-        const float w = std::min(max_width, width - 96);
+        const float w = std::min(max_width + extra_width, width - 96);
         return {(width - w) * 0.5f, (height - h) * 0.5f, (width + w) * 0.5f, (height + h) * 0.5f};
     }
     settings_ui::Rect row(int index) const {

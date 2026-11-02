@@ -475,16 +475,16 @@ int main() {
         limiter.fps_game_limits = {{"steam:42", 30}, {"epic:a:b", 0}};
         limiter.show_companies = true;
         limiter.fps_limit_mode = 1; limiter.fps_badges = false; limiter.hud_pins = {"fps", "ram", "vram", "cpu", "gpu"};
-        limiter.hud_layout = 1; limiter.hud_label_colors = true; limiter.hud_size = 70; limiter.cpu_temp_source = 1;
+        limiter.steam_hide_launch_window = false; limiter.hud_enabled = false; limiter.hud_layout = 1; limiter.hud_label_colors = true; limiter.hud_size = 70; limiter.cpu_temp_source = 1;
         const auto other = file.parent_path() / L"limiter_settings.ini";
         if (!saveAppSettings(limiter, other)) return 62;
         const auto restored = loadAppSettings(other);
         if (!restored.fps_graph || !restored.fps_limiter || restored.fps_limit != 90 || restored.fps_limit_precise ||
             restored.fps_game_limits != limiter.fps_game_limits || !restored.show_companies ||
             restored.fps_limit_mode != 1 || restored.fps_badges || restored.hud_pins != limiter.hud_pins) return 60;
-        if (restored.hud_layout != 1 || !restored.hud_label_colors || restored.hud_size != 70 || restored.cpu_temp_source != 1) return 63;
+        if (restored.steam_hide_launch_window || !AppSettings{}.steam_hide_launch_window || restored.hud_enabled || restored.hud_layout != 1 || !restored.hud_label_colors || restored.hud_size != 70 || restored.cpu_temp_source != 1) return 63;
         const auto strange = parseAppSettings("hud_size=20\nhud_layout=7\ncpu_temp_source=x\n");
-        if (strange.hud_size != 100 || strange.hud_layout != 0 || strange.cpu_temp_source != 0) return 64;
+        if (!strange.hud_enabled || strange.hud_size != 100 || strange.hud_layout != 0 || strange.cpu_temp_source != 0) return 64;
         const auto odd = parseAppSettings("fps_limit=5\nfps_game_limit=7:x\nfps_game_limit=60\nfps_game_limit=abc:y\nfps_limit=99999\nfps_limiter=2\n");
         if (odd.fps_limit != 0 || !odd.fps_game_limits.empty() || odd.fps_limiter) return 61;
     }
