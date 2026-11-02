@@ -271,6 +271,9 @@ void Launcher::overlayDashboard() {
     still_since_ = std::chrono::steady_clock::now(); frame_limit_ = 240;
     overlay_backend_.focus(hwnd_);
     closeGameOverlay(false);
+    // Hiding the overlay hands the foreground back to the game: the launcher takes it again (with the
+    // retries of a refused return), or its page would open behind the game.
+    bringToFront();
     if (settingsOpen()) saveSettings();
     closeQuick(); quick_progress_ = 0; closeCategoryMenu(); dismissMenu();
     showCategory(0);
