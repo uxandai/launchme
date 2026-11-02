@@ -353,11 +353,11 @@ void Launcher::aureliaOperation(aurelia::Request request, const Game& game) {
         }
         openAurelia(); return;
     }
-    if (aurelia_operations_.contains(request.app) || aurelia_operations_.contains(game.app_id) || aurelia_downloads_.contains(request.app)) {
+    if (aurelia_operations_.contains(request.app) || aurelia_operations_.contains(game.app_id) || (request.command != C::install_resume && aurelia_downloads_.contains(request.app))) {
         showNotification(NotificationKind::error, L"Aurelia", tr(L"Operacja dla tej gry już trwa")); return;
     }
     aurelia_operations_.insert(request.app); aurelia_operations_.insert(game.app_id);
-    const bool transfer = request.command == C::install || request.command == C::update || request.command == C::verify || request.command == C::downgrade || request.command == C::move;
+    const bool transfer = request.command == C::install || request.command == C::install_resume || request.command == C::update || request.command == C::verify || request.command == C::downgrade || request.command == C::move;
     if (transfer) {
         aurelia::Download download; download.app = request.app; download.name = game.name; download.progress.phase = InstallPhase::allocating;
         download.progress.update = game.installed; aurelia_downloads_[request.app] = std::move(download);
@@ -374,7 +374,7 @@ void Launcher::aureliaOperation(aurelia::Request request, const Game& game) {
             if (c.state != aurelia::CloudState::synced) { reply.ok = false; if (reply.error.empty()) reply.error = aurelia::cloudLabel(c.state); }
         }
         if (reply.ok && transfer) app.downloadFinished(game.name, &game);
-        else if (!reply.ok && !reply.cancelled) app.showNotification(NotificationKind::error, L"Aurelia · " + game.name, reply.error);
+        else if (!reply.ok && !reply.cancelled && aurelia::text(reply.data, "type") != "cancelled") app.showNotification(NotificationKind::error, L"Aurelia · " + game.name, reply.error);
         if (aurelia::flag(reply.data, "steam_restart_required")) app.showNotification(NotificationKind::launch, L"Aurelia", tr(L"Uruchom ponownie klienta Steam, aby zobaczył zmianę DLC."));
         app.aureliaRescan();
         if (app.aurelia_ui_.open && page_generation == app.aurelia_page_generation_) {

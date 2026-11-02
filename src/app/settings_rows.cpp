@@ -1,6 +1,7 @@
 // Settings row definitions and presentation; interaction and persistence live in settings.cpp.
 // Settings 2.0: every category is split into titled sections (Row::section on a section's first row).
 #include "launcher.hpp"
+#include "../platform/etw_access.hpp"
 #include "../platform/flac.hpp"
 #include "../platform/music_themes.hpp"
 #include "../platform/sound_cues.hpp"
@@ -839,6 +840,21 @@ void Launcher::buildSettingsRows() {
             choiceRow(Id::game_fps, tr(L"Widget FPS gry"),
                       tr(L"Eksperymentalny pomiar PresentMon / ETW. Wymaga uprawnień do śledzenia wydajności. 1% low: najwolniejsze klatki z ostatnich 60 sekund."),
                       fps, !settings_.game_fps ? 0 : settings_.game_fps_low ? 2 : 1);
+        }
+        if (settings_.game_fps) {
+            // The trace needs the user in "Performance Log Users" once; the launcher itself stays unelevated.
+            switch (etw_access::state()) {
+            case etw_access::State::missing:
+                add({Id::fps_access, Control::action, tr(L"Uprawnienia pomiaru FPS"),
+                    tr(L"Dodaje Twoje konto do grupy Użytkownicy dzienników wydajności (jedno potwierdzenie administratora). Launchme nadal działa bez podniesionych uprawnień."),
+                    tr(L"Nadaj")});
+                break;
+            case etw_access::State::pending_sign_in:
+                add({Id::fps_access, Control::action, tr(L"Uprawnienia pomiaru FPS"),
+                    tr(L"Nadane. Wyloguj się z Windows i zaloguj ponownie, aby pomiar zadziałał."), L""});
+                break;
+            default: break;
+            }
         }
         section(tr(L"Wydajność"));
         add({Id::low_memory, Control::toggle, tr(L"Tryb niskiego zużycia RAM"),

@@ -18,7 +18,7 @@ enum class Action {
     none, toggle, cloud_toggle, default_launch, helper, repository, login, logout, reconnect, refresh, close,
     login_start, login_refresh, login_cancel, // The in-app sign-in (setup page): open it, a new QR code, leave it.
     cloud, dlc, versions, branches, workshop,
-    sync, resolve_cloud, resolve_local, install, update, verify, cancel, uninstall, steam, auto_cloud,
+    sync, resolve_cloud, resolve_local, install, update, verify, cancel, pause, resume, forget, forget_files, relink, import_files, duplicates, uninstall, steam, auto_cloud,
     enable_dlc, disable_dlc, pin, unpin, downgrade, set_branch, move, choose_library, browse_library,
     workshop_install, workshop_subscribe, workshop_unsubscribe
 };

@@ -167,6 +167,29 @@ int main(int argc, char** argv) {
     const auto progress = aurelia::downloads(parsed(R"([{"app_id":902,"downloaded_bytes":0,"total_bytes":9000000000,"is_downloading":true}])"));
     CHECK(progress && progress->front().progress.percent() == 0 && progress->front().progress.total == 9000000000ULL);
     CHECK(!aurelia::downloads(parsed("{}")));
+    // The install backlog: paused, stopped and interrupted entries are not running downloads.
+    const auto backlog = aurelia::downloads(parsed(R"([{"app_id":1,"state":"running","is_downloading":true},{"app_id":2,"state":"paused","downloaded_bytes":5,"total_bytes":10},{"app_id":3,"state":"aborted"},{"app_id":4,"state":"queued"}])"));
+    CHECK(backlog && backlog->size() == 4 && !(*backlog)[0].backlog && (*backlog)[1].backlog && (*backlog)[2].backlog && (*backlog)[3].backlog);
+    CHECK((*backlog)[0].progress.phase == InstallPhase::downloading && (*backlog)[1].progress.phase == InstallPhase::paused &&
+          !(*backlog)[1].progress.live && (*backlog)[3].progress.phase == InstallPhase::queued);
+    CHECK(aurelia::arguments({C::install_pause, 902}) == std::vector<std::wstring>({L"--json", L"install", L"pause", L"902"}));
+    CHECK(aurelia::arguments({C::install_resume, 902}) == std::vector<std::wstring>({L"--json", L"install", L"resume", L"902"}));
+    CHECK(aurelia::arguments({C::install_forget, 902}) == std::vector<std::wstring>({L"--json", L"install", L"forget", L"902"}));
+    { aurelia::Request forget{C::install_forget, 902}; forget.delete_files = true; CHECK(aurelia::arguments(forget).back() == L"--delete-files"); }
+    CHECK(aurelia::arguments({C::install_pause}).empty()); // Needs a game.
+    CHECK(aurelia::arguments({C::duplicates}) == std::vector<std::wstring>({L"--json", L"duplicates"}));
+    { aurelia::Request relink{C::relink, 902}; CHECK(aurelia::arguments(relink).empty()); // Relative or missing library: refused.
+      relink.folder = L"D:\\SteamLibrary";
+#ifdef _WIN32
+      CHECK(aurelia::arguments(relink) == std::vector<std::wstring>({L"--json", L"relink", L"902", L"D:\\SteamLibrary"}));
+      relink.command = C::import_files; CHECK(aurelia::arguments(relink)[1] == L"import");
+#endif
+    }
+    CHECK(aurelia::checked({C::install_resume, 902}, {true, false, parsed(R"({"app_id":902,"status":"installed"})")}).ok);
+    CHECK(!aurelia::checked({C::relink, 902}, {true, false, parsed(R"({"app_id":902,"status":"imported"})")}).ok);
+    const auto twice = aurelia::duplicates(parsed(R"({"duplicates":[{"app_id":620,"name":"Portal 2","keep":{"install_path":"C:/a"},"remove":[{"install_path":"D:/b","size_bytes":100},{"install_path":"E:/c","size_bytes":50}]},{"app_id":7,"remove":[]}]})"));
+    CHECK(twice && twice->size() == 1 && twice->front().app == 620 && twice->front().stale.size() == 2 && twice->front().reclaimable == 150);
+    CHECK(!aurelia::duplicates(parsed("[]")));
     const auto history = aurelia::chatHistory(parsed(R"([{"timestamp":20,"from_self":true,"message":"second"},{"timestamp":10,"from_self":false,"message":"first"}])"));
     CHECK(history && history->front().text == L"first");
     CHECK(!aurelia::chatHistory(parsed(R"([{"timestamp":20,"message":"bad"}])")));

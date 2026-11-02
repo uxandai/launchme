@@ -926,6 +926,8 @@ private:
     std::map<uint32_t, uint64_t> aurelia_stopping_; // Zamknij grę through Aurelia: the deadline (0 while asked).
     json::Value aurelia_page_data_;
     aurelia_ui::Action aurelia_library_action_ = aurelia_ui::Action::install;
+    const wchar_t* aureliaLibraryTitle() const;
+    void aureliaReportDuplicates();
     void initializeAurelia();
     void startAureliaLibraryWorker();
     void toggleAurelia();

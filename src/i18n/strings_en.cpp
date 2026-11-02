@@ -542,6 +542,14 @@ constexpr Entry entries[] = {
     {L"Najwolniejsze 1% klatek z ostatnich 60 sekund gry.", L"Slowest 1% of frames from the last 60 seconds of gameplay."},
     {L"FPS gry", L"Game FPS"},
     {L"Brak uprawnień ETW", L"ETW access denied"},
+    {L"Uprawnienia pomiaru FPS", L"FPS measurement permission"},
+    {L"Dodaje Twoje konto do grupy Użytkownicy dzienników wydajności (jedno potwierdzenie administratora). Launchme nadal działa bez podniesionych uprawnień.", L"Adds your account to the Performance Log Users group (one administrator confirmation). Launchme itself still runs unelevated."},
+    {L"Nadaj", L"Grant"},
+    {L"Nadane. Wyloguj się z Windows i zaloguj ponownie, aby pomiar zadziałał.", L"Granted. Sign out of Windows and back in for the measurement to work."},
+    {L"Uprawnienia nadane", L"Permission granted"},
+    {L"Wyloguj się z Windows i zaloguj ponownie, aby pomiar FPS zadziałał.", L"Sign out of Windows and back in for FPS measurement to work."},
+    {L"Nie nadano uprawnień", L"Permission not granted"},
+    {L"Potrzebna jest zgoda administratora.", L"Administrator approval is required."},
     {L"Brak dostępu do ETW. Pomiar FPS wymaga uprawnień.", L"ETW access denied. FPS measurement requires tracing permissions."},
     {L"Pomiar FPS niedostępny", L"FPS measurement unavailable"},
     {L"Brak aktywnej gry", L"No active game"},
@@ -2956,6 +2964,25 @@ constexpr Entry entries[] = {
 #if __has_include("strings_en_local.inc")
 #include "strings_en_local.inc"
 #endif
+    {L"Wstrzymaj pobieranie", L"Pause download"},
+    {L"Wznów pobieranie", L"Resume download"},
+    {L"Usuń z kolejki", L"Remove from queue"},
+    {L"Usuń z kolejki wraz z pobranymi plikami", L"Remove from queue and delete downloaded files"},
+    {L"Wskaż przeniesione pliki", L"Point to moved files"},
+    {L"Steam znajdzie grę w innej bibliotece, bez kopiowania.", L"Steam finds the game in another library, without copying."},
+    {L"Zarejestruj istniejące pliki", L"Register existing files"},
+    {L"Gra już leży w bibliotece Steam; nic nie zostanie pobrane.", L"The game is already in a Steam library; nothing will be downloaded."},
+    {L"Sprawdź zdublowane instalacje", L"Find duplicate installs"},
+    {L"Gry zainstalowane w kilku bibliotekach naraz; nic nie jest usuwane.", L"Games installed in several libraries at once; nothing is deleted."},
+    {L"Biblioteka, do której przeniesiono pliki", L"Library the files were moved to"},
+    {L"Biblioteka z plikami gry", L"Library holding the game's files"},
+    {L"Usunąć pobrane pliki?", L"Delete the downloaded files?"},
+    {L"Częściowo pobrane pliki tej gry zostaną skasowane.", L"This game's partly downloaded files will be deleted."},
+    {L"Wstrzymywanie pobierania…", L"Pausing download…"},
+    {L"Usunięto z kolejki", L"Removed from the queue"},
+    {L"Żadna gra nie jest zainstalowana w kilku bibliotekach.", L"No game is installed in more than one library."},
+    {L" gier w kilku bibliotekach: ", L" games in several libraries: "},
+    {L" do odzyskania. Usuń zbędne kopie ręcznie po zamknięciu Steam.", L" to reclaim. Delete the extra copies by hand after closing Steam."},
 };
 } // namespace
 

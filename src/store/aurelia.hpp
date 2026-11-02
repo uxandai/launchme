@@ -46,6 +46,12 @@ enum class Command {
     chat_history, chat_send, chat_live, install, downloads, cancel_install, update, verify, uninstall,
     play, launch_targets, running, stop, available, cloud_list, cloud_sync, dlc, enable_dlc, disable_dlc,
     manifests, pin, unpin, downgrade, branches, set_branch, move,
+    // Aurelia's install backlog: pause keeps the partial files, stop (cancel_install) leaves the entry
+    // "aborted", resume continues it (a long command, like install), forget drops the entry.
+    install_pause, install_resume, install_forget,
+    // Library maintenance: relink points Steam at files already moved (no copy), import registers files
+    // already on disk in a library, duplicates reports games installed in several libraries (read only).
+    relink, import_files, duplicates,
     workshop_browse, workshop_status, workshop_install, workshop_subscribe, workshop_unsubscribe,
     // Steam's collections, read only: pull fetches the cloud's into Aurelia's store (never push or sync,
     // which change the account), list names them, show (text: its id) gives one's games.
@@ -65,6 +71,7 @@ struct Request {
     std::wstring language = L"english";
     enum class Direction { both, down, up } direction = Direction::both;
     bool auto_cloud = false;
+    bool delete_files = false; // install_forget: also remove the entry's safe partial files.
     bool force = false; // stop: end the recorded process tree at once (taskkill /F), as Zamknij grę does.
     // login_password: the password, given to the child as AURELIA_PASSWORD (never on a command line).
     std::wstring secret;
@@ -118,10 +125,15 @@ SteamAchievements achievements(const json::Value& value);
 GameDetails details(const json::Value& value);
 struct Download {
     uint32_t app = 0; std::wstring name, status; Installation progress;
+    // A backlog entry (paused, stopped or interrupted) that no process is downloading.
+    bool backlog = false;
     uint64_t speed = 0;
     std::optional<uint64_t> eta;
 };
 std::optional<std::vector<Download>> downloads(const json::Value& value);
+// `duplicates --json`: a game installed in several libraries; `keep` is the live copy, the rest are stale.
+struct Duplicate { uint32_t app = 0; std::wstring name; std::vector<std::filesystem::path> stale; uint64_t reclaimable = 0; };
+std::optional<std::vector<Duplicate>> duplicates(const json::Value& value);
 enum class CloudState { unknown, checking, files, empty, syncing, synced, conflicts, incomplete, failed };
 struct Cloud {
     CloudState state = CloudState::unknown; size_t files = 0, conflicts = 0; uint64_t checked = 0; std::wstring error;

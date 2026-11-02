@@ -7,7 +7,9 @@ Reply checked(const Request& request, Reply reply) {
     if (!reply.ok) return reply;
     const char* status = nullptr;
     switch (request.command) {
-    case Command::install: status = "installed"; break;
+    case Command::install: case Command::install_resume: status = "installed"; break;
+    case Command::relink: status = "relinked"; break;
+    case Command::import_files: status = "imported"; break;
     case Command::update: status = "updated"; break;
     case Command::verify: status = "verified"; break;
     case Command::move: status = "moved"; break;

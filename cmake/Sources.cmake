@@ -353,6 +353,7 @@ set(LAUNCHME_APP_SOURCES
     src/platform/frame_clock.cpp
     src/platform/game_activity.cpp
     src/platform/game_overlay_monitor.cpp
+    src/platform/etw_access.cpp
     src/platform/layered_surface.cpp
     src/platform/process_freeze.cpp
     src/platform/steam_downloads.cpp

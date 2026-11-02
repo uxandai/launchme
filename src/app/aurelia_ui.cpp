@@ -157,6 +157,11 @@ void Launcher::aureliaRows() {
         }
         add(A::helper, s.installed ? tr(L"Sprawdź aktualizację") : tr(L"Zainstaluj Aurelię"),
             aurelia_helper_busy_ ? tr(L"Pobieranie…") : aurelia_version_).locked = aurelia_helper_busy_;
+        if (aurelia_authenticated_ && s.installed) {
+            auto& duplicates = add(A::duplicates, tr(L"Sprawdź zdublowane instalacje"));
+            duplicates.description = tr(L"Gry zainstalowane w kilku bibliotekach naraz; nic nie jest usuwane.");
+            duplicates.locked = s.busy;
+        }
         add(A::repository, tr(L"Repozytorium Aurelii"), L"GitHub");
         if (s.intro) add(A::close, tr(L"Dalej"));
         break;
@@ -167,22 +172,38 @@ void Launcher::aureliaRows() {
         if (settings_.aurelia_default)
             toggle(A::steam, tr(L"Zarządzaj przez Steam"), settings_.aurelia_steam.contains(std::to_string(s.game.app_id)));
         else toggle(A::steam, tr(L"Zarządzaj przez Aurelię"), settings_.aurelia_standalone.contains(std::to_string(s.game.app_id)));
-        const bool downloading = aurelia_downloads_.contains(s.game.app_id);
-        if (!aureliaManaged(s.game)) { if (downloading) add(A::cancel, tr(L"Anuluj pobieranie")); break; }
+        const auto transfer = aurelia_downloads_.find(s.game.app_id);
+        const bool downloading = transfer != aurelia_downloads_.end();
+        // Its transfer: running (pause, cancel) or waiting in Aurelia's backlog (resume, forget).
+        const auto transferRows = [&] {
+            if (transfer->second.backlog) {
+                add(A::resume, tr(L"Wznów pobieranie"));
+                add(A::forget, tr(L"Usuń z kolejki"));
+                add(A::forget_files, tr(L"Usuń z kolejki wraz z pobranymi plikami")).danger = true;
+            } else {
+                add(A::pause, tr(L"Wstrzymaj pobieranie"));
+                add(A::cancel, tr(L"Anuluj pobieranie"));
+            }
+        };
+        if (!aureliaManaged(s.game)) { if (downloading) transferRows(); break; }
         if (settings_.aurelia_cloud) add(A::cloud, tr(L"Zapisy w chmurze"), aurelia::cloudShort(cloud_state));
         if (s.game.installed) {
             add(A::dlc, L"DLC");
             add(A::versions, tr(L"Wersje"), s.pinned == true ? tr(L"Przypięta") : L"");
             add(A::workshop, L"Steam Workshop");
-            if (downloading) add(A::cancel, tr(L"Anuluj pobieranie"));
+            if (downloading) transferRows();
             else {
                 add(A::update, tr(L"Aktualizuj"));
                 add(A::verify, tr(L"Sprawdź pliki"));
                 add(A::move, tr(L"Przenieś do innej biblioteki"));
+                add(A::relink, tr(L"Wskaż przeniesione pliki")).description = tr(L"Steam znajdzie grę w innej bibliotece, bez kopiowania.");
             }
             add(A::uninstall, tr(L"Odinstaluj")).danger = true;
-        } else if (downloading) add(A::cancel, tr(L"Anuluj pobieranie"));
-        else add(A::install, tr(L"Zainstaluj"));
+        } else if (downloading) transferRows();
+        else {
+            add(A::install, tr(L"Zainstaluj"));
+            add(A::import_files, tr(L"Zarejestruj istniejące pliki")).description = tr(L"Gra już leży w bibliotece Steam; nic nie zostanie pobrane.");
+        }
         break;
     }
     case P::cloud: {
@@ -224,7 +245,7 @@ void Launcher::aureliaRows() {
             add(A::set_branch, wideLenient(b.text), {}, 0, wideLenient(b.text));
         break;
     case P::libraries: {
-        s.title = aurelia_library_action_ == A::move ? tr(L"Przenieś do innej biblioteki") : tr(L"Wybierz bibliotekę Steam");
+        s.title = aureliaLibraryTitle();
         for (const auto& l : array(data, "libraries")) {
             const auto path = wideLenient(aurelia::text(l, "path"));
             const auto free = aurelia::integer(l.get("free_bytes"));
@@ -304,10 +325,19 @@ void Launcher::aureliaPage(P page) {
     });
 }
 
+const wchar_t* Launcher::aureliaLibraryTitle() const {
+    switch (aurelia_library_action_) {
+    case A::move: return tr(L"Przenieś do innej biblioteki");
+    case A::relink: return tr(L"Biblioteka, do której przeniesiono pliki");
+    case A::import_files: return tr(L"Biblioteka z plikami gry");
+    default: return tr(L"Wybierz bibliotekę Steam");
+    }
+}
+
 void Launcher::aureliaBrowseLibrary() {
     file_browser::Request request;
     request.mode = file_browser::Mode::folder;
-    request.title = aurelia_library_action_ == A::move ? tr(L"Przenieś do innej biblioteki") : tr(L"Wybierz bibliotekę Steam");
+    request.title = aureliaLibraryTitle();
     request.native = [this, title = request.title] { return pickPath(hwnd_, true, title, {}, {}, false, {}); };
     const auto app_id = aurelia_ui_.game.app_id, generation = aurelia_page_generation_;
     openFileBrowser(std::move(request), [this, app_id, generation](const std::filesystem::path& folder) {
@@ -337,7 +367,7 @@ void Launcher::aureliaActivate(Row row, bool confirmed) {
     if (row.action == A::repository) {
         execute_(hwnd_, GameAction{L"https://github.com/Drackrath/Aurelia", {}, {}, ActionKind::open_client}); return;
     }
-    if (s.busy && row.action != A::cancel && !confirmed) return;
+    if (s.busy && row.action != A::cancel && row.action != A::pause && !confirmed) return;
     switch (row.action) {
     case A::cloud: aureliaPage(P::cloud); return;
     case A::dlc: aureliaPage(P::dlc); return;
@@ -359,12 +389,16 @@ void Launcher::aureliaActivate(Row row, bool confirmed) {
     }
     case A::install: if (s.page != P::dlc) { aurelia_library_action_ = A::install; aureliaPage(P::libraries); return; } break;
     case A::move: aurelia_library_action_ = A::move; aureliaPage(P::libraries); return;
+    case A::relink: aurelia_library_action_ = A::relink; aureliaPage(P::libraries); return;
+    case A::import_files: aurelia_library_action_ = A::import_files; aureliaPage(P::libraries); return;
+    case A::duplicates: aureliaReportDuplicates(); return;
     default: break;
     }
-    const bool destructive = row.action == A::uninstall || row.action == A::downgrade || row.action == A::resolve_cloud || row.action == A::resolve_local || row.action == A::logout;
+    const bool destructive = row.action == A::uninstall || row.action == A::downgrade || row.action == A::resolve_cloud || row.action == A::resolve_local || row.action == A::logout || row.action == A::forget_files;
     if (destructive && !confirmed) {
         auto question = row;
         if (row.action == A::uninstall) { question.title = tr(L"Odinstalować grę?"); question.description = tr(L"Zapisy w chmurze pozostają."); }
+        else if (row.action == A::forget_files) { question.title = tr(L"Usunąć pobrane pliki?"); question.description = tr(L"Częściowo pobrane pliki tej gry zostaną skasowane."); }
         else if (row.action == A::logout) { question.title = tr(L"Wylogować z Aurelii?"); question.description.clear(); }
         s.confirmation = question; s.input_focus = false; s.confirm_focus = false; s.hover = -9;
         closeKeyboard(); InvalidateRect(hwnd_, nullptr, FALSE); return;
@@ -377,10 +411,16 @@ void Launcher::aureliaActivate(Row row, bool confirmed) {
     case A::sync: case A::resolve_cloud: case A::resolve_local:
         request.command = C::cloud_sync; request.text = row.action == A::resolve_cloud ? L"cloud" : row.action == A::resolve_local ? L"local" : L""; break;
     case A::install: request.command = C::install; request.app = static_cast<uint32_t>(row.id); break;
-    case A::choose_library: request.command = aurelia_library_action_ == A::move ? C::move : C::install; request.folder = plainPath(row.payload); break;
+    case A::choose_library:
+        request.command = aurelia_library_action_ == A::move ? C::move : aurelia_library_action_ == A::relink ? C::relink :
+                          aurelia_library_action_ == A::import_files ? C::import_files : C::install;
+        request.folder = plainPath(row.payload); break;
     case A::update: request.command = C::update; break;
     case A::verify: request.command = C::verify; break;
     case A::cancel: request.command = C::cancel_install; break;
+    case A::pause: request.command = C::install_pause; break;
+    case A::resume: request.command = C::install_resume; break;
+    case A::forget: case A::forget_files: request.command = C::install_forget; request.delete_files = row.action == A::forget_files; break;
     case A::uninstall: request.command = C::uninstall; break;
     case A::enable_dlc: request.command = C::enable_dlc; request.app = static_cast<uint32_t>(row.id); break;
     case A::disable_dlc: request.command = C::disable_dlc; request.app = static_cast<uint32_t>(row.id); break;
@@ -419,14 +459,45 @@ void Launcher::aureliaActivate(Row row, bool confirmed) {
         if (game_sessions_.contains(gameKey(s.game)) || aurelia_playing_.contains(s.game.app_id)) {
             s.status = tr(L"Najpierw zamknij grę, zanim zmienisz jej pliki lub zapisy"); InvalidateRect(hwnd_, nullptr, FALSE); return;
         }
-        if (request.command == C::cancel_install) {
-            aureliaRequest(request, [](Launcher& app, aurelia::Reply r) {
-                app.aurelia_ui_.status = r.ok ? tr(L"Zatrzymywanie pobierania…") : r.error;
-                app.aurelia_poll_at_ = 0; InvalidateRect(app.hwnd_, nullptr, FALSE);
+        if (request.command == C::cancel_install || request.command == C::install_pause || request.command == C::install_forget) {
+            // Said at once; the next poll shows where the transfer is (paused and stopped ones stay in the backlog).
+            const bool pausing = request.command == C::install_pause, forgetting = request.command == C::install_forget;
+            aureliaRequest(request, [pausing, forgetting](Launcher& app, aurelia::Reply r) {
+                app.aurelia_ui_.status = !r.ok ? r.error : pausing ? tr(L"Wstrzymywanie pobierania…") : forgetting ? tr(L"Usunięto z kolejki") : tr(L"Zatrzymywanie pobierania…");
+                app.aurelia_poll_at_ = 0;
+                if (app.aurelia_ui_.open && app.aurelia_ui_.page == P::game) app.aureliaRows();
+                InvalidateRect(app.hwnd_, nullptr, FALSE);
             });
         } else aureliaOperation(request, s.game);
     }
     InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+// Games installed in several libraries (read only: Aurelia reports what to delete, it removes nothing).
+void Launcher::aureliaReportDuplicates() {
+    auto& s = aurelia_ui_; if (!s.open || !aurelia_transport_ || s.busy) return;
+    const auto generation = aurelia_page_generation_;
+    s.busy = true; s.status = tr(L"Wczytywanie…"); aureliaRows();
+    aureliaRequest({C::duplicates}, [generation](Launcher& app, aurelia::Reply reply) {
+        const auto list = reply.ok ? aurelia::duplicates(reply.data) : std::nullopt;
+        std::wstring message;
+        if (!reply.ok) message = reply.error;
+        else if (!list) message = tr(L"Nieprawidłowa odpowiedź Aurelii");
+        else if (list->empty()) message = tr(L"Żadna gra nie jest zainstalowana w kilku bibliotekach.");
+        else {
+            uint64_t bytes = 0; std::wstring names;
+            for (size_t i = 0; i < list->size(); ++i) {
+                const auto& d = (*list)[i];
+                bytes += d.reclaimable;
+                if (i < 3) names += (names.empty() ? L"" : L", ") + (d.name.empty() ? std::to_wstring(d.app) : d.name);
+            }
+            message = std::to_wstring(list->size()) + tr(L" gier w kilku bibliotekach: ") + names + (list->size() > 3 ? L"…" : L"") +
+                      L" · " + sizeText(bytes) + tr(L" do odzyskania. Usuń zbędne kopie ręcznie po zamknięciu Steam.");
+        }
+        if (app.aurelia_ui_.open && app.aurelia_page_generation_ == generation) { app.aurelia_ui_.busy = false; app.aurelia_ui_.status = message; app.aureliaRows(); }
+        else if (!message.empty()) app.showNotification(reply.ok ? NotificationKind::launch : NotificationKind::error, L"Aurelia", message);
+        InvalidateRect(app.hwnd_, nullptr, FALSE);
+    });
 }
 
 // The sign-in page: Steam's QR code for the Steam Mobile app and, in the same page, the field for the

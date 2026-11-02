@@ -1,4 +1,5 @@
 #include "launcher.hpp"
+#include "../platform/etw_access.hpp"
 #include "../platform/flac.hpp"
 #include "../platform/music_themes.hpp"
 #include "../platform/sound_cues.hpp"
@@ -431,6 +432,14 @@ void Launcher::settingsActivate() {
         settings_.tour_done = false;
         settings_dirty_ = true; settings_edited_ = std::chrono::steady_clock::now();
         startTour();
+        return;
+    }
+    if (row.id == Id::fps_access) {
+        if (etw_access::state() != etw_access::State::missing) return;
+        if (etw_access::grant()) {
+            showNotification(NotificationKind::launch, tr(L"Uprawnienia nadane"), tr(L"Wyloguj się z Windows i zaloguj ponownie, aby pomiar FPS zadziałał."));
+            settingsChanged(); // Rebuilds the page: the row now says to sign in again.
+        } else showNotification(NotificationKind::error, tr(L"Nie nadano uprawnień"), tr(L"Potrzebna jest zgoda administratora."));
         return;
     }
     if (row.id == Id::update) { updateAction(); return; } // Aktualizuj (one click), or look for one now.

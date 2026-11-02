@@ -22,7 +22,7 @@ struct Handle {
     void reset() { if (value && value != INVALID_HANDLE_VALUE) CloseHandle(value); value = nullptr; }
 };
 bool longCommand(Command c) {
-    return c == Command::install || c == Command::update || c == Command::verify || c == Command::downgrade ||
+    return c == Command::install || c == Command::install_resume || c == Command::relink || c == Command::import_files || c == Command::update || c == Command::verify || c == Command::downgrade ||
            c == Command::move || c == Command::workshop_install || c == Command::workshop_subscribe || c == Command::play || c == Command::chat_live;
 }
 bool pipeAbsent(const std::wstring& endpoint) {
@@ -316,7 +316,7 @@ bool pipeOf(Descriptor& read_end, Descriptor& write_end) {
     return ::fcntl(read_end.fd, F_SETFL, ::fcntl(read_end.fd, F_GETFL) | O_NONBLOCK) == 0;
 }
 bool longCommand(Command c) {
-    return c == Command::install || c == Command::update || c == Command::verify || c == Command::downgrade ||
+    return c == Command::install || c == Command::install_resume || c == Command::relink || c == Command::import_files || c == Command::update || c == Command::verify || c == Command::downgrade ||
            c == Command::move || c == Command::workshop_install || c == Command::workshop_subscribe || c == Command::play || c == Command::chat_live;
 }
 std::string readSmall(const std::filesystem::path& file, std::streamoff limit) { return file_io::readText(file, static_cast<size_t>(limit)); }

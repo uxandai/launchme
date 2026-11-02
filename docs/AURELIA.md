@@ -99,7 +99,23 @@ requests follow the interface's Steam language, including Brazilian Portuguese a
 
 Aurelia's daemon owns background transfers. Closing Launchme detaches its CLI processes; it does not
 terminate Steam or running games. Reopening the launcher discovers active transfers through `install list`.
-Pause/resume is not exposed because this CLI currently exposes cancellation, not a pause operation.
+
+**Pause, resume, cancel.** A running transfer in **Manage · Aurelia** has *Pause download* (`install pause`, partial
+files are kept) and *Cancel download* (`install stop`). Since upstream keeps an install backlog, `install list` also
+returns entries nobody is downloading (state `queued`, `paused`, `aborted`, `interrupted`): Launchme shows them as
+*Paused* (not as running) with *Resume download* (`install resume`, continues from the files on disk, reported like an
+install), *Remove from queue* (`install forget`) and *Remove from queue and delete downloaded files*
+(`install forget --delete-files`, after confirmation; upstream only deletes folders it knows are safe).
+
+## Library maintenance
+
+In **Manage · Aurelia** for an installed game, **Point to moved files** runs `relink <app> <library>` (Steam is pointed
+at files already moved to another library; nothing is copied). For a game that is not installed, **Register existing
+files** runs `import <app> <library>` (the files are already under `steamapps/common` of that library). Both use the
+same library picker as *Move*. Launchme never asks Aurelia to stop or restart the Steam client for them, so they refuse
+while Steam runs, as upstream does. **Settings → Library → Steam → Manage Aurelia → Find duplicate installs** runs
+`duplicates` and only reports games installed in several libraries and the space the stale copies take; nothing is
+deleted.
 
 ## Cloud saves
 

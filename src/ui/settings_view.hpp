@@ -130,7 +130,9 @@ enum class Id { font, home_layout, ui_accent, accent, uninstalled, emulation, co
                    // Metro / Flix → Pasek kategorii (AppSettings::metro_category_tabs / flix_category_tabs).
                    metro_category_tabs, flix_category_tabs, psfive_category_tabs,
                    // Okna i podpowiedzi → Wygląd podpowiedzi (AppSettings::hint_style).
-                   hint_style };
+                   hint_style,
+                   // Biblioteka → Uruchamianie: FPS widget's one-time ETW permission (src/platform/etw_access.cpp).
+                   fps_access };
 inline bool hasOptionsButton(Id id) { return id == Id::plugin_enabled || id == Id::pc_platform; }
 // layout: drawn preview tiles in the row (one per home layout); Row::choice is the active one.
 // count: Row::value as a large number with a chevron; activating opens a sub-list.

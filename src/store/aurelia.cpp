@@ -47,7 +47,7 @@ std::vector<std::wstring> arguments(const Request& r) {
     case C::health: case C::login: case C::logout: case C::reconnect: case C::library: case C::libraries:
     case C::friends: case C::presence: case C::chat_history: case C::chat_send: case C::chat_live:
     case C::downloads: case C::running: case C::workshop_install: case C::workshop_subscribe: case C::workshop_unsubscribe:
-    case C::collections_pull: case C::collections_list: case C::collections_show: break;
+    case C::collections_pull: case C::collections_list: case C::collections_show: case C::duplicates: break;
     default: if (!r.app) return {};
     }
     const auto app = std::to_wstring(r.app), id = std::to_wstring(r.id);
@@ -76,6 +76,13 @@ std::vector<std::wstring> arguments(const Request& r) {
     case C::chat_live: if (!r.id) return {}; add({L"chat", L"open", id}); break;
     case C::downloads: add({L"install", L"list"}); break;
     case C::cancel_install: add({L"install", L"stop", app}); break;
+    case C::install_pause: add({L"install", L"pause", app}); break;
+    case C::install_resume: add({L"install", L"resume", app}); break;
+    case C::install_forget: add({L"install", L"forget", app}); if (r.delete_files) add({L"--delete-files"}); break;
+    case C::duplicates: add({L"duplicates"}); break;
+    // The library root must be absolute; Steam is never stopped or restarted for the user.
+    case C::relink: if (!r.folder.is_absolute()) return {}; add({L"relink", app, r.folder.native()}); break;
+    case C::import_files: if (!r.folder.is_absolute()) return {}; add({L"import", app, r.folder.native()}); break;
 #ifdef _WIN32
     case C::install: add({L"install", app, L"--platform", L"windows"}); if (!r.folder.empty()) add({L"--library", r.folder.native()}); break;
 #else
@@ -223,8 +230,28 @@ std::optional<std::vector<Download>> downloads(const json::Value& value) {
         d.progress.done = integer(item.get("downloaded_bytes")).value_or(0);
         d.progress.total = integer(item.get("total_bytes")).value_or(0);
         if (d.progress.done > d.progress.total) d.progress.total = 0;
-        d.progress.live = true; d.progress.phase = flag(item, "is_downloading") ? InstallPhase::downloading : InstallPhase::allocating;
+        // "state": running, or a backlog entry (queued, paused, aborted, interrupted) that nothing downloads.
+        const auto state = text(item, "state");
+        d.backlog = !state.empty() && state != "running";
+        d.progress.live = !d.backlog;
+        d.progress.phase = d.backlog ? (state == "queued" ? InstallPhase::queued : InstallPhase::paused)
+                                     : flag(item, "is_downloading") ? InstallPhase::downloading : InstallPhase::allocating;
         result.push_back(std::move(d));
+    }
+    return result;
+}
+std::optional<std::vector<Duplicate>> duplicates(const json::Value& value) {
+    const auto* list = value.get("duplicates"); if (!list || list->type != Type::array || list->elements.size() > 10000) return {};
+    std::vector<Duplicate> result;
+    for (const auto& item : list->elements) {
+        Duplicate d; d.app = appId(item); if (!d.app) return {};
+        d.name = wideLenient(text(item, "name"));
+        if (const auto* stale = item.get("remove"); stale && stale->type == Type::array) for (const auto& copy : stale->elements) {
+            const auto path = text(copy, "install_path"); if (path.empty()) continue;
+            d.stale.push_back(std::filesystem::path(wideLenient(path)));
+            d.reclaimable += integer(copy.get("size_bytes")).value_or(0);
+        }
+        if (!d.stale.empty()) result.push_back(std::move(d));
     }
     return result;
 }
