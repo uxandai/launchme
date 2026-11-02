@@ -6,6 +6,7 @@
 #include "../platform/sound_cues.hpp"
 #include "../platform/text_encoding.hpp"
 #include "../library/screenscraper_config.hpp"
+#include "../library/search.hpp"
 #include "../artwork/artwork_sources.hpp"
 #include <algorithm>
 #include <cmath>
@@ -13,6 +14,15 @@
 using namespace settings_ui;
 namespace {
 std::wstring percent(float value) { return std::to_wstring(static_cast<int>(std::round(value * 100))) + L"%"; }
+// An excluded game's store, from its key ("steam:620", "drmfree:…", "shortcut:…" an emulated or Steam shortcut).
+std::wstring excludedSourceName(std::string_view key) {
+    const auto slug = key.substr(0, key.find(':'));
+    if (slug == "shortcut") return tr(L"Emulacja lub skrót Steam");
+    for (const auto source : {GameSource::steam, GameSource::gog, GameSource::epic, GameSource::battlenet, GameSource::ea, GameSource::ubisoft,
+                              GameSource::amazon, GameSource::xbox, GameSource::multimc, GameSource::drmfree})
+        if (slug == sourceSlug(source)) return sourceName(source);
+    return {};
+}
 }
 
 // Which page of Settings the rows describe: a rebuild of the same page keeps the focused row by
@@ -47,6 +57,8 @@ std::wstring Launcher::settingsPageTitle(const settings_ui::PageFrame* frame) co
     case Page::screenscraper: return L"ScreenScraper";
     case Page::custom_games: return tr(L"Gry dodane ręcznie");
     case Page::collections: return tr(L"Kolekcje");
+    case Page::hidden_studios: return tr(L"Ukryci wydawcy i developerzy");
+    case Page::excluded_games: return tr(L"Wykluczone gry");
     case Page::layout_options: return tr(L"Opcje układu: ") + std::wstring(tr(home_layouts[std::clamp(static_cast<int>(settings_.home_layout), 0, home_layout_count - 1)]));
     case Page::cover_focus: return tr(L"Zaznaczona okładka");
     case Page::backdrop: return tr(L"Tło i szkło");
@@ -174,10 +186,16 @@ void Launcher::buildSettingsRows() {
                     tr(L"Wszystkie ikony dolnego menu, małe, obok znaku platformy. Towarzyszka jako awatar, Glance jako ikona."), {}, settings_.flix_top_icons});
                 add({Id::flix_category_tabs, Control::toggle, tr(L"Pasek kategorii"),
                     tr(L"Kategorie jak w bibliotece, na środku u góry; zmieniają je LB/RB albo Page Up/Down."), {}, settings_.flix_category_tabs});
+                add({Id::flix_rail, Control::toggle, tr(L"Pasek boczny"),
+                    tr(L"Ikony po lewej, jak w serwisach z filmami: start, kategorie (przewijają do swojego rzędu), szukaj i wszystkie gry; na dole profil, menu i widżety."),
+                    {}, settings_.flix_rail});
             }
             if (settings_.home_layout == HomeLayout::metro) {
                 add({Id::metro_category_tabs, Control::toggle, tr(L"Pasek kategorii"),
                     tr(L"Kategorie jak w bibliotece, na środku u góry, zamiast zakładek; zmieniają je LB/RB albo Page Up/Down."), {}, settings_.metro_category_tabs});
+                if (!settings_.metro_category_tabs)
+                    add({Id::home_tab_icons, Control::toggle, tr(L"Ikony zamiast nazw"),
+                        tr(L"Zakładki Platformy PC, Emulacja, Wydawcy, Developerzy i Ulubione jako ikony; inne kolekcje zostają z nazwą."), {}, settings_.home_tab_icons});
                 add({Id::metro_3d, Control::toggle, tr(L"Efekt 3D"),
                     tr(L"Strony obok bieżącej są mniejsze (80%) i powiększają się po przejściu na nie."), {}, settings_.metro_3d});
                 add({Id::metro_light, Control::toggle, tr(L"Jasny motyw"),
@@ -194,6 +212,9 @@ void Launcher::buildSettingsRows() {
                     {}, settings_.psfive_details});
                 add({Id::psfive_category_tabs, Control::toggle, tr(L"Pasek kategorii"),
                     tr(L"Kategorie jak w bibliotece, na środku u góry, zamiast zakładek; zmieniają je LB/RB albo Page Up/Down."), {}, settings_.psfive_category_tabs});
+                if (!settings_.psfive_category_tabs)
+                    add({Id::home_tab_icons, Control::toggle, tr(L"Ikony zamiast nazw"),
+                        tr(L"Zakładki Platformy PC, Emulacja, Wydawcy, Developerzy i Ulubione jako ikony; inne kolekcje zostają z nazwą."), {}, settings_.home_tab_icons});
             }
             break;
         }
@@ -398,6 +419,34 @@ void Launcher::buildSettingsRows() {
             }
             break;
         }
+        if (settings_state_.at(Page::excluded_games)) {
+            // Wykluczone gry: a thin list of titles (with their store), each with Przywróć.
+            add({Id::excluded_restore_all, Control::action, tr(L"Przywróć wszystkie"), tr(L"Wszystkie wykluczone gry wracają do biblioteki."), tr(L"Przywróć")});
+            std::vector<std::pair<std::wstring, std::string>> excluded;
+            for (const auto& [key, name] : library_state_.excluded_games) excluded.emplace_back(name.empty() ? text_encoding::wide(key) : name, key);
+            std::sort(excluded.begin(), excluded.end(), [](const auto& a, const auto& b) { return foldGameTitle(a.first) < foldGameTitle(b.first); });
+            for (const auto& [name, key] : excluded) {
+                Row row{Id::excluded_game, Control::action, name, excludedSourceName(key), tr(L"Przywróć")};
+                row.key = key;
+                add(std::move(row));
+            }
+            break;
+        }
+        if (settings_state_.at(Page::hidden_studios)) {
+            // Ukryci wydawcy i developerzy: each one with a switch that shows it again, by name.
+            add({Id::studio_show_all, Control::action, tr(L"Pokaż wszystkich"), tr(L"Przywraca każdego ukrytego wydawcę i developera."), tr(L"Pokaż")});
+            std::vector<std::pair<std::wstring, std::string>> hidden;
+            for (const auto& key : settings_.hidden_studios)
+                if (const auto studio = studios::parse(key)) hidden.emplace_back(std::wstring(studio->second->name), key);
+            std::sort(hidden.begin(), hidden.end());
+            for (const auto& [name, key] : hidden) {
+                const bool publisher = studios::parse(key)->first == studios::Role::publisher;
+                Row row{Id::studio_hidden_entry, Control::toggle, name, publisher ? tr(L"Wydawca") : tr(L"Developer"), {}, false};
+                row.key = key;
+                add(std::move(row));
+            }
+            break;
+        }
         {
             // Overview: the platforms first (the DRM-free catalogue with the games added by hand,
             // Emulacja, Steam, then the others by name, each with its page behind the cog).
@@ -418,11 +467,28 @@ void Launcher::buildSettingsRows() {
                     (settings_collections_.empty() ? std::wstring{} : L" · " + (tr(L"Widoczne: ") + std::to_wstring(shown))),
                 std::to_wstring(settings_collections_.size())});
         }
-        // Wydawcy i developerzy: their libraries are collections of a kind.
-        add({Id::studio_libraries, Control::toggle, tr(L"Wydawcy i developerzy"),
-            tr(L"Gry wydawców i twórców z logo: rzędy na ekranie głównym i sekcje okna desktopowego."), {}, settings_.studio_libraries});
-        if (settings_.studio_libraries && !settings_.hidden_studios.empty())
-            add({Id::studio_hidden, Control::action, tr(L"Ukryci wydawcy i developerzy"), std::to_wstring(settings_.hidden_studios.size()), tr(L"Pokaż wszystkich")});
+        // The Steam rows of an account with no collections of its own.
+        add({Id::updated_row, Control::toggle, tr(L"Ostatnio zaktualizowane"),
+            tr(L"Rząd na ekranie głównym, gdy konto Steam nie ma kolekcji."), {}, settings_.show_updated_row});
+        add({Id::discovery_row, Control::toggle, tr(L"Jeszcze niegrane"),
+            tr(L"Rząd na ekranie głównym, gdy konto Steam nie ma kolekcji."), {}, settings_.show_discovery_row});
+        // Wydawcy i developerzy: their libraries are collections of a kind, each row on its own.
+        section(tr(L"Wydawcy i developerzy"));
+        add({Id::studio_publishers, Control::toggle, tr(L"Wydawcy"),
+            tr(L"Gry wydawców z logo: rząd na ekranie głównym i sekcja okna desktopowego."), {}, settings_.show_publishers});
+        add({Id::studio_developers, Control::toggle, tr(L"Developerzy"),
+            tr(L"Gry twórców z logo: rząd na ekranie głównym i sekcja okna desktopowego."), {}, settings_.show_developers});
+        if (studiosShown()) {
+            Row least{Id::studio_min_games, Control::choice, tr(L"Najmniej gier"),
+                      tr(L"Studio pokazuje się, gdy ma tyle gier w bibliotece. Kolejność: najwięcej gier najpierw.")};
+            for (const int count : studio_min_counts) least.choices.push_back({std::to_wstring(count)});
+            for (size_t i = 0; i < studio_min_counts.size(); ++i) if (studio_min_counts[i] == settings_.studio_min_games) least.choice = static_cast<int>(i);
+            least.value = std::to_wstring(settings_.studio_min_games);
+            add(std::move(least));
+        }
+        if (!settings_.hidden_studios.empty())
+            add({Id::studio_hidden, Control::count, tr(L"Ukryci wydawcy i developerzy"), tr(L"Ukryte w menu ich kafla albo w oknie desktopowym; tu można je przywrócić."),
+                 std::to_wstring(settings_.hidden_studios.size())});
         section(tr(L"Widoczność"));
         add({Id::uninstalled, Control::toggle, tr(L"Niezainstalowane gry"),
             tr(L"Pokazuj je w kolekcjach i bibliotekach sklepów."), {}, settings_.show_uninstalled});
@@ -430,6 +496,10 @@ void Launcher::buildSettingsRows() {
             tr(L"Także gry bez instalacji i dodane bez pliku, według daty dodania do biblioteki."), {}, settings_.recent_uninstalled});
         add({Id::show_private, Control::toggle, tr(L"Pokaż ukryte/prywatne gry"),
             tr(L"Gry oznaczone w Steam jako ukryte lub prywatne pojawią się w kolekcjach i bibliotece."), {}, settings_.show_private});
+        if (!library_state_.excluded_games.empty())
+            add({Id::excluded_games, Control::count, tr(L"Wykluczone gry"),
+                 tr(L"Wykluczone z menu gry (prawy przycisk: Wyklucz grę). Nie ma ich w bibliotece, kolekcjach ani wyszukiwaniu; tu je przywrócisz."),
+                 std::to_wstring(library_state_.excluded_games.size())});
         section(tr(L"Uruchamianie"));
         choiceRow(Id::accept_action, tr(L"Domyślna akcja gry"),
                   tr(L"Wybranie gry w każdym widoku. Menu gry i ekran szczegółów zawsze uruchamiają."),

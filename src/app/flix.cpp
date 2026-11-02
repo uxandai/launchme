@@ -19,6 +19,7 @@ bool Launcher::flixActive() const {
 }
 
 void Launcher::rebuildFlix(bool preserve_background) {
+    flixRailInset(); // Pasek boczny: the rows start right of it.
     const auto view = renderer_.viewport();
     const float scale = tileScale(settings_);
     std::unordered_map<std::string, size_t> scrolled; // A library refresh keeps each row's scroll.
@@ -126,7 +127,8 @@ const Game* Launcher::flixBackdrop(size_t category) {
 
 void Launcher::flixFocus(size_t row, size_t column) {
     if (flix_rows_.empty()) return;
-    flix_icon_focus_ = -1; // A tile takes the focus back from the corner icons.
+    flix_icon_focus_ = -1; // A tile takes the focus back from the corner icons (and the side ones).
+    flix_rail_focus_ = -1;
     row = std::min(row, flix_rows_.size() - 1);
     auto& info = flix_rows_[row];
     column = std::min(column, info.count - 1);
@@ -152,8 +154,12 @@ void Launcher::flixHorizontal(int amount) {
     if (flix_rows_.empty() || !amount) return;
     const auto& row = flix_rows_[flix_row_];
     const int column = static_cast<int>(selected_ - row.begin);
-    // Like the shelves: Left at the start of a row lists the categories to jump to.
-    if (amount < 0 && column == 0) { openCategoryMenu(); return; }
+    // Like the shelves: Left at the start of a row lists the categories to jump to; with Pasek boczny,
+    // its icons take the focus (the row in view's own first).
+    if (amount < 0 && column == 0) {
+        if (flixRailShown()) { const auto items = flixRailItems(); flixRailFocus(std::max(0, flixRailActive(items))); return; }
+        openCategoryMenu(); return;
+    }
     const int next = std::clamp(column + amount, 0, static_cast<int>(row.count) - 1);
     if (next == column) { navigationBoundary(); return; }
     flixFocus(flix_row_, static_cast<size_t>(next));
@@ -218,7 +224,7 @@ bool Launcher::flixUnfoldReady(std::chrono::steady_clock::time_point now) const 
         selected_ >= flix_card_rows_.size() || flix_card_rows_[selected_] != flix_row_) return false;
     const auto& game = cards_[selected_].game;
     if (!isGame(game) || game.kind == GameKind::catalog) return false; // Store and console tiles, "Wszystkie".
-    if (menu_open_ || quick_open_ || category_menu_open_ || friends_open_ || pending_launch_ || launchAnimationActive() ||
+    if (menu_open_ || quick_open_ || category_menu_open_ || friends_open_ || pending_launch_ || launchAnimationActive() || flixRailFocused() ||
         topModal() != Modal::none || screensaverActive() || !windowWatched()) return false;
     const auto rest = std::chrono::duration<float>(flix_layout::unfold_rest);
     return now - flix_focus_at_ >= rest && now - last_input_ >= rest;

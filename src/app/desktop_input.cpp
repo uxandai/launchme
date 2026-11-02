@@ -86,7 +86,7 @@ desktop_ui::Hit Launcher::desktopHit(float x, float y) const {
         const float s = desktop_pane_scroll_;
         if (y < L.paneTop(s) + L.bannerHeight()) return {};
         if (L.panePrimary(s).contains(x, y)) return {Target::pane_primary, 0};
-        if (L.paneFavorite(s).contains(x, y)) return {Target::pane_favorite, 0};
+        if (L.favorite && L.paneFavorite(s).contains(x, y)) return {Target::pane_favorite, 0};
         if (L.paneMore(s).contains(x, y)) return {Target::pane_more, 0};
         for (int i = 0; i < Layout::quick_count; ++i) if (L.paneQuick(i, s).contains(x, y)) return {Target::pane_quick, i};
         const auto& chips = renderer_.desktopChips();

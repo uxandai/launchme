@@ -401,6 +401,24 @@ bool rootNoise(std::wstring_view name, bool hidden_system) {
     return noise.contains(lower(name));
 }
 
+// What an installed game leaves beside its program, at the top of its folder: a store's or installer's
+// file (Steam's API library or app id, GOG's info, an InstallScript, its uninstaller) or its engine's
+// data (Unity's <exe>_Data, Godot's .pck, Unreal's <name>\Binaries, an Engine folder). A folder of games
+// has none of them at its top.
+bool installedGameMarks(const std::filesystem::path& folder, const std::filesystem::path& program) {
+    const auto stem = lower(program.stem().wstring());
+    bool marked = false;
+    listFolder(folder, [&](const Found& item) {
+        const auto name = lower(item.name);
+        if (item.folder) marked = name == stem + L"_data" || name == L"engine" || directoryExists(folder / item.name / L"Binaries");
+        else marked = name == L"steam_api.dll" || name == L"steam_api64.dll" || name == L"steam_appid.txt" || name == L"installscript.vdf" ||
+                      name == stem + L".pck" || (name.starts_with(L"goggame-") && hasSuffix(name, L".info")) ||
+                      (hasSuffix(name, L".exe") && (name.starts_with(L"unins") || name.starts_with(L"uninstall")));
+        return !marked;
+    });
+    return marked;
+}
+
 void collectChildren(const std::filesystem::path& folder, int depth, const ScanOptions& options, std::vector<std::pair<std::filesystem::path, int>>& work) {
     listFolder(folder, [&](const Found& item) {
         if (!item.folder || rootNoise(item.name, item.hidden_system)) return true;
@@ -458,7 +476,8 @@ bool inside(const std::filesystem::path& path, const std::filesystem::path& fold
 }
 
 const std::filesystem::path* rootOf(const Catalog& catalog, const std::filesystem::path& folder) {
-    for (const auto& root : catalog.roots) if (inside(folder, root)) return &root;
+    // A root may be one game's own folder (scan: installedGameMarks): its game is the root itself.
+    for (const auto& root : catalog.roots) if (inside(folder, root) || folderKey(folder) == folderKey(root)) return &root;
     return nullptr;
 }
 
@@ -805,10 +824,20 @@ Catalog scan(const Catalog& previous, const ScanOptions& options, const Cancelle
         if (!directoryExists(root)) {
             // An unplugged drive or offline share: its games wait, unplayable.
             for (const auto& entry : previous.games)
-                if (inside(entry.folder, root) && placed.insert(entry.id).second) { auto kept = entry; kept.missing = true; next.games.push_back(std::move(kept)); }
+                if ((inside(entry.folder, root) || folderKey(entry.folder) == folderKey(root)) && placed.insert(entry.id).second) {
+                    auto kept = entry; kept.missing = true; next.games.push_back(std::move(kept));
+                }
             continue;
         }
         examined.insert(folderKey(root));
+        // A root that is one game's own folder ("D:\Games\Football Life 2025": its best program at the top,
+        // beside what an installed game leaves there): that game, not each of its subfolders (a mod tool
+        // beside it is no game of its own).
+        if (const auto own = detect(root, cancelled); !own.store_owned && !own.container && !own.executable.empty() &&
+            own.executable.parent_path().lexically_normal() == root.lexically_normal() && installedGameMarks(root, own.executable)) {
+            work.emplace_back(root, 1); // Depth 1: one game, never opened as a container.
+            continue;
+        }
         collectChildren(root, 0, options, work);
     }
     Progress state{0, work.size()};

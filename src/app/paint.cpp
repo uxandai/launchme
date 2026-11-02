@@ -289,6 +289,8 @@ void Launcher::paint(bool overlay) {
     context.menu_progress = menu_progress_;
     context.menu_selected = menu_selected_;
     const auto menu_rows = menuRows();
+    context.menu_rows = menu_rows;
+    if (menu_rows.emulator && selected_ < cards_.size()) context.menu_emulator = gameEmulatorLabel(cards_[selected_].game);
     context.menu_detail_options = menu_rows.detail_options;
     context.menu_folder = menu_rows.folder;
     context.menu_exclude = menu_rows.exclude;
@@ -332,6 +334,13 @@ void Launcher::paint(bool overlay) {
         context.prompt_question = std::wstring(tr(L"Usunąć z biblioteki?")) + L" " + remove_game_.name;
         context.prompt_labels = {std::wstring(tr(L"Usuń z biblioteki")), std::wstring(tr(L"Edytuj grę…")), std::wstring(tr(L"Anuluj"))};
         context.prompt_body = tr(L"Zniknie tylko wpis w launcherze; plik gry na dysku zostaje.");
+        context.prompt_danger = true;
+    }
+    if (exit_prompt_ && prompt_kind_ == PromptKind::exclude) {
+        context.prompt_question = std::wstring(tr(L"Wykluczyć grę?")) + L" " + exclude_game_.name;
+        context.prompt_labels = {std::wstring(tr(L"Wyklucz")), std::wstring(tr(L"Ukryj")), std::wstring(tr(L"Anuluj"))};
+        context.prompt_body = std::wstring(tr(L"Zniknie z biblioteki, kolekcji i wyszukiwania. Trafi do Biblioteka → Widoczność → Wykluczone gry")) +
+                              L" (" + std::to_wstring(library_state_.excluded_games.size() + 1) + L"), " + tr(L"skąd ją przywrócisz.");
         context.prompt_danger = true;
     }
     if (exit_prompt_ && prompt_kind_ == PromptKind::delete_collection) {
@@ -471,6 +480,15 @@ void Launcher::paint(bool overlay) {
                 context.flix_unfold_genres = std::move(genres);
             }
         }
+        if (flixRailShown()) {
+            // Pasek boczny: always there; it gives way only to the drawers and menus over the page.
+            context.flix_rail = flixRailItems();
+            context.flix_rail_focus = flixRailFocused() ? flix_rail_focus_ : -1;
+            context.flix_rail_hover = flix_rail_hover_;
+            context.flix_rail_active = flixRailActive(context.flix_rail);
+            const float away = std::max({friends_progress_, category_menu_progress_, menu_progress_});
+            context.flix_rail_alpha = std::clamp(1.0f - away, 0.0f, 1.0f);
+        }
         if (flixIconsShown()) {
             // The quick bar's icons at the top: they make way for the bar itself and the drawers.
             context.flix_icons = true;
@@ -490,8 +508,10 @@ void Launcher::paint(bool overlay) {
         context.metro_tab = metro_tab_;
         context.metro_page = metro_page_;
         context.metro_tabs_focus = metro_tabs_;
-        for (const auto& page : metro_pages_)
+        for (const auto& page : metro_pages_) {
             context.metro_tabs.push_back(lowered(page.category ? categories_[page.category].title : std::wstring(tr(L"Start"))));
+            context.metro_tab_glyphs.push_back(page.category ? homeTabGlyph(page.category) : 0);
+        }
         context.metro_tiles.reserve(cards_.size());
         for (size_t i = 0; i < cards_.size(); ++i) {
             const auto role = metro_tiles_[i].role;
@@ -533,8 +553,10 @@ void Launcher::paint(bool overlay) {
         }
         const auto tabs = psfiveTabs();
         const int tab_count = psfiveTabCount();
-        for (const auto category : tabs)
+        for (const auto category : tabs) {
             context.psfive_tabs.push_back(category_titles_[category]);
+            context.psfive_tab_glyphs.push_back(homeTabGlyph(category));
+        }
         if (tab_count > static_cast<int>(tabs.size()))
             context.psfive_tabs.push_back(category_ >= tabs.size() ? category_titles_[category_] + L"..." : tr(L"Więcej..."));
         context.psfive_tab = psfiveActiveTab();

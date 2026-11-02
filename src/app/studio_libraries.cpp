@@ -32,25 +32,26 @@ bool Launcher::refreshStudios() {
                 if (record->achievements_total && record->achievements_unlocked >= record->achievements_total) perfect.insert(key);
             }
         });
-        if (settings_.studio_libraries) {
-            groups[static_cast<size_t>(studios::Role::publisher)] = studios::group(publishers);
-            groups[static_cast<size_t>(studios::Role::developer)] = studios::group(developers);
-        }
+        if (settings_.show_publishers) groups[static_cast<size_t>(studios::Role::publisher)] = studios::group(publishers);
+        if (settings_.show_developers) groups[static_cast<size_t>(studios::Role::developer)] = studios::group(developers);
     }
     // What the profile saw complete (other stores' achievements through plugins).
     for (const auto& [key, progress] : history_.progress)
         if (progress.total && progress.unlocked >= progress.total) perfect.insert(key);
-    // Hidden ones out; the player's order first (Move up / Move down), the rest alphabetically.
+    // Hidden ones and those with fewer games than Najmniej gier out; the player's order first (Move
+    // up / Move down), the rest by most games, then by name.
     std::unordered_map<std::string, size_t> positions;
     for (size_t i = 0; i < settings_.studio_order.size(); ++i) positions.emplace(settings_.studio_order[i], i);
+    const auto least = static_cast<size_t>(std::max(1, settings_.studio_min_games));
     for (int role = 0; role < studios::role_count; ++role) {
         auto& list = groups[static_cast<size_t>(role)];
         const auto keyOf = [&](const studios::Entry& entry) { return studios::key(static_cast<studios::Role>(role), entry.studio->id); };
-        std::erase_if(list, [&](const studios::Entry& entry) { return settings_.hidden_studios.contains(keyOf(entry)); });
+        std::erase_if(list, [&](const studios::Entry& entry) { return settings_.hidden_studios.contains(keyOf(entry)) || entry.games.size() < least; });
         std::stable_sort(list.begin(), list.end(), [&](const studios::Entry& a, const studios::Entry& b) {
             const auto left = positions.find(keyOf(a)), right = positions.find(keyOf(b));
             const size_t first = left == positions.end() ? SIZE_MAX : left->second, second = right == positions.end() ? SIZE_MAX : right->second;
             if (first != second) return first < second;
+            if (a.games.size() != b.games.size()) return a.games.size() > b.games.size();
             return studios::fold(a.studio->name) < studios::fold(b.studio->name);
         });
     }
@@ -99,6 +100,52 @@ void Launcher::requestStudioBadges() {
     for (int role = 0; role < studios::role_count; ++role)
         for (const auto& entry : studio_groups_[static_cast<size_t>(role)])
             requestArt(studioTile(static_cast<studios::Role>(role), entry), CoverMessage::Kind::badge, true);
+}
+
+wchar_t Launcher::homeTabGlyph(size_t category) const { return settings_.home_tab_icons ? categoryGlyph(category) : 0; }
+
+wchar_t Launcher::categoryGlyph(size_t category) const {
+    if (category >= categories_.size()) return 0;
+    const auto& id = categories_[category].id;
+    if (id == "pc-platforms") return L'\uE770';                // A monitor.
+    if (id == "emulation") return L'\uE7FC';                   // A gamepad.
+    if (id == "publishers") return L'\uE8EC';                  // A label: the brand on the box.
+    if (id == "developers") return L'\uE716';                  // People: the team that made it.
+    if (id == "user-collections.favorite") return L'\uE735';   // The filled star.
+    return 0;
+}
+
+bool Launcher::studioMenuTile(const Game& tile) const {
+    return tile.kind == GameKind::platform && tile.platform.size() > 3 && studios::parse(text_encoding::utf8(tile.platform)).has_value();
+}
+
+bool Launcher::studioSettingsToggle(const settings_ui::Row& row) {
+    using settings_ui::Id;
+    if (row.id == Id::home_tab_icons) { // Visual only: the tabs read it when they draw.
+        settings_.home_tab_icons = !settings_.home_tab_icons;
+        settingsChanged(); audio_.context();
+        return true;
+    }
+    if (row.id == Id::flix_rail) { // The rows move right of it: Flix again.
+        settings_.flix_rail = !settings_.flix_rail;
+        flix_rail_focus_ = -1;
+        settingsChanged(true); audio_.context();
+        return true;
+    }
+    if (row.id == Id::studio_hidden_entry) {
+        // Shown again; the page lists the others (back to Biblioteka once none is hidden).
+        if (!settings_.hidden_studios.erase(row.key)) return true;
+        settingsChanged(true); audio_.context();
+        if (settings_.hidden_studios.empty() && settings_state_.at(settings_ui::Page::hidden_studios)) closeSettingsPage();
+        return true;
+    }
+    bool* flag = row.id == Id::studio_publishers ? &settings_.show_publishers : row.id == Id::studio_developers ? &settings_.show_developers :
+                 row.id == Id::updated_row ? &settings_.show_updated_row : row.id == Id::discovery_row ? &settings_.show_discovery_row : nullptr;
+    if (!flag) return false;
+    *flag = !*flag;
+    settingsChanged(true); // Rebuild: the rows and the desktop sections.
+    audio_.context();
+    return true;
 }
 
 void Launcher::showStudios() {

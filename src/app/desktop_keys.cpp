@@ -212,7 +212,10 @@ void Launcher::desktopMove(int dx, int dy, bool extend) {
         if (bulk) focus = std::clamp(focus + dy + dx, 0, Layout::bulk_count - 1);
         else if (dy) focus = dy > 0 ? (focus < 3 ? 3 + std::min(focus, 2) : focus) : (focus >= 3 ? std::min(focus - 3, 2) : focus);
         else if (dx < 0 && (focus == 0 || focus == 3)) { desktop_zone_ = 1; InvalidateRect(hwnd_, nullptr, FALSE); return; }
-        else focus = std::clamp(focus + dx, focus >= 3 ? 3 : 0, focus >= 3 ? 3 + Layout::quick_count - 1 : 2);
+        else {
+            focus = std::clamp(focus + dx, focus >= 3 ? 3 : 0, focus >= 3 ? 3 + Layout::quick_count - 1 : 2);
+            if (focus == 1 && !desktopLayout().favorite) focus = std::clamp(focus + dx, 0, 2); // No star: Graj and "…" side by side.
+        }
         if (focus == desktop_pane_focus_) navigationBoundary();
         desktop_pane_focus_ = focus;
         InvalidateRect(hwnd_, nullptr, FALSE);

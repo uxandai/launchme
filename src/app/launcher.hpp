@@ -242,6 +242,19 @@ public:
     // The pad on those icons (they replace the quick bar there): Up from the first row or Guide focuses
     // them, Left/Right walk them, Enter opens one, Down or Back returns to the row (companion.cpp).
     int flix_icon_focus_ = -1;
+    // Flix → Pasek boczny (src/app/flix_rail.cpp): the focused and hovered icon (-1: none).
+    int flix_rail_focus_ = -1, flix_rail_hover_ = -1;
+    bool flixRailShown() const;
+    bool flixRailFocused() const;
+    void flixRailInset() const; // flix_layout::rail for this frame.
+    std::vector<flix_rail::Item> flixRailItems() const;
+    int flixRailActive(const std::vector<flix_rail::Item>& items) const;
+    void flixRailFocus(int index); // -1: back to the tile.
+    void flixRailMove(int amount);
+    void flixRailAccept(int index);
+    int flixRailAt(float x, float y) const; // Layout coordinates; -1: none.
+    // The icon of a default category (Platformy PC, Emulacja, Wydawcy, Developerzy, Ulubione); 0 otherwise.
+    wchar_t categoryGlyph(size_t category) const;
     bool flixIconsFocused() const;
     void flixFocusIcons();
     void flixIconMove(int amount);
@@ -1102,6 +1115,19 @@ private:
     void collectionDialogBack();
     void collectionDialogEdit(wchar_t ch);
     void collectionDialogClick(float x, float y);
+    // Ulubione switched off (hidden like any collection, Biblioteka → Kolekcje): no stars, no Ulubione shelf
+    // or desktop section, nothing to add to it; what it holds stays for when it is on again.
+    bool favoritesShown() const;
+    // Emulator per gra (src/app/game_emulator.cpp): a ROM game's own emulator over its system's.
+    struct EmulatorChoice { std::wstring label; std::string id; std::filesystem::path program; bool pick = false; };
+    std::vector<EmulatorChoice> gameEmulatorChoices(const Game& game) const; // Empty: no emulated game.
+    int gameEmulatorIndex(const Game& game, const std::vector<EmulatorChoice>& choices) const;
+    bool gameEmulatorEditable(const Game& game) const;
+    std::wstring gameEmulatorLabel(const Game& game) const; // "Emulator: Ryujinx"
+    GameAction gameEmulatorAction(const Game& game) const;  // Its own emulator's command; empty: the system's.
+    void applyGameEmulators(std::vector<Game>& games) const;
+    void setGameEmulator(const Game& game, std::optional<LibraryState::GameEmulator> choice);
+    void cycleGameEmulator(const Game& game, int step = 1);
     bool isFavorite(const Game& game) const;
     void toggleFavorite(const Game& game);
     int favoriteDetailAction() const;
@@ -1126,9 +1152,13 @@ private:
     std::vector<Game> hideableCopies(const Game& game) const;
     bool hiddenInLauncher(const Game& game) const;
     void toggleHidden(const Game& game);
+    // Wyklucz grę (any store, a scanned DRM-free or ROM copy; not a game added by hand, which is removed
+    // instead): gone from every view until restored in Biblioteka → Widoczność → Wykluczone.
     bool canExclude(const Game& game) const;
     bool excludedGame(const Game& game) const;
+    void askExcludeGame(const Game& game); // The question first (PromptKind::exclude).
     void excludeGame(const Game& game);
+    void restoreExcludedGame(const std::string& key);
     void openExcludedGames(GameSource source);
     uint32_t localPlaytime(const Game& game) const; // Launchme's own count (minutes), never Steam's.
     // Czas gry shown for a game: Steam's value (`steam`), the store's or Launchme's count, the player's own.
@@ -1599,7 +1629,13 @@ private:
     void openPlatform(const std::wstring& name);
     // Wydawcy and Developerzy (src/app/studio_libraries.cpp): the studios with a logo, from the game index.
     bool refreshStudios();                       // True when the studios or the perfect games changed.
-    bool studiosShown() const { return settings_.studio_libraries; }
+    bool studiosShown() const { return settings_.show_publishers || settings_.show_developers; }
+    // Settings → Biblioteka: Wydawcy, Developerzy, the Steam rows, a hidden studio shown again, the tab
+    // icons; false: not one of them.
+    bool studioSettingsToggle(const settings_ui::Row& row);
+    bool studioMenuTile(const Game& tile) const; // A publisher's or developer's logo (its menu: move, hide).
+    // Ikony zamiast nazw (native PSfive and Metro tabs): the icon of a category's tab, 0 for its name.
+    wchar_t homeTabGlyph(size_t category) const;
     std::vector<Game> studioGames(const std::string& key) const;
     const std::vector<Game>* consoleGames(const std::wstring& name) const; // A console's or a studio's games.
     Game studioTile(studios::Role role, const studios::Entry& entry) const;
@@ -2203,8 +2239,9 @@ private:
     // The same three-button prompt also asks whether downloaded videos follow a new video folder.
     // remove: "Usuń z biblioteki" of a user-added game (remove_game_); its file stays on disk.
     // delete_collection: an own collection's trash (Ustawienia → Biblioteka → Kolekcje); its key.
-    enum class PromptKind { exit, move_videos, uninstall, remove, restore_saves, delete_collection };
+    enum class PromptKind { exit, move_videos, uninstall, remove, restore_saves, delete_collection, exclude };
     Game remove_game_;
+    Game exclude_game_; // PromptKind::exclude: Wyklucz grę, asked first (Biblioteka → Widoczność → Wykluczone).
     std::string delete_collection_key_;
     Game uninstall_game_; // PromptKind::uninstall: the game Launchme itself would remove (Legendary, GOG silently).
     GameAction uninstall_silent_; // ...and for a GOG game, its Inno uninstaller with the silent switches.

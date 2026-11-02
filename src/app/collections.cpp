@@ -6,7 +6,11 @@
 
 using library_manager_ui::Page;
 
+bool Launcher::favoritesShown() const {
+    return settings_.hidden_collections.empty() || !settings_.hidden_collections.contains(collectionKey(account_, desktopFavorites()));
+}
 bool Launcher::isFavorite(const Game& game) const {
+    if (!favoritesShown()) return false;
     if (!game.version_group.empty()) if (const auto* copies = versions_.find(game))
         return std::any_of(copies->begin(), copies->end(), [&](const Game& copy) { return isFavorite(copy); });
     const auto found = std::find_if(settings_collections_.begin(), settings_collections_.end(), favoriteCollection);
@@ -28,10 +32,14 @@ void Launcher::toggleFavorite(const Game& game) {
     collectionChanged();
 }
 int Launcher::favoriteDetailAction() const {
-    if (screen_ != ScreenMode::details || cards_.empty() || cards_[0].game.kind == GameKind::catalog) return -2;
+    if (screen_ != ScreenMode::details || cards_.empty() || cards_[0].game.kind == GameKind::catalog || !favoritesShown()) return -2;
     return std::max(1, identifyDetailAction()) + 1;
 }
-int Launcher::collectionsDetailAction() const { const int favorite = favoriteDetailAction(); return favorite < 0 ? -2 : favorite + 1; }
+int Launcher::collectionsDetailAction() const {
+    if (screen_ != ScreenMode::details || cards_.empty() || cards_[0].game.kind == GameKind::catalog) return -2;
+    const int favorite = favoriteDetailAction(); // Without Ulubione: its place.
+    return favorite >= 0 ? favorite + 1 : std::max(1, identifyDetailAction()) + 1;
+}
 std::string Launcher::hiddenKey(const Game& game) const {
     const auto key = gameKey(game);
     return !key.empty() && game.source == GameSource::steam ? "steam-user:" + std::to_string(account_) + '/' + key : key;
@@ -92,10 +100,20 @@ void Launcher::toggleHidden(const Game& original) {
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 bool Launcher::canExclude(const Game& game) const {
-    return game.kind == GameKind::store && (game.source == GameSource::gog || game.source == GameSource::epic) && !gameKey(game).empty();
+    if (!isGame(game) || game.kind == GameKind::catalog || gameKey(game).empty()) return false;
+    return !(game.source == GameSource::custom && !game.source_id.empty()); // Added by hand: Usuń z biblioteki.
 }
 bool Launcher::excludedGame(const Game& game) const {
-    return canExclude(game) && library_state_.excluded_games.contains(gameKey(game));
+    return !library_state_.excluded_games.empty() && canExclude(game) && library_state_.excluded_games.contains(gameKey(game));
+}
+void Launcher::askExcludeGame(const Game& game) {
+    if (!canExclude(game)) return;
+    dismissMenu();
+    exclude_game_ = game;
+    prompt_kind_ = PromptKind::exclude;
+    exit_prompt_ = 2; // Anuluj: the safe default.
+    audio_.context();
+    InvalidateRect(hwnd_, nullptr, FALSE);
 }
 void Launcher::excludeGame(const Game& original) {
     const Game game = original;
@@ -104,11 +122,19 @@ void Launcher::excludeGame(const Game& original) {
     library_state_.excluded_games[gameKey(game)] = game.name.substr(0, 200);
     library_state_.hidden.erase(gameKey(game));
     library_state_dirty_ = true;
+    saveLibraryPreferences();
     dismissMenu();
     if (screen_ == ScreenMode::details) back();
     refreshRecentGames();
     audio_.context();
-    showNotification(NotificationKind::launch, tr(L"Gra wykluczona"), tr(L"Przywrócisz ją w ustawieniach platformy."));
+    showNotification(NotificationKind::launch, tr(L"Gra wykluczona"), tr(L"Przywrócisz ją w Biblioteka → Widoczność → Wykluczone gry."));
+}
+void Launcher::restoreExcludedGame(const std::string& key) {
+    if (!library_state_.excluded_games.erase(key)) return;
+    library_state_dirty_ = true;
+    saveLibraryPreferences();
+    refreshRecentGames();
+    audio_.context();
 }
 void Launcher::openExcludedGames(GameSource source) {
     if (source != GameSource::gog && source != GameSource::epic) return;

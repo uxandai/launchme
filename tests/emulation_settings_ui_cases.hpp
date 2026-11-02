@@ -311,6 +311,35 @@ int LauncherUiTest::emulationSettings(HWND window) {
     if (app.rom_library_.size() != 2) return 19966;
     for (int i = 0; i < 8 && app.settingsOpen(); ++i) app.back();
     app.desktop_mode_ = false;
+    // Emulator per gra: Details' "…" → Emulator walks Automatycznie, the system's emulators found here and
+    // "Inny program…" (picked: this game's own program); the system's games keep theirs.
+    {
+        const auto okami = std::find_if(app.rom_library_.begin(), app.rom_library_.end(), [](const Game& g) { return g.platform == L"Switch 2"; });
+        if (okami == app.rom_library_.end()) return 19970;
+        const auto game = *okami;
+        const auto system_target = game.play_action.target;
+        const auto choices = app.gameEmulatorChoices(game);
+        if (choices.size() < 2 || !choices.back().pick || app.gameEmulatorIndex(game, choices) != 0 || !app.gameEmulatorEditable(game)) return 19971;
+        const auto own = root / L"Separate drive" / L"switch2-nightly.exe";
+        write(own, "exe");
+        answer = own;
+        app.cycleGameEmulator(game, -1); // From Automatycznie back to the last choice: "Inny program…".
+        const auto key = gameKey(game);
+        const auto now = std::find_if(app.rom_library_.begin(), app.rom_library_.end(), [&](const Game& g) { return gameKey(g) == key; });
+        if (!app.library_state_.game_emulators.contains(key) || app.library_state_.game_emulators[key].program != own.wstring() ||
+            now == app.rom_library_.end() || now->play_action.target != own.wstring() ||
+            app.gameEmulatorLabel(game).find(L"switch2-nightly.exe") == std::wstring::npos) return 19972;
+        // Its details' "…" has the row, labelled with the choice.
+        app.back(); app.openDetails(*now); app.detail_action_ = 1; app.enterDown(false); app.enterUp();
+        const auto menu = app.menuRows();
+        if (!app.menu_open_ || !menu.emulator || context_menu::row(context_menu::Item::emulator, menu) < 0) return 19973;
+        settle();
+        if (!capture(L"emulation-game-emulator-menu.png")) return 19974;
+        app.dismissMenu(); app.back();
+        app.setGameEmulator(game, std::nullopt); // Automatycznie: the system's again.
+        const auto back = std::find_if(app.rom_library_.begin(), app.rom_library_.end(), [&](const Game& g) { return gameKey(g) == key; });
+        if (app.library_state_.game_emulators.contains(key) || back == app.rom_library_.end() || back->play_action.target != system_target) return 19975;
+    }
     std::filesystem::remove_all(root, error);
     return 0;
 }

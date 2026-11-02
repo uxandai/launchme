@@ -29,6 +29,7 @@ void Launcher::enterDown(bool repeated) {
     if (devicesOpen()) { deviceAccept(); return; }
     if (artworkOpen()) { artworkAccept(); return; }
     if (flixIconsFocused()) { flixIconAccept(); return; }
+    if (flixRailFocused()) { flixRailAccept(flix_rail_focus_); return; }
     if (quick_open_) { quickAccept(); return; }
     if (screen_ == ScreenMode::settings) { settingsActivate(); return; }
     if (screen_ == ScreenMode::details) { if (menu_open_) menuAccept(); else launch(); return; }
@@ -66,7 +67,7 @@ void Launcher::cancelEnterHold() { enter_held_ = pad_enter_hold_ = false; dashbo
 bool Launcher::acceptHoldsForMenu() const {
     if (glanceOpen() || companionOpen()) return false;
     if (pending_launch_ || menu_open_ || identifyOpen() || screen_ == ScreenMode::plugin_page || screen_ == ScreenMode::details || downloadsOpen() ||
-        cropOpen() || devicesOpen() || artworkOpen() || (categoryRailActive() && category_rail_focus_) || metroTabsFocused() || psfiveActions() || psfiveTopFocused() || psfiveDetailsShown() || flixIconsFocused() ||
+        cropOpen() || devicesOpen() || artworkOpen() || (categoryRailActive() && category_rail_focus_) || metroTabsFocused() || psfiveActions() || psfiveTopFocused() || psfiveDetailsShown() || flixIconsFocused() || flixRailFocused() ||
         (libraryControls() && (library_controls_.focus >= 0 || library_controls_.open() || library_controls_.action >= 0)) ||
         searchBackFocused() || cards_.empty() || selected_ >= cards_.size()) return false;
     const auto& game = cards_[selected_].game;

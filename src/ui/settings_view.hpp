@@ -67,7 +67,8 @@ enum class Id { font, home_layout, ui_accent, accent, uninstalled, emulation, co
                    // System → Aktualizacje: Launchme's own update (src/app/updates.cpp) and whether to look for one.
                    update, update_check,
                    // Platformy PC → MultiMC / Prism: the launcher picked by hand (portable MultiMC).
-                   multimc_path, studio_libraries, studio_hidden,
+                   multimc_path, studio_publishers, studio_developers, studio_min_games, studio_hidden, studio_hidden_entry, studio_show_all,
+                   updated_row, discovery_row, home_tab_icons, flix_rail, excluded_games, excluded_game, excluded_restore_all,
                    // System → Wydajność: the low memory mode (AppSettings::low_memory) and Kompresja grafik
                    // (AppSettings::texture_compression).
                    low_memory, texture_compression,
@@ -155,6 +156,8 @@ enum class Page {
     artwork_sources, // Media i dane → Źródła grafik: the galleries of "Zmień grafikę", each on or off.
     // Biblioteka → Emulacja: the ROM folder, the emulators and the console row; one system (key: its folder).
     emulation, emulation_system,
+    hidden_studios, // Biblioteka → Ukryci wydawcy i developerzy: each one with a switch to show it again.
+    excluded_games, // Biblioteka → Widoczność → Wykluczone gry: each title with Przywróć.
     drm_roots // DRM-free → Katalogi: adding a folder and every folder with its removal.
 };
 // A row drawn as tiles, with State::tile picking one of them.
@@ -182,6 +185,7 @@ inline int sizeSteps(Id id) { return id == Id::xmb_size || id == Id::psfive_size
 inline constexpr std::array<const wchar_t*, 2> accept_actions{trKey(L"Uruchom / instaluj"), trKey(L"Szczegóły")};
 inline constexpr std::array<int, 4> video_delays{1, 3, 5, 10};
 inline constexpr std::array<int, 4> trailer_spaces{100, 250, 500, 1000}; // MB
+inline constexpr std::array<int, 4> studio_min_counts{1, 2, 3, 5};      // Najmniej gier of a studio.
 inline constexpr std::array<const wchar_t*, 4> video_volumes{trKey(L"Wyciszony"), trKey(L"Cicho"), trKey(L"Normalnie"), trKey(L"Głośno")};
 inline constexpr std::array<double, 4> video_volume_levels{0.0, 0.2, 0.45, 0.8};
 // Indexed like AppSettings::GridStyle.

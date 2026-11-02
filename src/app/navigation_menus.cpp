@@ -5,6 +5,7 @@
 #include "../ui/category_rail.hpp"
 #include "../ui/context_menu.hpp"
 #include "../ui/quick_menu.hpp"
+#include "../platform/text_encoding.hpp"
 
 #include <algorithm>
 
@@ -236,7 +237,8 @@ void Launcher::openContextMenu() {
     if (topDialog() != Modal::none || exit_prompt_ || power_menu_) return;
     if (pending_launch_ || friends_open_ || category_menu_open_ || quick_open_ || cards_.empty() ||
         (screen_ != ScreenMode::shelves && screen_ != ScreenMode::platform_games && screen_ != ScreenMode::details && !gridScreen(screen_)) ||
-        (libraryControls() && (library_controls_.focus >= 0 || library_controls_.open())) || searchBackFocused() || !isGame(cards_[selected_].game)) return;
+        (libraryControls() && (library_controls_.focus >= 0 || library_controls_.open())) || searchBackFocused() ||
+        (!isGame(cards_[selected_].game) && !studioMenuTile(cards_[selected_].game))) return;
     if (menu_open_) { dismissMenu(); return; }
     cancelEnterHold(); menu_open_ = true; menu_selected_ = 0;
     library_menu_from_action_ = psfiveActions(); // PSfive buttons: the menu unfolds from "…".
@@ -254,7 +256,7 @@ void Launcher::contextClick(float mouse_x, float mouse_y) {
         (screen_ != ScreenMode::shelves && screen_ != ScreenMode::platform_games && !gridScreen(screen_))) return;
     const auto view = renderer_.viewport(); const float x = mouse_x / view.scale, y = mouse_y / view.scale;
     for (size_t i = 0; i < cards_.size(); ++i) {
-        if (!isGame(cards_[i].game) || !cardHit(i, x, y)) continue;
+        if ((!isGame(cards_[i].game) && !studioMenuTile(cards_[i].game)) || !cardHit(i, x, y)) continue;
         library_controls_.focus = -1; closeLibraryPanel();
         dismissMenu(); focusCard(i); openContextMenu(); return;
     }
@@ -303,7 +305,7 @@ void Launcher::menuAccept() {
                 showNotification(NotificationKind::error, tr(L"Nie można otworzyć folderu"), folder.wstring());
         break;
     case Item::hide: dismissMenu(); toggleHidden(game); break;
-    case Item::exclude: excludeGame(game); break;
+    case Item::exclude: askExcludeGame(game); break;
     case Item::uninstall: uninstallGame(game); break;
     case Item::remove: askRemoveFromLibrary(game); break;
     case Item::launch: dismissMenu(); openLaunchEditor(game); break;
@@ -313,6 +315,10 @@ void Launcher::menuAccept() {
     case Item::aurelia: dismissMenu(); openAurelia(&game); break;
     case Item::identify: dismissMenu(); openIdentifyFor(game); break;
     case Item::steam_account: cycleSteamAccount(game); break; // The menu stays: the row shows the next choice.
+    // A studio's logo: moved, the menu stays with it (its tile keeps the focus); hidden, the menu closes.
+    case Item::studio_earlier: case Item::studio_later: moveStudio(text_encoding::utf8(game.platform), item == Item::studio_earlier ? -1 : 1); break;
+    case Item::studio_hide: dismissMenu(); hideStudio(text_encoding::utf8(game.platform)); break;
+    case Item::emulator: cycleGameEmulator(game); break; // The menu stays: the row shows the next choice.
     default: openArtworkBrowser(game); break;
     }
 }

@@ -132,6 +132,7 @@ public:
     static int amazonGames(HWND window);
     static int xboxAccount(HWND window);
     static int studioLibraries(HWND window);
+    static int homeOptions(HWND window); // home_options_ui_cases.hpp
     static int studioTiles(HWND window); // studio_tiles_ui_cases.hpp
     static int updates(HWND window);
     static int gameLengths(HWND window);
@@ -1423,6 +1424,7 @@ public:
 #include "amazon_ui_cases.hpp"
 #include "xbox_ui_cases.hpp"
 #include "studios_ui_cases.hpp"
+#include "home_options_ui_cases.hpp"
 #include "studio_tiles_ui_cases.hpp"
 #include "update_ui_cases.hpp"
 #include "companion_ui_cases.hpp"
@@ -2221,6 +2223,15 @@ int main(int argc, char** argv) {
         CoUninitialize();
         if (code) std::cerr << "Aurelia UI failed at checkpoint " << code << '\n';
         else std::cout << "Aurelia: onboarding, setting, cloud conflicts, DLC, versions, downloads, live chat and desktop/TV passed\n";
+        return code;
+    }
+    if (argc == 2 && std::string_view(argv[1]) == "--home-options") {
+        std::filesystem::create_directories(root);
+        const auto code = window ? LauncherUiTest::homeOptions(window) : 99;
+        if (window) DestroyWindow(window);
+        CoUninitialize();
+        if (code) std::cerr << "Home options regression failed at checkpoint " << code << '\n';
+        else std::cout << "Home options: Flix side bar, tab icons, Ulubione switched off and the Steam rows passed\n";
         return code;
     }
     if (argc == 2 && std::string_view(argv[1]) == "--studios") {

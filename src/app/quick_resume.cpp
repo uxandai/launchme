@@ -96,6 +96,7 @@ void Launcher::focusPlayedGame(const std::string& key) {
 context_menu::Rows Launcher::menuRows() const {
     if (cards_.empty()) return {};
     const auto& game = cards_[selected_].game;
+    if (studioMenuTile(game)) { context_menu::Rows rows; rows.studio = true; return rows; }
     if (screen_ == ScreenMode::details) {
         context_menu::Rows rows{false, 0, false, true, !gameFolder(game).empty(), canExclude(game), !hideableCopies(game).empty()};
         rows.uninstall = canUninstall(game) && sessionState(game) == SessionState::none; // Never while it runs.
@@ -105,6 +106,7 @@ context_menu::Rows Launcher::menuRows() const {
                          shortcutAvailable(game, ShortcutPlace::steam);
         rows.aurelia = aurelia_active_ && aurelia::validGame(game);
         rows.steam_account = steamAccountChoices(game).size() > 1;
+        rows.emulator = gameEmulatorEditable(game);
         rows.metadata = isGame(game) && game.kind != GameKind::catalog && !gameKey(game).empty(); // Not a store's offer.
         rows.remove = canRemoveFromLibrary(game) && sessionState(game) == SessionState::none; // Usuń z biblioteki, never while it runs.
         return rows;
@@ -390,6 +392,14 @@ void Launcher::exitPromptAccept() {
             if (removeCustomGame(game.source_id)) showNotification(NotificationKind::launch, tr(L"Usunięto z biblioteki"), game.name);
             else showNotification(NotificationKind::error, tr(L"Nie udało się zapisać listy gier."), game.name);
         } else if (index == 1) openCustomEditor(game.source_id);
+        return;
+    }
+    if (prompt_kind_ == PromptKind::exclude) {
+        prompt_kind_ = PromptKind::exit;
+        const int index = static_cast<int>(choice); // 0 exclude it, 1 only hide it (Ctrl+H shows it), 2 cancel.
+        const auto game = std::exchange(exclude_game_, Game{});
+        if (index == 0) excludeGame(game);
+        else if (index == 1 && !hiddenInLauncher(game)) toggleHidden(game);
         return;
     }
     if (prompt_kind_ == PromptKind::delete_collection) {

@@ -85,7 +85,9 @@ Settings → System → Help → **Open folder** (the version row) opens it.
   on a game for a few seconds unfolds its poster into a wide card with its background, logo and facts,
   pushing the neighbouring tiles aside. In PSfive, Down from Play scrolls to the game's description, facts,
   Steam screenshots and similar games from your library, and starting on PSfive plays its start-up entrance.
-  Metro and Flix can show the library's category bar at the top (LB/RB). All games, Glance, Tarot, the companion and an
+  Metro and Flix can show the library's category bar at the top (LB/RB); PSfive's and Metro's own tabs can show
+  icons for PC platforms, Emulation, Publishers, Developers and Favorites, and Flix can keep a side bar of icons
+  at the left (home, those categories, search, all games; profile, menu and widgets at the bottom). All games, Glance, Tarot, the companion and an
   *Add game* tile can lead or close the first row of every layout; Metro has a light theme, and the game menu
   can be a large dialog with an icon for each option.
 - **Wallpaper** (Settings → Interface → *Wallpaper*): a picture from Wallhaven or Danbooru (safe content only) or
@@ -108,10 +110,13 @@ Settings → System → Help → **Open folder** (the version row) opens it.
   remembered positions. Consoles, collections and publishers each open in a default view of their own until one
   gets its own (Settings → Interface → *Library views in TV mode*, with a reset for each). With game videos on, the video plays in List+'s picture, in Cinematic's focused tile
   and in the desktop window's details pane; PC games from other stores play the Steam trailer of the same game.
-  Games you hide, and Steam's hidden and private games, stay out of sight until you show them.
+  Games you hide, and Steam's hidden and private games, stay out of sight until you show them. A game of any
+  store (or a DRM-free folder found twice) can be excluded from its menu, after a question; excluded games are
+  listed in Settings → Library → Visibility → *Excluded games*, where they can be restored.
 - **Collections**: Steam's collections (synced with the running client) and your own ones (create them from a
   game's menu or the desktop window's sidebar, drag games onto them); each can be hidden from the home screen or
-  reordered, and your own ones deleted (Settings → Library → *Collections*).
+  reordered, and your own ones deleted (Settings → Library → *Collections*). Hiding Favorites switches them off:
+  no stars and no Favorites shelf or section until it is shown again.
 - **Playing**: Play on a game installed by another remembered Steam account switches Steam to that account
   first, and a Steam game can be tied to one account (game menu → *Steam account*); Install picks the Steam
   library (with its free space) in Launchme's own dialog. While a game runs, *Close game* sits next to Play.
@@ -141,7 +146,8 @@ Settings → System → Help → **Open folder** (the version row) opens it.
   PS Vita (Vita3K) and ScummVM are among them; PS5 and Switch 2 start with a program you choose. Each system can
   also have its own ROM folder in place of its subfolder of the main one, and **Look for games again** reads it anew
   (new games, updates, removed ones). Switch 2 dumps kept unpacked are one game per folder, started from the newest
-  update's `exefs\main`.
+  update's `exefs\main`. A game can also have an emulator of its own (its details' "…" → *Emulator*): another
+  emulator of the system, or any program.
 - **Games added by hand** (Settings → Library → *DRM-free folders* → **Add game** → **Choose file** or **Choose
   folder**, the "+" tile, or a file or folder dropped on the desktop window): a program, shortcut or script is a PC
   game; a disc image or ROM is an emulated game with its console guessed and changeable (*Platform*), started by
@@ -195,7 +201,9 @@ Settings → System → Help → **Open folder** (the version row) opens it.
   a local semantic memory (a small multilingual model on the CPU, no service) and a relationship that grows with
   your conversations — see [AI companion](#ai-companion).
 - **Publishers and developers**: rows of their logos on the TV home (a board of all of them, then a studio's games),
-  folded sections in the desktop window, links in the details pane, and search by studio.
+  folded sections in the desktop window, links in the details pane, and search by studio. Each row has its own
+  switch, a studio needs a minimum number of games (3 by default) and the studios with the most games come first;
+  a logo's menu moves or hides it, and hidden ones come back one by one in Settings → Library.
   Games with every achievement unlocked have a gold border.
 - **Widgets drawer**: clock, Steam friends, Discord, CPU/GPU temperatures, controllers, audio and Bluetooth.
 - **Controllers** (TV mode and Settings → *Controllers*): every pad with its picture and battery, a green or red

@@ -344,7 +344,8 @@ void Launcher::settingsActivate() {
     if (settingsExtraActivate(row)) return; // The wallpaper picker, Bez tapety (settings_extras.cpp).
     if (row.id == Id::steam_sync) { requestSteamSync(true); audio_.context(); return; }
     if (row.id == Id::collection_manage) { openCollectionManager(); return; }
-    if (row.id == Id::studio_hidden) { showStudios(); return; }
+    if (row.id == Id::studio_hidden) { openSettingsPage(Page::hidden_studios); return; }
+    if (row.id == Id::studio_show_all) { showStudios(); closeSettingsPage(); return; }
     if (row.id == Id::collections_open) { openSettingsCollections(); return; }
     if (row.control == Control::sources && settings_state_.editing) { settingsPickSource(row, settings_state_.choice); return; }
     if (settingsTileActivate(row)) return;
@@ -640,7 +641,6 @@ void Launcher::settingsToggle(const Row& row) {
     if (row.id == Id::uninstalled) settings_.show_uninstalled = !settings_.show_uninstalled;
     else if (row.id == Id::recent_uninstalled) settings_.recent_uninstalled = !settings_.recent_uninstalled;
     else if (row.id == Id::emulation) settings_.show_emulation = !settings_.show_emulation;
-    else if (row.id == Id::studio_libraries) settings_.studio_libraries = !settings_.studio_libraries; // Rebuild: rows and sections.
     else if (row.id == Id::show_private) {
         // The split into public and private games comes from the scan: onLibrary applies the setting
         // to the fresh snapshot of the same account and keeps this screen.

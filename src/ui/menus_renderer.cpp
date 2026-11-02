@@ -123,6 +123,9 @@ void Renderer::drawExitPrompt() {
     textLine(context_->prompt_question.empty() ? std::wstring(tr(exit_prompt::question)) : context_->prompt_question,
         panel.left + 24, panel.top + 42, panel.right - panel.left - 48,
         category_font_.Get(), color(0.95f, 0.95f, 0.95f), DWRITE_TEXT_ALIGNMENT_CENTER);
+    // What the answer changes (Wyklucz grę: where the game goes), under the panel.
+    if (!context_->prompt_body.empty())
+        paragraph(context_->prompt_body, panel.left + 12, panel.bottom + 22, panel.right - panel.left - 24, settings_body_font_.Get(), color(0.82f, 0.82f, 0.82f), 3);
     // PSfive's pills inside the glass panel; the white one glides to the chosen answer.
     const auto rect = [](settings_ui::Rect r) { return D2D1::RectF(r.left, r.top, r.right, r.bottom); };
     for (int i = 0; i < exit_prompt::count; ++i) drawButtonGlass(rect(layout.button(static_cast<float>(i))), 1, false);
@@ -141,13 +144,12 @@ void Renderer::drawExitPrompt() {
 void Renderer::drawContextMenu() {
     if (cards_->empty() || context_->menu_progress < 0.005f) return;
     const auto& active = (*cards_)[selected_];
-    if (!isGame(active.game)) return;
+    if (!isGame(active.game) && !context_->menu_rows.studio) return; // A studio's logo has its menu too.
     // Duże menu gry: the home screen's menu as the large dialog (menu_dialog_renderer.cpp).
     if (context_->menu_dialog) { drawContextMenuDialog(); return; }
     const float alpha = smoothFade(context_->menu_progress);
     const bool beside = context_->menu_beside;
-    context_menu::Rows rows{context_->menu_suspend, static_cast<int>(context_->menu_plugins.size()), context_->menu_session,
-                            context_->menu_detail_options, context_->menu_folder, context_->menu_exclude, context_->menu_hide, context_->psfive};
+    auto rows = context_->menu_rows; // As Launcher::menuRows built them (identify, the studio's rows, the emulator...).
     rows.uninstall = context_->menu_uninstall;
     rows.remove = context_->menu_remove;
     rows.launch = context_->menu_launch;
@@ -198,6 +200,10 @@ void Renderer::drawContextMenu() {
         case context_menu::Item::compat: return L"Proton / Wine";
         case context_menu::Item::shortcuts: return tr(L"Skróty");
         case context_menu::Item::identify: return tr(L"Zidentyfikuj grę…");
+        case context_menu::Item::studio_earlier: return tr(L"Przesuń wcześniej");
+        case context_menu::Item::studio_later: return tr(L"Przesuń dalej");
+        case context_menu::Item::studio_hide: return tr(L"Ukryj");
+        case context_menu::Item::emulator: return context_->menu_emulator.c_str();
         }
         return L"";
     };

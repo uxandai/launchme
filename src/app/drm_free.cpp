@@ -289,7 +289,7 @@ void Launcher::drmSettingsRows() {
         for (const auto& root : drm_catalog_.roots) {
             size_t count = 0, missing = 0;
             for (const auto& entry : drm_catalog_.games)
-                if (playable(entry) && drm_free::inside(entry.folder, root)) { ++count; missing += entry.missing; }
+                if (playable(entry) && (drm_free::inside(entry.folder, root) || drm_free::folderKey(entry.folder) == drm_free::folderKey(root))) { ++count; missing += entry.missing; }
             auto description = tr(L"Gry: ") + std::to_wstring(count);
             if (count && missing == count) description += L" · " + std::wstring(tr(L"Katalog niedostępny"));
             Row row{Id::drm_root, Control::action, root.wstring(), std::move(description)};
@@ -464,7 +464,7 @@ bool Launcher::drmSettingsActivate(const Row& row) {
         const std::filesystem::path root = text_encoding::wide(row.key);
         const auto key = drm_free::folderKey(root);
         std::erase_if(drm_catalog_.roots, [&](const auto& item) { return drm_free::folderKey(item) == key; });
-        std::erase_if(drm_catalog_.games, [&](const auto& entry) { return drm_free::inside(entry.folder, root); });
+        std::erase_if(drm_catalog_.games, [&](const auto& entry) { return drm_free::inside(entry.folder, root) || drm_free::folderKey(entry.folder) == key; });
         refresh();
         return true;
     }

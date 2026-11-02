@@ -470,7 +470,7 @@ void Launcher::snapCardsForTransition() {
         card.size = target_size;
         card.aspect = aspect;
         card.opacity = 1.0f;
-        card.emphasis = i == selected_ && !quick_open_ && !flixIconsFocused() && !(metro && metro_tabs_) && !psfive_buttons && !searchBackFocused() &&
+        card.emphasis = i == selected_ && !quick_open_ && !flixIconsFocused() && !flixRailFocused() && !(metro && metro_tabs_) && !psfive_buttons && !searchBackFocused() &&
             !(libraryControls() && (library_controls_.focus >= 0 || library_controls_.open() ||
                                     (libraryOverview() && library_controls_.action >= 0))) ? 1.0f : 0.0f;
         if (renderer_.hasCover(i) || renderer_.hasPoster(i)) card.cover_opacity = 1.0f;
@@ -481,6 +481,7 @@ void Launcher::tick() {
     const auto now = std::chrono::steady_clock::now();
     last_tick_ms_ = GetTickCount64();
     if (closing_) { frame_limit_ = 240; tickClose(now); return; } // The exit animation at the full rate.
+    flixRailInset(); // Flix's rows start right of Pasek boczny while it is shown.
     pollMemory();
     pollGameFocus();
     pollTray();
@@ -720,7 +721,7 @@ void Launcher::tick() {
         }
         card.aspect = aspect;
         if (i == selected_) { focus_x = target_x; focus_y = target_y; focus_w = target_size * aspect; focus_h = target_size; }
-        const float emphasis = i == selected_ && !quick_open_ && !flixIconsFocused() && !(metro && metro_tabs_) && !psfive_buttons && !searchBackFocused() &&
+        const float emphasis = i == selected_ && !quick_open_ && !flixIconsFocused() && !flixRailFocused() && !(metro && metro_tabs_) && !psfive_buttons && !searchBackFocused() &&
             !(libraryControls() && (library_controls_.focus >= 0 || library_controls_.open() ||
                                     (libraryOverview() && library_controls_.action >= 0))) ? 1.0f : 0.0f; // Przegląd: its panel's buttons.
         // PSfive at start-up: the row slides in from the right, small, tile after tile, then the first

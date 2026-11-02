@@ -277,10 +277,20 @@ struct AppSettings {
     std::unordered_set<std::string> hidden_collections;
     std::vector<std::string> collection_order;
     // Wydawcy and Developerzy (src/app/studio_libraries.cpp): the libraries of the publishers and developers
-    // with a logo; hidden ones ("publisher:capcom") and the player's order.
-    bool studio_libraries = true;
+    // with a logo, each row on its own; a studio needs studio_min_games games (1, 2, 3 or 5) to show; hidden
+    // ones ("publisher:capcom") and the player's order (the rest: most games first).
+    bool show_publishers = true;
+    bool show_developers = true;
+    int studio_min_games = 3;
     std::unordered_set<std::string> hidden_studios;
     std::vector<std::string> studio_order;
+    // The Steam rows of an account with no collections: Ostatnio zaktualizowane, Jeszcze niegrane.
+    bool show_updated_row = true;
+    bool show_discovery_row = true;
+    // Native PSfive and Metro tabs: icons for Platformy PC, Emulacja, Wydawcy, Developerzy and Ulubione.
+    bool home_tab_icons = false;
+    // Flix → Pasek boczny: the icons at the left edge (src/ui/flix_rail.hpp).
+    bool flix_rail = false;
     bool quick_resume = false; // Experimental: suspend/resume running games from the game menu.
     // Guide/PS opens the launcher menu (hold: power). Off when Game Bar or Steam
     // already own that button on this PC.

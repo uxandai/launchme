@@ -54,7 +54,11 @@ void Launcher::rebuildCustomLibrary() {
     for (const auto& entry : custom_games_) {
         const auto found = custom_installed_.find(entry.id);
         auto game = custom_games::makeGame(entry, found == custom_installed_.end() || found->second); // No file: never installed.
-        if (game.kind == GameKind::nonsteam && game.installed) game.play_action = emulationAction(entry.platform, entry.path, entry.arguments);
+        if (game.kind == GameKind::nonsteam && game.installed) {
+            // Its ROM as makeGame resolved it (a Switch 2 dump's exefs\main); its own emulator unless a command is typed.
+            game.play_action = emulationAction(entry.platform, game.rom.empty() ? entry.path : game.rom, entry.arguments);
+            if (entry.arguments.empty()) if (auto own = gameEmulatorAction(game); !own.target.empty()) game.play_action = std::move(own);
+        }
         custom_library_.push_back(std::move(game));
     }
 }

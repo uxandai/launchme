@@ -29,6 +29,8 @@ set(LAUNCHME_APP_SOURCES
     src/ui/bulk_covers_renderer.cpp
     src/app/navigation.cpp
     src/app/navigation_menus.cpp
+    src/app/flix_rail.cpp
+    src/app/game_emulator.cpp
     src/app/game_launch.cpp
     src/app/pointer.cpp
     src/app/friends.cpp
@@ -264,6 +266,7 @@ set(LAUNCHME_APP_SOURCES
     src/ui/psfive_renderer.cpp
     src/ui/snitch_renderer.cpp
     src/ui/tv_metadata_renderer.cpp
+    src/ui/flix_rail_renderer.cpp
     src/ui/glass_renderer.cpp
     src/ui/achievements_renderer.cpp
     src/ui/dashboard_renderer.cpp

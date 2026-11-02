@@ -336,6 +336,18 @@ int main() {
             read.focus_gap != AppSettings::FocusGap::inside || read.search_art != AppSettings::SearchArt::landscape || !read.shelves_hero_facts || !read.flix_top_icons) return 112;
         looks.button_rgb = 0;
         if (!saveAppSettings(looks, file) || loadAppSettings(file).button_rgb != 0) return 113;
+        // 0.5.8: Wydawcy and Developerzy each on its own (the old switch sets both), Najmniej gier (1, 2, 3 or
+        // 5; 3 by default), the Steam rows, the tab icons and Flix's side bar.
+        if (!defaults.show_publishers || !defaults.show_developers || defaults.studio_min_games != 3 || !defaults.show_updated_row ||
+            !defaults.show_discovery_row || defaults.home_tab_icons || defaults.flix_rail) return 118;
+        auto rows = config;
+        rows.show_publishers = false; rows.studio_min_games = 5; rows.show_updated_row = false; rows.home_tab_icons = true; rows.flix_rail = true;
+        if (!saveAppSettings(rows, file)) return 119;
+        const auto again = loadAppSettings(file);
+        if (again.show_publishers || !again.show_developers || again.studio_min_games != 5 || again.show_updated_row || !again.show_discovery_row ||
+            !again.home_tab_icons || !again.flix_rail) return 120;
+        const auto old = parseAppSettings("studio_libraries=0\nstudio_min_games=4\n");
+        if (old.show_publishers || old.show_developers || old.studio_min_games != 3) return 121;
         // The first version's focus_gap=1 was the outline moved outward.
         if (parseAppSettings("focus_gap=1\n").focus_gap != AppSettings::FocusGap::outside ||
             parseAppSettings("focus_gap=outside\n").focus_gap != AppSettings::FocusGap::outside) return 115;

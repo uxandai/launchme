@@ -38,8 +38,13 @@ struct LibraryState {
     // playtest). The edit stays in Launchme only and is not sent again while its value is unchanged.
     // Key: steam_sync::unsyncedKey. Row: steam-unsynced "<key>" <0|1>.
     std::map<std::string, bool> steam_unsynced;
-    // Epic/GOG exclusions never join Ctrl+H. Retain titles for restoration even offline.
+    // Wyklucz grę (any store, scanned DRM-free and emulated games, Steam shortcuts): never joins Ctrl+H.
+    // Titles are kept for restoring even offline (Biblioteka → Widoczność → Wykluczone gry).
     std::map<std::string, std::wstring> excluded_games;
+    // Emulator per gra: a game's own emulator by gameKey, a catalogue id ("ryujinx") or its own program.
+    // Row: game-emulator "<key>" "<id>" "<program>" (one of them empty).
+    struct GameEmulator { std::string id; std::wstring program; bool operator==(const GameEmulator&) const = default; };
+    std::map<std::string, GameEmulator> game_emulators;
     // A Steam game's own launch options ("Opcje uruchamiania…"), by gameKey; passed through
     // steam.exe -applaunch. Row: launch-arguments "<key>" "<options>".
     std::map<std::string, std::wstring> launch_arguments;

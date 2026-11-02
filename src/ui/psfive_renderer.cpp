@@ -150,9 +150,12 @@ void Renderer::drawPsfiveTopBar() {
         const bool focused = static_cast<int>(i) == context_->psfive_tab_focus;
         const bool bold = context_->psfive_tab_focus >= 0 ? focused : shown;
         auto* font = bold ? psfive_tab_font_.Get() : psfive_tab_idle_font_.Get();
-        const float w = std::min(max_tab, textAdvance(tabs[i], psfive_tab_font_.Get()));
+        const wchar_t icon = i < context_->psfive_tab_glyphs.size() ? context_->psfive_tab_glyphs[i] : 0;
+        const float w = icon ? 34.0f : std::min(max_tab, textAdvance(tabs[i], psfive_tab_font_.Get()));
         psfive_tab_rects_[i] = {x - 16, top_center - 25, x + w + 16, top_center + 25};
-        if (i == visible_tabs && textAdvance(tabs[i], font) > w) {
+        if (icon) // Ikony zamiast nazw: the bold one in full, the others dimmed as the idle weight reads.
+            desktopGlyph(icon, x + w * 0.5f, top_center, 28.0f, gray(0.97f, opacity * (bold ? 1.0f : 0.62f)));
+        else if (i == visible_tabs && textAdvance(tabs[i], font) > w) {
             // Keep the overflow affordance visible even when a long category name is clipped.
             const float dots = textAdvance(L"...", font);
             textLine(tabs[i].substr(0, tabs[i].size() - 3), x, top_center, w - dots, font, gray(0.97f, opacity));

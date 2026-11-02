@@ -12,8 +12,11 @@ std::string encoded(std::string_view value) { return key_codec::encode(value); }
 bool validField(std::string_view value) {
     return value.size() <= 1024 && value.find_first_of("\r\n\0", 0, 3) == std::string_view::npos;
 }
+// Wyklucz grę: any store's game, a scanned DRM-free one, an emulated game or a Steam shortcut (gameKey).
 bool exclusionKey(std::string_view key) {
-    return (key.starts_with("gog:") && key.size() > 4) || (key.starts_with("epic:") && key.size() > 5);
+    for (const std::string_view prefix : {"steam:", "gog:", "epic:", "battlenet:", "ea:", "ubisoft:", "amazon:", "xbox:", "multimc:", "drmfree:", "shortcut:"})
+        if (key.starts_with(prefix) && key.size() > prefix.size()) return true;
+    return false;
 }
 bool endOfRow(std::istream& row) { row >> std::ws; return row.eof() && !row.bad(); }
 bool field(std::istream& input, std::string& value) {
@@ -113,6 +116,12 @@ bool parseRow(const std::string& line, LibraryState& result) {
             auto title = text_encoding::wide(name);
             if ((!name.empty() && title.empty()) || title.size() > 200) return {};
             result.excluded_games[std::move(key)] = std::move(title);
+        } else if (kind == "game-emulator") {
+            std::string key, id, program;
+            if (!field(row, key) || !field(row, id) || !field(row, program) || key.empty() || (id.empty() == program.empty()) || id.size() > 32) return {};
+            auto path = text_encoding::wide(program);
+            if (!program.empty() && path.empty()) return {};
+            result.game_emulators[std::move(key)] = {std::move(id), std::move(path)};
         } else if (kind == "launch-arguments") {
             std::string key, options;
             if (!field(row, key) || !field(row, options) || key.empty() || options.empty()) return {};
@@ -225,6 +234,12 @@ bool saveLibraryState(const LibraryState& state, const std::filesystem::path& fi
         const auto text = text_encoding::utf8(name);
         if (!exclusionKey(key) || !validField(key) || name.size() > 200 || !validField(text) || (!name.empty() && text.empty())) return false;
         output << "excluded-game " << std::quoted(encoded(key)) << ' ' << std::quoted(encoded(text)) << '\n';
+        if (!bounded()) return false;
+    }
+    for (const auto& [key, emulator] : state.game_emulators) {
+        const auto program = text_encoding::utf8(emulator.program);
+        if (key.empty() || !validField(key) || emulator.id.empty() == program.empty() || !validField(emulator.id) || !validField(program)) return false;
+        output << "game-emulator " << std::quoted(encoded(key)) << ' ' << std::quoted(encoded(emulator.id)) << ' ' << std::quoted(encoded(program)) << '\n';
         if (!bounded()) return false;
     }
     for (const auto& [key, options] : state.launch_arguments) {

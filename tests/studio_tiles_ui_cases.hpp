@@ -15,6 +15,7 @@ int LauncherUiTest::studioTiles(HWND window) {
     app.settings_.glance = app.settings_.companion = false;
     app.settings_.shelves_category_all = true;
     app.settings_.show_emulation = true;
+    app.settings_.studio_min_games = 1; // One game per studio here.
     app.settings_.enabled_pc_sources.insert("gog");
     if (!app.renderer_.initialize(window)) return 9900;
     const auto capture = [&](const wchar_t* name) {

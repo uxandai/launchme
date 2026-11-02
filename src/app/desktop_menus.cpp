@@ -48,7 +48,7 @@ void Launcher::desktopOpenGameMenu(float x, float y, bool keyboard) {
         if (session != SessionState::none) items.push_back({Action::close_game, tr(L"Zamknij grę"), {}, glyph::stop});
         separator();
         const bool favorite = isFavorite(game);
-        items.push_back({Action::favorite, favorite ? tr(L"Usuń z ulubionych") : tr(L"Dodaj do ulubionych"), {}, favorite ? glyph::star_fill : glyph::star});
+        if (favoritesShown()) items.push_back({Action::favorite, favorite ? tr(L"Usuń z ulubionych") : tr(L"Dodaj do ulubionych"), {}, favorite ? glyph::star_fill : glyph::star});
         MenuItem collections{Action::collections, tr(L"Kolekcje"), {}, glyph::folder};
         collections.submenu = true;
         items.push_back(std::move(collections));
@@ -57,11 +57,12 @@ void Launcher::desktopOpenGameMenu(float x, float y, bool keyboard) {
         items.push_back({Action::details, tr(L"Szczegóły"), enter_details ? std::wstring(tr(L"Enter")) : std::wstring{}, glyph::info});
         items.push_back({Action::artwork, tr(L"Zmień grafikę…"), {}, glyph::picture});
         items.push_back({Action::retry_art, tr(L"Pobierz grafiki ponownie"), {}, glyph::refresh});
-        if (!steamArtwork(game) && !gameKey(game).empty()) items.push_back({Action::identify, tr(L"Zidentyfikuj grę…"), {}, glyph::search});
         if (!gameKey(game).empty()) items.push_back({Action::metadata, tr(L"Edytuj metadane…"), {}, glyph::edit}); // Own title and details.
+        if (!steamArtwork(game) && !gameKey(game).empty()) items.push_back({Action::identify, tr(L"Zidentyfikuj grę…"), {}, glyph::search}); // Under it, as in Tryb TV.
         if (aurelia_active_ && aurelia::validGame(game)) items.push_back({Action::aurelia, tr(L"Zarządzaj · Aurelia"), {}, glyph::edit});
         // The file, options and folder it starts with (Steam: its launch options).
         if (steamAccountChoices(game).size() > 1) items.push_back({Action::steam_account, tr(L"Konto Steam: ") + steamAccountLabel(game), {}, glyph::people});
+        if (gameEmulatorEditable(game)) items.push_back({Action::emulator, gameEmulatorLabel(game), {}, glyph::game}); // Emulator per gra: the next choice.
         if (launchEditable(game)) // A game added by hand: the file, name and options are its own editor.
             items.push_back({Action::launch_options, game.source == GameSource::custom ? tr(L"Edytuj grę…") : tr(L"Opcje uruchamiania…"), {}, glyph::settings});
         if (compatGame(game) && !gameKey(game).empty()) items.push_back({Action::compat_options, L"Proton / Wine…", {}, glyph::settings});
@@ -108,7 +109,7 @@ void Launcher::desktopOpenGameMenu(float x, float y, bool keyboard) {
         title.enabled = false;
         items.push_back(std::move(title));
         separator();
-        items.push_back({Action::favorite, tr(L"Dodaj do ulubionych"), {}, glyph::star});
+        if (favoritesShown()) items.push_back({Action::favorite, tr(L"Dodaj do ulubionych"), {}, glyph::star});
         MenuItem collections{Action::collections, tr(L"Kolekcje"), {}, glyph::folder};
         collections.submenu = true;
         items.push_back(std::move(collections));
@@ -337,6 +338,7 @@ void Launcher::desktopMenuPick(const desktop_ui::MenuItem& item, bool /*from_sub
     case Action::metadata: if (game) desktopMetaOpen(*game); return;
     case Action::aurelia: if (game) openAurelia(game); return;
     case Action::steam_account: if (game) cycleSteamAccount(*game); return;
+    case Action::emulator: if (game) cycleGameEmulator(*game); return;
     case Action::launch_options: if (game) openLaunchEditor(*game); return;
     case Action::compat_options: if (game) openGameCompatSettings(*game); return;
     case Action::shortcuts: case Action::saves: return; // Their submenus.
@@ -360,7 +362,7 @@ void Launcher::desktopMenuPick(const desktop_ui::MenuItem& item, bool /*from_sub
         else for (const auto& each : games) if (!hiddenInLauncher(each)) toggleHidden(each);
         desktop_marked_.clear();
         return;
-    case Action::exclude: if (game) excludeGame(*game); return;
+    case Action::exclude: if (game) askExcludeGame(*game); return;
     case Action::uninstall: if (game) uninstallGame(*game); return;
     case Action::remove_game: if (game) askRemoveFromLibrary(*game); return;
     case Action::sort:

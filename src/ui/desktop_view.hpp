@@ -96,7 +96,7 @@ enum class Action {
     none, play, suspend, close_game, details, favorite, collections, collection_toggle, collection_new, collection_manage,
     versions, artwork, retry_art, missing_art, identify, folder, hide, exclude, plugin, sort, section_rename, section_games,
     section_options, section_delete, section_up, section_down, section_tv, section_hide, clear_marks, select_all, store_page, downloads, metadata, companion_change, companion_mind,
-    companion_settings, uninstall, launch_options, aurelia, steam_account, remove_game,
+    companion_settings, uninstall, launch_options, aurelia, steam_account, emulator, remove_game,
     compat_options, // Linux: the game's Proton / Wine options (Launcher::openGameCompatSettings).
     shortcuts,      // Skróty ▸: the game's shortcuts outside Launchme (Launcher::setGameShortcut).
     shortcut_toggle, // One of them (value: ShortcutPlace), checked when it exists.
@@ -415,6 +415,7 @@ struct Layout {
     bool companion_card = false;
     float narrow = 0;     // 0 wide … 1 narrow sidebar, animated between them.
     float pane_width = 0; // Dragged by its left edge; 0: a quarter of the window.
+    bool favorite = true; // The pane's star beside Graj (none while Ulubione is switched off).
 
     float sidebarWide() const { return std::clamp(std::round(width * 0.17f), 228.0f, 272.0f); }
     float sidebarRight() const { return std::round(sidebarWide() + (sidebar_narrow - sidebarWide()) * std::clamp(narrow, 0.0f, 1.0f)); }
@@ -576,7 +577,7 @@ struct Layout {
         return {left, y, left + std::min(320.0f, width - 20 - 2 * 48 - left), y + 42};
     }
     Rect paneFavorite(float scroll) const { const auto p = panePrimary(scroll); return {p.right + 6, p.top, p.right + 48, p.bottom}; }
-    Rect paneMore(float scroll) const { const auto f = paneFavorite(scroll); return {f.right + 6, f.top, f.right + 48, f.bottom}; }
+    Rect paneMore(float scroll) const { const auto f = favorite ? paneFavorite(scroll) : panePrimary(scroll); return {f.right + 6, f.top, f.right + 48, f.bottom}; }
     Rect paneStats(float scroll) const { const float y = paneY(132, scroll); return {paneLeft() + 20, y, width - 20, y + 66}; }
     static constexpr int quick_count = 4; // Szczegóły, Grafika, Folder, Ukryj.
     Rect paneQuick(int i, float scroll) const {

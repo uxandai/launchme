@@ -38,10 +38,10 @@ void Renderer::drawFlix() {
             const auto source = logo.has_ink_bounds ? logo.ink_bounds : D2D1::RectF(0, 0, static_cast<float>(size.width), static_cast<float>(size.height));
             const float ink_w = source.right - source.left, ink_h = source.bottom - source.top;
             const float factor = std::min(520.0f / ink_w, 170.0f / ink_h);
-            target_->DrawBitmap(logo.bitmap.Get(), D2D1::RectF(flix_layout::left, bottom - ink_h * factor, flix_layout::left + ink_w * factor, bottom),
+            target_->DrawBitmap(logo.bitmap.Get(), D2D1::RectF(flix_layout::leftEdge(), bottom - ink_h * factor, flix_layout::leftEdge() + ink_w * factor, bottom),
                                 rest_alpha * reveal(logo), D2D1_BITMAP_INTERPOLATION_MODE_LINEAR, &source);
         } else if (!context_->logo_pending && !logo.decoding)
-            text(cards[selected_].game.name, flix_layout::left, bottom - 80, width - 2 * flix_layout::left, 80, hero_font_.Get(), gray(0.95f, rest_alpha));
+            text(cards[selected_].game.name, flix_layout::leftEdge(), bottom - 80, width - 2 * flix_layout::leftEdge(), 80, hero_font_.Get(), gray(0.95f, rest_alpha));
     }
     drawQuickShade();
     const auto measure = [&](const std::wstring& value) {
@@ -62,9 +62,9 @@ void Renderer::drawFlix() {
         if (alpha < 0.01f) continue;
         const bool focused_row = r == context_->flix_row;
         const float header_y = tile_top - flix_layout::header;
-        textLine(row.title, flix_layout::left, header_y + 22, width * 0.5f, category_font_.Get(), gray(focused_row ? 0.93f : 0.72f, alpha));
+        textLine(row.title, flix_layout::leftEdge(), header_y + 22, width * 0.5f, category_font_.Get(), gray(focused_row ? 0.93f : 0.72f, alpha));
         if (focused_row && selected_ < cards.size() && isGame(cards[selected_].game)) {
-            const float offset = flix_layout::left + std::min(width * 0.5f, measure(row.title)) + 14;
+            const float offset = flix_layout::leftEdge() + std::min(width * 0.5f, measure(row.title)) + 14;
             brush(uiAccent(0.8f * alpha));
             target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(offset, header_y + 22), 2.8f, 2.8f), solid_.Get());
             textLine(cards[selected_].game.name, offset + 16, header_y + 22, width - offset - 16 - flix_layout::right_margin,

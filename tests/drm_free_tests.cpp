@@ -164,6 +164,31 @@ int main() {
     if (game.source != GameSource::drmfree || gameKey(game) != "drmfree:" + gog->id || !game.installed || game.play_action.arguments != L"-windowed" ||
         game.install_directory != gog->folder || game.executable != gog->executable || std::string(sourceSlug(GameSource::drmfree)) != "drmfree") return 13;
 
+    // (2b) A root that is one game's own folder (its program at the top, beside an installed game's files):
+    // that one game, not its mod tool's subfolder; a root with a stray program at the top but no such
+    // files stays a folder of games.
+    {
+        const auto single = base / L"Football Life 2025";
+        executable(single / L"FL_2025.exe", 30 * 1024 * 1024);
+        executable(single / L"Settings.exe", 400 * 1024);
+        executable(single / L"Uninstall FL25.exe", 300 * 1024);
+        text(single / L"steam_api64.dll", "dll");
+        executable(single / L"SiderAddons" / L"sider.exe", 2 * 1024 * 1024);
+        Catalog one; one.roots = {single};
+        const auto found = scan(one, options);
+        if (found.games.size() != 1 || folderKey(found.games[0].folder) != folderKey(single) ||
+            folderKey(found.games[0].executable) != folderKey(single / L"FL_2025.exe") || byFolder(found, single / L"SiderAddons")) return 15;
+        // Its file round trip and an unplugged drive keep it, as any other game.
+        if (parse(format(found)).catalog != found || rootOf(found, single) != &found.roots[0]) return 16;
+        const auto shelf = base / L"Shelf";
+        executable(shelf / L"tool.exe", 30 * 1024 * 1024);
+        executable(shelf / L"First" / L"First.exe", 300 * 1024);
+        executable(shelf / L"Second" / L"Second.exe", 300 * 1024);
+        Catalog many; many.roots = {shelf};
+        const auto shelved = scan(many, options);
+        if (!byFolder(shelved, shelf / L"First") || !byFolder(shelved, shelf / L"Second") || byFolder(shelved, shelf)) return 17;
+    }
+
     // (3) The file round trip keeps everything; damaged entries are dropped one by one.
     const auto reloaded = parse(format(scanned));
     if (!reloaded.readable || reloaded.catalog != scanned) return 20;

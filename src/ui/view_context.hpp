@@ -5,6 +5,8 @@
 #include <unordered_set>
 #include "../friends/steam_friends.hpp"
 #include "settings_view.hpp"
+#include "context_menu.hpp"
+#include "flix_rail.hpp"
 #include "../model/game_details.hpp"
 #include "../plugins/time_comparison.hpp"
 #include "artwork_browser.hpp"
@@ -344,6 +346,13 @@ struct ViewContext {
     bool menu_metadata = false; // Details' "Edytuj metadane".
     bool menu_aurelia = false;
     std::wstring menu_steam_account; // Details' "…": the account a Steam game starts from; empty: no choice.
+    // Flix → Pasek boczny (src/ui/flix_rail.hpp): its icons, the focused and hovered one (-1: none), the
+    // row in view's own (-1: another row), and how much of it shows.
+    std::vector<flix_rail::Item> flix_rail;
+    int flix_rail_focus = -1, flix_rail_hover = -1, flix_rail_active = -1;
+    float flix_rail_alpha = 1;
+    std::wstring menu_emulator;      // Details' "…": "Emulator: Ryujinx" (Emulator per gra); empty: none.
+    context_menu::Rows menu_rows{};  // The menu's rows as Launcher::menuRows builds them (every flag, the studio's too).
     std::wstring aurelia_cloud;
     // Szczegóły: the cloud icon after "…" (Aurelia-managed games), its state and its action's index.
     std::optional<aurelia::CloudState> detail_cloud;
@@ -430,6 +439,7 @@ struct ViewContext {
     bool metro = false;
     std::vector<MetroTile> metro_tiles;
     std::vector<std::wstring> metro_tabs;
+    std::vector<wchar_t> metro_tab_glyphs; // Ikony zamiast nazw: a tab's icon (0: its name), as psfive_tab_glyphs.
     float metro_tab = 0;
     size_t metro_page = 0;
     bool metro_tabs_focus = false; // The tab strip has the focus (Up from the top row of tiles).
@@ -444,6 +454,7 @@ struct ViewContext {
     float psfive_scale = 1;      // psfive_layout::sizeScale of the tile size setting.
     int psfive_top = -1;         // The focused top bar icon (psfive_layout::TopItem); -1 none.
     std::vector<std::wstring> psfive_tabs; // Three categories, then optional "Więcej...".
+    std::vector<wchar_t> psfive_tab_glyphs; // Ikony zamiast nazw: Platformy PC, Emulacja, Wydawcy, Developerzy, Ulubione (0: the name).
     int psfive_tab = -1;                   // The shown category's tab (overflow uses "Więcej...").
     int psfive_tab_focus = -1;
     float psfive_top_opacity = 0.66f; // Whole navigation row: active 100%, inactive 66%.

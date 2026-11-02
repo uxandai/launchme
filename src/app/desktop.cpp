@@ -65,6 +65,7 @@ desktop_ui::Layout Launcher::desktopLayout() const {
     layout.companion_card = settings_.companion && !settings_.desktop_narrow; // Narrow: icons only, no card.
     layout.narrow = desktop_narrow_anim_;
     layout.pane_width = static_cast<float>(settings_.desktop_pane);
+    layout.favorite = favoritesShown();
     return layout;
 }
 
@@ -102,7 +103,7 @@ void Launcher::buildDesktopSidebar() {
     const size_t favorites = desktopFavoriteGames().size();
     add(EntryKind::all, Group::library, "all", tr(L"Wszystkie gry"), all, glyph::library);
     add(EntryKind::recent, Group::library, "recent", tr(L"Ostatnio grane"), recent, glyph::history);
-    add(EntryKind::favorites, Group::library, "favorites", tr(L"Ulubione"), favorites, glyph::star).droppable = true;
+    if (favoritesShown()) add(EntryKind::favorites, Group::library, "favorites", tr(L"Ulubione"), favorites, glyph::star).droppable = true;
     if (private_shelf_ && !private_category_.games.empty())
         add(EntryKind::hidden, Group::library, "hidden", tr(L"Ukryte"), private_category_.games.size(), glyph::hide);
     // Every store with games, in the TV mode's order; each copy under its own store.

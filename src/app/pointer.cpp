@@ -123,6 +123,9 @@ void Launcher::click(float mouse_x, float mouse_y, bool double_click) {
     }
     if (snitchClick(x, y, double_click)) return;
     if (flixIconClick(x, y, double_click)) return;
+    // Flix → Pasek boczny: an icon acts at once (no menu, drawer or prompt over the page).
+    if (!quick_open_ && !friends_open_ && !menu_open_ && !category_menu_open_ && !exit_prompt_)
+        if (const int rail = flixRailAt(x, y); rail >= 0) { flixRailAccept(rail); return; }
     if (emptyHomeClick(x, y, double_click)) return;
     if (quick_open_) {
         if (snitchActive()) { closeQuick(); return; }
@@ -374,6 +377,7 @@ bool Launcher::hoverButton(float mouse_x, float mouse_y) const {
         (snitch_layout::hitDock(view.width, view.height, x, y, static_cast<int>(plugin_menu_.size())) >= 0 ||
          snitch_layout::profile().contains(x, y))) return true;
     if (flixIconsShown() && homeOverlayAvailable() && home_widgets::icons::hit(x, y, flixIconCount(), view.width) >= 0) return true;
+    if (flixRailAt(x, y) >= 0) return true;
     if (emptyHomeActive() && emptyHomeLayout().hit(x, y) >= 0) return true;
     if (quick_open_) {
         if (snitchActive()) return false;
@@ -519,6 +523,9 @@ void Launcher::mouseMove(float mouse_x, float mouse_y) {
         const int hover = flixIconsShown() && homeOverlayAvailable() ?
             home_widgets::icons::hit(mouse_x / glance_view.scale, mouse_y / glance_view.scale, flixIconCount(), glance_view.width) : -1;
         if (flix_icon_hover_ != hover) { flix_icon_hover_ = hover; InvalidateRect(hwnd_, nullptr, FALSE); }
+        // Pasek boczny: the icon under the pointer lights up and names itself.
+        const int rail = flixRailAt(mouse_x / glance_view.scale, mouse_y / glance_view.scale);
+        if (flix_rail_hover_ != rail) { flix_rail_hover_ = rail; InvalidateRect(hwnd_, nullptr, FALSE); }
         // The empty home's buttons: the one under the pointer lights up.
         const int empty = emptyHomeActive() ? emptyHomeLayout().hit(mouse_x / glance_view.scale, mouse_y / glance_view.scale) : -1;
         if (empty_hover_ != empty) { empty_hover_ = empty; InvalidateRect(hwnd_, nullptr, FALSE); }

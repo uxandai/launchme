@@ -70,7 +70,7 @@ std::wstring folderKey(const std::filesystem::path& folder);
 std::string folderId(const std::filesystem::path& folder);
 bool validRoot(const std::filesystem::path& root);
 bool inside(const std::filesystem::path& path, const std::filesystem::path& folder); // Strictly below it.
-const std::filesystem::path* rootOf(const Catalog& catalog, const std::filesystem::path& folder);
+const std::filesystem::path* rootOf(const Catalog& catalog, const std::filesystem::path& folder); // At or below one of its roots.
 
 // "The.Witcher.3.Wild.Hunt.v1.32-GOG" → "The Witcher 3 Wild Hunt"; "Celeste (2018)" → "Celeste", 2018.
 struct Title { std::wstring text; int year = 0; };

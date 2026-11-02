@@ -242,6 +242,16 @@ bool parseExtraSetting(AppSettings& settings, std::string_view key, std::string_
     if (key == "metro_category_tabs") return flag(settings.metro_category_tabs);
     if (key == "flix_category_tabs") return flag(settings.flix_category_tabs);
     if (key == "psfive_category_tabs") return flag(settings.psfive_category_tabs);
+    if (key == "show_publishers") return flag(settings.show_publishers);
+    if (key == "show_developers") return flag(settings.show_developers);
+    if (key == "studio_min_games") {
+        if (value == "1" || value == "2" || value == "3" || value == "5") settings.studio_min_games = value[0] - '0';
+        return true;
+    }
+    if (key == "show_updated_row") return flag(settings.show_updated_row);
+    if (key == "show_discovery_row") return flag(settings.show_discovery_row);
+    if (key == "home_tab_icons") return flag(settings.home_tab_icons);
+    if (key == "flix_rail") return flag(settings.flix_rail);
     if (key == "hint_style") {
         if (value == "glass") settings.hint_style = AppSettings::HintStyle::glass;
         else if (value == "white") settings.hint_style = AppSettings::HintStyle::white;
@@ -371,7 +381,7 @@ AppSettings parseAppSettings(std::string_view text) {
             }
         }
         else if (key == "show_emulation" && (value == "0" || value == "1")) settings.show_emulation = value == "1";
-        else if (key == "studio_libraries" && (value == "0" || value == "1")) settings.studio_libraries = value == "1";
+        else if (key == "studio_libraries" && (value == "0" || value == "1")) settings.show_publishers = settings.show_developers = value == "1"; // Before 0.5.8: both rows.
         else if (key == "show_private" && (value == "0" || value == "1")) settings.show_private = value == "1";
         else if (key == "show_store" && (value == "0" || value == "1")) settings.show_store = value == "1";
         else if (key == "show_categories" && (value == "0" || value == "1")) settings.show_categories = value == "1";
@@ -721,7 +731,6 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
            << "default_view_collection=" << std::clamp(settings.default_view_collection, 0, 11) << '\n'
            << "default_view_studio=" << std::clamp(settings.default_view_studio, 0, 11) << '\n'
            << "show_emulation=" << settings.show_emulation << '\n'
-           << "studio_libraries=" << settings.studio_libraries << '\n'
            << "show_private=" << settings.show_private << '\n'
            << "show_store=" << settings.show_store << '\n'
            << "quick_resume=" << settings.quick_resume << '\n'
@@ -909,6 +918,13 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
     output << "metro_category_tabs=" << settings.metro_category_tabs << '\n';
     output << "flix_category_tabs=" << settings.flix_category_tabs << '\n';
     output << "psfive_category_tabs=" << settings.psfive_category_tabs << '\n';
+    output << "show_publishers=" << settings.show_publishers << '\n';
+    output << "show_developers=" << settings.show_developers << '\n';
+    output << "studio_min_games=" << settings.studio_min_games << '\n';
+    output << "show_updated_row=" << settings.show_updated_row << '\n';
+    output << "show_discovery_row=" << settings.show_discovery_row << '\n';
+    output << "home_tab_icons=" << settings.home_tab_icons << '\n';
+    output << "flix_rail=" << settings.flix_rail << '\n';
     output << "hint_style=" << (settings.hint_style == AppSettings::HintStyle::white ? "white" : "glass") << '\n';
     output << "game_action=" << (settings.accept_action == AppSettings::AcceptAction::details ? "details" : "launch") << '\n';
     output << "hidden_collections=";

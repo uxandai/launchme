@@ -37,6 +37,10 @@ wchar_t icon(context_menu::Item item, bool hidden) {
     case context_menu::Item::compat: return glyph::settings;
     case context_menu::Item::shortcuts: return glyph::open;
     case context_menu::Item::identify: return glyph::search;
+    case context_menu::Item::studio_earlier: return L'\uE70E'; // Chevron up.
+    case context_menu::Item::studio_later: return glyph::chevron_down;
+    case context_menu::Item::studio_hide: return glyph::hide;
+    case context_menu::Item::emulator: return glyph::game;
     }
     return glyph::more;
 }
@@ -45,8 +49,7 @@ wchar_t icon(context_menu::Item item, bool hidden) {
 void Renderer::drawContextMenuDialog() {
     const auto& active = (*cards_)[selected_];
     const float alpha = smoothFade(context_->menu_progress);
-    context_menu::Rows rows{context_->menu_suspend, static_cast<int>(context_->menu_plugins.size()), context_->menu_session,
-                            context_->menu_detail_options, context_->menu_folder, context_->menu_exclude, context_->menu_hide, context_->psfive};
+    auto rows = context_->menu_rows; // As Launcher::menuRows built them (identify, the studio's rows, the emulator...).
     rows.uninstall = context_->menu_uninstall;
     rows.remove = context_->menu_remove;
     rows.launch = context_->menu_launch;
@@ -110,6 +113,10 @@ void Renderer::drawContextMenuDialog() {
         case context_menu::Item::compat: return L"Proton / Wine";
         case context_menu::Item::shortcuts: return tr(L"Skróty");
         case context_menu::Item::identify: return tr(L"Zidentyfikuj grę…");
+        case context_menu::Item::studio_earlier: return tr(L"Przesuń wcześniej");
+        case context_menu::Item::studio_later: return tr(L"Przesuń dalej");
+        case context_menu::Item::studio_hide: return tr(L"Ukryj");
+        case context_menu::Item::emulator: return context_->menu_emulator;
         }
         return {};
     };

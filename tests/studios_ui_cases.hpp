@@ -17,6 +17,7 @@ int LauncherUiTest::studioLibraries(HWND window) {
     app.settings_.launch_animation = false; app.settings_.tour_done = true;
     app.settings_.glance = app.settings_.companion = false;
     app.settings_.shelves_category_all = true;
+    app.settings_.studio_min_games = 1; // These studios have one or two games each (Najmniej gier is checked below).
     if (!app.renderer_.initialize(window)) return 9800;
     const auto capture = [&](const wchar_t* name) {
         wchar_t folder[4096]{};
@@ -60,9 +61,9 @@ int LauncherUiTest::studioLibraries(HWND window) {
     const auto& publishers = app.studio_groups_[static_cast<size_t>(studios::Role::publisher)];
     const auto& developers = app.studio_groups_[static_cast<size_t>(studios::Role::developer)];
     for (const auto end = GetTickCount64() + 5000; (publishers.size() < 3 || developers.size() < 2) && GetTickCount64() < end; Sleep(5)) pump();
-    // Publishers by name: Capcom, Sega, Ubisoft (two games); Devolver has no logo.
-    if (publishers.size() != 3 || publishers[0].studio->id != "capcom" || publishers[1].studio->id != "sega" ||
-        publishers[2].studio->id != "ubisoft" || publishers[2].games.size() != 2) return 9802;
+    // Publishers by most games: Ubisoft (two games), then Capcom and Sega by name; Devolver has no logo.
+    if (publishers.size() != 3 || publishers[0].studio->id != "ubisoft" || publishers[0].games.size() != 2 ||
+        publishers[1].studio->id != "capcom" || publishers[2].studio->id != "sega") return 9802;
     if (developers.size() != 2 || developers[0].studio->id != "capcom" || developers[0].games.size() != 2 || developers[1].studio->id != "ubisoft") return 9803;
 
     // The home: a row of logos for each, after the others.
@@ -73,7 +74,7 @@ int LauncherUiTest::studioLibraries(HWND window) {
     const int publisher_row = row("publishers"), developer_row = row("developers");
     if (publisher_row < 0 || developer_row != publisher_row + 1 || app.categories_[static_cast<size_t>(publisher_row)].games.size() != 3) return 9804;
     const auto& tile = app.categories_[static_cast<size_t>(publisher_row)].games[0];
-    if (tile.kind != GameKind::platform || tile.name != L"Capcom" || tile.platform != L"publisher:capcom") return 9805;
+    if (tile.kind != GameKind::platform || tile.name != L"Ubisoft" || tile.platform != L"publisher:ubisoft") return 9805;
     // The logo ships beside the program (assets\studios); as a badge it is the tabs' and headers' mark.
     const auto logo = [](const std::wstring& key) { return platformLogoCached(key, {}); };
     if (logo(L"publisher:ubisoft").size() < 128 || !logo(L"publisher:nobody").empty()) return 9806;
@@ -94,24 +95,24 @@ int LauncherUiTest::studioLibraries(HWND window) {
 
     // "Wszystkie": the board of all the logos; its tabs Wydawcy and Developerzy.
     app.openCategoryLibrary("publishers");
-    if (!app.studioBoard() || app.cards_.size() != 3 || app.cards_[0].game.platform != L"publisher:capcom" || app.cards_[2].game.platform != L"publisher:ubisoft") return 9808;
+    if (!app.studioBoard() || app.cards_.size() != 3 || app.cards_[0].game.platform != L"publisher:ubisoft" || app.cards_[2].game.platform != L"publisher:sega") return 9808;
     const auto tabs = app.libraryTabs();
     if (tabs.size() != 2 || tabs[0].id != "publishers" || tabs[1].id != "developers" || app.libraryTabIndex(tabs) != 0) return 9809;
     bindLogos();
     for (int i = 0; i < 20; ++i) { app.last_frame_ -= std::chrono::milliseconds(50); app.tick(); }
     if (!capture(L"studios-board.png")) return 9810;
     // A logo: that publisher's games; the tabs are the other logos.
-    app.focusCard(2); app.enterDown(false); app.enterUp();
+    app.focusCard(0); app.enterDown(false); app.enterUp();
     if (app.screen_ != ScreenMode::library || app.library_console_ != L"publisher:ubisoft" || app.cards_.size() != 2 || app.studio_board_return_ != "publishers") return 9811;
     const auto studio_tabs = app.libraryTabs();
-    if (studio_tabs.size() != 3 || studio_tabs[0].mark != L"publisher:capcom" || studio_tabs[2].mark != L"publisher:ubisoft") return 9812;
+    if (studio_tabs.size() != 3 || studio_tabs[0].mark != L"publisher:ubisoft" || studio_tabs[2].mark != L"publisher:sega") return 9812;
     for (int i = 0; i < 20; ++i) { app.last_frame_ -= std::chrono::milliseconds(50); app.tick(); }
     if (!capture(L"studios-library.png")) return 9813;
-    app.switchLibraryTab(-1);
-    if (app.library_console_ != L"publisher:sega" || app.cards_.size() != 1 || app.studio_board_return_ != "publishers") return 9814;
-    // Back: the board, on Sega's logo; Back again: home.
+    app.switchLibraryTab(1);
+    if (app.library_console_ != L"publisher:capcom" || app.cards_.size() != 1 || app.studio_board_return_ != "publishers") return 9814;
+    // Back: the board, on Capcom's logo; Back again: home.
     app.back();
-    if (!app.studioBoard() || app.selected_ >= app.cards_.size() || app.cards_[app.selected_].game.platform != L"publisher:sega") return 9815;
+    if (!app.studioBoard() || app.selected_ >= app.cards_.size() || app.cards_[app.selected_].game.platform != L"publisher:capcom") return 9815;
     app.back();
     if (app.screen_ != ScreenMode::shelves) return 9816;
 
@@ -129,15 +130,48 @@ int LauncherUiTest::studioLibraries(HWND window) {
     app.openSettings(); app.settings_state_.selectCategory(static_cast<int>(settings_ui::Category::library)); app.buildSettingsRows();
     const auto hidden_row = std::find_if(app.settings_rows_.begin(), app.settings_rows_.end(), [](const auto& r) { return r.id == settings_ui::Id::studio_hidden; });
     if (hidden_row == app.settings_rows_.end()) return 9819;
+    // Its page: each hidden studio with a switch that shows it again (back to Biblioteka once none is left).
+    app.settings_state_.options = true; // The rows, not the category list.
+    app.settings_state_.selected[app.settings_state_.category] = static_cast<int>(hidden_row - app.settings_rows_.begin()); app.settingsActivate();
+    if (!app.settings_state_.at(settings_ui::Page::hidden_studios) || app.settings_rows_.size() != 2 ||
+        app.settings_rows_[1].id != settings_ui::Id::studio_hidden_entry || app.settings_rows_[1].key != "publisher:sega" || app.settings_rows_[1].checked) return 9852;
+    if (!capture(L"studios-hidden-page.png")) return 9853;
+    app.settings_state_.selected[app.settings_state_.category] = 1; app.settingsActivate();
+    if (!app.settings_.hidden_studios.empty() || app.settings_state_.at(settings_ui::Page::hidden_studios) || publishers.size() != 3) return 9854;
+    app.hideStudio("publisher:sega");
     app.showStudios();
     if (publishers.size() != 3 || !app.settings_.hidden_studios.empty()) return 9820;
+    // Tryb TV: a logo's own menu (move earlier or later, hide), not a game's.
+    {
+        app.back(); app.showCategory(static_cast<size_t>(row("publishers")));
+        const auto ubisoft = std::find_if(app.cards_.begin(), app.cards_.end(), [](const GameCard& c) { return c.game.platform == L"publisher:ubisoft"; });
+        if (ubisoft == app.cards_.end()) return 9855;
+        app.focusCard(static_cast<size_t>(ubisoft - app.cards_.begin()));
+        app.openContextMenu();
+        const auto menu = app.menuRows();
+        if (!app.menu_open_ || !menu.studio || context_menu::rows(menu) != 3 || context_menu::item(0, menu) != context_menu::Item::studio_earlier ||
+            context_menu::item(2, menu) != context_menu::Item::studio_hide) return 9856;
+        for (int i = 0; i < 20; ++i) { app.last_frame_ -= std::chrono::milliseconds(50); app.tick(); }
+        if (!capture(L"studios-tile-menu.png")) return 9857;
+        app.menu_selected_ = 2; app.menuAccept();
+        if (app.menu_open_ || !app.settings_.hidden_studios.contains("publisher:ubisoft")) return 9858;
+        app.showStudios();
+        app.openSettings();
+    }
     app.back(); app.showCategory(0);
-    app.moveStudio("publisher:ubisoft", -1); // Before Sega: the order is the player's from now on.
-    if (publishers[1].studio->id != "ubisoft" || app.settings_.studio_order.size() < 2 || app.settings_.studio_order[1] != "publisher:ubisoft") return 9821;
-    app.settings_.studio_libraries = false; app.buildShelves();
-    if (row("publishers") >= 0 || !publishers.empty()) return 9822;
-    app.settings_.studio_libraries = true; app.buildShelves();
+    app.moveStudio("publisher:sega", -1); // Before Capcom: the order is the player's from now on.
+    if (publishers[1].studio->id != "sega" || app.settings_.studio_order.size() < 2 || app.settings_.studio_order[1] != "publisher:sega") return 9821;
+    // Each row on its own switch: Wydawcy off keeps Developerzy.
+    app.settings_.show_publishers = false; app.buildShelves();
+    if (row("publishers") >= 0 || !publishers.empty() || row("developers") < 0 || developers.empty()) return 9822;
+    app.settings_.show_publishers = true; app.buildShelves();
     if (row("publishers") < 0 || publishers.size() != 3) return 9823;
+    // Najmniej gier: two games keep Ubisoft (it stays where the player put it), one-game studios go; the
+    // rest by most games.
+    app.settings_.studio_min_games = 2; app.buildShelves();
+    if (std::any_of(publishers.begin(), publishers.end(), [](const studios::Entry& e) { return e.games.size() < 2; }) ||
+        std::none_of(publishers.begin(), publishers.end(), [](const studios::Entry& e) { return e.studio->id == "ubisoft"; })) return 9851;
+    app.settings_.studio_min_games = 1; app.buildShelves();
 
     // A game with every achievement: a gold edge.
     app.history_.progress["steam:9800"] = {12, 12};

@@ -78,10 +78,20 @@ int main() {
     const auto restored = loadLibraryState(file);
     if (restored != state) return 2;
     {
-        auto invalid = state; invalid.excluded_games["steam:456"] = L"Not supported";
+        auto invalid = state; invalid.excluded_games["platform:456"] = L"Not a game";
         if (saveLibraryState(invalid, file) || loadLibraryState(file) != state) return 44;
+        // Wyklucz grę: any store, a scanned DRM-free game, an emulated one; Emulator per gra: an id or a program.
+        auto excluded = state;
+        excluded.excluded_games["steam:456"] = L"Steam game"; excluded.excluded_games["drmfree:0123456789abcdef"] = L"Folder game";
+        excluded.excluded_games["shortcut:12716030611542769664"] = L"Kirby Air Riders";
+        excluded.game_emulators["shortcut:12716030611542769664"] = {{}, L"K:\\Emulators\\Switch 2\\emulator.exe"};
+        excluded.game_emulators["shortcut:17314267876185604096"] = {"ryujinx", {}};
+        if (!saveLibraryState(excluded, file) || loadLibraryState(file) != excluded) return 47;
+        auto both = state; both.game_emulators["shortcut:1"] = {"ryujinx", L"C:\\x.exe"}; // One of them, never both.
+        if (saveLibraryState(both, file)) return 48;
+        if (!saveLibraryState(state, file)) return 1;
         const auto malformed = root / L"malformed-exclusion.ini";
-        for (const auto& key : {"steam:456", "gog:", "epic:"}) {
+        for (const auto& key : {"platform:456", "gog:", "epic:", "steam:"}) {
             std::ofstream(malformed) << "launchme-library 1\nexcluded-game \"" << key_codec::encode(key) << "\" \"\"\n";
             if (loadLibraryState(malformed)) return 45;
         }

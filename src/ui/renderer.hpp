@@ -593,6 +593,7 @@ private:
     void drawQuickPanel();
     void drawQuickGlyph(quick_menu::Action action, float x, float cy, D2D1_COLOR_F ink, int index, bool home);
     void drawFlixIcons(); // Flix (AppSettings::flix_top_icons): the quick bar's icons small, top right.
+    void drawFlixRail();  // Flix (AppSettings::flix_rail): the icons at the left edge (src/ui/flix_rail_renderer.cpp).
     void drawEmptyLibrary(); // The TV home without games: why, and its three buttons (empty_library.hpp).
     void drawGrid();
     void drawPluginPage(float left = 0, bool drawer = false);

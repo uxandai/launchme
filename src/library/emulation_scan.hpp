@@ -87,7 +87,8 @@ std::filesystem::path core(const Rule& rule, const Setup& setup);
 bool coreMissing(const Rule& rule, const Setup& setup);
 // How a system's emulator starts one ROM; empty when none of its emulators is installed (a Windows
 // shortcut, .lnk, starts itself).
-GameAction action(const Rule& rule, const Setup& setup, const std::filesystem::path& rom);
+// `emulator`: one game's own (Emulator per gra), else the system's (Setup::emulatorFor).
+GameAction action(const Rule& rule, const Setup& setup, const std::filesystem::path& rom, const emulators::Found* emulator = nullptr);
 // A typed emulator command ("C:\Emu\pcsx2.exe" -fullscreen %ROM%): %ROM% becomes the quoted ROM
 // path, appended when the command does not name it.
 GameAction commandAction(std::wstring_view command, const std::filesystem::path& rom);

@@ -8,6 +8,7 @@ using namespace settings_ui;
 
 // A switch of these settings; false: not one of them.
 bool Launcher::settingsExtraToggle(const Row& row) {
+    if (studioSettingsToggle(row)) return true; // Wydawcy, Developerzy, the Steam rows, the tab icons (studio_libraries.cpp).
     if (row.id == Id::artwork_source) {
         if (row.key.empty()) return true;
         if (!settings_.artwork_sources_off.erase(row.key)) settings_.artwork_sources_off.insert(row.key);
@@ -44,6 +45,12 @@ bool Launcher::settingsExtraToggle(const Row& row) {
 // A choice picked from these rows' lists; false: not one of them.
 bool Launcher::settingsExtraChoose(const Row& row) {
     if (emulationSettingsChoose(row)) return true; // Gry emulowane (emulation_library.cpp).
+    if (row.id == Id::studio_min_games) { // Najmniej gier of a studio (studio_libraries.cpp).
+        settings_.studio_min_games = studio_min_counts[static_cast<size_t>(std::clamp(settings_state_.choice, 0, static_cast<int>(studio_min_counts.size()) - 1))];
+        settings_state_.editing = false;
+        settingsChanged(true); // The shelves again: their studios with it.
+        return true;
+    }
     if (row.id != Id::home_tiles) return false;
     settings_.home_tiles = static_cast<AppSettings::HomeTiles>(std::clamp(settings_state_.choice, 0, static_cast<int>(home_tile_places.size()) - 1));
     settings_state_.editing = false;
@@ -54,6 +61,19 @@ bool Launcher::settingsExtraChoose(const Row& row) {
 // The action rows: the wallpaper picker and "Bez tapety"; false: not one of them.
 bool Launcher::settingsExtraActivate(const Row& row) {
     if (emulationSettingsActivate(row)) return true; // Folder ROM-ów (emulation_library.cpp).
+    // Biblioteka → Widoczność → Wykluczone gry (collections.cpp): back to the library, one or all.
+    if (row.id == Id::excluded_games) { openSettingsPage(Page::excluded_games); return true; }
+    if (row.id == Id::excluded_game || row.id == Id::excluded_restore_all) {
+        if (row.id == Id::excluded_game) restoreExcludedGame(row.key);
+        else if (!library_state_.excluded_games.empty()) {
+            library_state_.excluded_games.clear();
+            library_state_dirty_ = true; saveLibraryPreferences();
+            refreshRecentGames(); audio_.context();
+        }
+        if (library_state_.excluded_games.empty() && settings_state_.at(Page::excluded_games)) closeSettingsPage();
+        else buildSettingsRows();
+        return true;
+    }
     if (row.id == Id::wallpaper_pick) { openWallpaperBrowser(); return true; }
     if (row.id == Id::wallpaper_clear) {
         settings_.wallpaper = AppSettings::WallpaperKind::none;

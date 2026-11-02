@@ -125,10 +125,12 @@ void Renderer::drawDesktopPane(const Layout& layout, const View& view) {
         desktopButton(primary, 2, primary_hover, pressed, pane.primary_enabled, g, pane.primary);
     }
     const auto favorite = layout.paneFavorite(s);
-    desktopButton(favorite, 1, view.hover.target == Target::pane_favorite ? 1.0f : 0.0f, view.pressed.target == Target::pane_favorite, true, 0, {});
-    const float fav_scale = 1.0f + (pane.favorite ? 0.32f : -0.18f) * std::sin(pane.favorite_pulse * std::numbers::pi_v<float>);
-    desktopGlyph(pane.favorite ? glyph::star_fill : glyph::star, (favorite.left + favorite.right) * 0.5f, (favorite.top + favorite.bottom) * 0.5f,
-                 16 * fav_scale, pane.favorite ? rgb(1.0f, 0.78f, 0.28f) : gray(0.85f));
+    if (layout.favorite) { // Ulubione switched off: no star.
+        desktopButton(favorite, 1, view.hover.target == Target::pane_favorite ? 1.0f : 0.0f, view.pressed.target == Target::pane_favorite, true, 0, {});
+        const float fav_scale = 1.0f + (pane.favorite ? 0.32f : -0.18f) * std::sin(pane.favorite_pulse * std::numbers::pi_v<float>);
+        desktopGlyph(pane.favorite ? glyph::star_fill : glyph::star, (favorite.left + favorite.right) * 0.5f, (favorite.top + favorite.bottom) * 0.5f,
+                     16 * fav_scale, pane.favorite ? rgb(1.0f, 0.78f, 0.28f) : gray(0.85f));
+    }
     const auto more = layout.paneMore(s);
     const bool more_open = view.menu && view.menu->align_right && view.menu->kind == Menu::Kind::game;
     desktopButton(more, 1, view.hover.target == Target::pane_more || more_open ? 1.0f : 0.0f, view.pressed.target == Target::pane_more, true, glyph::more, {});

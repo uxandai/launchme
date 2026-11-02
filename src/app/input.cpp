@@ -127,6 +127,7 @@ void Launcher::openGuideMenu() {
     if (exit_prompt_ || pending_launch_ || gogInstallOpen() || customEditorOpen() || fileBrowserOpen()) return;
     if (power_menu_) { closePowerMenu(); return; }
     if (flixIconsFocused()) { flixIconsLeave(); return; }
+    if (flixRailFocused()) { flixRailFocus(-1); return; }
     if (quick_open_) { closeQuick(); return; }
     // The desktop window: the pad's Guide button takes the launcher to Tryb TV (like Big Picture).
     if (desktop_mode_) { setDesktopMode(false); return; }
@@ -543,6 +544,7 @@ void Launcher::controllerInput(const PadReading& state) {
         noteUserInput();
         if (settingsOpen()) settingsActivate();
         else if (flixIconsFocused()) flixIconAccept();
+        else if (flixRailFocused()) flixRailAccept(flix_rail_focus_);
         else if (quick_open_) quickAccept();
         else if (friends_open_) friendsAccept();
         else if (category_menu_open_) categoryMenuAccept();

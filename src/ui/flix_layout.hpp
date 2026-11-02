@@ -11,6 +11,10 @@
 // Shared by the animation targets, art binding, hit testing and drawing.
 namespace flix_layout {
 constexpr float left = 68, right_margin = 68;
+// Pasek boczny (src/ui/flix_rail.hpp): its width while it is shown, else 0; set by the app
+// (Launcher::rebuildFlix and each frame) before targets, hit tests and drawing read it.
+inline float rail = 0;
+inline float leftEdge() { return left + rail; } // Where the rows, their titles and the logo start.
 constexpr float header = 48;    // Row title band above the tiles.
 constexpr float gap = 22;       // Between the tiles of a row.
 constexpr float row_gap = 30;   // Below a row's tiles.
@@ -49,10 +53,10 @@ inline float lift(float first_row_top, float height, float scale = 1) {
 }
 // Tiles that fit completely; the next one peeks in at the right edge.
 inline size_t visibleCount(bool landscape, float width, float scale = 1) {
-    return std::max<size_t>(1, static_cast<size_t>((width - left - right_margin + gap * scale) / pitch(landscape, scale)));
+    return std::max<size_t>(1, static_cast<size_t>((width - leftEdge() - right_margin + gap * scale) / pitch(landscape, scale)));
 }
 inline float tileLeft(bool landscape, size_t column, size_t first, float scale = 1) {
-    return left + (static_cast<float>(column) - static_cast<float>(first)) * pitch(landscape, scale);
+    return leftEdge() + (static_cast<float>(column) - static_cast<float>(first)) * pitch(landscape, scale);
 }
 // Resting on a game of a poster row unfolds its tile sideways into a wide card (its background,
 // logo and facts) after `unfold_rest` seconds without input; the tiles after it make room.

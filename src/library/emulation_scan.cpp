@@ -663,8 +663,8 @@ bool coreMissing(const Rule& rule, const Setup& setup) {
     return !file.empty() && file.is_absolute() && !fileExists(file);
 }
 
-GameAction action(const Rule& rule, const Setup& setup, const std::filesystem::path& rom) {
-    const auto* found = setup.emulatorFor(rule);
+GameAction action(const Rule& rule, const Setup& setup, const std::filesystem::path& rom, const emulators::Found* emulator) {
+    const auto* found = emulator ? emulator : setup.emulatorFor(rule);
     const auto* info = found ? emulators::find(found->id) : nullptr;
     const bool windows = setup.environment.windows;
     const bool script = found && found->via == emulators::Via::emudeck_script;

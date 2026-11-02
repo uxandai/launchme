@@ -30,7 +30,7 @@ int LauncherUiTest::excludedGames(HWND window) {
         app.detail_action_ = 1; app.enterDown(false); app.enterUp();
         return app.menu_open_ && app.libraryMenuAnchor().has_value();
     };
-    const auto menuClick = [&](Item item) {
+    const auto menuClickRaw = [&](Item item) {
         const auto view = app.renderer_.viewport();
         const auto bounds = context_menu::bounds(app.cards_[0], app.menuRows(), app.menuBeside(), view.width, view.height, app.libraryMenuAnchor());
         const int row = context_menu::row(item, app.menuRows());
@@ -40,6 +40,12 @@ int LauncherUiTest::excludedGames(HWND window) {
         if (!app.hoverButton(x, y)) return false;
         app.click(x, y, false); return true;
     };
+    // Wyklucz grę asks first: its answer "Wyklucz" (Anuluj has the focus).
+    const auto confirmExclude = [&] {
+        if (!app.exit_prompt_ || app.prompt_kind_ != Launcher::PromptKind::exclude || *app.exit_prompt_ != 2) return false;
+        app.exit_prompt_ = 0; app.exitPromptAccept(); return !app.exit_prompt_;
+    };
+    const auto menuClick = [&](Item item) { return menuClickRaw(item) && (item != Item::exclude || confirmExclude()); };
     app.openPcLibrary(GameSource::gog); app.openDetails(gog);
     // Artwork, folder, Skróty (installed: its shortcuts), Edytuj metadane, hide, exclude and (installed) uninstall.
     if (!options() || context_menu::rows(app.menuRows()) != 7 || context_menu::row(Item::shortcuts, app.menuRows()) != 2 ||
@@ -59,6 +65,7 @@ int LauncherUiTest::excludedGames(HWND window) {
     app.openPcLibrary(GameSource::epic); app.openDetails(epic);
     if (!options() || context_menu::rows(app.menuRows()) != 4 || context_menu::row(Item::folder, app.menuRows()) != -1) return 3109;
     app.changeCategory(context_menu::row(Item::exclude, app.menuRows())); app.enterDown(false); app.enterUp();
+    if (!confirmExclude()) return 3131;
     if (!absent(epic) || app.screen_ == ScreenMode::details || dispatched.size() != launches + 1) return 3110;
     // A game already hidden by its store must also disappear from the private category.
     app.openLibrary(); app.openDetails(private_game);
@@ -72,12 +79,17 @@ int LauncherUiTest::excludedGames(HWND window) {
     scan->library.visible = {gog, epic}; scan->library.private_games = {private_game};
     app.onPcLibrary(std::move(scan)); // A fresh, unfiltered platform snapshot cannot undo exclusions.
     if (!absent(gog) || !absent(epic) || !absent(private_game)) return 3113;
-    // Every unsupported platform rejects exclusion in both the menu and the command.
-    for (const auto source : {GameSource::steam, GameSource::ea, GameSource::battlenet, GameSource::ubisoft, GameSource::xbox, GameSource::custom, GameSource::drmfree}) {
+    // Every store's game (and a scanned DRM-free one) can be excluded; a game added by hand cannot (it is
+    // removed from the library instead), in both the menu and the command.
+    for (const auto source : {GameSource::ea, GameSource::battlenet, GameSource::ubisoft, GameSource::xbox, GameSource::drmfree}) {
         auto other = gog; other.source = source;
-        app.openLibrary(); app.openDetails(other);
-        if (app.canExclude(other) || context_menu::row(Item::exclude, app.menuRows()) != -1) return 3114;
-        app.excludeGame(other);
+        if (!app.canExclude(other)) return 3114;
+    }
+    {
+        auto added = gog; added.source = GameSource::custom;
+        app.openLibrary(); app.openDetails(added);
+        if (app.canExclude(added) || context_menu::row(Item::exclude, app.menuRows()) != -1) return 3114;
+        app.excludeGame(added);
         if (app.library_state_.excluded_games.size() != 3) return 3115;
     }
     app.back(); app.openSettings();
@@ -123,5 +135,36 @@ int LauncherUiTest::excludedGames(HWND window) {
     // Unreadable history must not be replaced by a new exclusion list.
     app.library_state_readable_ = false; app.excludeGame(gog);
     if (app.library_state_.excluded_games.contains(gameKey(gog))) return 3127;
+    app.library_state_readable_ = true;
+
+    // A Steam game: Wyklucz grę asks first (Anuluj keeps it, Wyklucz excludes it), then Biblioteka →
+    // Widoczność → Wykluczone gry lists it with its store, and Przywróć brings it back.
+    {
+        app.library_state_.excluded_games.clear(); app.store_library_.clear(); app.buildShelves(); app.showCategory(0);
+        const Game portal{620, L"Portal 2"};
+        if (!app.canExclude(portal) || !present(app.public_library_, portal)) return 3132;
+        app.askExcludeGame(portal);
+        if (!app.exit_prompt_ || *app.exit_prompt_ != 2 || app.prompt_kind_ != Launcher::PromptKind::exclude) return 3133;
+        if (!capture(L"excluded-games-question.png")) return 3134;
+        app.exitPromptAccept(); // Anuluj.
+        if (app.exit_prompt_ || !app.library_state_.excluded_games.empty()) return 3135;
+        app.askExcludeGame(portal); app.exit_prompt_ = 0; app.exitPromptAccept();
+        if (!app.library_state_.excluded_games.contains("steam:620") || present(app.public_library_, portal) ||
+            !searchPublicGames(app.public_library_, L"Portal 2", true).empty()) return 3136;
+        app.togglePrivateCategory(); // Not even with Ctrl+H.
+        if (present(app.public_library_, portal) || present(app.private_category_.games, portal)) return 3137;
+        app.togglePrivateCategory();
+        app.openSettings(); app.settings_state_.selectCategory(static_cast<int>(settings_ui::Category::library)); app.buildSettingsRows();
+        const auto excluded = std::find_if(app.settings_rows_.begin(), app.settings_rows_.end(), [](const auto& r) { return r.id == settings_ui::Id::excluded_games; });
+        if (excluded == app.settings_rows_.end() || excluded->value != L"1") return 3138;
+        app.settings_state_.options = true;
+        app.settings_state_.selected[app.settings_state_.category] = static_cast<int>(excluded - app.settings_rows_.begin()); app.settingsActivate();
+        if (!app.settings_state_.at(settings_ui::Page::excluded_games) || app.settings_rows_.size() != 2 || app.settings_rows_[1].id != settings_ui::Id::excluded_game ||
+            app.settings_rows_[1].key != "steam:620" || app.settings_rows_[1].title != L"Portal 2" || app.settings_rows_[1].description != L"Steam") return 3139;
+        if (!capture(L"excluded-games-settings.png")) return 3140;
+        app.settings_state_.selected[app.settings_state_.category] = 1; app.settingsActivate(); // Przywróć.
+        if (!app.library_state_.excluded_games.empty() || app.settings_state_.at(settings_ui::Page::excluded_games) || !present(app.public_library_, portal)) return 3141;
+        app.back();
+    }
     return 0;
 }

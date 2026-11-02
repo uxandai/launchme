@@ -180,13 +180,15 @@ void Launcher::buildShelves() {
     // Steam's scanner reports store-hidden/private games as private_game. Our hidden copies are
     // derived afresh from the unmodified source lists; never carry them over into the next build.
     std::erase_if(private_category_.games, [this](const Game& game) {
-        return game.source != GameSource::steam || !settings_.steam_enabled || (game.kind == GameKind::steam && game.visibility == GameVisibility::hidden);
+        return game.source != GameSource::steam || !settings_.steam_enabled || (game.kind == GameKind::steam && game.visibility == GameVisibility::hidden) ||
+               excludedGame(game);
     });
     for (const auto& game : store_private_library_)
         if (!excludedGame(game) && settings_.enabled_pc_sources.contains(sourceSlug(game.source))) private_category_.games.push_back(game);
     public_library_.clear();
     // Hidden here (Szczegóły → "…" → "Ukryj"): with the store's own hidden/private games, Ctrl+H only.
     const auto user_hidden = [&](const Game& game) {
+        if (excludedGame(game)) return true; // Wykluczone: nowhere, not even with Ctrl+H.
         if (!locallyHidden(game)) return false;
         auto copy = game; copy.visibility = GameVisibility::hidden;
         private_category_.games.push_back(std::move(copy));
@@ -219,6 +221,7 @@ void Launcher::buildShelves() {
     std::vector<const Game*> emulated;
     if (steam) for (const auto& shortcut : shortcut_library_) {
         if (roms && shortcut.platform != L"PC") continue;
+        if (excludedGame(shortcut)) continue;
         public_library_.push_back(shortcut);
         // A Steam shortcut to a PC program is no emulated game: in the library, not on Emulacja's consoles.
         if (shortcut.platform != L"PC") emulated.push_back(&shortcut);
@@ -382,12 +385,12 @@ void Launcher::buildShelves() {
                           [](const Game* a, const Game* b) { return a->last_updated > b->last_updated; });
         std::vector<Game> updated;
         for (size_t i = 0; i < count; ++i) updated.push_back(*newest[i]);
-        if (!updated.empty()) categories_.push_back(Category{tr(L"OSTATNIO ZAKTUALIZOWANE"), std::move(updated), 0, "updated"});
+        if (!updated.empty() && settings_.show_updated_row) categories_.push_back(Category{tr(L"OSTATNIO ZAKTUALIZOWANE"), std::move(updated), 0, "updated"});
         Category discovery{tr(L"JESZCZE NIEGRANE")};
         discovery.id = "discovery";
         for (const auto& game : installed_library_)
             if (!locallyHidden(game) && !game.last_played && (game.installed || game.installation.active() || settings_.show_uninstalled) && discovery.games.size() < 8) discovery.games.push_back(game);
-        if (!discovery.games.empty()) categories_.push_back(std::move(discovery));
+        if (!discovery.games.empty() && settings_.show_discovery_row) categories_.push_back(std::move(discovery));
     }
     // Ctrl+H: the hidden and private games as the last category, in every home layout.
     if (private_shelf_) {

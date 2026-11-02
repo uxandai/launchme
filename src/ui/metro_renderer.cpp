@@ -53,10 +53,11 @@ void Renderer::drawMetroTabs() {
     if (tabs.empty() || !metro_tab_font_) return;
     std::vector<float> lefts(tabs.size()), widths(tabs.size());
     float at = 0;
+    const auto icon = [&](size_t i) -> wchar_t { return i < context_->metro_tab_glyphs.size() ? context_->metro_tab_glyphs[i] : 0; };
     for (size_t i = 0; i < tabs.size(); ++i) {
         DWRITE_TEXT_METRICS metrics{};
-        const auto measured = text_layouts_.get(dwrite_.Get(), tabs[i], metro_tab_font_.Get(), 4000, 80);
-        widths[i] = measured && SUCCEEDED(measured->GetMetrics(&metrics)) ? metrics.widthIncludingTrailingWhitespace : tabs[i].size() * 18.0f;
+        const auto measured = icon(i) ? nullptr : text_layouts_.get(dwrite_.Get(), tabs[i], metro_tab_font_.Get(), 4000, 80);
+        widths[i] = icon(i) ? 44.0f : measured && SUCCEEDED(measured->GetMetrics(&metrics)) ? metrics.widthIncludingTrailingWhitespace : tabs[i].size() * 18.0f;
         lefts[i] = at;
         at += widths[i] + metro_layout::tab_gap;
     }
@@ -75,8 +76,9 @@ void Renderer::drawMetroTabs() {
         // Previous tabs fade out before the screen's edge could cut them ("ny pc").
         const float alpha = (left < metro_layout::left ? smoothFade(left / std::max(1.0f, metro_layout::left)) : 1.0f) * quiet;
         if (alpha < 0.01f) continue;
-        textLine(tabs[i], left, metro_layout::tabs_center, widths[i] + 8, metro_tab_font_.Get(),
-                 metro_light_ ? gray(std::lerp(0.62f, 0.06f, active), alpha) : gray(std::lerp(0.42f, 0.97f, active), alpha));
+        const auto ink = metro_light_ ? gray(std::lerp(0.62f, 0.06f, active), alpha) : gray(std::lerp(0.42f, 0.97f, active), alpha);
+        if (icon(i)) desktopGlyph(icon(i), left + widths[i] * 0.5f, metro_layout::tabs_center - 2, 34.0f, ink); // Ikony zamiast nazw.
+        else textLine(tabs[i], left, metro_layout::tabs_center, widths[i] + 8, metro_tab_font_.Get(), ink);
         // The strip has the focus: an accent bar under the current tab, gliding with it.
         if (context_->metro_tabs_focus && active > 0.01f) {
             brush(uiAccent(active * alpha));

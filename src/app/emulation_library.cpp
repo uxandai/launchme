@@ -74,6 +74,7 @@ void Launcher::onRomScan(uint64_t generation, std::shared_ptr<const emulation_sc
         showNotification(NotificationKind::launch, emulationSystemTitle(system),
                          tr(L"Gier: ") + std::to_wstring(count == rom_system_counts_.end() ? 0 : count->second));
     }
+    applyGameEmulators(games); // Emulator per gra over the system's.
     // Games added by hand start through the setup's parsers: their commands as it now finds them.
     rebuildCustomLibrary();
     std::sort(games.begin(), games.end(), [](const Game& a, const Game& b) { return gameKey(a) < gameKey(b); });
