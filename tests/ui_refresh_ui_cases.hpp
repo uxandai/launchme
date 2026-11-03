@@ -224,6 +224,10 @@ int LauncherUiTest::uiRefresh(HWND window) {
         for (const auto& category : empty.categories_)
             for (const auto& game : category.games)
                 if (game.kind == GameKind::pc_platform && game.source == GameSource::steam) return 7783; // No Steam tile to an empty library.
+        empty.enterDown(false); // Enter presses the focused button on key-down (Dodaj grę), as Space does.
+        if (!empty.customEditorOpen()) return 7790;
+        empty.back();
+        if (empty.customEditorOpen() || !empty.emptyHomeActive()) return 7791;
         empty.navigate(1, true); empty.navigate(1, true); empty.navigate(1, true);
         if (empty.empty_focus_ != empty_library::action_count - 1) return 7784;
         empty.navigate(-1, true);
