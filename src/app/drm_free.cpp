@@ -101,7 +101,8 @@ void Launcher::applyDrmFree(const std::vector<std::string>& artwork_reset) {
     if (screen_ == ScreenMode::search) updateSearch();
     else if (screen_ == ScreenMode::shelves || screen_ == ScreenMode::library) rebuildCards();
     else { InvalidateRect(hwnd_, nullptr, FALSE); return; }
-    if (const auto found = findCard(selected_key, true)) focusCard(*found, library_controls_.focus < 0);
+    if (homeUntouched()) focusCard(0, false);
+    else if (const auto found = findCard(selected_key, true)) focusCard(*found, library_controls_.focus < 0);
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 

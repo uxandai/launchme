@@ -66,7 +66,7 @@ inline Spots spots(Placement placement, float width, float height, bool glance, 
     return result;
 }
 
-// Flix with "Ikony menu w prawym górnym rogu" (AppSettings::flix_top_icons): every quick-bar icon as
+// Flix once had (an option, now gone) every quick-bar icon as
 // a small circle in the pills' band, Glance's icon after them and her avatar nearest the badge.
 // `total` counts them all; the quick bar's own order comes first.
 namespace icons {

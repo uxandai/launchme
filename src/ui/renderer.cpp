@@ -498,6 +498,8 @@ void Renderer::paint(const std::vector<GameCard>& cards, size_t selected, bool s
         const float scale = viewport_.scale;
         target_->SetTransform(D2D1::Matrix3x2F::Scale(scale, scale));
         target_->Clear(color(0.025f, 0.030f, 0.036f));
+        theme_scene_bitmap_.Reset();
+        const bool theme_scene = context.theme_scene && context.theme_studio && context.launch_animation_seconds < 0 && beginThemeScene();
         if (context.launch_animation_seconds >= 0) {
             drawBackground();
             drawLaunchAnimation();
@@ -587,6 +589,7 @@ void Renderer::paint(const std::vector<GameCard>& cards, size_t selected, bool s
                 if (context.companion && (context.companion->tile || context.companion->pill)) drawCompanionTile();
             }
             foreground_result = endScreenForeground();
+            if (theme_scene) { const auto scene = endThemeScene(); if (FAILED(scene)) foreground_result = scene; }
             drawContextMenu();
             if (!context.snitch) drawQuickPanel(); // snitch's permanent dock belongs below overlays.
             drawCategoryMenu();
@@ -600,6 +603,7 @@ void Renderer::paint(const std::vector<GameCard>& cards, size_t selected, bool s
             // Opened from the panels above; the power menu and exit prompt stay over it (over Aurelia, below).
             if (!context.aurelia) { drawFileBrowser(); drawKeyboard(); } // Aurelia's field belongs above its page.
             drawCompanionPicker();
+            drawThemeStudio();
             drawProfile(); // Over any screen, from the drawer: the lowest dialog.
             drawTarot(); // Over the home it opens from; the walkthrough, prompts and toasts above it.
             drawAurelia();

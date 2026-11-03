@@ -637,6 +637,7 @@ void Launcher::tick() {
     if (desktop) needs_paint |= tickDesktop(dt);
     needs_paint |= tickDesktopSheet(dt); // Ustawienia as a desktop dialog: its scroll and caret.
     tickDownloadBars(dt, needs_paint);   // Pobierania: the bars glide to the stores' samples.
+    needs_paint |= themeAnimate(dt);     // Dostosuj wygląd: its motion, and its return from the wallpaper picker.
     needs_paint |= tickDesktopDialog();  // Kolekcje, Dodaj grę, Zidentyfikuj grę: the caret.
     needs_paint |= customEditorOpen() && renderer_.customPosterPending(); // Its poster shows once decoded.
     if (favorite_pulse_ > 0.0f) {

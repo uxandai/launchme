@@ -209,7 +209,7 @@ void Launcher::initializeLibraryPreferences() {
     }
     library_state_readable_ = saved.has_value();
     library_state_ = saved ? std::move(*saved) : LibraryState{};
-    restore_pending_ = library_state_.bookmark.has_value();
+    restore_pending_ = false; // The home starts on its first tile (Ostatnio grane), not where the last session ended.
     if (library_state_readable_) library_writer_ = std::make_unique<LibraryStateWriter>(file);
     else showNotification(NotificationKind::error, tr(L"Nie można odczytać historii biblioteki"), tr(L"Plik jest zablokowany przez inny program. Zmiany nie będą zapisane do ponownego uruchomienia."));
 }
@@ -409,14 +409,17 @@ void Launcher::refreshRecentGames() {
     if (found_category != categories_.end()) category_ = static_cast<size_t>(found_category - categories_.begin());
     if (screen_ == ScreenMode::search) updateSearch();
     else if (screen_ == ScreenMode::shelves || screen_ == ScreenMode::library || screen_ == ScreenMode::platform_games) rebuildCards();
-    if (const auto found = findCard(selected, true)) focusCard(*found, false);
+    // Before the first key, click or pad press the home stays on its first tile as Recent re-sorts (a start-up scan,
+    // a game's session): the focus follows the tile, not the game that happened to stand there.
+    if (homeUntouched()) focusCard(0, false);
+    else if (const auto found = findCard(selected, true)) focusCard(*found, false);
     saveLibraryPreferences();
 }
 void Launcher::rememberPlace() {
     // The desktop window keeps its own place (desktopSaveState); Tryb TV's bookmark stays as it was.
     if (desktop_mode_) return;
     // The Ctrl+H shelf is never a bookmark: it is off again after a restart.
-    if (scanning_ || restore_pending_ || library_transition_ || cards_.empty() || categories_.empty() ||
+    if (scanning_ || restore_pending_ || library_transition_ || theme_.open || cards_.empty() || categories_.empty() || // The studio's demo walks the focus: not a place to return to.
         (screen_ == ScreenMode::shelves && categories_[std::min(category_, categories_.size() - 1)].id == "private") ||
         (screen_ != ScreenMode::shelves && !libraryControls())) return;
     if (libraryControls() && (library_controls_.focus >= 0 || library_controls_.open() || library_controls_.search)) return;
@@ -446,12 +449,16 @@ void Launcher::saveLibraryPreferences() {
     if (library_state_dirty_ && !library_state_save_failed_) showNotification(NotificationKind::error, tr(L"Nie udało się zapisać widoku biblioteki"), L"");
     library_state_save_failed_ = library_state_dirty_;
 }
+bool Launcher::homeUntouched() const {
+    return !input_seen_ && !desktop_mode_ && screen_ == ScreenMode::shelves && category_ == 0 && !cards_.empty();
+}
 void Launcher::noteUserInput() {
     if (drm_idle_scan_ && drm_stop_) drm_stop_->store(true); // Idle scans give way to the user.
     cancelGameFocus();
     restore_pending_ = false;
     desktop_restore_key_.clear(); // The user moves on: a late scan must not pull the focus back.
     last_input_ = std::chrono::steady_clock::now();
+    input_seen_ = true;
 }
 void Launcher::restorePlace() {
     // Settings, a device page or Guide's drawer opened before the scans finished: the saved place does not take it away.

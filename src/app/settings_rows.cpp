@@ -63,6 +63,7 @@ std::wstring Launcher::settingsPageTitle(const settings_ui::PageFrame* frame) co
     case Page::layout_options: return tr(L"Opcje układu: ") + std::wstring(tr(home_layouts[std::clamp(static_cast<int>(settings_.home_layout), 0, home_layout_count - 1)]));
     case Page::cover_focus: return tr(L"Zaznaczona okładka");
     case Page::backdrop: return tr(L"Tło i szkło");
+    case Page::appearance_all: return tr(L"Wszystkie opcje wyglądu");
     case Page::videos: return tr(L"Filmy w tle");
     case Page::service_keys: return tr(L"Klucze usług");
     case Page::sounds: return tr(L"Dźwięki interfejsu");
@@ -184,8 +185,6 @@ void Launcher::buildSettingsRows() {
                     tr(L"Domyślny lub duży — dla plakatów i kafelków ostatnio granych."), tr(flix_sizes[size]), false, static_cast<float>(size)});
                 add({Id::flix_category_all, Control::toggle, tr(L"Kafelek „Wszystkie” w rzędach"),
                     tr(L"Pierwszy w każdym rzędzie gier, z losowym tłem kategorii; otwiera jej bibliotekę."), {}, settings_.flix_category_all});
-                add({Id::flix_top_icons, Control::toggle, tr(L"Ikony menu w prawym górnym rogu"),
-                    tr(L"Wszystkie ikony dolnego menu, małe, obok znaku platformy. Towarzyszka jako awatar, Glance jako ikona."), {}, settings_.flix_top_icons});
                 add({Id::flix_category_tabs, Control::toggle, tr(L"Pasek kategorii"),
                     tr(L"Kategorie jak w bibliotece, na środku u góry; zmieniają je LB/RB albo Page Up/Down."), {}, settings_.flix_category_tabs});
                 add({Id::flix_rail, Control::toggle, tr(L"Pasek boczny"),
@@ -273,6 +272,49 @@ void Launcher::buildSettingsRows() {
                 (settings_.drawer.fade_fraction - 0.06f) / 0.69f});
             break;
         }
+        const auto viewRows = [&] {
+            // A console's, a collection's and a publisher's library without a view of its own; its badge
+            // (↺ Zresetuj, Delete, X) gives every one of the kind this view again (their own view, order and filter go).
+            const auto viewRow = [&](Id id, const wchar_t* title, const wchar_t* description, int saved, const char* kind) {
+                Row row{id, Control::choice, title, description};
+                for (const auto view : library_view::drawer_order) row.choices.push_back({library_view::label(view)});
+                row.choice = library_view::drawerRow(library_view::viewFromPersisted(std::clamp(saved, 0, library_view::persisted_view_count - 1)));
+                row.value = row.choices[row.choice].label;
+                if (const int own = libraryViewOverrides(kind)) row.description += L" · " + (tr(L"Z własnym widokiem: ") + std::to_wstring(own));
+                row.badge = tr(L"Zresetuj"); row.reset = std::string("views:") + kind;
+                add(std::move(row));
+            };
+            viewRow(Id::default_view_console, tr(L"Domyślny widok emulatorów"),
+                    tr(L"Biblioteki konsol bez własnego widoku. Zresetuj: wszystkie wracają do niego."), settings_.default_view_console, "console");
+            viewRow(Id::default_view_collection, tr(L"Domyślny widok kolekcji"),
+                    tr(L"Kolekcje Steam i własne bez własnego widoku. Zresetuj: wszystkie wracają do niego."), settings_.default_view_collection, "collection");
+            viewRow(Id::default_view_studio, tr(L"Domyślny widok wydawców"),
+                    tr(L"Wydawcy i developerzy bez własnego widoku. Zresetuj: wszystkie wracają do niego."), settings_.default_view_studio, "studio");
+        };
+        if (!settings_state_.at(Page::appearance_all)) {
+            // The short list: the live layout preview, the studio, a few switches; the rest is in Dostosuj wygląd.
+            if (desktop_mode_) {
+                section(tr(L"Okno desktopowe"));
+                add({Id::desktop_platform_badges, Control::toggle, tr(L"Ikona platformy na okładkach"),
+                    tr(L"Mały znak sklepu lub konsoli w prawym górnym rogu każdej okładki."), {}, settings_.desktop_platform_badges});
+                add({Id::desktop_gray_uninstalled, Control::toggle, tr(L"Niezainstalowane w czerni i bieli"),
+                    tr(L"Okładki gier, których nie ma na dysku, bez kolorów - zainstalowane od razu się wyróżniają."), {}, settings_.desktop_gray_uninstalled});
+            }
+            section(tr(L"Tryb TV"));
+            Row layout{Id::home_layout, Control::layout, tr(L"Układ trybu TV"), tr(L"Półki, XMB, Flix, Metro, PSfive lub snitch z rzędem okładek i białymi ikonami.")};
+            layout.choice = std::clamp(static_cast<int>(settings_.home_layout), 0, static_cast<int>(home_layouts.size()) - 1);
+            layout.value = tr(home_layouts[layout.choice]);
+            add(std::move(layout));
+            add({Id::theme_studio, Control::action, tr(L"Dostosuj wygląd"),
+                tr(L"Układ, tapeta, kafelki, kolory i czcionki z podglądem na żywo. Wyglądy można zapisać, wczytać i usunąć."), tr(L"Otwórz")});
+            add({Id::launch_tv_mode, Control::toggle, tr(L"Uruchamiaj w trybie TV"),
+                tr(L"Po starcie pełny ekran z układem powyżej zamiast okna desktopowego. Przełączysz też ikoną telewizora lub w menu zasilania."),
+                {}, settings_.launch_tv_mode});
+            pageRow(Page::appearance_all, tr(L"Wszystkie opcje wyglądu"), tr(L"Klasyczna lista każdego ustawienia wyglądu."), {});
+            section(tr(L"Widoki biblioteki w trybie TV"));
+            viewRows();
+            break;
+        }
         // In the desktop window its own options come first; the console layouts (Tryb TV) follow.
         if (desktop_mode_) {
             section(tr(L"Okno desktopowe"));
@@ -292,7 +334,7 @@ void Launcher::buildSettingsRows() {
             // The chosen layout's own options on their page (snitch has none).
             const wchar_t* options = settings_.home_layout == HomeLayout::shelves ? trKey(L"Stała lista kategorii, pionowe plakaty, kafelek „Wszystkie” i informacje pod logo.") :
                                      settings_.home_layout == HomeLayout::xmb ? trKey(L"Pionowe plakaty i rozmiar kafelków.") :
-                                     settings_.home_layout == HomeLayout::flix ? trKey(L"Rozmiar kafelków, kafelek „Wszystkie” i ikony menu u góry.") :
+                                     settings_.home_layout == HomeLayout::flix ? trKey(L"Rozmiar kafelków, kafelek „Wszystkie”, pasek kategorii i boczny.") :
                                      settings_.home_layout == HomeLayout::metro ? trKey(L"Efekt 3D stron obok bieżącej.") :
                                      settings_.home_layout == HomeLayout::psfive ? trKey(L"Rozmiar kafelków i zegar.") : nullptr;
             if (options) pageRow(Page::layout_options, tr(L"Opcje układu"), tr(options), layout_name);
@@ -361,26 +403,6 @@ void Launcher::buildSettingsRows() {
         choiceRow(Id::hint_style, tr(L"Wygląd podpowiedzi"),
                   tr(L"Klawisze i przyciski pada w podpowiedziach, także przy paskach kategorii: szklane albo białe z ciemnym napisem."),
                   hint_styles, static_cast<int>(settings_.hint_style));
-        section(tr(L"Widoki biblioteki w trybie TV"));
-        {
-            // A console's, a collection's and a publisher's library without a view of its own; its badge
-            // (↺ Zresetuj, Delete, X) gives every one of the kind this view again (their own view, order and filter go).
-            const auto viewRow = [&](Id id, const wchar_t* title, const wchar_t* description, int saved, const char* kind) {
-                Row row{id, Control::choice, title, description};
-                for (const auto view : library_view::drawer_order) row.choices.push_back({library_view::label(view)});
-                row.choice = library_view::drawerRow(library_view::viewFromPersisted(std::clamp(saved, 0, library_view::persisted_view_count - 1)));
-                row.value = row.choices[row.choice].label;
-                if (const int own = libraryViewOverrides(kind)) row.description += L" · " + (tr(L"Z własnym widokiem: ") + std::to_wstring(own));
-                row.badge = tr(L"Zresetuj"); row.reset = std::string("views:") + kind;
-                add(std::move(row));
-            };
-            viewRow(Id::default_view_console, tr(L"Domyślny widok emulatorów"),
-                    tr(L"Biblioteki konsol bez własnego widoku. Zresetuj: wszystkie wracają do niego."), settings_.default_view_console, "console");
-            viewRow(Id::default_view_collection, tr(L"Domyślny widok kolekcji"),
-                    tr(L"Kolekcje Steam i własne bez własnego widoku. Zresetuj: wszystkie wracają do niego."), settings_.default_view_collection, "collection");
-            viewRow(Id::default_view_studio, tr(L"Domyślny widok wydawców"),
-                    tr(L"Wydawcy i developerzy bez własnego widoku. Zresetuj: wszystkie wracają do niego."), settings_.default_view_studio, "studio");
-        }
         break;
     }
 #ifndef _WIN32

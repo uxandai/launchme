@@ -254,6 +254,7 @@ int LauncherUiTest::desktop(HWND window) {
     app.desktopSettingsActivate({SheetHit::Kind::toggle, tv_row});
     if (app.settings_.launch_tv_mode) return 7620;
     // A choice opens its list under the field; a pick applies it.
+    app.revealSetting(settings_ui::Id::font); // On "Wszystkie opcje wyglądu".
     const int font_row = row(settings_ui::Id::font);
     if (font_row < 0) return 7621;
     app.desktopSettingsActivate({SheetHit::Kind::field, font_row});

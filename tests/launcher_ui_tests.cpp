@@ -90,6 +90,7 @@ public:
     static int pcSettings(HWND window);
     static int pcRefresh(HWND window);
     static int drmFree(HWND window);
+    static int themeStudio(HWND window);
     static int xmb(HWND window);
     static int quickResume(HWND window);
     static int exitTransition(HWND window);
@@ -501,6 +502,7 @@ public:
         app.openSettings();
         if (!capture(L"settings-native-appearance.png")) return 90;
         app.settingsActivate(); // Enter right pane, not change a value.
+        app.revealSetting(settings_ui::Id::font); // Interfejs → Wszystkie opcje wyglądu.
         // Czcionka belongs to the "Wygląd" section of Interfejs, opened by the interface accent.
         const auto font_row = std::find_if(app.settings_rows_.begin(), app.settings_rows_.end(),
                                            [](const auto& row) { return row.id == settings_ui::Id::font; });
@@ -1609,6 +1611,7 @@ int LauncherUiTest::xmb(HWND window) {
     if (app.artwork_state_.kind() != ArtworkKind::poster) return 231;
     app.closeArtworkBrowser();
     app.openSettings(); app.settings_state_.selectCategory(0);
+    app.buildSettingsRows(); app.openSettingsPage(settings_ui::Page::appearance_all); // The classic list.
     for (const int layout : {0, 2}) {
         app.setHomeLayout(layout);
         if (rowIndex(settings_ui::Id::xmb_posters) != -1 || rowIndex(settings_ui::Id::xmb_size) != -1 ||
@@ -2002,6 +2005,7 @@ int LauncherUiTest::language(HWND window) {
     app.back();
     app.settings_state_.selectCategory(static_cast<int>(settings_ui::Category::appearance));
     app.buildSettingsRows();
+    app.revealSetting(settings_ui::Id::font); // Interfejs → Wszystkie opcje wyglądu.
     {
         const auto* font_row = english_row(settings_ui::Id::font);
         if (!font_row || font_row->title != L"Font" || app.settings_rows_[0].section != L"TV mode") return 504;
@@ -2102,6 +2106,7 @@ int LauncherUiTest::language(HWND window) {
 #include "platform_settings_ui_cases.hpp"
 #include "pc_refresh_ui_cases.hpp"
 #include "drm_free_ui_cases.hpp"
+#include "theme_studio_ui_cases.hpp"
 #include "emulation_settings_ui_cases.hpp"
 #include "quick_resume_failure_ui_cases.hpp"
 #include "game_discovery_ui_cases.hpp"
@@ -2470,6 +2475,15 @@ int main(int argc, char** argv) {
         else std::cout << "Emulacja page, system pages, emulator choice, program by hand, missing core and Wskaż folder passed\n";
         return code;
     }
+    if (argc == 2 && std::string_view(argv[1]) == "--theme-studio") {
+        std::filesystem::create_directories(root);
+        const auto code = window ? LauncherUiTest::themeStudio(window) : 99;
+        if (window) DestroyWindow(window);
+        CoUninitialize();
+        if (code) std::cerr << "Theme studio regression failed at checkpoint " << code << '\n';
+        else std::cout << "Dostosuj wygląd: tabs, pictures, switches, sliders, undo, saved looks and the pointer passed\n";
+        return code;
+    }
     if (argc == 2 && std::string_view(argv[1]) == "--drm-free") {
         std::filesystem::create_directories(root);
         const auto code = window ? LauncherUiTest::drmFree(window) : 99;
@@ -2527,6 +2541,7 @@ int main(int argc, char** argv) {
     if (!code && !profiling) code = LauncherUiTest::steamVisibility(window);
     if (!code && !profiling) code = LauncherUiTest::bulkCovers(window);
     if (!code && !profiling) code = LauncherUiTest::drmFree(window);
+    if (!code && !profiling) code = LauncherUiTest::themeStudio(window);
     if (!code && !profiling) code = LauncherUiTest::tour(window);
     if (!code && !profiling) code = LauncherUiTest::organization(window);
     if (!code && !profiling) code = LauncherUiTest::excludedGames(window);

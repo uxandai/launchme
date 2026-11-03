@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(launchme VERSION 0.6.2 LANGUAGES C CXX)
+project(launchme VERSION 0.7.0 LANGUAGES C CXX)
 
 if(NOT WIN32)
     # Linux (highly experimental, docs/linux-port.md): the shared core, its tests and the launcher on SDL3 + Skia.
@@ -438,6 +438,7 @@ add_test(NAME low_memory_mode COMMAND launcher_ui_tests --low-memory)
     add_test(NAME launchme_updates_and_whats_new COMMAND launcher_ui_tests --updates)
     add_test(NAME tray_while_playing_and_background_crop COMMAND launcher_ui_tests --tray)
     add_test(NAME drm_free_artwork_crop_controls COMMAND launcher_ui_tests --drm-free)
+    add_test(NAME theme_studio_tabs_cards_and_saved_looks COMMAND launcher_ui_tests --theme-studio)
     add_test(NAME emulation_settings_pages_and_add_folder COMMAND launcher_ui_tests --emulation)
     set_tests_properties(tarot_reading_cards_and_results PROPERTIES TIMEOUT 60)
     add_test(NAME companion_home_chat_and_settings COMMAND launcher_ui_tests --companion)
@@ -517,6 +518,9 @@ add_test(NAME low_memory_mode COMMAND launcher_ui_tests --low-memory)
         LIBS pdh)
     launchme_executable(user_settings_tests TEST drawer_appearance_settings
         SOURCES tests/user_settings_tests.cpp src/platform/user_config.cpp
+        LIBS shell32 ole32)
+    launchme_executable(theme_preset_tests TEST theme_presets
+        SOURCES tests/theme_preset_tests.cpp src/platform/theme_preset.cpp src/platform/user_config.cpp
         LIBS shell32 ole32)
     launchme_executable(owned_games_tests TEST steam_app_names
         SOURCES tests/owned_games_tests.cpp src/library/owned_games.cpp ${LAUNCHME_WEB_SOURCES}

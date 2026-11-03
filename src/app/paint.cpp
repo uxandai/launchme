@@ -68,12 +68,14 @@ void Launcher::paint(bool overlay) {
     context.glance_hover = glance_hover_motion_.value;
     if (widget_spots.glance) context.glance_spot = *widget_spots.glance;
     context.glance = glanceOpen() ? &glance_ : nullptr;
+    context.theme_studio = theme_.open ? &theme_ : nullptr; if (theme_.open) context.hint_device = hintDevice();
     CompanionView companion_view; // Borrowed by the context until the frame is painted.
     if (settings_.companion) { companionView(companion_view); context.companion = &companion_view; }
     const auto glance_device = hintDevice();
     context.glance_key = glance_device == HintDevice::keyboard ? L"G" : glance_device == HintDevice::playstation ? L"R2" :
                         glance_device == HintDevice::nintendo ? L"ZR" : L"RT";
     context.screen_transition = screen_transition_;
+    if (theme_.open && !desktop_mode_) { context.theme_scene = true; context.screen_transition = 1; } // The home behind the studio is drawn into its preview.
     context.wallpaper_zoom = wallpaper_zoom_;
     context.library_manager = libraryDialogOpen() ? &library_dialog_ : nullptr;
     context.detail_favorite_action = favoriteDetailAction();

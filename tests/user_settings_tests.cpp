@@ -326,14 +326,14 @@ int main() {
         const AppSettings defaults;
         if (defaults.button_rgb != 0xF5F5F5 || defaults.button_idle != AppSettings::ButtonIdle::gray ||
             defaults.tile_entrance != AppSettings::TileEntrance::grow || defaults.focus_gap != AppSettings::FocusGap::none || defaults.search_art != AppSettings::SearchArt::square ||
-            defaults.shelves_hero_facts || defaults.flix_top_icons) return 110;
+            defaults.shelves_hero_facts) return 110;
         auto looks = config;
         looks.button_rgb = 0x0070D1; looks.button_idle = AppSettings::ButtonIdle::tinted; looks.tile_entrance = AppSettings::TileEntrance::none;
-        looks.focus_gap = AppSettings::FocusGap::inside; looks.search_art = AppSettings::SearchArt::landscape; looks.shelves_hero_facts = true; looks.flix_top_icons = true;
+        looks.focus_gap = AppSettings::FocusGap::inside; looks.search_art = AppSettings::SearchArt::landscape; looks.shelves_hero_facts = true;
         if (!saveAppSettings(looks, file)) return 111;
         const auto read = loadAppSettings(file);
         if (read.button_rgb != 0x0070D1 || read.button_idle != AppSettings::ButtonIdle::tinted || read.tile_entrance != AppSettings::TileEntrance::none ||
-            read.focus_gap != AppSettings::FocusGap::inside || read.search_art != AppSettings::SearchArt::landscape || !read.shelves_hero_facts || !read.flix_top_icons) return 112;
+            read.focus_gap != AppSettings::FocusGap::inside || read.search_art != AppSettings::SearchArt::landscape || !read.shelves_hero_facts) return 112;
         looks.button_rgb = 0;
         if (!saveAppSettings(looks, file) || loadAppSettings(file).button_rgb != 0) return 113;
         // 0.5.8: Wydawcy and Developerzy each on its own (the old switch sets both), Najmniej gier (1, 2, 3 or

@@ -203,6 +203,7 @@ void Launcher::back() {
     switch (dialog) {
     case Modal::aurelia: aureliaKey(VK_ESCAPE, false); return;
     case Modal::companion_picker: companionPicker(false); return;
+    case Modal::theme_studio: themeStudioKey(VK_ESCAPE, false); return;
     case Modal::file_browser: closeFileBrowser(); return; // Over every panel that opens it.
     case Modal::custom_editor: closeCustomEditor(); return;
     case Modal::metadata: desktopMetaClose(); return;
@@ -344,6 +345,7 @@ void Launcher::onCharacter(wchar_t character) {
     case Modal::custom_editor: customEditorInsert(std::wstring_view(&character, 1)); return;
     case Modal::metadata: desktopMetaChar(character); return;
     case Modal::identify: identifyEdit(character); return;
+    case Modal::theme_studio: themeStudioChar(character); return;
     case Modal::gog_install: case Modal::companion_picker: case Modal::tarot: case Modal::whats_new: case Modal::profile: return;
     default: break; // No dialog, or one without a text field (Pobierz brakujące okładki).
     }

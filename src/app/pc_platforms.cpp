@@ -390,7 +390,8 @@ void Launcher::onPcLibrary(std::unique_ptr<PcLibraryMessage> message) {
     if (screen_ == ScreenMode::shelves || screen_ == ScreenMode::library || screen_ == ScreenMode::search) {
         if (screen_ == ScreenMode::search) updateSearch();
         else rebuildCards();
-        if (const auto found = findCard(selected_key, false)) focusCard(*found, library_controls_.focus < 0);
+        if (homeUntouched()) focusCard(0, false); // The emulators' games arrive after Steam's: Recent re-sorts under the focus.
+        else if (const auto found = findCard(selected_key, false)) focusCard(*found, library_controls_.focus < 0);
     }
     retryArt();
     InvalidateRect(hwnd_, nullptr, FALSE);
