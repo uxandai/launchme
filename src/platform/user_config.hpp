@@ -190,9 +190,6 @@ struct AppSettings {
     // Flix: a "Wszystkie" tile first in every game row (not Recent, PC platforms or Emulation),
     // with a random background of that category; it opens the library of the category.
     bool flix_category_all = false;
-    // Flix: every quick-bar icon small in the top-right corner, beside the platform badge; the
-    // companion shows only her avatar there and Glance only its icon.
-    bool flix_top_icons = false;
     // Search results (Szukaj): square covers, 2:3 posters or 920:430 landscape tiles.
     enum class SearchArt { square, poster, landscape };
     SearchArt search_art = SearchArt::square;

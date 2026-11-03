@@ -623,6 +623,12 @@ private:
     void drawCompanion();
     void drawCompanionFeed();
     void drawCompanionPicker();
+    void drawThemeStudio();
+    bool beginThemeScene();
+    HRESULT endThemeScene();
+    void drawThemePreview(float left, float top, float right, float bottom);
+    void drawThemeCard(const theme_ui::Option& option, int index, float left, float top, float right, float bottom, bool chosen, bool focused, bool hovered);
+    IDWriteTextFormat* fontSample(size_t index);
     // Gamification: a small "Lv 12" badge with a sympathy bar under it, starting at `left`,
     // centred on `cy`; returns its width (draw false: only measures). level 0: the host's from the
     // view (with her streak and level-up glow); else that level, and the bar only for progress ≥ 0.
@@ -1121,6 +1127,11 @@ private:
     Microsoft::WRL::ComPtr<ID2D1RenderTarget> main_target_;
     Microsoft::WRL::ComPtr<ID2D1DeviceContext1> main_realizer_;
     Microsoft::WRL::ComPtr<ID2D1BitmapRenderTarget> screen_ui_target_;
+    // Dostosuj wygląd: the home screen drawn into its own target, shown scaled in the preview.
+    Microsoft::WRL::ComPtr<ID2D1RenderTarget> theme_main_target_;
+    Microsoft::WRL::ComPtr<ID2D1DeviceContext1> theme_main_realizer_;
+    Microsoft::WRL::ComPtr<ID2D1BitmapRenderTarget> theme_scene_target_;
+    Microsoft::WRL::ComPtr<ID2D1Bitmap> theme_scene_bitmap_;
     Microsoft::WRL::ComPtr<ID2D1Bitmap> video_bitmap_;
     // Tapeta: its picture, its video's latest frame, where it shows, whether this frame drew it.
     Cover wallpaper_;
@@ -1260,6 +1271,7 @@ private:
     std::vector<settings_ui::Rect> psfive_tab_rects_; // As drawn last; one per PSfive tab.
     Microsoft::WRL::ComPtr<ID2D1Layer> category_rail_layer_;
     Microsoft::WRL::ComPtr<IDWriteFactory> dwrite_;
+    std::array<Microsoft::WRL::ComPtr<IDWriteTextFormat>, 4> font_samples_; // Dostosuj wygląd: each font in its own face.
     Microsoft::WRL::ComPtr<IDWriteFontCollection1> sst_fonts_;
     Microsoft::WRL::ComPtr<IWICImagingFactory> wic_;
     Microsoft::WRL::ComPtr<IDWriteTextFormat> hero_font_, label_font_, cd_pen_font_;

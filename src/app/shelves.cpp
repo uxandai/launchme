@@ -113,7 +113,8 @@ void Launcher::onLibrary(std::unique_ptr<LibraryMessage> library) {
         if (category != categories_.end()) category_ = static_cast<size_t>(category - categories_.begin());
         if (screen_ == ScreenMode::search) updateSearch();
         else if (screen_ == ScreenMode::shelves || screen_ == ScreenMode::library) rebuildCards();
-        if (const auto found = findCard(selected, true)) focusCard(*found, library_controls_.focus < 0);
+        if (homeUntouched()) focusCard(0, false); // See refreshRecentGames.
+        else if (const auto found = findCard(selected, true)) focusCard(*found, library_controls_.focus < 0);
         InvalidateRect(hwnd_, nullptr, FALSE);
         return;
     }

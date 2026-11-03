@@ -43,6 +43,7 @@ Launcher::Modal Launcher::topModal() const {
 Launcher::Modal Launcher::topDialog() const {
     if (whats_new_.open) return Modal::whats_new; // Shown alone, right after an update's restart.
     if (aurelia_ui_.open) return fileBrowserOpen() ? Modal::file_browser : Modal::aurelia; // Its library picker opens over it.
+    if (theme_.open) return Modal::theme_studio;
     if (companion_.picker.open) return Modal::companion_picker;
     if (fileBrowserOpen()) return Modal::file_browser; // Opened from the panels below it.
     if (libraryDialogOpen()) return Modal::library_dialog;
@@ -80,6 +81,7 @@ bool Launcher::modalKey(WPARAM key, bool repeated) {
     case Modal::identify: identifyKey(key, repeated); break;
     case Modal::gog_install: gogInstallKey(key, repeated); break;
     case Modal::companion_picker: companionPickerKey(key, repeated); break;
+    case Modal::theme_studio: themeStudioKey(key, repeated); break;
     case Modal::tarot: tarotKey(key, repeated); break;
     case Modal::profile: profileKey(key, repeated); break;
     case Modal::aurelia: aureliaKey(key, repeated); break;
@@ -657,6 +659,18 @@ bool Launcher::modalPad(const PadReading& state, WORD buttons, ULONGLONG now) {
         else if (pressed(XINPUT_GAMEPAD_B) || pressed(XINPUT_GAMEPAD_BACK)) { noteUserInput(); profileKey(VK_ESCAPE, false); }
         else if (pressed(XINPUT_GAMEPAD_LEFT_SHOULDER)) { noteUserInput(); profileKey(VK_PRIOR, false); }
         else if (pressed(XINPUT_GAMEPAD_RIGHT_SHOULDER)) { noteUserInput(); profileKey(VK_NEXT, false); }
+        break;
+    case Modal::theme_studio:
+        controllerNavigate(0);
+        if (direction && (direction != controller_direction_ || now >= controller_repeat_)) {
+            noteUserInput(); themeStudioKey(direction, false);
+            controller_repeat_ = now + (direction != controller_direction_ ? 280 : 120);
+        }
+        if (pressed(XINPUT_GAMEPAD_A)) { noteUserInput(); themeStudioKey(VK_RETURN, false); }
+        else if (pressed(XINPUT_GAMEPAD_B)) { noteUserInput(); themeStudioKey(VK_ESCAPE, false); }
+        else if (pressed(XINPUT_GAMEPAD_X)) { noteUserInput(); themeStudioKey(VK_DELETE, false); }
+        else if (pressed(XINPUT_GAMEPAD_LEFT_SHOULDER)) { noteUserInput(); themeStudioKey(VK_PRIOR, false); }
+        else if (pressed(XINPUT_GAMEPAD_RIGHT_SHOULDER)) { noteUserInput(); themeStudioKey(VK_NEXT, false); }
         break;
     case Modal::companion_picker:
         controllerNavigate(0);

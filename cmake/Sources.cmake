@@ -340,6 +340,9 @@ set(LAUNCHME_APP_SOURCES
     src/platform/device_service.cpp
     src/platform/device_service_windows.cpp
     src/platform/user_config.cpp
+    src/platform/theme_preset.cpp
+    src/app/theme_studio.cpp
+    src/ui/theme_studio_renderer.cpp
     src/platform/embedded_resources.cpp
     src/platform/unicode_text.cpp
     src/platform/hashing.cpp

@@ -118,7 +118,7 @@ namespace {
 // focus gap, search artwork, Flix icons, the default home's facts). True: the key was one of them.
 bool parseLookSetting(AppSettings& settings, std::string_view key, std::string_view value) {
     const auto flag = [&](bool& target) { if (value == "0" || value == "1") target = value == "1"; return true; };
-    if (key == "flix_top_icons") return flag(settings.flix_top_icons);
+    if (key == "flix_top_icons") return true; // Retired: Flix has no icons in the corner any more.
     if (key == "hide_while_playing") return flag(settings.hide_while_playing);
     if (key == "shelves_hero_facts") return flag(settings.shelves_hero_facts);
     if (key == "focus_gap") {
@@ -846,7 +846,6 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
                              settings.xmb_size == AppSettings::XmbSize::large ? "large" : "default") << '\n';
     output << "flix_size=" << (settings.flix_size == AppSettings::FlixSize::large ? "large" : "default") << '\n';
     output << "flix_category_all=" << settings.flix_category_all << '\n';
-    output << "flix_top_icons=" << settings.flix_top_icons << '\n';
     output << "shelves_hero_facts=" << settings.shelves_hero_facts << '\n';
     output << "search_art=" << (settings.search_art == AppSettings::SearchArt::poster ? "poster" :
                                 settings.search_art == AppSettings::SearchArt::landscape ? "landscape" : "square") << '\n';

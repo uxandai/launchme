@@ -58,8 +58,10 @@ enum class Id { font, home_layout, ui_accent, accent, uninstalled, emulation, co
                    focus_gap,
                    // Interfejs → Tryb TV: how tiles appear; the artwork of search results.
                    tile_entrance, search_art,
-                   // Opcje układu: the default home's facts under the logo; Flix's quick icons top right.
-                   shelves_hero_facts, flix_top_icons,
+                   // Interfejs: opens the theme studio (Dostosuj wygląd).
+                   theme_studio,
+                   // Opcje układu: the default home's facts under the logo.
+                   shelves_hero_facts,
                    // System → Funkcje: Tarot, the card reading (src/app/tarot.cpp).
                    tarot,
                    // Towarzyszka → Gdzie mieszkają: one city for all of them, and the chosen one's own.
@@ -163,7 +165,8 @@ enum class Page {
     fps_limiter, // Funkcje -> FPS i limiter: the widget, its graph, the frame limiter and the limits of single games.
     hidden_studios, // Biblioteka → Ukryci wydawcy i developerzy: each one with a switch to show it again.
     excluded_games, // Biblioteka → Widoczność → Wykluczone gry: each title with Przywróć.
-    drm_roots // DRM-free → Katalogi: adding a folder and every folder with its removal.
+    drm_roots, // DRM-free → Katalogi: adding a folder and every folder with its removal.
+    appearance_all // Interfejs → Wszystkie opcje wyglądu: the classic list of every appearance setting (the studio has them as pictures).
 };
 // A row drawn as tiles, with State::tile picking one of them.
 inline bool tiled(Control control) { return control == Control::sources || control == Control::pads; }

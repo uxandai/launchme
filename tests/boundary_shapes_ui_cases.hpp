@@ -46,6 +46,7 @@ int LauncherUiTest::boundaryAndShapes(HWND window) {
     app.controllerNavigate(0); const int before = taps;
     app.controllerNavigate(-2); app.controllerNavigate(-2);
     if (taps != before + 1) return 1410;
+    app.openSettingsPage(settings_ui::Page::appearance_all); // The classic list of every appearance setting.
     const auto shape_row = std::find_if(app.settings_rows_.begin(), app.settings_rows_.end(),
         [](const auto& row) { return row.id == settings_ui::Id::tile_shape; });
     if (shape_row == app.settings_rows_.end() || shape_row->choices.size() != 3) return 1411;
@@ -64,6 +65,7 @@ int LauncherUiTest::boundaryAndShapes(HWND window) {
     if (app.settings_.tile_shape != AppSettings::TileShape::squircle) return 1413; // Cancel is side-effect free.
     for (int choice = 0; choice < 3; ++choice) {
         app.openSettings(); app.settings_state_.selectCategory(0); app.buildSettingsRows();
+        app.openSettingsPage(settings_ui::Page::appearance_all);
         app.settings_state_.enter(static_cast<int>(app.settings_rows_.size())); app.settings_state_.selected[0] = row_index;
         app.settingsActivate(); app.settingsMove(choice); app.settingsActivate();
         if (app.settings_.tile_shape != static_cast<AppSettings::TileShape>(choice)) return 1414;
@@ -82,11 +84,13 @@ int LauncherUiTest::boundaryAndShapes(HWND window) {
         }
         // Next picker opens at the current choice; reset selection via settings, below.
         app.openSettings(); app.settings_state_.selectCategory(0); app.buildSettingsRows();
+        app.openSettingsPage(settings_ui::Page::appearance_all);
         app.settings_state_.enter(static_cast<int>(app.settings_rows_.size())); app.settings_state_.selected[0] = row_index;
         app.settingsActivate(); app.settingsMove(-2); app.settingsActivate();
     }
     // Window borders: the first of "Okna i podpowiedzi", off by default, saved like the others.
     app.openSettings(); app.settings_state_.selectCategory(0); app.buildSettingsRows();
+    app.openSettingsPage(settings_ui::Page::appearance_all);
     const auto borders_row = std::find_if(app.settings_rows_.begin(), app.settings_rows_.end(),
         [](const auto& row) { return row.id == settings_ui::Id::panel_borders; });
     if (borders_row == app.settings_rows_.end() || borders_row->section != tr(L"Okna i podpowiedzi") ||
@@ -125,6 +129,7 @@ int LauncherUiTest::boundaryAndShapes(HWND window) {
     app.saveSettings();
     if (app.settings_.console_colors || app.settings_rows_[consoles_index].checked || loadAppSettings().console_colors) return 1422;
     app.openSettings(); app.settings_state_.selectCategory(0); app.buildSettingsRows();
+    app.openSettingsPage(settings_ui::Page::appearance_all);
     app.settings_state_.enter(static_cast<int>(app.settings_rows_.size())); app.settings_state_.selected[0] = consoles_index;
     app.settingsActivate(); app.saveSettings();
     if (!app.settings_.console_colors || !loadAppSettings().console_colors) return 1424;

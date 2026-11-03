@@ -111,6 +111,7 @@ bool Launcher::settingsExtraActivate(const Row& row) {
         else buildSettingsRows();
         return true;
     }
+    if (row.id == Id::theme_studio) { themeStudio(true); return true; } // Interfejs → Dostosuj wygląd.
     if (row.id == Id::wallpaper_pick) { openWallpaperBrowser(); return true; }
     if (row.id == Id::wallpaper_clear) {
         settings_.wallpaper = AppSettings::WallpaperKind::none;

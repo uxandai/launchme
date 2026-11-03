@@ -65,10 +65,9 @@ home_widgets::Spots Launcher::homeWidgetSpots() const {
     return spots;
 }
 
-// Flix (Opcje układu → Ikony menu w prawym górnym rogu): the quick bar's icons small at the top.
-bool Launcher::flixIconsShown() const {
-    return settings_.flix_top_icons && settings_.home_layout == AppSettings::HomeLayout::flix && !desktop_mode_;
-}
+// Flix once had the quick bar's icons small in the top-right corner (an option); it is gone, and with it
+// everything that hangs on this switch (the remaining code is unreachable).
+bool Launcher::flixIconsShown() const { return false; }
 int Launcher::flixIconCount() const {
     return quick_menu::count(quick_menu::store_slots) + (settings_.glance ? 1 : 0) + (settings_.companion ? 1 : 0);
 }

@@ -5,6 +5,7 @@
 #include <unordered_set>
 #include "../friends/steam_friends.hpp"
 #include "settings_view.hpp"
+#include "theme_studio.hpp"
 #include "context_menu.hpp"
 #include "flix_rail.hpp"
 #include "../model/game_details.hpp"
@@ -306,6 +307,8 @@ struct ViewContext {
     const tarot_ui::State* tarot = nullptr; // Tarot's reading, while open or fading out.
     const profile_ui::State* profile = nullptr; // Profil, while open or fading out.
     aurelia_ui::State* aurelia = nullptr; // The renderer records its measured note and visible rows.
+    bool theme_scene = false; // The home screen is drawn into the studio's preview (not the desktop window).
+    const theme_ui::State* theme_studio = nullptr; // Dostosuj wygląd, over everything but the walkthrough.
     update_ui::WhatsNew* whats_new = nullptr; // Co nowego after an update; the renderer records the text's height.
     const desktop_ui::MetaView* tv_meta = nullptr; // Tryb TV: Edytuj metadane (the desktop dialog, on the TV canvas).
     const custom_game_ui::State* custom_editor = nullptr; // Settings → Library add/edit panel.

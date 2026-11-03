@@ -1,4 +1,5 @@
 #include "launcher.hpp"
+#include <functional>
 #include "../platform/etw_access.hpp"
 #include "../platform/flac.hpp"
 #include "../platform/music_themes.hpp"
@@ -89,18 +90,22 @@ bool Launcher::revealSetting(Id id, const std::string& key) {
     settings_state_.closeAll(); settings_motion_.valid = false;
     buildSettingsRows();
     if (focus()) return true;
-    std::vector<std::pair<int, Page>> tiles;
-    for (int i = 0; i < static_cast<int>(settings_rows_.size()); ++i)
-        if (settings_rows_[i].control == Control::page) tiles.push_back({i, settings_rows_[i].page});
-    for (const auto& [index, page] : tiles) {
-        settings_state_.selected[settings_state_.category] = index;
-        settings_state_.open(page, {}, 0, RowRef::of(settings_rows_[index]));
-        buildSettingsRows();
-        if (focus()) return true;
-        settings_state_.close();
-        buildSettingsRows();
-    }
-    return false;
+    // The pages behind the list's tiles, and the pages behind those (Interfejs → Wszystkie opcje wyglądu → Zaznaczona okładka).
+    const std::function<bool(int)> search = [&](int depth) {
+        std::vector<std::pair<int, Page>> tiles;
+        for (int i = 0; i < static_cast<int>(settings_rows_.size()); ++i)
+            if (settings_rows_[i].control == Control::page) tiles.push_back({i, settings_rows_[i].page});
+        for (const auto& [index, page] : tiles) {
+            settings_state_.selected[settings_state_.category] = index;
+            settings_state_.open(page, {}, 0, RowRef::of(settings_rows_[index]));
+            buildSettingsRows();
+            if (focus() || (depth > 0 && search(depth - 1))) return true;
+            settings_state_.close();
+            buildSettingsRows();
+        }
+        return false;
+    };
+    return search(1);
 }
 
 void Launcher::settingsMove(int amount) {
@@ -697,9 +702,8 @@ void Launcher::settingsToggle(const Row& row) {
         settings_.focus_spring = !settings_.focus_spring;
         settingsChanged(); audio_.context(); return; // Visual only: no shelf rebuild.
     }
-    else if (row.id == Id::shelves_hero_facts || row.id == Id::flix_top_icons) {
-        auto& flag = row.id == Id::shelves_hero_facts ? settings_.shelves_hero_facts : settings_.flix_top_icons;
-        flag = !flag;
+    else if (row.id == Id::shelves_hero_facts) {
+        settings_.shelves_hero_facts = !settings_.shelves_hero_facts;
         settingsChanged(); audio_.context(); return; // Visual only: no shelf rebuild.
     }
     else if (row.id == Id::steam_silent_launch || row.id == Id::steam_account_switch || row.id == Id::steam_install_dialog ||

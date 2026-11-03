@@ -120,6 +120,7 @@ set(LAUNCHME_CORE_SOURCES
     src/platform/protected_file.cpp
     src/platform/unicode_text.cpp
     src/platform/user_config.cpp
+    src/platform/theme_preset.cpp
     src/plugins/achievements.cpp
     src/plugins/manager.cpp
     src/plugins/manifest.cpp

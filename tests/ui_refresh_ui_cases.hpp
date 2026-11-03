@@ -170,37 +170,7 @@ int LauncherUiTest::uiRefresh(HWND window) {
     app.settings_.home_layout = AppSettings::HomeLayout::shelves; app.showCategory(0); settle();
     app.settings_.focus_gap = AppSettings::FocusGap::none; app.settingsChanged(true);
 
-    // Flix with the menu's icons at the top: Glance and her avatar join the row; a click on an icon
-    // opens its screen like the bottom bar.
-    app.settings_.glance = app.settings_.companion = true;
-    app.settings_.home_layout = AppSettings::HomeLayout::flix;
-    app.settings_.flix_top_icons = true;
-    app.showCategory(0); settle();
-    if (!app.flixIconsShown()) return 7770;
-    const int quick = quick_menu::count(quick_menu::store_slots);
-    if (app.flixIconCount() != quick + 2) return 7771;
-    {
-        const auto spots = app.homeWidgetSpots();
-        const auto glance = home_widgets::icons::at(quick, quick + 2, view.width), her = home_widgets::icons::at(quick + 1, quick + 2, view.width);
-        if (!spots.glance || !spots.companion || spots.glance->left != glance.left || spots.companion->left != her.left ||
-            her.right != view.width - home_widgets::badge_slot) return 7772;
-    }
-    if (!capture(L"refresh-flix-icons.png")) return 7773;
-    // The pad: Up from the first row focuses the icons (no second bar at the bottom), Right walks them, the
-    // focused one's name stands left of the row; Down returns to the tiles.
-    app.changeCategory(-1);
-    if (!app.flixIconsFocused() || app.quick_open_ || app.flix_icon_focus_ != 0) return 7776;
-    app.navigate(1); settle();
-    if (app.flix_icon_focus_ != 1 || !capture(L"refresh-flix-icons-focus.png")) return 7777;
-    app.changeCategory(1);
-    if (app.flixIconsFocused() || app.quick_open_) return 7778;
-    {
-        const auto search = home_widgets::icons::at(0, quick + 2, view.width);
-        app.click((search.left + 20) * view.scale, (search.top + 20) * view.scale, false);
-        if (app.screen_ != ScreenMode::search) return 7774;
-        app.back(); settle();
-    }
-    app.settings_.flix_top_icons = false;
+    app.settings_.glance = app.settings_.companion = true; app.settings_.home_layout = AppSettings::HomeLayout::flix; app.showCategory(0); settle();
     if (app.homeWidgetSpots().glance->right - app.homeWidgetSpots().glance->left != home_widgets::glance_pill_width) return 7775;
     app.settings_.home_layout = AppSettings::HomeLayout::shelves;
     app.showCategory(0); settle();

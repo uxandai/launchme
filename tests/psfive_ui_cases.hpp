@@ -547,6 +547,7 @@ int LauncherUiTest::psfive(HWND window) {
     app.categories_ = std::move(saved_categories);
     // Settings → Interfejs: five layouts and, only on PSfive, the tile size slider.
     app.openSettings(); app.settings_state_.selectCategory(0); app.buildSettingsRows();
+    app.openSettingsPage(settings_ui::Page::appearance_all); // The classic list: the studio has these options as pictures.
     const auto rowOf = [&](settings_ui::Id id) {
         const auto found = std::find_if(app.settings_rows_.begin(), app.settings_rows_.end(), [&](const auto& row) { return row.id == id; });
         return found == app.settings_rows_.end() ? -1 : static_cast<int>(found - app.settings_rows_.begin());
@@ -608,6 +609,7 @@ int LauncherUiTest::psfive(HWND window) {
     if (app.category_menu_open_ || app.category_ != 1) return 5050;
     app.showCategory(0);
     app.openSettings(); app.settings_state_.selectCategory(0); app.buildSettingsRows();
+    app.openSettingsPage(settings_ui::Page::appearance_all);
     if (rowOf(settings_ui::Id::psfive_size) >= 0) return 4946;
     app.setHomeLayout(static_cast<int>(AppSettings::HomeLayout::psfive));
     if (rowOf(settings_ui::Id::psfive_size) >= 0 || app.settings_rows_[layout_row + 1].page != settings_ui::Page::layout_options) return 4947;

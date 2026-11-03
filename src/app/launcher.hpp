@@ -39,6 +39,7 @@
 #include "../net/remote_server.hpp"
 #include "../artwork/identified_artwork.hpp"
 #include "../ui/identify_view.hpp"
+#include "../ui/theme_studio.hpp"
 #include "../ui/bulk_covers_view.hpp"
 #include "../ui/achievements_view.hpp"
 #include "../platform/file_dialog.hpp"
@@ -289,6 +290,42 @@ public:
     std::wstring companionGameUrl(const std::wstring& title) const;
     bool companionLinkClick(float x, float y);
     void companionPointer(float mouse_x, float mouse_y);
+    // Settings → Interfejs → Dostosuj wygląd (theme_studio.cpp).
+    bool themeStudioOpen() const;
+    void themeStudio(bool open);
+    void themeStudioKey(WPARAM key, bool repeated);
+    void themeStudioChar(wchar_t ch);
+    void themeStudioWheel(float amount);
+    void themeStudioClick(float x, float y);
+    void themeStudioDrag(float x, float y);
+    void themeStudioRelease();
+    void themeStudioHover(float x, float y);
+    bool themeStudioHot(float x, float y) const;
+    bool themeAnimate(float dt);
+    void themeTouch();     // The user did something: the preview's demo stops and the home returns to where it was.
+    void themeDemoStep();
+    void themeRefreshHome(bool black);
+    int themeWantedExample() const;
+    void themeSyncExample();
+    void themeClearWallpaper();
+    void themeApplyExample();
+    void themeBuildOptions();
+    void themeEnsureVisible();
+    void themeSetTab(int tab);
+    void themeChooseCard(int option, int card);
+    void themeToggle(int option);
+    void themeSetLevel(int option, float level);
+    void themeAction(int option);
+    void themeApplyLook(const AppSettings& look);
+    void themeRevert();
+    void themeBeginSave();
+    void themeSaveLook();
+    void themeLoadLook(int index);
+    void themeDeleteLook(int index);
+    void themeActivateBar();
+    void themeRefreshActive();
+    theme_ui::State theme_;
+    AppSettings theme_backup_;
     void companionPicker(bool open);
     void companionPickerKey(WPARAM key, bool repeated);
     void companionPickerClick(float x, float y);
@@ -735,6 +772,7 @@ public:
     HWND frameWindow() const { return gameOverlayOpen() && game_overlay_ ? game_overlay_->handle() : hwnd_; }
     void togglePerformance();
     void noteUserInput();
+    bool homeUntouched() const; // Before the first key, click or pad press, on the home's first row.
     bool identifyOpen() const { return identify_state_.open; }
     void identifyKey(WPARAM key, bool repeated);
     void onRatings(std::unique_ptr<RatingsMessage> message);
@@ -781,7 +819,7 @@ public:
     // topmost open one takes keys, pad buttons, the wheel and clicks before any screen, drawer or
     // menu. The on-screen keyboard is not a layer: it types into the field of the layer beneath.
     enum class Modal { none, exit_prompt, power_menu, tour, file_browser, library_dialog, custom_editor, bulk_covers, identify, gog_install, companion_picker, tarot,
-                       whats_new, profile, metadata, aurelia };
+                       whats_new, profile, metadata, aurelia, theme_studio };
     Modal topModal() const;
     // The topmost of the dialogs under the walkthrough (file picker … installer): Back and typed
     // characters reach it even under the exit prompt or the power menu.
@@ -2764,6 +2802,7 @@ private:
     // resumes later from the same phase instead of jumping.
     float ambient_time_ = 0;
     std::chrono::steady_clock::time_point last_input_ = std::chrono::steady_clock::now();
+    bool input_seen_ = false; // Until the first key, click or pad press the home stays on its first tile, however Recent re-sorts.
     float arrived_ = 0;
     size_t entrance_selected_ = 0; // The focus the tile entrance started with (a move ends the entrance).
     // The next tile wave opens a fresh Tryb TV screen (startup, from the desktop window, a new layout):

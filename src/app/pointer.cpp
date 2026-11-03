@@ -47,6 +47,7 @@ void Launcher::click(float mouse_x, float mouse_y, bool double_click) {
     switch (modal) {
     case Modal::none: break;
     case Modal::companion_picker: if (!double_click) companionPickerClick(x, y); return;
+    case Modal::theme_studio: if (!double_click) { themeStudioClick(x, y); if (theme_.dragging) SetCapture(hwnd_); } return;
     case Modal::tarot: if (!double_click) tarotClick(x, y); return;
     case Modal::profile: if (!double_click) profileClick(x, y); return;
     case Modal::aurelia: if (!double_click) aureliaClick(x, y); return;
@@ -318,6 +319,7 @@ bool Launcher::hoverButton(float mouse_x, float mouse_y) const {
     }
     case Modal::gog_install: return gog_install_ui::Layout{view.width, view.height, gog_install_ui::helperInstall(gog_install_ui_.game.source) || gog_install_ui_.steam}.hit(x, y) >= 0;
     case Modal::companion_picker: return companion_ui::PickerLayout{view.width, view.height}.hit(companion_.picker, x, y) != companion_ui::no_hit;
+    case Modal::theme_studio: return themeStudioHot(x, y);
     case Modal::tarot: return tarotPointerOver(x, y);
     case Modal::profile: return profilePointerOver(x, y);
     case Modal::aurelia: return aurelia_ui::Layout{view.width, view.height}.hit(aurelia_ui_, x, y) != -9;
@@ -474,6 +476,12 @@ void Launcher::mouseMove(float mouse_x, float mouse_y) {
         const auto view = renderer_.viewport();
         const int hit = aurelia_ui::Layout{view.width, view.height}.hit(aurelia_ui_, mouse_x / view.scale, mouse_y / view.scale);
         if (aurelia_ui_.hover != hit) { aurelia_ui_.hover = hit; InvalidateRect(hwnd_, nullptr, FALSE); }
+        return;
+    }
+    if (topModal() == Modal::theme_studio) {
+        const auto view = renderer_.viewport();
+        if (theme_.dragging) themeStudioDrag(mouse_x / view.scale, mouse_y / view.scale);
+        else themeStudioHover(mouse_x / view.scale, mouse_y / view.scale);
         return;
     }
     companionPointer(mouse_x, mouse_y);
@@ -635,6 +643,7 @@ void Launcher::pointerUp(bool cancelled) {
     }
     if (crop_state_.dragging) { crop_state_.dragging = false; if (GetCapture() == hwnd_) ReleaseCapture(); }
     if (color_editor_.dragging) { color_editor_.dragging = false; if (GetCapture() == hwnd_) ReleaseCapture(); }
+    if (theme_.dragging) { themeStudioRelease(); if (GetCapture() == hwnd_) ReleaseCapture(); }
     if (!settings_dragging_) return;
     settings_dragging_ = false;
     if (GetCapture() == hwnd_) ReleaseCapture();
