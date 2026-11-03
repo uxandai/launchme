@@ -1,6 +1,8 @@
 #include "launcher.hpp"
 #include "../library/steam.hpp"
 
+#include <climits>
+
 std::vector<glance::OwnedGame> Launcher::glanceGames() const {
     std::vector<glance::OwnedGame> games;
     for (const auto* source : {&installed_library_, &uninstalled_library_}) for (const auto& game : *source) {
