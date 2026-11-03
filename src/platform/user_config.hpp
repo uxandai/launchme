@@ -176,6 +176,7 @@ struct AppSettings {
     }
     bool show_categories = false; // Default home: permanent category list instead of the left drawer.
     bool shelves_posters = false; // Default home: 2:3 game posters instead of square covers.
+    bool shelves_steam = false;   // Default home, "Wygląd Steam": posters, and Ostatnie as one row of equal height with a wide first tile. Implies shelves_posters.
     bool shelves_category_all = false; // Default home: a "Wszystkie" tile first on game shelves (as flix_category_all).
     // Default home: the focused game's playtime, last played, release date and platform centred under
     // its logo (raised a little), each under a small capitalised heading; the corner badge moves there.
@@ -185,6 +186,7 @@ struct AppSettings {
     XmbSize xmb_size = XmbSize::normal;
     XmbSize psfive_size = XmbSize::normal; // PSfive tiles: the same three sizes (80 / 100 / 120%).
     bool psfive_clock = true;              // PSfive: the time in the top bar's right corner.
+    float psfive_dim = 0;                  // PSfive: extra darkening of the background picture, 0..1 (0 = as it was).
     enum class FlixSize { normal, large }; // Flix posters and capsules.
     FlixSize flix_size = FlixSize::normal;
     // Flix: a "Wszystkie" tile first in every game row (not Recent, PC platforms or Emulation),

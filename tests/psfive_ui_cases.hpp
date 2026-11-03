@@ -339,35 +339,20 @@ int LauncherUiTest::psfive(HWND window) {
     app.controllerNavigate(1); // Pad Right opens More.
     app.categoryMenuMove(5); // Highlight a category different from the currently shown one.
     const auto before_right = app.category_;
-    app.categoryMenuHorizontal(1, false); // Same entry point as WM_KEYDOWN Right/D.
-    if (app.category_menu_open_ || app.psfive_top_ != icons + layout::top_widgets || app.category_ != before_right) return 5021;
-    app.navigate(-1); // Back onto More; key repeat must not accept a category either.
-    app.categoryMenuMove(3);
-    app.categoryMenuHorizontal(1, true);
-    if (app.category_menu_open_ || app.psfive_top_ != icons + layout::top_widgets || app.category_ != before_right) return 5047;
-    app.enterDown(false);
-    if (!app.friends_open_ || app.friends_list_ || app.quick_open_) return 5022;
-    settle();
-    if (!capture(L"psfive-widgets.png")) return 5023;
-    if (app.psfiveTopActive() || app.psfive_top_opacity_.value != 0.66f) return 5036;
-    app.back();
-    if (app.friends_open_ || app.psfive_top_ != icons + layout::top_widgets) return 5024;
-    app.friends_progress_ = 0;
-    app.navigate(1);
-    if (app.category_menu_open_ || app.psfive_top_ != icons + layout::top_menu || app.category_ != tabs[2]) return 4964;
+    app.categoryMenuHorizontal(1, false); // The Widgets and Menu icons are gone: nothing follows More, and no category is accepted.
+    if (app.psfive_top_ != icons - 1 || app.category_ != before_right) return 5021;
+    app.closeCategoryMenu();
+    app.psfiveFocusTop(2); // The last tab before More.
+    if (app.category_menu_open_ || app.psfive_top_ != 2 || app.category_ != tabs[2]) return 4964;
     settle();
     if (app.cards_[app.selected_].emphasis > 0.01f || !capture(L"psfive-top.png")) return 4965;
     if (app.psfive_top_opacity_.value != 1) return 5037;
-    app.enterDown(false);
-    if (!app.quick_open_ || app.psfive_top_ != icons + layout::top_menu) return 4966;
-    settle();
-    if (app.psfiveTopActive() || app.psfive_top_opacity_.value != 0.66f) return 5038;
     app.changeCategory(-1);
-    if (app.quick_open_ || app.psfive_top_ != icons + layout::top_menu) return 4967;
-    app.changeCategory(-1);
-    if (app.psfive_top_ != icons + layout::top_menu) return 4968; // Up from the top bar: a boundary.
+    if (app.psfive_top_ != 2) return 4968; // Up from the top bar: a boundary.
     app.homePage(-1); app.homePage(-1); // LB twice: Ostatnie, remembering its tile.
-    if (app.category_ != 0 || app.psfive_top_ != -1 || app.selected_ != 2) return 4983;
+    if (app.category_ != 0 || app.psfive_top_ != 0 || app.selected_ != 2) return 4983; // The top bar keeps its focus on the tab.
+    app.accept(); // Enter/A on a tab: down to its row.
+    if (app.psfive_top_ != -1) return 5099;
     app.homePage(-1);
     if (app.category_ != 0) return 4987;
     app.homePage(1); app.back(); // Back from another tab: Ostatnie.
@@ -451,25 +436,13 @@ int LauncherUiTest::psfive(HWND window) {
     clickAt((play.left + play.right) * 0.5f, (play.top + play.bottom) * 0.5f);
     if (!app.pending_launch_ || app.pending_game_.app_id != app.cards_[3].game.app_id) return 4938;
     app.pending_launch_ = false; app.launch_progress_ = 0;
-    // The Menu icon opens the quick bar; Widgets opens the right drawer.
-    const auto menu_icon = layout::topItem(layout::top_menu, view.width, true);
-    const auto widgets_icon = layout::topItem(layout::top_widgets, view.width, true);
-    if (layout::clock(view.width).left - menu_icon.right > 30 || widgets_icon.right >= menu_icon.left) return 5025;
-    const auto centre = [](const settings_ui::Rect& r) { return std::pair{(r.left + r.right) * 0.5f, (r.top + r.bottom) * 0.5f}; };
-    if (!app.hoverButton(centre(menu_icon).first * view.scale, centre(menu_icon).second * view.scale)) return 4972;
-    app.mouse_transition_until_ = 0;
-    clickAt(centre(menu_icon).first, centre(menu_icon).second);
-    if (!app.quick_open_) return 4973;
-    clickAt(view.width * 0.5f, view.height * 0.5f); // A click beside the bar closes it.
-    if (app.quick_open_) return 4974;
-    app.quick_progress_ = 0;
-    clickAt(centre(widgets_icon).first, centre(widgets_icon).second);
-    if (!app.psfiveActive() || app.quick_open_ || !app.friends_open_ || app.friends_list_) return 4975;
-    app.back(); app.friends_progress_ = 0;
+    // The Menu and Widgets icons are gone from the top bar: a click where they stood does nothing.
+    clickAt(view.width - layout::bar_margin - layout::clock_width - layout::clock_gap - layout::icon_radius, layout::top_center);
+    if (app.quick_open_ || app.friends_open_) return 4973;
     // Mouse overflow: opens below the fourth tab, selects only later categories, dismisses outside.
     app.paint(); app.mouse_transition_until_ = 0;
     float more_x = -1;
-    for (float x = layout::tabs_left; x < menu_icon.left && more_x < 0; x += 4)
+    for (float x = layout::tabs_left; x < view.width * 0.5f && more_x < 0; x += 4)
         if (app.renderer_.psfiveTabAt(x, layout::top_center) == 3) more_x = x;
     if (more_x < 0) return 4976;
     app.mouseMove(more_x * view.scale, layout::top_center * view.scale);
@@ -579,8 +552,7 @@ int LauncherUiTest::psfive(HWND window) {
     app.saveSettings();
     if (loadAppSettings().psfive_size != AppSettings::XmbSize::large || loadAppSettings().home_layout != AppSettings::HomeLayout::psfive ||
         loadAppSettings().psfive_clock) return 4943;
-    if (layout::topItem(layout::top_menu, view.width, false).right <= layout::topItem(layout::top_menu, view.width, true).right ||
-        layout::hitTop(centre(layout::topItem(layout::top_menu, view.width, false)).first, layout::top_center, view.width, false) != layout::top_menu) return 4979;
+    if (layout::top_count != 0 || layout::hitTop(view.width - layout::bar_margin - layout::icon_radius, layout::top_center, view.width, false) != -1) return 4979; // The icons are gone.
     app.settings_state_.options = app.settings_state_.editing = false; app.back(); app.showCategory(0); settle();
     // Every size is +30%: large focus 168 -> 218.4, small focus 112 -> 145.6.
     // Changing size never shifts the row/buttons from the shared left margin.
@@ -589,7 +561,7 @@ int LauncherUiTest::psfive(HWND window) {
         std::abs(app.cards_[app.selected_].x - layout::tabs_left) > 1 ||
         std::abs(app.cards_[app.selected_ + 1].size - 137.28f) > 1 ||
         layout::action(0, view.height, large).left != layout::tabs_left) return 4944;
-    if (!capture(L"psfive-large.png")) return 4961; // Also: no clock, the icons in its place.
+    if (!capture(L"psfive-large.png")) return 4961; // Also: no clock.
     app.settings_.psfive_size = AppSettings::XmbSize::compact; settle();
     if (std::abs(app.cards_[app.selected_].size - 145.6f) > 1 ||
         std::abs(app.cards_[app.selected_ + 1].size - 91.52f) > 1 ||

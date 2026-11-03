@@ -121,7 +121,12 @@ void Launcher::requestStudioBadges() {
             requestArt(studioTile(static_cast<studios::Role>(role), entry), CoverMessage::Kind::badge, true);
 }
 
-wchar_t Launcher::homeTabGlyph(size_t category) const { return settings_.home_tab_icons ? categoryGlyph(category) : 0; }
+// Metro, Flix and PSfive tabs: with the icons on, "Ostatnio grane" is a clock face with an arrow (History) too.
+wchar_t Launcher::homeTabGlyph(size_t category) const {
+    if (!settings_.home_tab_icons) return 0;
+    if (category < categories_.size() && categories_[category].id == "recent") return L'\uE81C';
+    return categoryGlyph(category);
+}
 
 wchar_t Launcher::categoryGlyph(size_t category) const {
     if (category >= categories_.size()) return 0;

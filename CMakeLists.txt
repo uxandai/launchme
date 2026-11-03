@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(launchme VERSION 0.7.1 LANGUAGES C CXX)
+project(launchme VERSION 0.7.2 LANGUAGES C CXX)
 
 if(NOT WIN32)
     # Linux (highly experimental, docs/linux-port.md): the shared core, its tests and the launcher on SDL3 + Skia.
@@ -181,6 +181,15 @@ add_custom_target(launchme_platform_logos ALL
     DEPENDS ${LAUNCHME_PLATFORM_LOGOS} VERBATIM)
 add_dependencies(launchme launchme_platform_logos)
 install(FILES ${LAUNCHME_PLATFORM_LOGOS} DESTINATION assets/platforms COMPONENT Runtime)
+
+# Lexend (Google Fonts, SIL OFL): the static weights cut from the variable font, loaded by Renderer::loadLocalFonts.
+file(GLOB LAUNCHME_LEXEND CONFIGURE_DEPENDS "${LAUNCHME_RES_DIR}/fonts/Lexend-*.ttf")
+add_custom_target(launchme_fonts ALL
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets/fonts"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${LAUNCHME_LEXEND} "${LAUNCHME_RES_DIR}/fonts/Lexend-OFL.txt" "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets/fonts/"
+    DEPENDS ${LAUNCHME_LEXEND} VERBATIM)
+add_dependencies(launchme launchme_fonts)
+install(FILES ${LAUNCHME_LEXEND} res/fonts/Lexend-OFL.txt DESTINATION assets/fonts COMPONENT Runtime)
 
 # Bundled extensions are separate DLL/ZIPs, built by the normal launcher target.
 # Packaging also runs for manifest-only edits, without relying on a DLL relink.

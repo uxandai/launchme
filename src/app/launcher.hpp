@@ -236,14 +236,6 @@ public:
     // tiles or Flix pills (none on Metro and XMB, where they are tiles of the layout).
     home_widgets::Placement homeWidgets() const;
     home_widgets::Spots homeWidgetSpots() const;
-    // Flix with the quick bar's icons small at the top (AppSettings::flix_top_icons).
-    bool flixIconsShown() const;
-    int flixIconCount() const;
-    bool flixIconClick(float x, float y, bool double_click);
-    int flix_icon_hover_ = -1;
-    // The pad on those icons (they replace the quick bar there): Up from the first row or Guide focuses
-    // them, Left/Right walk them, Enter opens one, Down or Back returns to the row (companion.cpp).
-    int flix_icon_focus_ = -1;
     // Flix → Pasek boczny (src/app/flix_rail.cpp): the focused and hovered icon (-1: none).
     int flix_rail_focus_ = -1, flix_rail_hover_ = -1;
     bool flixRailShown() const;
@@ -257,11 +249,6 @@ public:
     int flixRailAt(float x, float y) const; // Layout coordinates; -1: none.
     // The icon of a default category (Platformy PC, Emulacja, Wydawcy, Developerzy, Ulubione); 0 otherwise.
     wchar_t categoryGlyph(size_t category) const;
-    bool flixIconsFocused() const;
-    void flixFocusIcons();
-    void flixIconMove(int amount);
-    void flixIconAccept();
-    void flixIconsLeave();
     // The TV home without games (src/ui/empty_library.hpp): its reason, its buttons and their focus.
     empty_library::Reason emptyLibraryReason() const;
     bool emptyHomeActive() const;
@@ -646,6 +633,7 @@ public:
     void eraseSecret();
     void retryStore();
     bool settingsOpen() const { return screen_ == ScreenMode::settings; }
+    void openSettingsSearch(); // F3, Ctrl+F or Y in Settings (src/app/settings_search.cpp).
     bool gogInstallOpen() const { return gog_install_ui_.open; }
     void gogInstallKey(WPARAM key, bool repeated);
     void settingsMove(int amount);
@@ -1998,6 +1986,21 @@ private:
     std::wstring settingsParentTitle() const; // The page under it; empty: the category.
     // Focuses the row `id` (and `key`) of the current category, opening the page it is on; false: none.
     bool revealSetting(settings_ui::Id id, const std::string& key = {});
+    // Search in Settings (src/app/settings_search.cpp): every setting of every category (and of the pages behind
+    // their tiles) is indexed when the search opens; the page lists the ones that match the typed words.
+    struct SettingsHit {
+        int category = 0;
+        std::vector<settings_ui::Page> path; // The tiles opened on the way.
+        settings_ui::Id id = settings_ui::Id::font;
+        std::string key, plugin_setting;
+        std::wstring title, description, where, value;
+    };
+    std::vector<SettingsHit> settings_hits_;
+    std::wstring settings_search_query_;
+    void buildSettingsSearchIndex();
+    void settingsSearchRows(const std::function<void(settings_ui::Row)>& add);
+    void settingsSearchEdited(); // The typed words changed: the list follows.
+    void settingsSearchJump(size_t hit);
     void openSettingsCollections();
     // Bottom-right button hints (input_hints.cpp): for the screen and the last used input.
     void inputHints(ViewContext& context) const;
@@ -2013,6 +2016,9 @@ private:
     // Default layout with "Pionowe plakaty": the shown shelf holds games (stores and consoles keep
     // their square logo tiles), drawn as 2:3 posters.
     bool shelfPosters() const; // Posters bind through bindLibraryPoster.
+    bool shelfSteamRow() const;             // Wygląd Steam on Ostatnio grane: carousel::steam_row.
+    bool shelfWideCard(size_t index) const; // Its first tile, when a game: the wide capsule.
+    void steamTarget(size_t index, const Viewport& view, float inset, float& x, float& y, float& size, float& aspect) const;
     // Default layout with "Kafelek „Wszystkie” w rzędach": the shown game shelf starts with a
     // tile that opens its category's library (as on Flix).
     bool shelfAllTile() const;
@@ -2107,7 +2113,8 @@ private:
     bool psfiveTopAvailable() const;
     bool psfiveTopActive() const;
     float psfiveMenuScroll() const; // Animated offset, shared by drawing and pointer input.
-    std::vector<size_t> psfiveTabs() const; // First three category indices, in shelf order.
+    std::vector<size_t> psfiveTabs() const; // The first psfiveVisibleTabs() category indices, in shelf order.
+    size_t psfiveVisibleTabs() const; // Three; with "Ikony zamiast nazw" every category that has an icon, before "Więcej...".
     int psfiveTabCount() const; // Includes "Więcej..." when there are more categories.
     int psfiveActiveTab() const;           // The tab of the shown category; -1: none.
     void psfiveSelectTab(int tab, bool keep_focus);

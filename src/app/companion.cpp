@@ -58,58 +58,11 @@ home_widgets::Spots Launcher::homeWidgetSpots() const {
         if (spots.companion) { spots.companion = settings_ui::Rect{left, 60, left + home_widgets::companion_pill_width, 100}; left += home_widgets::companion_pill_width + 10; }
         if (spots.glance) spots.glance = settings_ui::Rect{left, 60, left + home_widgets::glance_pill_width, 100};
     }
-    // Flix with the menu's icons at the top: Glance and her avatar as two more small icons in that row.
-    if (flixIconsShown()) home_widgets::icons::place(spots, quick_menu::count(quick_menu::store_slots), view.width);
     // PSfive's details sheet covers the corner where they stand.
     if (psfive_details_progress_ > 0.001f && psfiveActive()) { spots.glance.reset(); spots.companion.reset(); }
     return spots;
 }
 
-// Flix once had the quick bar's icons small in the top-right corner (an option); it is gone, and with it
-// everything that hangs on this switch (the remaining code is unreachable).
-bool Launcher::flixIconsShown() const { return false; }
-int Launcher::flixIconCount() const {
-    return quick_menu::count(quick_menu::store_slots) + (settings_.glance ? 1 : 0) + (settings_.companion ? 1 : 0);
-}
-// A click on one of the quick icons (Glance and her avatar answer through their spots).
-bool Launcher::flixIconClick(float x, float y, bool double_click) {
-    if (!flixIconsShown() || !homeOverlayAvailable()) return false;
-    const auto view = renderer_.viewport();
-    const int item = home_widgets::icons::hit(x, y, flixIconCount(), view.width);
-    if (item < 0 || item >= quick_menu::count(quick_menu::store_slots)) return false;
-    if (!double_click) { quick_open_ = true; quick_selected_ = item; quickAccept(); }
-    return true;
-}
-
-bool Launcher::flixIconsFocused() const {
-    return flix_icon_focus_ >= 0 && flixIconsShown() && flixActive() && screen_ == ScreenMode::shelves;
-}
-void Launcher::flixFocusIcons() {
-    dismissMenu();
-    flix_icon_focus_ = 0;
-    audio_.quick();
-    InvalidateRect(hwnd_, nullptr, FALSE);
-}
-void Launcher::flixIconMove(int amount) {
-    const int next = std::clamp(flix_icon_focus_ + (amount < 0 ? -1 : 1), 0, std::max(0, flixIconCount() - 1));
-    if (next == flix_icon_focus_) { navigationBoundary(); return; }
-    flix_icon_focus_ = next;
-    audio_.navigate();
-    InvalidateRect(hwnd_, nullptr, FALSE);
-}
-void Launcher::flixIconsLeave() {
-    flix_icon_focus_ = -1;
-    audio_.navigate();
-    InvalidateRect(hwnd_, nullptr, FALSE);
-}
-// Enter on an icon: a quick-bar item as the bar would open it, then Glance and her avatar.
-void Launcher::flixIconAccept() {
-    const int item = flix_icon_focus_, quick = quick_menu::count(quick_menu::store_slots);
-    flix_icon_focus_ = -1;
-    if (item < quick) { quick_open_ = true; quick_selected_ = item; quickAccept(); return; }
-    if (settings_.glance && item == quick) { if (glanceAvailable()) openGlance(); return; }
-    if (settings_.companion && companionAvailable()) openCompanion();
-}
 bool Launcher::companionAvailable(bool allow_closing) const { return settings_.companion && homeOverlayAvailable(allow_closing); }
 
 companion::Look Launcher::companionLook() const { return lookOf(settings_); }

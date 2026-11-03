@@ -100,6 +100,7 @@ int LauncherUiTest::themeStudio(HWND window) {
     const int last = static_cast<int>(app.theme_.options.size()) - 1;
     app.theme_.row = last; key(VK_DOWN);
     if (app.theme_.row != last || app.theme_.bar) return 8125;
+    if (theme_ui::looks_tab_shown) { // The Looks tab is hidden for now (theme_ui::looks_tab_shown).
     app.themeSetTab(static_cast<int>(theme_ui::Tab::looks));
     if (!app.theme_.bar || app.theme_.item != theme_ui::State::undo_item) return 8125;
     key(VK_RIGHT); key(VK_RETURN); // Zapisz wygląd…
@@ -125,6 +126,7 @@ int LauncherUiTest::themeStudio(HWND window) {
     app.theme_.item = theme_ui::State::undo_item;
     key(VK_RETURN);
     if (app.settings_.font_family != L"SST" || app.settings_.tile_shape != AppSettings::TileShape::squircle) return 8133;
+    }
     app.settings_.glass = 0.35f; app.settingsChanged();
     key(VK_ESCAPE);
     if (app.themeStudioOpen() || app.topModal() != Launcher::Modal::none && app.topModal() != Launcher::Modal::theme_studio) return 8134;
@@ -144,5 +146,29 @@ int LauncherUiTest::themeStudio(HWND window) {
     const auto close = layout.close();
     app.themeStudioClick((close.left + close.right) * 0.5f, (close.top + close.bottom) * 0.5f);
     if (app.themeStudioOpen()) return 8138;
+
+    // Search in Settings: every category is indexed (also the pages behind tiles), the typed word lists the
+    // matches, a result opens its page with the row focused; a word nothing has gives one locked row.
+    app.openSettings();
+    app.openSettingsSearch();
+    if (!app.settings_state_.at(Page::settings_search) || !app.settings_state_.editing || app.settings_hits_.size() < 40) return 8150;
+    const auto glass_hit = std::find_if(app.settings_hits_.begin(), app.settings_hits_.end(), [](const auto& hit) { return hit.id == Id::glass; });
+    if (glass_hit == app.settings_hits_.end() || glass_hit->path.empty()) return 8151;
+    const auto glass_title = glass_hit->title;
+    for (const wchar_t ch : glass_title.substr(0, glass_title.find(L' '))) app.onCharacter(ch);
+    const auto result = std::find_if(app.settings_rows_.begin(), app.settings_rows_.end(), [&](const Row& row) { return row.id == Id::settings_hit && row.title == glass_title; });
+    if (app.settings_rows_.empty() || app.settings_rows_[0].id != Id::settings_search || result == app.settings_rows_.end()) return 8152;
+    app.settingsActivate(); // Enter in the field: down to the first result.
+    if (app.settings_state_.editing || app.settings_state_.row() != 1 || app.settings_rows_[1].id != Id::settings_hit) return 8153;
+    app.settings_state_.selected[app.settings_state_.category] = static_cast<int>(result - app.settings_rows_.begin());
+    app.settingsActivate(); // The result: its page, its row.
+    if (app.settings_state_.at(Page::settings_search) || app.settings_state_.pages.empty() ||
+        app.settings_rows_[app.settings_state_.row()].id != Id::glass || !app.settings_state_.options) return 8154;
+    app.openSettingsSearch();
+    for (const wchar_t ch : std::wstring(L"qqzzxx")) app.onCharacter(ch);
+    if (app.settings_rows_.size() != 2 || !app.settings_rows_[1].locked) return 8155;
+    app.settingsActivate();
+    app.back(); // The search closes; Settings stay open.
+    if (!app.settingsOpen() || app.settings_state_.at(Page::settings_search)) return 8156;
     return 0;
 }

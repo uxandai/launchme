@@ -66,31 +66,6 @@ inline Spots spots(Placement placement, float width, float height, bool glance, 
     return result;
 }
 
-// Flix once had (an option, now gone) every quick-bar icon as
-// a small circle in the pills' band, Glance's icon after them and her avatar nearest the badge.
-// `total` counts them all; the quick bar's own order comes first.
-namespace icons {
-inline constexpr float size = 40, gap = 8;
-inline Rect at(int index, int total, float width) {
-    const float right = width - badge_slot - static_cast<float>(total - 1 - index) * (size + gap);
-    return {right - size, pill_top, right, pill_top + size};
-}
-inline int hit(float x, float y, int total, float width) {
-    for (int i = 0; i < total; ++i) {
-        const auto r = at(i, total, width);
-        const float cx = (r.left + r.right) * 0.5f, cy = (r.top + r.bottom) * 0.5f, radius = size * 0.5f + 3;
-        if ((x - cx) * (x - cx) + (y - cy) * (y - cy) <= radius * radius) return i;
-    }
-    return -1;
-}
-// The same spots as icons: Glance after the quick ones, her avatar last.
-inline void place(Spots& spots, int quick, float width) {
-    const int total = quick + (spots.glance ? 1 : 0) + (spots.companion ? 1 : 0);
-    if (spots.glance) spots.glance = at(quick, total, width);
-    if (spots.companion) spots.companion = at(total - 1, total, width);
-}
-}
-
 // Hover lifts a tile a little (as glance_ui::shortcut); a pill stays put.
 inline Rect glanceArea(const Spots& spots, float hover) {
     if (!spots.glance) return {};

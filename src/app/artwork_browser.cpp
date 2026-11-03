@@ -211,12 +211,14 @@ void Launcher::initializeArtworkBrowser() {
     });
 }
 
-// Which types of this game have an artwork the player set (a filled dot; an empty one when none).
+// Which types of this game have an artwork in use (a filled dot; an empty one when none): the one the player
+// picked, or the one found by itself (Steam's, SteamGridDB's by the game's ID, the store's own).
 void Launcher::refreshArtworkSet() {
     auto& state = artwork_state_;
     if (state.wallpaper) return;
     const auto cache = coverCacheDirectory();
-    for (size_t i = 0; i < artwork_ui::kinds.size(); ++i) state.custom[i] = selectedArtworkId(state.game, artwork_ui::kinds[i], cache) != 0;
+    for (size_t i = 0; i < artwork_ui::kinds.size(); ++i)
+        state.custom[i] = selectedArtworkId(state.game, artwork_ui::kinds[i], cache) != 0 || cachedArtworkAvailable(state.game, artwork_ui::kinds[i], cache, false);
 }
 
 void Launcher::openArtworkBrowser(const Game& game) {
@@ -232,6 +234,7 @@ void Launcher::openArtworkBrowser(const Game& game) {
         (flix_card_rows_[selected_] == 0 ? ArtworkKind::landscape : ArtworkKind::poster) :
         metroActive() && selected_ < metro_tiles_.size() ?
         (metro_layout::landscape(metro_tiles_[selected_].role) ? ArtworkKind::landscape : ArtworkKind::poster) :
+        shelfWideCard(selected_) ? ArtworkKind::landscape :
         (xmbActive() && settings_.xmb_posters) || shelfPosters() ? ArtworkKind::poster : ArtworkKind::cover;
     artwork_state_ = {};
     artwork_pages_.clear(); artwork_page_key_.clear();

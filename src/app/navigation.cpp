@@ -52,7 +52,6 @@ void Launcher::navigate(int amount, bool edge_menu) {
         InvalidateRect(hwnd_, nullptr, FALSE);
         return;
     }
-    if (flixIconsFocused()) { flixIconMove(amount); return; }
     if (flixRailFocused()) { if (amount > 0) flixRailFocus(-1); else navigationBoundary(); return; } // Right: back to the tile.
     if (quick_open_) { quickMove(amount); return; }
     if (searchBackFocused() && !friends_open_) { if (edge_menu) navigationBoundary(); return; } // Back stands alone in its row.
@@ -254,7 +253,6 @@ void Launcher::back() {
         } else closeArtworkBrowser();
         return;
     }
-    if (flixIconsFocused()) { flixIconsLeave(); return; }
     if (flixRailFocused()) { flixRailFocus(-1); return; }
     if (quick_open_) { closeQuick(); return; }
     if (category_menu_open_) { closeCategoryMenu(); return; }
@@ -373,6 +371,7 @@ void Launcher::onCharacter(wchar_t character) {
         const size_t limit = id == settings_ui::Id::battlenet_callback ? 262144u : id == settings_ui::Id::ea_callback ? 16384u :
                              id == settings_ui::Id::gog_callback || id == settings_ui::Id::amazon_callback ? 8192u : 512u;
         if (settings_secret_input_.size() < limit) settings_secret_input_ += character;
+        settingsSearchEdited();
         InvalidateRect(hwnd_, nullptr, FALSE);
         return;
     }
@@ -509,7 +508,6 @@ void Launcher::changeCategory(int amount) {
     // The quick bar closes towards the tiles: Down on the other layouts, Up on Metro (opened by Down).
     // PSfive opens it from the buttons (Down) and closes it either way; with its details under the
     // row (Opcje układu → Szczegóły pod rzędem) it opens from above the tabs, and Down closes it.
-    if (flixIconsFocused()) { if (amount > 0) flixIconsLeave(); else navigationBoundary(); return; }
     if (flixRailFocused()) { flixRailMove(amount); return; }
     if (quick_open_) {
         if (psfiveActive() && settings_.psfive_details) { if (amount > 0) closeQuick(); else navigationBoundary(); return; }

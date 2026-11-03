@@ -125,6 +125,7 @@ void Launcher::themeBuildOptions() {
         if (s.home_layout == HomeLayout::shelves) {
             toggle(Id::show_categories, L"Kategorie zawsze widoczne", s.show_categories);
             toggle(Id::shelves_posters, L"Pionowe plakaty", s.shelves_posters);
+            toggle(Id::shelves_steam, L"Wygląd Steam", s.shelves_steam);
             toggle(Id::shelves_category_all, L"Kafelek „Wszystkie” w rzędach", s.shelves_category_all);
             toggle(Id::shelves_hero_facts, L"Informacje pod logo", s.shelves_hero_facts);
         } else if (s.home_layout == HomeLayout::xmb) {
@@ -143,6 +144,7 @@ void Launcher::themeBuildOptions() {
         } else if (s.home_layout == HomeLayout::psfive) {
             cards(Id::psfive_size, Look::size, L"Rozmiar kafelków PSfive", static_cast<int>(s.psfive_size), names(xmb_sizes, xmb_sizes.size()));
             toggle(Id::psfive_clock, L"Zegar", s.psfive_clock);
+            slider(Id::psfive_dim, L"Przyciemnienie tła", s.psfive_dim, percent(s.psfive_dim));
             toggle(Id::psfive_details, L"Szczegóły pod rzędem", s.psfive_details);
             toggle(Id::psfive_category_tabs, L"Pasek kategorii", s.psfive_category_tabs);
             if (!s.psfive_category_tabs) toggle(Id::home_tab_icons, L"Ikony zamiast nazw", s.home_tab_icons);
@@ -325,6 +327,7 @@ void Launcher::themeSetLevel(int option, float level) {
     level = std::clamp(level, 0.0f, 1.0f);
     switch (id) {
     case Id::glass: settings_.glass = std::round(level * 20) / 20.0f; break;
+    case Id::psfive_dim: settings_.psfive_dim = std::round(level * 20) / 20.0f; break;
     case Id::background_grid: settings_.background_grid = std::round(level * 20) / 20.0f; break;
     case Id::glow_level: settings_.glow_level = std::round(level * 20) / 10.0f; break;
     case Id::opacity: settings_.drawer.opacity = std::round(level * 98) / 100.0f; break;

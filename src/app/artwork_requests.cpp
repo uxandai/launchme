@@ -81,6 +81,7 @@ void Launcher::onCover(std::unique_ptr<CoverMessage> cover) {
         metroArtArrived(cover->key, cover->kind);
         if (shelfPosters() && cover->kind == CoverMessage::Kind::poster)
             for (size_t i = 0; i < cards_.size(); ++i) if (gameKey(cards_[i].game) == cover->key) bindLibraryPoster(i, true);
+        if (cover->kind == CoverMessage::Kind::landscape && shelfWideCard(0) && gameKey(cards_[0].game) == cover->key) bindLibraryLandscape(0, true);
         if (xmbActive() && settings_.xmb_posters && cover->kind == CoverMessage::Kind::poster)
             for (size_t i = 0; i < cards_.size(); ++i) if (gameKey(cards_[i].game) == cover->key) bindXmbArt(i, true);
         if (desktopActive() && cover->kind == CoverMessage::Kind::poster) {
@@ -238,6 +239,7 @@ void Launcher::prefetchPosters() {
     const bool metro = settings_.home_layout == AppSettings::HomeLayout::metro;
     const bool xmb = settings_.home_layout == AppSettings::HomeLayout::xmb && settings_.xmb_posters;
     const bool shelves = settings_.home_layout == AppSettings::HomeLayout::shelves && settings_.shelves_posters;
+    const bool steam = shelves && settings_.shelves_steam; // Wygląd Steam: a wide capsule for Ostatnio grane's first tile.
     const bool desktop = desktop_mode_; // The desktop window's grid: a poster for every game.
     {   // Poster tiles: a game missing both gets its poster first.
         std::lock_guard lock(jobs_->mutex);
@@ -248,7 +250,7 @@ void Launcher::prefetchPosters() {
         std::lock_guard lock(jobs_->mutex);
         std::erase_if(jobs_->prefetch, [&](const Job& job) {
             const bool unused = (job.kind == CoverMessage::Kind::poster && !boxes && !flix && !metro && !xmb && !shelves && !desktop) ||
-                                (job.kind == CoverMessage::Kind::landscape && !flix && !metro);
+                                (job.kind == CoverMessage::Kind::landscape && !flix && !metro && !steam);
             if (unused) jobs_->requested.erase(job.key);
             return unused;
         });
@@ -268,6 +270,7 @@ void Launcher::prefetchPosters() {
     if (metro) if (const auto* install = metroInstallGame()) queue(*install, CoverMessage::Kind::poster);
     if (boxes || xmb || desktop) for (const auto& game : public_library_) queue(game, CoverMessage::Kind::poster);
     else if (shelves) for (const auto& category : categories_) for (const auto& game : category.games) queue(game, CoverMessage::Kind::poster);
+    if (steam && !categories_.empty() && !categories_[0].games.empty()) queue(categories_[0].games.front(), CoverMessage::Kind::landscape);
 }
 
 void Launcher::invalidateArtwork(const Game& game, CoverMessage::Kind kind) {
@@ -291,6 +294,8 @@ void Launcher::retryGameArtwork(const Game& game, bool notify) {
     else if ((settings_.home_layout == AppSettings::HomeLayout::xmb && settings_.xmb_posters) ||
              (settings_.home_layout == AppSettings::HomeLayout::shelves && settings_.shelves_posters) ||
              desktop_mode_) kinds.push_back(CoverMessage::Kind::poster); // The desktop window's grid shows posters.
+    if (settings_.home_layout == AppSettings::HomeLayout::shelves && settings_.shelves_steam &&
+        std::find(kinds.begin(), kinds.end(), CoverMessage::Kind::landscape) == kinds.end()) kinds.push_back(CoverMessage::Kind::landscape);
     if ((libraryLandscape() || libraryGridLandscape()) && std::find(kinds.begin(), kinds.end(), CoverMessage::Kind::landscape) == kinds.end()) kinds.push_back(CoverMessage::Kind::landscape);
     if (library_view::posterArt(libraryPresentation()) && std::find(kinds.begin(), kinds.end(), CoverMessage::Kind::poster) == kinds.end()) kinds.push_back(CoverMessage::Kind::poster);
     if (libraryCoverflow()) kinds.push_back(CoverMessage::Kind::disc);
@@ -402,6 +407,7 @@ void Launcher::bindLibraryLandscape(size_t index, bool replace) {
 
 void Launcher::bindLibraryPoster(size_t index, bool replace) {
     if (index >= cards_.size()) return;
+    if (shelfWideCard(index)) { bindLibraryLandscape(index, replace); return; } // Wygląd Steam: the wide first tile.
     const auto& game = cards_[index].game;
     if (const auto* art = art_.find(gameKey(game)); art && art->poster) {
         if (replace || !renderer_.hasPoster(index)) renderer_.setPoster(index, art->poster);

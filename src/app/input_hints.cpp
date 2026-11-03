@@ -127,6 +127,7 @@ void Launcher::inputHints(ViewContext& context) const {
         if (row && row->control == settings_ui::Control::sources && !row->tiles.empty() &&
             row->tiles[std::clamp(settings_state_.tile, 0, static_cast<int>(row->tiles.size()) - 1)].level >= 0)
             add(HintButton::shoulders, tr(L"Głośność")); // The focused source's volume, LB/RB or PgUp/PgDn.
+        if (!settings_state_.at(settings_ui::Page::settings_search)) hints.push_back({HintButton::search, tr(L"Szukaj"), L"F3"});
         add(HintButton::back, tr(L"Wstecz"));
         return;
     }

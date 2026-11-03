@@ -11,7 +11,10 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <limits>
 #include <mutex>
 #include <set>
@@ -85,10 +88,11 @@ bool installed(const std::string& folded) {
     return families.count(folded) != 0;
 }
 
-// The family fontconfig picks for a generic name (or any name it can only approximate).
+// The family fontconfig picks for a generic name (or any name it can only approximate); empty when the
+// system has no font for it to pick.
 std::string concreteFamily(const std::string& name) {
     std::lock_guard fc(fcLock());
-    std::string result = name;
+    std::string result;
     FcInit();
     if (FcPattern* pattern = FcPatternCreate()) {
         FcPatternAddString(pattern, FC_FAMILY, reinterpret_cast<const FcChar8*>(name.c_str()));
@@ -105,6 +109,8 @@ std::string concreteFamily(const std::string& name) {
     return result;
 }
 
+std::string lastResortFamily();
+
 std::string resolveSystem(const std::string& family) {
     static std::mutex mutex;
     static std::unordered_map<std::string, std::string> resolved;
@@ -118,7 +124,11 @@ std::string resolveSystem(const std::string& family) {
         const auto fallback = (alias ? *alias : default_alias).fallback;
         const auto chosen = std::find_if(fallback.begin(), fallback.end(), [](const char* name) { return generic(name) || installed(fold(name)); });
         result = chosen != fallback.end() ? *chosen : fallback.back();
-        if (generic(result.c_str())) result = concreteFamily(result);
+        if (generic(result.c_str())) {
+            const auto concrete = concreteFamily(result);
+            if (!concrete.empty()) result = concrete;
+            else if (const auto last_resort = lastResortFamily(); !last_resort.empty()) result = last_resort;
+        }
     }
     resolved.emplace(key, result);
     return result;
@@ -187,6 +197,60 @@ bool addAppFont(const std::string& path, std::vector<std::string>* families) {
         fonts.generation.fetch_add(1, std::memory_order_release);
     }
     return true;
+}
+
+// A system that has no font for fontconfig to hand out (a bare container, a fresh install, fonts.conf without
+// the font folders) would show no text at all. The first plain text font found in the usual font folders and in
+// the places that ship some anyway (Steam's interface, Proton, Wine) becomes an application font instead.
+std::string lastResortFamily() {
+    static const std::string family = [] {
+        namespace fs = std::filesystem;
+        std::vector<fs::path> roots{"/usr/share/fonts", "/usr/local/share/fonts", "/usr/share/wine/fonts"};
+        const char* home = std::getenv("HOME");
+        const char* data = std::getenv("XDG_DATA_HOME");
+        const fs::path user_data = data && *data ? fs::path(data) : home ? fs::path(home) / ".local/share" : fs::path();
+        if (home) roots.push_back(fs::path(home) / ".fonts");
+        if (!user_data.empty()) roots.push_back(user_data / "fonts");
+        std::vector<fs::path> steam;
+        if (home) {
+            steam = {fs::path(home) / ".steam/steam", fs::path(home) / ".local/share/Steam", fs::path(home) / ".var/app/com.valvesoftware.Steam/.local/share/Steam"};
+            roots.push_back(fs::path(home) / ".steam/root/steamui/fonts");
+        }
+        std::error_code ec;
+        for (const auto& base : steam) {
+            for (const char* folder : {"steamui/fonts", "clientui/fonts"}) roots.push_back(base / folder);
+            // Proton and the compatibility tools carry Liberation and the like in their own prefix files.
+            for (const char* folder : {"steamapps/common", "compatibilitytools.d"})
+                for (fs::directory_iterator it(base / folder, fs::directory_options::skip_permission_denied, ec), end; !ec && it != end; it.increment(ec))
+                    if (const auto name = it->path().filename().string(); name.starts_with("Proton") || std::strcmp(folder, "compatibilitytools.d") == 0)
+                        roots.push_back(it->path() / "files/share/fonts");
+        }
+        const auto plain = [](const fs::path& file) {
+            const auto extension = fold(file.extension().string());
+            if (extension != ".ttf" && extension != ".otf") return false;
+            const auto name = fold(file.filename().string());
+            for (const char* skip : {"symbol", "icon", "emoji", "dingbat", "awesome", "mono", "bold", "italic", "oblique", "light", "thin", "black", "cjk"})
+                if (name.find(skip) != std::string::npos) return false;
+            return true;
+        };
+        int tried = 0;
+        for (const auto& root : roots) {
+            if (!fs::is_directory(root, ec)) continue;
+            int visited = 0;
+            for (fs::recursive_directory_iterator it(root, fs::directory_options::skip_permission_denied, ec), end; !ec && it != end && visited < 5000 && tried < 60; it.increment(ec), ++visited) {
+                if (it.depth() > 6) it.disable_recursion_pending();
+                if (!it->is_regular_file(ec) || !plain(it->path())) continue;
+                ++tried;
+                std::vector<std::string> families;
+                if (!addAppFont(it->path().string(), &families) || families.empty()) continue;
+                std::fprintf(stderr, "launchme: no system fonts found for fontconfig; using %s from %s\n", families.front().c_str(), it->path().c_str());
+                return families.front();
+            }
+        }
+        std::fprintf(stderr, "launchme: no fonts found: text cannot be drawn (install a font package, e.g. ttf-dejavu or fonts-dejavu)\n");
+        return std::string();
+    }();
+    return family;
 }
 
 // The launcher's icon font, an application font from the program's assets (once).

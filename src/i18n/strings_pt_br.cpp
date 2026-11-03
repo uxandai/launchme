@@ -795,7 +795,7 @@ constexpr Entry entries[] = {
     {L"Rząd ostatnich gier nad dużym tłem.", L"Uma fileira de jogos recentes sobre um fundo grande."},
     {L"Rozmiar kafelków PSfive", L"Tamanho dos blocos do PSfive"},
     {L"Zegar", L"Relógio"},
-    {L"Godzina w prawym górnym rogu, obok ikon szukania i menu.", L"A hora no canto superior direito, ao lado dos ícones de busca e menu."},
+    {L"Godzina w prawym górnym rogu.", L"A hora no canto superior direito."},
     {L"Menu", L"Menu"},
     {L"Ikona menu w prawym górnym rogu, ruch w dół z przycisków Graj / … albo przycisk Guide / PS (klawisz Home).", L"O ícone de menu no canto superior direito, descendo a partir dos botões Jogar / …, ou Guide / PS (a tecla Home)."},
     {L"Mały, domyślny lub duży — dla kafelków w rzędzie.", L"Pequeno, padrão ou grande — para os blocos da fileira."},

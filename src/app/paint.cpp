@@ -526,17 +526,6 @@ void Launcher::paint(bool overlay) {
             const float away = std::max({friends_progress_, category_menu_progress_, menu_progress_});
             context.flix_rail_alpha = std::clamp(1.0f - away, 0.0f, 1.0f);
         }
-        if (flixIconsShown()) {
-            // The quick bar's icons at the top: they make way for the bar itself and the drawers.
-            context.flix_icons = true;
-            context.flix_icon_hover = flix_icon_hover_;
-            context.flix_icon_focus = flixIconsFocused() ? flix_icon_focus_ : -1;
-            context.flix_icon_glance = settings_.glance;
-            context.flix_icon_total = flixIconCount();
-            const float away = std::max({quick_progress_, friends_progress_, category_menu_progress_, menu_progress_});
-            context.flix_icons_alpha = homeOverlayAvailable(true) ? std::clamp(1.0f - away, 0.0f, 1.0f) : 0.0f;
-            if (!context.downloads_moving) context.downloads_moving = downloadsMoving();
-        }
     }
     context.shelf_posters = shelfPosters();
     if (metroActive() && !metro_pages_.empty() && metro_tiles_.size() == cards_.size()) {
@@ -594,12 +583,17 @@ void Launcher::paint(bool overlay) {
             context.psfive_tabs.push_back(category_titles_[category]);
             context.psfive_tab_glyphs.push_back(homeTabGlyph(category));
         }
-        if (tab_count > static_cast<int>(tabs.size()))
+        if (tab_count > static_cast<int>(tabs.size())) {
             context.psfive_tabs.push_back(category_ >= tabs.size() ? category_titles_[category_] + L"..." : tr(L"Więcej..."));
+            // With the icons on, "Więcej..." is three dots (the name of an overflow category shown stays text).
+            if (settings_.home_tab_icons && category_ < tabs.size()) context.psfive_tab_glyphs.push_back(L'');
+        }
         context.psfive_tab = psfiveActiveTab();
         context.psfive_tab_focus = psfiveTopFocused() && psfive_top_ < tab_count ? psfive_top_ : -1;
         if (psfiveTopFocused() && psfive_top_ >= tab_count) context.psfive_top = psfive_top_ - tab_count; // An icon (a tab: it is the bold one).
         context.psfive_clock_shown = settings_.psfive_clock;
+        context.psfive_dim = settings_.psfive_dim;
+        context.psfive_visible_tabs = psfiveVisibleTabs();
         if (settings_.psfive_clock) {
             const auto local = local_time_();
             context.psfive_clock = drawer_clock::time(local, i18n::localeName());

@@ -285,10 +285,9 @@ public:
         for (size_t i = 0; i < psfive_tab_rects_.size(); ++i) if (psfive_tab_rects_[i].contains(x, y)) return static_cast<int>(i);
         return -1;
     }
-    psfive_layout::MoreMenu psfiveMoreMenu(size_t categories) const {
-        const float left = psfive_tab_rects_.size() > psfive_layout::visible_tabs ?
-            psfive_tab_rects_[psfive_layout::visible_tabs].left : psfive_layout::tabs_left;
-        return {viewport_.width, viewport_.height, categories, left};
+    psfive_layout::MoreMenu psfiveMoreMenu(size_t categories, size_t first = psfive_layout::visible_tabs) const {
+        const float left = psfive_tab_rects_.size() > first ? psfive_tab_rects_[first].left : psfive_layout::tabs_left;
+        return {viewport_.width, viewport_.height, categories, left, first};
     }
     // Images are still decoding or fading in; the frame loop should keep painting.
     bool animating() const;
@@ -599,7 +598,6 @@ private:
     void drawQuickShade();
     void drawQuickPanel();
     void drawQuickGlyph(quick_menu::Action action, float x, float cy, D2D1_COLOR_F ink, int index, bool home);
-    void drawFlixIcons(); // Flix (AppSettings::flix_top_icons): the quick bar's icons small, top right.
     void drawFlixRail();  // Flix (AppSettings::flix_rail): the icons at the left edge (src/ui/flix_rail_renderer.cpp).
     void drawEmptyLibrary(); // The TV home without games: why, and its three buttons (empty_library.hpp).
     void drawGrid();
@@ -1273,6 +1271,7 @@ private:
     Microsoft::WRL::ComPtr<IDWriteFactory> dwrite_;
     std::array<Microsoft::WRL::ComPtr<IDWriteTextFormat>, 4> font_samples_; // Dostosuj wygląd: each font in its own face.
     Microsoft::WRL::ComPtr<IDWriteFontCollection1> sst_fonts_;
+    Microsoft::WRL::ComPtr<IDWriteFontCollection1> lexend_fonts_; // The Lexend files beside the program.
     Microsoft::WRL::ComPtr<IWICImagingFactory> wic_;
     Microsoft::WRL::ComPtr<IDWriteTextFormat> hero_font_, label_font_, cd_pen_font_;
     Microsoft::WRL::ComPtr<IDWriteTextFormat> button_font_;

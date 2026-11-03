@@ -45,4 +45,21 @@ inline size_t visibleEnd(size_t selected, size_t count, float width) {
 }
 
 inline float bottom(float height) { return height - 86.0f; }
+
+// "Wygląd Steam": Ostatnio grane as one row of tiles of the same height (the card's size), the first
+// a wide capsule in Steam's 460x215 proportions when it is a game, the rest 2:3 posters. The focused
+// tile keeps its size; a long row scrolls just far enough to keep it on screen.
+namespace steam_row {
+inline constexpr float height = 220.0f, wide_aspect = 460.0f / 215.0f, poster_aspect = 2.0f / 3.0f, inset = 56.0f, gap = 12.0f;
+inline float aspect(size_t index, bool wide_first) { return index == 0 && wide_first ? wide_aspect : poster_aspect; }
+inline float rawLeft(size_t index, bool wide_first) {
+    const float poster = height * poster_aspect + gap;
+    if (!wide_first) return inset + static_cast<float>(index) * poster;
+    return index == 0 ? inset : inset + height * wide_aspect + gap + static_cast<float>(index - 1) * poster;
+}
+inline float left(size_t index, size_t selected, bool wide_first, float width) {
+    const float shift = std::max(0.0f, rawLeft(selected, wide_first) + height * aspect(selected, wide_first) + inset - width);
+    return rawLeft(index, wide_first) - shift;
+}
+} // namespace steam_row
 } // namespace carousel

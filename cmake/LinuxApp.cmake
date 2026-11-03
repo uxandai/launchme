@@ -72,7 +72,9 @@ file(GLOB LAUNCHME_STUDIO_LOGOS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/r
 file(GLOB LAUNCHME_PLATFORM_LOGOS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/res/platforms/*.png")
 set(LAUNCHME_THEMES "${CMAKE_CURRENT_SOURCE_DIR}/res/HorizonsTheme.mp3" "${CMAKE_CURRENT_SOURCE_DIR}/res/ExploratorySilenceTheme.mp3")
 # The icon font standing in for Segoe Fluent Icons (tools/linux/make-icon-font.sh, Fluent UI System Icons, MIT).
-set(LAUNCHME_FONTS "${CMAKE_CURRENT_SOURCE_DIR}/res/fonts/launchme-icons.ttf" "${CMAKE_CURRENT_SOURCE_DIR}/res/fonts/launchme-icons-LICENSE.txt")
+file(GLOB LAUNCHME_LEXEND CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/res/fonts/Lexend-*.ttf")
+set(LAUNCHME_FONTS "${CMAKE_CURRENT_SOURCE_DIR}/res/fonts/launchme-icons.ttf" "${CMAKE_CURRENT_SOURCE_DIR}/res/fonts/launchme-icons-LICENSE.txt"
+    ${LAUNCHME_LEXEND} "${CMAKE_CURRENT_SOURCE_DIR}/res/fonts/Lexend-OFL.txt") # Lexend: Google Fonts, SIL OFL.
 add_custom_target(launchme_assets ALL
     COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/assets/studios" "${CMAKE_CURRENT_BINARY_DIR}/assets/platforms" "${CMAKE_CURRENT_BINARY_DIR}/assets/fonts"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${LAUNCHME_THEMES} "${CMAKE_CURRENT_BINARY_DIR}/assets/"

@@ -129,7 +129,6 @@ void Launcher::click(float mouse_x, float mouse_y, bool double_click) {
         return;
     }
     if (snitchClick(x, y, double_click)) return;
-    if (flixIconClick(x, y, double_click)) return;
     // Flix → Pasek boczny: an icon acts at once (no menu, drawer or prompt over the page).
     if (!quick_open_ && !friends_open_ && !menu_open_ && !category_menu_open_ && !exit_prompt_)
         if (const int rail = flixRailAt(x, y); rail >= 0) { flixRailAccept(rail); return; }
@@ -152,8 +151,8 @@ void Launcher::click(float mouse_x, float mouse_y, bool double_click) {
         if (psfiveActive()) {
             if (double_click) return;
             // Hover has already opened More; clicking its label must keep the list open.
-            if (renderer_.psfiveTabAt(x, y) == static_cast<int>(psfive_layout::visible_tabs)) return;
-            const auto layout = renderer_.psfiveMoreMenu(categories_.size());
+            if (renderer_.psfiveTabAt(x, y) == static_cast<int>(psfiveVisibleTabs())) return;
+            const auto layout = renderer_.psfiveMoreMenu(categories_.size(), psfiveVisibleTabs());
             const int row = layout.hit(x, y, psfiveMenuScroll(), category_menu_progress_);
             if (row >= 0) { category_cursor_ = row; categoryMenuAccept(); }
             else closeCategoryMenu();
@@ -385,7 +384,6 @@ bool Launcher::hoverButton(float mouse_x, float mouse_y) const {
     if (snitchActive() && !friends_open_ && !menu_open_ && !pending_launch_ &&
         (snitch_layout::hitDock(view.width, view.height, x, y, quick_menu::store_slots) >= 0 ||
          snitch_layout::profile().contains(x, y))) return true;
-    if (flixIconsShown() && homeOverlayAvailable() && home_widgets::icons::hit(x, y, flixIconCount(), view.width) >= 0) return true;
     if (flixRailAt(x, y) >= 0) return true;
     if (emptyHomeActive() && emptyHomeLayout().hit(x, y) >= 0) return true;
     if (quick_open_) {
@@ -414,7 +412,7 @@ bool Launcher::hoverButton(float mouse_x, float mouse_y) const {
                (y >= 104 && friends_layout::hit(friends_.friends, y + friends_scroll_).has_value());
     }
     if (category_menu_open_ && psfiveActive()) {
-        return renderer_.psfiveMoreMenu(categories_.size()).hit(x, y, psfiveMenuScroll(), category_menu_progress_) >= 0;
+        return renderer_.psfiveMoreMenu(categories_.size(), psfiveVisibleTabs()).hit(x, y, psfiveMenuScroll(), category_menu_progress_) >= 0;
     }
     if (category_menu_open_ && overCategoryMenu(mouse_x)) {
         return category_menu::hit(y, view.height, categories_.size(), category_menu_scroll_) >= 0;
@@ -534,10 +532,6 @@ void Launcher::mouseMove(float mouse_x, float mouse_y) {
     const bool glance_hover = glanceAvailable() && home_widgets::glanceArea(widget_spots, glance_hover_motion_.value).contains(mouse_x / glance_view.scale, mouse_y / glance_view.scale);
     if (glance_hover_ != glance_hover) { glance_hover_ = glance_hover; InvalidateRect(hwnd_, nullptr, FALSE); }
     {
-        // Flix's small menu icons: the one under the pointer lights up and names itself.
-        const int hover = flixIconsShown() && homeOverlayAvailable() ?
-            home_widgets::icons::hit(mouse_x / glance_view.scale, mouse_y / glance_view.scale, flixIconCount(), glance_view.width) : -1;
-        if (flix_icon_hover_ != hover) { flix_icon_hover_ = hover; InvalidateRect(hwnd_, nullptr, FALSE); }
         // Pasek boczny: the icon under the pointer lights up and names itself.
         const int rail = flixRailAt(mouse_x / glance_view.scale, mouse_y / glance_view.scale);
         if (flix_rail_hover_ != rail) { flix_rail_hover_ = rail; InvalidateRect(hwnd_, nullptr, FALSE); }

@@ -107,10 +107,32 @@ void Renderer::loadLocalFonts() {
                                                      DWRITE_FONT_SIMULATIONS_NONE, reference.GetAddressOf())) &&
             SUCCEEDED(builder->AddFontFaceReference(reference.Get()))) ++loaded;
     }
-    if (!loaded) return;
-    ComPtr<IDWriteFontSet> set;
-    if (SUCCEEDED(builder->CreateFontSet(set.GetAddressOf())))
-        modern->CreateFontCollectionFromFontSet(set.Get(), sst_fonts_.GetAddressOf());
+    if (loaded) {
+        ComPtr<IDWriteFontSet> set;
+        if (SUCCEEDED(builder->CreateFontSet(set.GetAddressOf())))
+            modern->CreateFontCollectionFromFontSet(set.Get(), sst_fonts_.GetAddressOf());
+    }
+    // Lexend: the weights the interface asks for, from assets/fonts beside the program (or ../share/launchme/assets/fonts).
+    ComPtr<IDWriteFontSetBuilder> lexend;
+    if (FAILED(modern->CreateFontSetBuilder(lexend.GetAddressOf()))) return;
+    wchar_t program[32768]{};
+    GetModuleFileNameW(nullptr, program, static_cast<DWORD>(std::size(program)));
+    unsigned found = 0;
+    for (const auto& place : {std::filesystem::path(program).parent_path() / L"assets" / L"fonts",
+                              std::filesystem::path(program).parent_path() / L".." / L"share" / L"launchme" / L"assets" / L"fonts"}) {
+        if (found) break;
+        for (const auto* file : {L"Lexend-Light.ttf", L"Lexend-Regular.ttf", L"Lexend-Medium.ttf", L"Lexend-SemiBold.ttf", L"Lexend-Bold.ttf"}) {
+            const auto path = place / file;
+            if (!std::filesystem::exists(path)) continue;
+            ComPtr<IDWriteFontFaceReference> reference;
+            if (SUCCEEDED(modern->CreateFontFaceReference(path.c_str(), nullptr, 0, DWRITE_FONT_SIMULATIONS_NONE, reference.GetAddressOf())) &&
+                SUCCEEDED(lexend->AddFontFaceReference(reference.Get()))) ++found;
+        }
+    }
+    if (!found) return;
+    ComPtr<IDWriteFontSet> lexend_set;
+    if (SUCCEEDED(lexend->CreateFontSet(lexend_set.GetAddressOf())))
+        modern->CreateFontCollectionFromFontSet(lexend_set.Get(), lexend_fonts_.GetAddressOf());
 }
 
 void Renderer::resize() {
@@ -582,7 +604,6 @@ void Renderer::paint(const std::vector<GameCard>& cards, size_t selected, bool s
                 drawCategoryRail();
                 drawPlatformBadge();
                 drawLibraryControls();
-                if (context.flix_icons && context.screen == ScreenMode::shelves) drawFlixIcons();
                 if (!context.flix_rail.empty() && context.screen == ScreenMode::shelves) drawFlixRail();
                 if (!context.home_tabs.empty() && context.screen == ScreenMode::shelves && (context.flix || context.metro || context.psfive)) drawHomeTabs();
                 if (context.glance_shortcut) drawGlanceShortcut();

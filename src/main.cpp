@@ -360,6 +360,7 @@ LRESULT CALLBACK windowProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lpara
             }
             else if (wparam == VK_F11) app->toggleFullscreen();
             else if (wparam == VK_F6 && !(lparam & (1LL << 30))) app->focusLibraryControls();
+            else if (app->settingsOpen() && !(lparam & (1LL << 30)) && (wparam == VK_F3 || (wparam == 'F' && (GetKeyState(VK_CONTROL) & 0x8000)))) app->openSettingsSearch();
             else if (wparam == VK_F8 && !(lparam & (1LL << 30))) app->togglePerformance();
             else if (wparam == VK_F5 && app->settingsOpen()) { app->saveSettings(); app->retryStore(); }
             else if (wparam == VK_F5) app->retryStore();

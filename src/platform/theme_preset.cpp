@@ -14,9 +14,9 @@ namespace {
     X(glow_level) X(glow_pulse) X(glow_trace) X(focus_spring) X(focus_gap) X(background_grid) \
     X(background_grid_style) X(tile_shape) X(tile_entrance) X(console_colors) X(panel_borders) \
     X(screen_transitions) X(glass) X(hint_style) X(menu_dialog) X(search_art) X(home_tiles) X(add_game_tile) \
-    X(show_categories) X(shelves_posters) X(shelves_category_all) X(shelves_hero_facts) X(xmb_posters) X(xmb_size) \
+    X(show_categories) X(shelves_posters) X(shelves_steam) X(shelves_category_all) X(shelves_hero_facts) X(xmb_posters) X(xmb_size) \
     X(flix_size) X(flix_category_all) X(flix_category_tabs) X(flix_rail) \
-    X(metro_category_tabs) X(metro_3d) X(metro_light) X(psfive_size) X(psfive_clock) X(psfive_details) \
+    X(metro_category_tabs) X(metro_3d) X(metro_light) X(psfive_size) X(psfive_clock) X(psfive_dim) X(psfive_details) \
     X(psfive_category_tabs) X(home_tab_icons) X(wallpaper) X(wallpaper_file) X(wallpaper_id) X(wallpaper_snitch) \
     X(wallpaper_menus) X(wallpaper_artwork) X(wallpaper_tiles)
 } // namespace

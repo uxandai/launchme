@@ -215,6 +215,7 @@ void Launcher::settingsSetLevel(float level) {
         return;
     }
     case Id::glass: settings_.glass = std::round(level * 20) / 20.0f; settingsChanged(); return; // Visual only.
+    case Id::psfive_dim: settings_.psfive_dim = std::round(level * 20) / 20.0f; settingsChanged(); return;
     case Id::music: settings_.music_volume = std::round(level * 40) / 100.0f; break;
     case Id::opacity: settings_.drawer.opacity = std::round(level * 98) / 100.0f; break;
     case Id::fade: settings_.drawer.fade_fraction = (6 + std::round(level * 69)) / 100.0f; break;
@@ -288,7 +289,7 @@ void Launcher::settingsAdjust(int amount) {
         const int steps = sizeSteps(row.id);
         const float range = steps ? steps - 1.0f : row.id == Id::music ? 40.0f : row.id == Id::opacity ? 98.0f :
                             row.id == Id::system_volume ? 50.0f :
-                            row.id == Id::glow_level || row.id == Id::background_grid || row.id == Id::glass ? 20.0f : 69.0f;
+                            row.id == Id::glow_level || row.id == Id::background_grid || row.id == Id::glass || row.id == Id::psfive_dim ? 20.0f : 69.0f;
         settingsSetLevel(row.level + amount / range);
     } else if (amount < 0) settings_state_.options = false;
     else if (!settings_rows_.empty() && settings_rows_[settings_state_.row()].control == Control::platform) settings_state_.editing = true;
@@ -317,6 +318,21 @@ void Launcher::settingsActivate() {
     }
     if (settings_rows_.empty()) return;
     const auto row = settings_rows_[settings_state_.row()];
+    if (row.id == Id::settings_search) { // Search in Settings: A types, A again goes down to the first result.
+        settingsTextRow(settings_search_query_, [this](const std::wstring& value) {
+            settings_search_query_ = value;
+            return true;
+        }, false);
+        if (!settings_state_.editing) {
+            buildSettingsRows();
+            if (settings_rows_.size() > 1 && settings_rows_[1].id == Id::settings_hit) { settings_state_.selected[settings_state_.category] = 1; ensureSettingVisible(); }
+        }
+        return;
+    }
+    if (row.id == Id::settings_hit) {
+        if (row.locked) navigationBoundary(); else settingsSearchJump(static_cast<size_t>(std::stoul(row.key)));
+        return;
+    }
 #ifndef _WIN32
     if (compatSettingsActivate(row)) return; // Proton i Wine and its pages (compat_activate.cpp).
     if (row.id == Id::compat_install_game) { compatInstallGame(); return; } // Also on Gry dodane ręcznie.
@@ -674,6 +690,14 @@ void Launcher::settingsToggle(const Row& row) {
     }
     else if (row.id == Id::shelves_posters) {
         settings_.shelves_posters = !settings_.shelves_posters;
+        if (!settings_.shelves_posters) settings_.shelves_steam = false; // Wygląd Steam is a poster look.
+        prefetchPosters();
+        settingsChanged(); audio_.context(); return;
+    }
+    else if (row.id == Id::shelves_steam) {
+        settings_.shelves_steam = !settings_.shelves_steam;
+        if (settings_.shelves_steam) settings_.shelves_posters = true;
+        rebuildCards(); // The first tile swaps its poster for the wide capsule (and back).
         prefetchPosters();
         settingsChanged(); audio_.context(); return;
     }

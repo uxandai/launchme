@@ -54,6 +54,7 @@ void Launcher::eraseSecret() {
     if (settings_secret_selected_) clearSecretInput();
     else if (!settings_secret_input_.empty()) { settings_secret_input_.back() = L'\0'; settings_secret_input_.pop_back(); }
     settings_secret_selected_ = false;
+    settingsSearchEdited();
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 

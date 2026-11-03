@@ -168,7 +168,7 @@ void Renderer::drawPsfiveDetails() {
             if (details.section == 1 && details.shot == i) focus = std::pair{glided(rect), accentOf(nullptr)};
         }
     }
-    // Similar games: square covers sliding the same way, the focused one's name under it.
+    // Similar games: square covers sliding the same way (a name only inside a cover that has no picture yet).
     if (!details.similar_names.empty()) {
         textLine(upper(tr(L"Podobne gry")), psfive_details::left, top + psfive_details::similar_label, 600, friend_section_font_.Get(), gray(0.6f, rise));
         for (size_t i = 0; i < details.similar_names.size(); ++i) {
@@ -197,8 +197,7 @@ void Renderer::drawPsfiveDetails() {
                 text(details.similar_names[i], rect.left + 10, rect.top + 44, rect.right - rect.left - 20, 70, button_font_.Get(), gray(0.86f, shown));
             if (shape) { brush(gray(1, 0.10f * shown)); target_->DrawGeometry(shape.Get(), solid_.Get(), 1.0f); }
             if (details.section == 2 && details.similar == i) {
-                focus = std::pair{glided(rect), accentOf(image)};
-                textLine(details.similar_names[i], rect.left, rect.bottom + 24, std::max(360.0f, rect.right - rect.left), menu_font_.Get(), gray(0.95f, shown));
+                focus = std::pair{glided(rect), accentOf(image)}; // No caption under it: the covers speak.
             }
         }
     }

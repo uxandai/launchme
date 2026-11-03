@@ -128,7 +128,6 @@ void Launcher::openGuideMenu() {
     // Modal panels keep their input (and unsaved text) until closed.
     if (exit_prompt_ || pending_launch_ || gogInstallOpen() || customEditorOpen() || fileBrowserOpen()) return;
     if (power_menu_) { closePowerMenu(); return; }
-    if (flixIconsFocused()) { flixIconsLeave(); return; }
     if (flixRailFocused()) { flixRailFocus(-1); return; }
     if (quick_open_) { closeQuick(); return; }
     // The desktop window: the pad's Guide button takes the launcher to Tryb TV (like Big Picture).
@@ -505,8 +504,8 @@ void Launcher::controllerInput(const PadReading& state) {
         else if (pressed(XINPUT_GAMEPAD_RIGHT_SHOULDER)) friendChatScroll(320);
         controller_direction_ = direction; controller_buttons_ = buttons; return;
     }
-    // Y: the focused game's menu on every screen (as a held A); the library bar is above the first row.
-    if (pressed(XINPUT_GAMEPAD_Y)) { noteUserInput(); openContextMenu(); }
+    // Y: the focused game's menu on every screen (as a held A); the library bar is above the first row. In Settings: the search.
+    if (pressed(XINPUT_GAMEPAD_Y)) { noteUserInput(); if (settingsOpen()) openSettingsSearch(); else openContextMenu(); }
     // The drawers, the quick bar and the category menu keep LB/RB as Left/Right on the other layouts.
     const bool home_shoulders = ((metroActive() || psfiveActive()) && !menu_open_) ||
         (homeShoulderCategories() && !menu_open_ && !friends_open_ && !quick_open_ && !category_menu_open_);
@@ -551,7 +550,6 @@ void Launcher::controllerInput(const PadReading& state) {
     if (pressed(XINPUT_GAMEPAD_A) && !dashboardPress(2, true, now)) {
         noteUserInput();
         if (settingsOpen()) settingsActivate();
-        else if (flixIconsFocused()) flixIconAccept();
         else if (flixRailFocused()) flixRailAccept(flix_rail_focus_);
         else if (quick_open_) quickAccept();
         else if (friends_open_) friendsAccept();

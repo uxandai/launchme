@@ -795,7 +795,7 @@ constexpr Entry entries[] = {
     {L"Rząd ostatnich gier nad dużym tłem.", L"Una fila de juegos recientes sobre un fondo grande."},
     {L"Rozmiar kafelków PSfive", L"Tamaño de los mosaicos de PSfive"},
     {L"Zegar", L"Reloj"},
-    {L"Godzina w prawym górnym rogu, obok ikon szukania i menu.", L"La hora en la esquina superior derecha, junto a los iconos de búsqueda y menú."},
+    {L"Godzina w prawym górnym rogu.", L"La hora en la esquina superior derecha."},
     {L"Menu", L"Menú"},
     {L"Ikona menu w prawym górnym rogu, ruch w dół z przycisków Graj / … albo przycisk Guide / PS (klawisz Home).", L"El icono de menú en la esquina superior derecha, bajando desde los botones Jugar / …, o Guide / PS (la tecla Home)."},
     {L"Mały, domyślny lub duży — dla kafelków w rzędzie.", L"Pequeño, predeterminado o grande — para los mosaicos de la fila."},
