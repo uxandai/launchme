@@ -1,25 +1,11 @@
 # Linux: the launcher's window, input, renderer and screens (docs/linux-port.md, phase 3), built
 # from the same src/app and src/ui sources as Windows. Their Windows surface (src/linux/win32) is
-# implemented by real ports: Direct2D on Skia (GPU: Vulkan, else OpenGL), DirectWrite on
-# SkParagraph, WIC on image_codec (src/linux/gfx) and the window manager on SDL3 (src/linux/window).
+# implemented by real ports: Direct2D and DirectWrite on Impeller (GPU: Vulkan, else OpenGL),
+# WIC on image_codec (src/linux/gfx) and the window manager on SDL3 (src/linux/window).
 include(cmake/Sources.cmake)
 
-# Skia, built from source by tools/linux/build-skia.sh (static libraries, linked in).
-set(LAUNCHME_SKIA_DIR "$ENV{HOME}/skia" CACHE PATH "Skia checkout built by tools/linux/build-skia.sh")
-set(LAUNCHME_SKIA_OUT "${LAUNCHME_SKIA_DIR}/out/Release")
-if(NOT EXISTS "${LAUNCHME_SKIA_OUT}/libskia.a" OR NOT EXISTS "${LAUNCHME_SKIA_OUT}/client_defines.txt")
-    message(FATAL_ERROR "Skia not found in ${LAUNCHME_SKIA_DIR}: run tools/linux/build-skia.sh (or set LAUNCHME_SKIA_DIR)")
-endif()
-file(STRINGS "${LAUNCHME_SKIA_OUT}/client_defines.txt" LAUNCHME_SKIA_DEFINES)
-pkg_check_modules(LAUNCHME_SKIA_DEPS REQUIRED IMPORTED_TARGET fontconfig freetype2 harfbuzz harfbuzz-subset icu-uc icu-i18n)
-add_library(launchme_skia INTERFACE)
-target_include_directories(launchme_skia SYSTEM INTERFACE "${LAUNCHME_SKIA_DIR}" "${LAUNCHME_SKIA_DIR}/include/third_party/vulkan"
-    "${LAUNCHME_SKIA_DIR}/third_party/externals/vulkanmemoryallocator/include")
-target_compile_definitions(launchme_skia INTERFACE ${LAUNCHME_SKIA_DEFINES} SK_USE_INTERNAL_VULKAN_HEADERS)
-target_link_libraries(launchme_skia INTERFACE
-    "${LAUNCHME_SKIA_OUT}/libskparagraph.a" "${LAUNCHME_SKIA_OUT}/libskshaper.a" "${LAUNCHME_SKIA_OUT}/libskunicode_icu.a"
-    "${LAUNCHME_SKIA_OUT}/libskunicode_core.a" "${LAUNCHME_SKIA_OUT}/libpathops.a" "${LAUNCHME_SKIA_OUT}/libskia.a" "${LAUNCHME_SKIA_OUT}/libskcms.a"
-    PkgConfig::LAUNCHME_SKIA_DEPS dl pthread)
+# Impeller (the renderer, text included), Clipper2 (path booleans), fontconfig and FreeType (fonts).
+pkg_check_modules(LAUNCHME_FONT_DEPS REQUIRED IMPORTED_TARGET fontconfig freetype2)
 
 set(LAUNCHME_WIN32_INCLUDES "${CMAKE_CURRENT_SOURCE_DIR}/src/linux/win32" "${CMAKE_CURRENT_SOURCE_DIR}/src/linux/win32/lower")
 
@@ -29,8 +15,7 @@ file(GLOB LAUNCHME_GFX_SOURCES CONFIGURE_DEPENDS
 add_library(launchme_gfx STATIC ${LAUNCHME_GFX_SOURCES})
 launchme_target_defaults(launchme_gfx)
 target_include_directories(launchme_gfx PUBLIC ${LAUNCHME_WIN32_INCLUDES})
-# Skia's headers stay in the ports; its libraries still reach every program linking them.
-target_link_libraries(launchme_gfx PUBLIC launchme_core PRIVATE launchme_skia)
+target_link_libraries(launchme_gfx PUBLIC launchme_core)
 include(cmake/Impeller.cmake)
 
 # The window manager, input, clipboard, timers and the shell calls, on SDL3.
@@ -39,7 +24,7 @@ add_library(launchme_window STATIC ${LAUNCHME_WINDOW_SOURCES})
 launchme_target_defaults(launchme_window)
 target_include_directories(launchme_window PUBLIC ${LAUNCHME_WIN32_INCLUDES})
 target_include_directories(launchme_window PRIVATE "${SDL3_INCLUDE_DIR}")
-target_link_libraries(launchme_window PUBLIC launchme_gfx "${SDL3_LIBRARY}" PRIVATE launchme_skia)
+target_link_libraries(launchme_window PUBLIC launchme_gfx "${SDL3_LIBRARY}")
 
 # Every app and UI source the Windows build compiles, but the Windows-only ones, which have Linux
 # counterparts listed after them.
@@ -52,7 +37,7 @@ list(APPEND LAUNCHME_UI_SOURCES src/ui/browser_window_linux.cpp src/ui/overlay_w
 set(LAUNCHME_UI_SHARED ${LAUNCHME_APP_SOURCES})
 list(FILTER LAUNCHME_UI_SHARED EXCLUDE REGEX "^src/(app|ui)/")
 list(REMOVE_ITEM LAUNCHME_UI_SHARED ${LAUNCHME_CORE_SOURCES})
-list(FILTER LAUNCHME_UI_SHARED EXCLUDE REGEX "_windows\\.cpp$|_wic\\.cpp$|http_winhttp\\.cpp$")
+list(FILTER LAUNCHME_UI_SHARED EXCLUDE REGEX "_windows\\.cpp$|_wic\\.cpp$|http_winhttp\\.cpp$|/etw_access\\.cpp$")
 list(REMOVE_ITEM LAUNCHME_UI_SHARED
     src/platform/memory_usage.cpp        # memory_usage_linux.cpp
     src/platform/frame_clock.cpp         # frame_clock_linux.cpp
@@ -63,7 +48,7 @@ list(REMOVE_ITEM LAUNCHME_UI_SHARED
     src/platform/power.cpp               # power_linux.cpp
     src/platform/discord.cpp             # discord_linux.cpp
     src/platform/file_dialog.cpp)        # file_dialog_linux.cpp
-list(APPEND LAUNCHME_UI_SHARED src/platform/frame_limiter_linux.cpp src/platform/frame_clock_linux.cpp src/platform/file_dialog_linux.cpp src/platform/layered_surface_linux.cpp)
+list(APPEND LAUNCHME_UI_SHARED src/platform/etw_access_linux.cpp src/platform/frame_limiter_linux.cpp src/platform/frame_clock_linux.cpp src/platform/file_dialog_linux.cpp src/platform/layered_surface_linux.cpp)
 message(STATUS "Linux app: shared sources outside the core: ${LAUNCHME_UI_SHARED}")
 
 function(launchme_ui_library name)

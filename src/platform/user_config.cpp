@@ -336,7 +336,6 @@ AppSettings parseAppSettings(std::string_view text) {
         }
         if (key == "xbox_own_install") { if (value == "0" || value == "1") settings.xbox_own_install = value == "1"; continue; }
         if (key == "texture_compression") { if (value == "0" || value == "1") settings.texture_compression = value == "1"; continue; }
-        if (key == "impeller") { if (value == "0" || value == "1") settings.impeller = value == "1"; continue; }
         // Before 0.4.6 (opt-in under the low memory mode): on stays on; off takes the new default.
         if (key == "low_memory_bc1") { if (value == "1") settings.texture_compression = true; continue; }
         if (key == "aurelia") { if (value == "0" || value == "1") settings.aurelia = value == "1"; continue; }
@@ -756,7 +755,6 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
            << "autostart=" << settings.autostart << '\n'
            << "low_memory=" << settings.low_memory << '\n'
            << "texture_compression=" << settings.texture_compression << '\n'
-           << "impeller=" << settings.impeller << '\n'
            << "tv_monitor=" << (settings.tv_monitor.find_first_of(L"\r\n") == std::wstring::npos ? text_encoding::utf8(settings.tv_monitor) : std::string()) << '\n'
          << "desktop_platform_badges=" << settings.desktop_platform_badges << '\n'
          << "desktop_gray_uninstalled=" << settings.desktop_gray_uninstalled << '\n'

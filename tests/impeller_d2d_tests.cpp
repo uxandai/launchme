@@ -11,7 +11,6 @@ using Microsoft::WRL::ComPtr;
 int main(int argc, char** argv) {
     const std::string transport = argc > 1 ? argv[1] : "gl";
     setenv("LAUNCHME_RENDERER", transport.c_str(), 1);
-    setenv("LAUNCHME_IMPELLER", "1", 1);
     std::string error;
     if (!lm_window::start(error)) { std::cerr << error << '\n'; return 77; }
     struct Window {
@@ -60,10 +59,11 @@ int main(int argc, char** argv) {
     if (FAILED(target->CreateBitmap({64, 64}, nullptr, 0,
         D2D1::BitmapProperties(D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED)), copy.GetAddressOf())) ||
         FAILED(copy->CopyFromRenderTarget(nullptr, target.Get(), nullptr))) return 10;
-    auto image = lm_d2d::Bitmap::from(copy.Get())->image(nullptr);
-    std::vector<uint8_t> pixels(64 * 64 * 4);
-    if (!image || !image->readPixels(nullptr, lm_d2d::bgraInfo(64, 64), pixels.data(), 64 * 4, 0, 0)) return 11;
-    const auto pixel = [&](int x, int y, int channel) { return pixels[(y * 64 + x) * 4 + channel]; };
+    auto image = lm_d2d::Bitmap::from(copy.Get())->image();
+    const auto bytes = image ? image->pixels() : nullptr;
+    if (!bytes || bytes->size() != 64 * 64 * 4) return 11;
+    // BGRA: channel 0 is blue, 1 green, 2 red.
+    const auto pixel = [&](int x, int y, int channel) { return (*bytes)[(y * 64 + x) * 4 + channel]; };
     if (bc && (pixel(8, 8, 2) < 240 || pixel(24, 8, 2) < 110 || pixel(24, 8, 2) > 145)) return 12;
     if (pixel(40, 8, 1) < 240 || pixel(55, 8, 1) != 0 || pixel(40, 25, 1) != 0) return 13;
     DestroyWindow(window.handle); window.handle = nullptr;

@@ -1,21 +1,9 @@
-// Direct2D bitmaps on Skia images: premultiplied BGRA (Direct2D's B8G8R8A8 in memory), or alpha
-// only. Straight, ignored-alpha and R8G8B8A8 pixels are converted on upload; BC1 blocks go
-// straight into a compressed GPU texture where the GPU samples them (createCompressed), other
-// block-compressed formats are refused. Pixels from memory stay in memory until first drawn on the
-// GPU, then live there as a mipmapped texture; a bitmap drawn into (a render target's, a copy's
-// destination) is a surface, read through snapshots.
+// Direct2D bitmaps on kernel images: premultiplied BGRA (Direct2D's B8G8R8A8 in memory), or alpha
+// only (kept as BGRA with no colour). Straight, ignored-alpha and R8G8B8A8 pixels are converted
+// on the way in; BC1/BC3 blocks go straight into a compressed GPU texture where the GPU samples
+// them (createCompressed), other block-compressed formats are refused. A bitmap a render target
+// drew into holds the render's GPU texture until something asks for its pixels.
 #include "d2d_internal.hpp"
-
-#include "include/core/SkBitmap.h"
-#include "include/core/SkData.h"
-#include "include/core/SkPixmap.h"
-#include "include/core/SkTextureCompressionType.h"
-#include "include/gpu/GpuTypes.h"
-#include "include/gpu/ganesh/GrBackendSurface.h"
-#include "include/gpu/ganesh/GrDirectContext.h"
-#include "include/gpu/ganesh/GrRecordingContext.h"
-#include "include/gpu/ganesh/SkImageGanesh.h"
-#include "include/gpu/ganesh/SkSurfaceGanesh.h"
 
 #include <algorithm>
 #include <atomic>
@@ -33,6 +21,10 @@ bool opaque(D2D1_PIXEL_FORMAT format) { return format.alphaMode == D2D1_ALPHA_MO
 
 // One row of `format` pixels as premultiplied B8G8R8A8.
 void convertRow(const uint8_t* source, uint8_t* target, int width, D2D1_PIXEL_FORMAT format) {
+    if (format.format == DXGI_FORMAT_A8_UNORM) {
+        for (int x = 0; x < width; ++x, target += 4) { target[0] = target[1] = target[2] = 0; target[3] = source[x]; }
+        return;
+    }
     const bool swap = format.format == DXGI_FORMAT_R8G8B8A8_UNORM || format.format == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
     const bool solid = opaque(format);
     const bool straight = format.alphaMode == D2D1_ALPHA_MODE_STRAIGHT;
@@ -49,30 +41,11 @@ void convertRow(const uint8_t* source, uint8_t* target, int width, D2D1_PIXEL_FO
         target[0] = b; target[1] = g; target[2] = r; target[3] = a;
     }
 }
-
-// Pictures large enough to be drawn reduced get mipmaps on the GPU.
-bool wantsMipmaps(int width, int height) { return width >= 64 && height >= 64; }
 } // namespace
 
 uint64_t newVersion() {
     static std::atomic<uint64_t> counter{0};
     return ++counter;
-}
-
-sk_sp<SkSurface> makeSurface(GrDirectContext* gpu, const SkImageInfo& info, bool mipmaps) {
-    if (info.width() <= 0 || info.height() <= 0) return nullptr;
-    if (gpu) {
-        if (auto surface = SkSurfaces::RenderTarget(gpu, skgpu::Budgeted::kYes, info, 0, kTopLeft_GrSurfaceOrigin, nullptr, mipmaps))
-            return surface;
-    }
-    return SkSurfaces::Raster(info);
-}
-
-sk_sp<SkImage> imageFor(GrDirectContext* gpu, sk_sp<SkImage> image) {
-    if (!image || gpu || !image->isTextureBacked()) return image; // A GPU canvas uploads memory images itself.
-    // A texture on a canvas in memory: read back, on the thread that owns the GPU.
-    GrDirectContext* owner = lm_gfx::gpu();
-    return owner ? image->makeRasterImage(owner) : nullptr;
 }
 
 D2D1_PIXEL_FORMAT resolveFormat(D2D1_PIXEL_FORMAT format) {
@@ -82,25 +55,10 @@ D2D1_PIXEL_FORMAT resolveFormat(D2D1_PIXEL_FORMAT format) {
     return format;
 }
 
-// Linear is bilinear, as Direct2D samples; the other smooth modes reduce through mipmaps
-// (trilinear) where the image has them, Direct2D's high-quality reduction.
-SkSamplingOptions samplingFor(D2D1_INTERPOLATION_MODE mode, bool reducing, bool mipmapped) {
-    switch (mode) {
-    case D2D1_INTERPOLATION_MODE_NEAREST_NEIGHBOR: return SkSamplingOptions(SkFilterMode::kNearest);
-    case D2D1_INTERPOLATION_MODE_LINEAR: return SkSamplingOptions(SkFilterMode::kLinear);
-    default:
-        if (reducing && mipmapped) return SkSamplingOptions(SkFilterMode::kLinear, SkMipmapMode::kLinear);
-        return SkSamplingOptions(SkFilterMode::kLinear);
-    }
-}
+gx::Sampling samplingFor(D2D1_INTERPOLATION_MODE mode) { return {mode == D2D1_INTERPOLATION_MODE_NEAREST_NEIGHBOR}; }
 
 Bitmap::Bitmap(int width, int height, D2D1_PIXEL_FORMAT format, float dpiX, float dpiY)
     : width_(width), height_(height), format_(format), dpi_x_(dpiX > 0 ? dpiX : 96), dpi_y_(dpiY > 0 ? dpiY : 96), version_(newVersion()) {}
-
-SkImageInfo Bitmap::info() const {
-    if (alphaOnly()) return SkImageInfo::MakeA8(width_, height_);
-    return bgraInfo(width_, height_, opaque(format_) ? kOpaque_SkAlphaType : kPremul_SkAlphaType);
-}
 
 HRESULT Bitmap::create(D2D1_SIZE_U size, const void* data, UINT32 pitch, D2D1_PIXEL_FORMAT format, float dpiX, float dpiY,
                        ComPtr<Bitmap>& out) {
@@ -112,34 +70,21 @@ HRESULT Bitmap::create(D2D1_SIZE_U size, const void* data, UINT32 pitch, D2D1_PI
     return data ? out->CopyFromMemory(nullptr, data, pitch) : S_OK;
 }
 
-bool blockCompressionSupported(GrDirectContext* gpu, DXGI_FORMAT format) {
-    return gpu && format == DXGI_FORMAT_BC1_UNORM && gpu->compressedBackendFormat(SkTextureCompressionType::kBC1_RGBA8_UNORM).isValid();
+bool blockCompressionSupported(DXGI_FORMAT format) {
+    return (format == DXGI_FORMAT_BC1_UNORM && gx::supportsCompression(1)) || (format == DXGI_FORMAT_BC3_UNORM && gx::supportsCompression(3));
 }
 
 HRESULT Bitmap::createCompressed(D2D1_SIZE_U size, const void* data, UINT32 pitch, D2D1_PIXEL_FORMAT format, float dpiX, float dpiY,
-                                 GrDirectContext* gpu, ComPtr<Bitmap>& out, bool impeller) {
-    if (impeller) {
-        const unsigned compression = format.format == DXGI_FORMAT_BC1_UNORM ? 1 : format.format == DXGI_FORMAT_BC3_UNORM ? 3 : 0;
-        if (!lm_impeller::supportsCompression(compression)) return D2DERR_UNSUPPORTED_PIXEL_FORMAT;
-        if (!data || !size.width || !size.height || size.width % 4 || size.height % 4 || size.width > 16384 || size.height > 16384 ||
-            pitch != size.width / 4 * (compression == 1 ? 8u : 16u)) return E_INVALIDARG;
-        auto image = lm_impeller::compressedImage(compression, static_cast<int>(size.width), static_cast<int>(size.height),
-            static_cast<const uint8_t*>(data), static_cast<size_t>(pitch) * (size.height / 4));
-        if (!image) return E_FAIL;
-        out.Attach(new Bitmap(static_cast<int>(size.width), static_cast<int>(size.height), {format.format, D2D1_ALPHA_MODE_PREMULTIPLIED}, dpiX, dpiY));
-        out->image_ = std::move(image);
-        return S_OK;
-    }
-    if (!blockCompressionSupported(gpu, format.format)) return D2DERR_UNSUPPORTED_PIXEL_FORMAT;
+                                 ComPtr<Bitmap>& out) {
+    const unsigned compression = format.format == DXGI_FORMAT_BC1_UNORM ? 1 : format.format == DXGI_FORMAT_BC3_UNORM ? 3 : 0;
+    if (!blockCompressionSupported(format.format)) return D2DERR_UNSUPPORTED_PIXEL_FORMAT;
     if (!data || !size.width || !size.height || size.width % 4 || size.height % 4 || size.width > 16384 || size.height > 16384 ||
-        pitch != size.width / 4 * 8) return E_INVALIDARG;
-    const size_t bytes = static_cast<size_t>(size.width / 4) * (size.height / 4) * 8;
-    sk_sp<SkImage> texture = SkImages::TextureFromCompressedTextureData(gpu, SkData::MakeWithCopy(data, bytes), static_cast<int>(size.width),
-                                                                        static_cast<int>(size.height), SkTextureCompressionType::kBC1_RGBA8_UNORM,
-                                                                        skgpu::Mipmapped::kNo);
-    if (!texture) return D2DERR_UNSUPPORTED_PIXEL_FORMAT;
+        pitch != size.width / 4 * (compression == 1 ? 8u : 16u)) return E_INVALIDARG;
+    auto image = gx::Image::fromCompressed(compression, static_cast<int>(size.width), static_cast<int>(size.height),
+                                           static_cast<const uint8_t*>(data), static_cast<size_t>(pitch) * (size.height / 4));
+    if (!image) return E_FAIL;
     out.Attach(new Bitmap(static_cast<int>(size.width), static_cast<int>(size.height), {format.format, D2D1_ALPHA_MODE_PREMULTIPLIED}, dpiX, dpiY));
-    out->image_ = std::move(texture);
+    out->image_ = std::move(image);
     return S_OK;
 }
 
@@ -151,36 +96,15 @@ D2D1_SIZE_F STDMETHODCALLTYPE Bitmap::GetSize() const {
 }
 D2D1_SIZE_U STDMETHODCALLTYPE Bitmap::GetPixelSize() const { return {static_cast<UINT32>(width_), static_cast<UINT32>(height_)}; }
 
-sk_sp<SkImage> Bitmap::image(GrDirectContext* gpu) {
-    if (surface_) {
-        if (!snapshot_) snapshot_ = surface_->makeImageSnapshot();
-        return imageFor(gpu, snapshot_);
-    }
-    if (image_ && gpu && !image_->isTextureBacked() && gpu == lm_gfx::gpu()) {
-        // Uploaded once; the memory copy goes.
-        if (auto texture = SkImages::TextureFromImage(gpu, image_.get(), wantsMipmaps(width_, height_) ? skgpu::Mipmapped::kYes : skgpu::Mipmapped::kNo))
-            image_ = std::move(texture);
-    }
-    return imageFor(gpu, image_);
+std::shared_ptr<gx::Image> Bitmap::image() {
+    if (!image_) image_ = gx::Image::fromPixels(width_, height_, std::vector<uint8_t>(static_cast<size_t>(width_) * height_ * 4));
+    return image_;
 }
 
-sk_sp<SkSurface> Bitmap::surface(GrDirectContext* gpu) {
-    if (surface_) return surface_;
-    SkImageInfo surface_info = info();
-    if (surface_info.alphaType() == kOpaque_SkAlphaType) surface_info = surface_info.makeAlphaType(kPremul_SkAlphaType);
-    if (image_ && image_->isTextureBacked()) gpu = lm_gfx::gpu(); // The pixels are there already.
-    surface_ = makeSurface(gpu, surface_info);
-    if (!surface_) return nullptr;
-    if (image_) {
-        SkPaint copy;
-        copy.setBlendMode(SkBlendMode::kSrc);
-        surface_->getCanvas()->drawImage(imageFor(surface_->recordingContext() ? gpu : nullptr, image_), 0, 0, SkSamplingOptions(), &copy);
-    } else {
-        surface_->getCanvas()->clear(SK_ColorTRANSPARENT);
-    }
-    image_.reset();
-    snapshot_.reset();
-    return surface_;
+void Bitmap::setImage(std::shared_ptr<gx::Image> image) {
+    image_ = std::move(image);
+    version_ = newVersion();
+    scaled_ = {};
 }
 
 HRESULT STDMETHODCALLTYPE Bitmap::CopyFromMemory(const D2D1_RECT_U* rect, const void* data, UINT32 pitch) {
@@ -190,58 +114,77 @@ HRESULT STDMETHODCALLTYPE Bitmap::CopyFromMemory(const D2D1_RECT_U* rect, const 
         return E_INVALIDARG;
     const int columns = static_cast<int>(area.right - area.left), rows = static_cast<int>(area.bottom - area.top);
     if (!columns || !rows) return S_OK;
-    // The rows in this bitmap's own layout.
-    const SkImageInfo part = info().makeWH(columns, rows);
-    SkBitmap pixels;
-    if (!pixels.tryAllocPixels(part)) return E_OUTOFMEMORY;
+    const bool whole = columns == width_ && rows == height_;
+    std::vector<uint8_t> pixels;
+    if (whole) {
+        pixels.resize(static_cast<size_t>(width_) * height_ * 4);
+    } else {
+        // Into the pixels so far (read back when they are on the GPU).
+        const auto current = image_ ? image_->pixels() : nullptr;
+        if (image_ && !current) return D2DERR_WRONG_STATE;
+        pixels = current ? *current : std::vector<uint8_t>(static_cast<size_t>(width_) * height_ * 4);
+    }
     const auto* source = static_cast<const uint8_t*>(data);
     for (int y = 0; y < rows; ++y, source += pitch) {
-        auto* row = static_cast<uint8_t*>(pixels.getAddr(0, y));
-        if (alphaOnly()) std::memcpy(row, source, static_cast<size_t>(columns));
-        else convertRow(source, row, columns, format_);
+        uint8_t* row = pixels.data() + (static_cast<size_t>(area.top + y) * width_ + area.left) * 4;
+        convertRow(source, row, columns, format_);
     }
-    const bool whole = columns == width_ && rows == height_;
-    const bool on_gpu = (image_ && image_->isTextureBacked()) || (surface_ && surface_->recordingContext());
-    if (whole && !on_gpu && !surface_) {
-        pixels.setImmutable();
-        image_ = SkImages::RasterFromBitmap(pixels);
-    } else if (on_gpu && lm_gfx::gpu() == nullptr) {
-        return D2DERR_WRONG_STATE; // GPU pixels change on the thread that owns them.
-    } else {
-        // Into the pixels where they are (a texture is updated in place: video frames).
-        sk_sp<SkSurface> target = surface(on_gpu ? lm_gfx::gpu() : nullptr);
-        if (!target) return E_OUTOFMEMORY;
-        target->writePixels(pixels.pixmap(), static_cast<int>(area.left), static_cast<int>(area.top));
-    }
-    touch();
+    auto made = gx::Image::fromPixels(width_, height_, std::move(pixels));
+    if (!made) return E_OUTOFMEMORY;
+    setImage(std::move(made));
     return S_OK;
 }
 
-HRESULT Bitmap::copyFrom(sk_sp<SkImage> source, const D2D1_POINT_2U* destPoint, const D2D1_RECT_U* srcRect) {
+HRESULT Bitmap::copyFrom(std::shared_ptr<gx::Image> source, const D2D1_POINT_2U* destPoint, const D2D1_RECT_U* srcRect) {
     if (!source) return E_INVALIDARG;
     const D2D1_RECT_U area = srcRect ? *srcRect : D2D1_RECT_U{0, 0, static_cast<UINT32>(source->width()), static_cast<UINT32>(source->height())};
     const D2D1_POINT_2U at = destPoint ? *destPoint : D2D1_POINT_2U{0, 0};
     if (area.left > area.right || area.top > area.bottom || area.right > static_cast<UINT32>(source->width()) ||
         area.bottom > static_cast<UINT32>(source->height()))
         return E_INVALIDARG;
-    GrDirectContext* gpu = source->isTextureBacked() ? lm_gfx::gpu() : nullptr;
-    sk_sp<SkSurface> target = surface(gpu);
-    if (!target) return E_OUTOFMEMORY;
-    SkPaint copy;
-    copy.setBlendMode(SkBlendMode::kSrc);
-    const SkRect from = SkRect::MakeLTRB(area.left, area.top, area.right, area.bottom);
-    const SkRect to = SkRect::MakeXYWH(at.x, at.y, from.width(), from.height());
-    GrRecordingContext* recording = target->recordingContext();
-    target->getCanvas()->drawImageRect(imageFor(recording ? recording->asDirectContext() : nullptr, std::move(source)), from, to,
-                                       SkSamplingOptions(), &copy, SkCanvas::kStrict_SrcRectConstraint);
-    touch();
+    if (area.left == area.right || area.top == area.bottom) return S_OK;
+    const gx::Rect from = gx::Rect::LTRB(area.left, area.top, area.right, area.bottom);
+    const gx::Rect to = gx::Rect::XYWH(static_cast<float>(at.x), static_cast<float>(at.y), from.width(), from.height());
+    if (gx::active()) {
+        // On the GPU: the pixels so far, then the copied part over them.
+        gx::Canvas frame(width_, height_);
+        gx::Paint copy;
+        copy.color = {0, 0, 0, 1};
+        copy.blend = kImpellerBlendModeSource;
+        if (image_) {
+            const gx::Rect whole = gx::Rect::XYWH(0, 0, static_cast<float>(width_), static_cast<float>(height_));
+            frame.drawImageRect(image_, whole, whole, gx::Sampling{true}, &copy);
+        }
+        frame.save();
+        frame.clipRect(to.offset(0, 0).sorted());
+        frame.drawImageRect(source, from, to, gx::Sampling{true}, &copy);
+        frame.restore();
+        auto result = frame.snapshot();
+        if (!result) return E_FAIL;
+        setImage(std::move(result));
+        return S_OK;
+    }
+    // In memory.
+    const auto from_pixels = source->pixels();
+    if (!from_pixels) return D2DERR_WRONG_STATE;
+    const auto current = image_ ? image_->pixels() : nullptr;
+    if (image_ && !current) return D2DERR_WRONG_STATE;
+    std::vector<uint8_t> pixels = current ? *current : std::vector<uint8_t>(static_cast<size_t>(width_) * height_ * 4);
+    const UINT32 columns = std::min(area.right - area.left, static_cast<UINT32>(width_) > at.x ? static_cast<UINT32>(width_) - at.x : 0u);
+    const UINT32 rows = std::min(area.bottom - area.top, static_cast<UINT32>(height_) > at.y ? static_cast<UINT32>(height_) - at.y : 0u);
+    for (UINT32 y = 0; y < rows; ++y)
+        std::memcpy(pixels.data() + (static_cast<size_t>(at.y + y) * width_ + at.x) * 4,
+                    from_pixels->data() + (static_cast<size_t>(area.top + y) * source->width() + area.left) * 4, static_cast<size_t>(columns) * 4);
+    auto made = gx::Image::fromPixels(width_, height_, std::move(pixels));
+    if (!made) return E_OUTOFMEMORY;
+    setImage(std::move(made));
     return S_OK;
 }
 
 HRESULT STDMETHODCALLTYPE Bitmap::CopyFromBitmap(const D2D1_POINT_2U* destPoint, ID2D1Bitmap* bitmap, const D2D1_RECT_U* srcRect) {
     auto* source = Bitmap::from(bitmap);
     if (!source || source == this) return E_INVALIDARG;
-    return copyFrom(source->image(lm_gfx::gpu()), destPoint, srcRect);
+    return copyFrom(source->image(), destPoint, srcRect);
 }
 
 HRESULT STDMETHODCALLTYPE Bitmap::CopyFromRenderTarget(const D2D1_POINT_2U* destPoint, ID2D1RenderTarget* renderTarget,
@@ -250,22 +193,24 @@ HRESULT STDMETHODCALLTYPE Bitmap::CopyFromRenderTarget(const D2D1_POINT_2U* dest
     return canvas ? copyFrom(canvas->snapshot(), destPoint, srcRect) : E_INVALIDARG;
 }
 
-// At another resolution: drawn smaller through mipmaps (or larger), kept until the pixels change.
-ImageData Bitmap::render(double scale, GrDirectContext* gpu) {
+// At another resolution: drawn smaller through reductions (or larger), kept until the pixels change.
+ImageData Bitmap::render(double scale) {
     const int width = std::max(1, static_cast<int>(std::lround(width_ / scaleX() * scale)));
     const int height = std::max(1, static_cast<int>(std::lround(height_ / scaleY() * scale)));
-    sk_sp<SkImage> pixels = image(gpu);
+    std::shared_ptr<gx::Image> pixels = image();
     if (!pixels) return {};
-    if (width == width_ && height == height_ && !alphaOnly()) return {std::move(pixels), 0, 0};
+    if (width == width_ && height == height_) return {std::move(pixels), 0, 0};
     if (scaled_.image && scaled_version_ == version_ && scaled_scale_ == scale) return scaled_;
-    sk_sp<SkSurface> surface = makeSurface(gpu, bgraInfo(width, height));
-    if (!surface) return {};
-    SkPaint paint;
-    paint.setBlendMode(SkBlendMode::kSrc);
-    const bool reducing = width < width_ || height < height_;
-    surface->getCanvas()->drawImageRect(pixels, SkRect::MakeIWH(width, height), samplingFor(D2D1_INTERPOLATION_MODE_HIGH_QUALITY_CUBIC, reducing, true),
-                                        &paint);
-    scaled_ = {surface->makeImageSnapshot(), 0, 0};
+    if (!gx::active()) return {};
+    gx::Canvas frame(width, height);
+    gx::Paint copy;
+    copy.color = {0, 0, 0, 1};
+    copy.blend = kImpellerBlendModeSource;
+    frame.drawImageRect(pixels, gx::Rect::XYWH(0, 0, static_cast<float>(width_), static_cast<float>(height_)),
+                        gx::Rect::XYWH(0, 0, static_cast<float>(width), static_cast<float>(height)), gx::Sampling{false}, &copy);
+    auto result = frame.snapshot();
+    if (!result) return {};
+    scaled_ = {std::move(result), 0, 0};
     scaled_version_ = version_;
     scaled_scale_ = scale;
     return scaled_;

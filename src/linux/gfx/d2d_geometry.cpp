@@ -1,13 +1,8 @@
-// Direct2D geometry on Skia paths: rectangles, rounded rectangles, ellipses, groups, transformed
-// and path geometries, their measurements (SkContourMeasure) and boolean combinations (SkPathOps).
+// Direct2D geometry on kernel paths: rectangles, rounded rectangles, ellipses, groups, transformed
+// and path geometries, their measurements (PathMeasure) and boolean combinations (Clipper2).
 // A geometry keeps two paths: every figure (strokes) and the filled figures with the fill rule
 // (fills): Direct2D's hollow figures are stroked but never filled.
 #include "d2d_internal.hpp"
-
-#include "include/core/SkContourMeasure.h"
-#include "include/core/SkPathBuilder.h"
-#include "include/core/SkRRect.h"
-#include "include/pathops/SkPathOps.h"
 
 #include <algorithm>
 #include <cfloat>
@@ -15,123 +10,99 @@
 
 namespace lm_d2d {
 namespace {
-SkPathFillType fillTypeFor(D2D1_FILL_MODE mode) { return mode == D2D1_FILL_MODE_WINDING ? SkPathFillType::kWinding : SkPathFillType::kEvenOdd; }
-
 // Clockwise from the top-left corner, as Direct2D's rectangle geometry runs.
-SkPath rectanglePath(const D2D1_RECT_F& r) {
-    SkPathBuilder builder;
-    builder.moveTo(r.left, r.top).lineTo(r.right, r.top).lineTo(r.right, r.bottom).lineTo(r.left, r.bottom).close();
-    return builder.detach();
-}
+gx::Path rectanglePath(const D2D1_RECT_F& r) { return gx::Path::Rect_(gx::Rect::LTRB(r.left, r.top, r.right, r.bottom)); }
 
 // The ID2D1Geometry methods every geometry shares; the subclass sets its two paths.
 template <class Interface>
 class GeometryObject : public lm_com::Object<Interface>, public Geometry {
 public:
-    const SkPath& outline() const override { return outline_; }
-    const SkPath& area() const override { return area_; }
+    const gx::Path& outline() const override { return outline_; }
+    const gx::Path& area() const override { return area_; }
 
     HRESULT STDMETHODCALLTYPE GetBounds(const D2D1_MATRIX_3X2_F* transform, D2D1_RECT_F* bounds) const override {
         if (!bounds) return E_INVALIDARG;
-        if (outline_.isEmpty()) { *bounds = {FLT_MAX, FLT_MAX, -FLT_MAX, -FLT_MAX}; return S_OK; } // Empty, as Direct2D reports it.
-        const SkRect box = (transform ? outline_.makeTransform(toSk(*transform)) : outline_).computeTightBounds();
-        *bounds = {box.left(), box.top(), box.right(), box.bottom()};
+        if (outline_.empty()) { *bounds = {FLT_MAX, FLT_MAX, -FLT_MAX, -FLT_MAX}; return S_OK; } // Empty, as Direct2D reports it.
+        const gx::Rect box = (transform ? outline_.transformed(toGx(*transform)) : outline_).tightBounds();
+        *bounds = {box.left, box.top, box.right, box.bottom};
         return S_OK;
     }
     HRESULT STDMETHODCALLTYPE FillContainsPoint(D2D1_POINT_2F point, const D2D1_MATRIX_3X2_F* transform, FLOAT, BOOL* contains) const override {
         if (!contains) return E_INVALIDARG;
-        *contains = (transform ? area_.makeTransform(toSk(*transform)) : area_).contains(point.x, point.y);
+        *contains = (transform ? area_.transformed(toGx(*transform)) : area_).contains(point.x, point.y);
         return S_OK;
     }
     HRESULT STDMETHODCALLTYPE CombineWithGeometry(ID2D1Geometry* input, D2D1_COMBINE_MODE mode, const D2D1_MATRIX_3X2_F* transform,
                                                   FLOAT, ID2D1SimplifiedGeometrySink* sink) const override;
     HRESULT STDMETHODCALLTYPE ComputeLength(const D2D1_MATRIX_3X2_F* transform, FLOAT, FLOAT* length) const override {
         if (!length) return E_INVALIDARG;
-        double total = 0;
-        SkContourMeasureIter contours(transform ? outline_.makeTransform(toSk(*transform)) : outline_, false);
-        while (const auto contour = contours.next()) total += contour->length();
-        *length = static_cast<float>(total);
+        *length = gx::PathMeasure(transform ? outline_.transformed(toGx(*transform)) : outline_).length();
         return S_OK;
     }
     // Past the end: the end of the last figure.
     HRESULT STDMETHODCALLTYPE ComputePointAtLength(FLOAT length, const D2D1_MATRIX_3X2_F* transform, FLOAT, D2D1_POINT_2F* point,
                                                    D2D1_POINT_2F* tangent) const override {
-        const SkPath path = transform ? outline_.makeTransform(toSk(*transform)) : outline_;
-        SkContourMeasureIter contours(path, false);
-        float left = std::max(0.0f, length);
-        sk_sp<SkContourMeasure> last;
-        SkPoint at{}, direction{1, 0};
-        bool found = false;
-        while (auto contour = contours.next()) {
-            last = contour;
-            if (left <= contour->length()) {
-                found = contour->getPosTan(left, &at, &direction);
-                break;
-            }
-            left -= contour->length();
+        const gx::Path path = transform ? outline_.transformed(toGx(*transform)) : outline_;
+        const gx::PathMeasure measure(path);
+        gx::Point at{}, direction{1, 0};
+        if (!measure.positionAt(length, &at, &direction)) {
+            if (path.points.empty()) return D2DERR_WRONG_STATE;
+            at = path.points.front();
         }
-        if (!found) {
-            if (last) (void)last->getPosTan(last->length(), &at, &direction);
-            else if (path.countPoints()) at = path.getPoint(0);
-            else return D2DERR_WRONG_STATE;
-        }
-        if (point) *point = {at.x(), at.y()};
-        if (tangent) *tangent = {direction.x(), direction.y()};
+        if (point) *point = {at.x, at.y};
+        if (tangent) *tangent = {direction.x, direction.y};
         return S_OK;
     }
 
 protected:
-    void set(SkPath outline, SkPath area) { outline_ = std::move(outline); area_ = std::move(area); }
+    void set(gx::Path outline, gx::Path area) { outline_ = std::move(outline); area_ = std::move(area); }
 private:
-    SkPath outline_, area_;
+    gx::Path outline_, area_;
 };
 
-// The result's outline as closed figures of lines and Béziers (conics become cubics through quadratics).
-void emit(const SkPath& path, ID2D1SimplifiedGeometrySink* sink) {
-    sink->SetFillMode(path.getFillType() == SkPathFillType::kWinding ? D2D1_FILL_MODE_WINDING : D2D1_FILL_MODE_ALTERNATE);
-    SkPath::Iter it(path, false);
-    SkPoint points[4];
+// The result's outline as closed figures of lines and Beziers.
+void emit(const gx::Path& path, ID2D1SimplifiedGeometrySink* sink) {
+    sink->SetFillMode(path.even_odd ? D2D1_FILL_MODE_ALTERNATE : D2D1_FILL_MODE_WINDING);
     bool open = false;
-    SkPoint current{};
-    const auto quadratic = [&](SkPoint control, SkPoint end) {
-        const D2D1_BEZIER_SEGMENT cubic{{current.x() + (control.x() - current.x()) * 2 / 3, current.y() + (control.y() - current.y()) * 2 / 3},
-                                        {end.x() + (control.x() - end.x()) * 2 / 3, end.y() + (control.y() - end.y()) * 2 / 3},
-                                        {end.x(), end.y()}};
+    size_t at = 0;
+    gx::Point current{};
+    const auto quadratic = [&](gx::Point control, gx::Point end) {
+        const D2D1_BEZIER_SEGMENT cubic{{current.x + (control.x - current.x) * 2 / 3, current.y + (control.y - current.y) * 2 / 3},
+                                        {end.x + (control.x - end.x) * 2 / 3, end.y + (control.y - end.y) * 2 / 3},
+                                        {end.x, end.y}};
         sink->AddBeziers(&cubic, 1);
         current = end;
     };
-    for (SkPath::Verb verb; (verb = it.next(points)) != SkPath::kDone_Verb;) {
+    for (const gx::Verb verb : path.verbs) {
         switch (verb) {
-        case SkPath::kMove_Verb:
+        case gx::Verb::move:
             if (open) sink->EndFigure(D2D1_FIGURE_END_CLOSED);
-            sink->BeginFigure({points[0].x(), points[0].y()}, D2D1_FIGURE_BEGIN_FILLED);
-            current = points[0];
+            current = path.points[at++];
+            sink->BeginFigure({current.x, current.y}, D2D1_FIGURE_BEGIN_FILLED);
             open = true;
             break;
-        case SkPath::kLine_Verb: {
-            const D2D1_POINT_2F end{points[1].x(), points[1].y()};
+        case gx::Verb::line: {
+            current = path.points[at++];
+            const D2D1_POINT_2F end{current.x, current.y};
             sink->AddLines(&end, 1);
-            current = points[1];
             break;
         }
-        case SkPath::kQuad_Verb: quadratic(points[1], points[2]); break;
-        case SkPath::kConic_Verb: {
-            SkPoint quads[1 + 2 * 4];
-            const int count = SkPath::ConvertConicToQuads(points[0], points[1], points[2], it.conicWeight(), quads, 2);
-            for (int i = 0; i < count; ++i) quadratic(quads[1 + i * 2], quads[2 + i * 2]);
+        case gx::Verb::quad:
+            quadratic(path.points[at], path.points[at + 1]);
+            at += 2;
             break;
-        }
-        case SkPath::kCubic_Verb: {
-            const D2D1_BEZIER_SEGMENT cubic{{points[1].x(), points[1].y()}, {points[2].x(), points[2].y()}, {points[3].x(), points[3].y()}};
+        case gx::Verb::cubic: {
+            const gx::Point a = path.points[at], b = path.points[at + 1], c = path.points[at + 2];
+            at += 3;
+            const D2D1_BEZIER_SEGMENT cubic{{a.x, a.y}, {b.x, b.y}, {c.x, c.y}};
             sink->AddBeziers(&cubic, 1);
-            current = points[3];
+            current = c;
             break;
         }
-        case SkPath::kClose_Verb:
+        case gx::Verb::close:
             if (open) sink->EndFigure(D2D1_FIGURE_END_CLOSED);
             open = false;
             break;
-        default: break;
         }
     }
     if (open) sink->EndFigure(D2D1_FIGURE_END_CLOSED);
@@ -143,14 +114,14 @@ HRESULT STDMETHODCALLTYPE GeometryObject<Interface>::CombineWithGeometry(ID2D1Ge
                                                                          ID2D1SimplifiedGeometrySink* sink) const {
     const auto* other = Geometry::from(input);
     if (!other || !sink) return E_INVALIDARG;
-    SkPathOp op = kUnion_SkPathOp;
+    gx::BoolOp op = gx::BoolOp::unite;
     switch (mode) {
-    case D2D1_COMBINE_MODE_INTERSECT: op = kIntersect_SkPathOp; break;
-    case D2D1_COMBINE_MODE_XOR: op = kXOR_SkPathOp; break;
-    case D2D1_COMBINE_MODE_EXCLUDE: op = kDifference_SkPathOp; break;
+    case D2D1_COMBINE_MODE_INTERSECT: op = gx::BoolOp::intersect; break;
+    case D2D1_COMBINE_MODE_XOR: op = gx::BoolOp::exclusive_or; break;
+    case D2D1_COMBINE_MODE_EXCLUDE: op = gx::BoolOp::difference; break;
     default: break;
     }
-    const auto result = Op(area_, transform ? other->area().makeTransform(toSk(*transform)) : other->area(), op);
+    const auto result = gx::Path::combine(area_, transform ? other->area().transformed(toGx(*transform)) : other->area(), op);
     if (!result) return E_FAIL;
     emit(*result, sink);
     return S_OK;
@@ -158,30 +129,31 @@ HRESULT STDMETHODCALLTYPE GeometryObject<Interface>::CombineWithGeometry(ID2D1Ge
 
 class RectangleGeometry final : public GeometryObject<ID2D1RectangleGeometry> {
 public:
-    explicit RectangleGeometry(const D2D1_RECT_F& rect) { SkPath path = rectanglePath(rect); set(path, path); }
+    explicit RectangleGeometry(const D2D1_RECT_F& rect) { gx::Path path = rectanglePath(rect); set(path, path); }
 };
 
 class RoundedRectangleGeometry final : public GeometryObject<ID2D1RoundedRectangleGeometry> {
 public:
-    explicit RoundedRectangleGeometry(const D2D1_ROUNDED_RECT& rounded) { SkPath path = roundedRectanglePath(rounded); set(path, path); }
+    explicit RoundedRectangleGeometry(const D2D1_ROUNDED_RECT& rounded) { gx::Path path = roundedRectanglePath(rounded); set(path, path); }
 };
 
 class EllipseGeometry final : public GeometryObject<ID2D1EllipseGeometry> {
 public:
-    explicit EllipseGeometry(const D2D1_ELLIPSE& ellipse) { SkPath path = ellipsePath(ellipse); set(path, path); }
+    explicit EllipseGeometry(const D2D1_ELLIPSE& ellipse) { gx::Path path = ellipsePath(ellipse); set(path, path); }
 };
 
 // The children's figures together, filled by the group's own fill mode.
 class GeometryGroup final : public GeometryObject<ID2D1GeometryGroup> {
 public:
     GeometryGroup(D2D1_FILL_MODE mode, std::vector<ComPtr<ID2D1Geometry>> children) : children_(std::move(children)) {
-        SkPathBuilder outline, area(fillTypeFor(mode));
+        gx::Path outline, area;
+        area.even_odd = mode != D2D1_FILL_MODE_WINDING;
         for (const auto& child : children_)
             if (const auto* geometry = Geometry::from(child.Get())) {
                 outline.addPath(geometry->outline());
                 area.addPath(geometry->area());
             }
-        set(outline.detach(), area.detach());
+        set(std::move(outline), std::move(area));
     }
 private:
     std::vector<ComPtr<ID2D1Geometry>> children_;
@@ -193,8 +165,8 @@ class TransformedGeometry final : public GeometryObject<ID2D1TransformedGeometry
 public:
     TransformedGeometry(ComPtr<ID2D1Geometry> source, const D2D1_MATRIX_3X2_F& transform) : source_(std::move(source)) {
         const auto* geometry = Geometry::from(source_.Get());
-        const SkMatrix m = toSk(transform);
-        if (geometry) set(geometry->outline().makeTransform(m), geometry->area().makeTransform(m));
+        const gx::Matrix m = toGx(transform);
+        if (geometry) set(geometry->outline().transformed(m), geometry->area().transformed(m));
     }
 private:
     ComPtr<ID2D1Geometry> source_;
@@ -213,8 +185,8 @@ private:
 // Writes into its path geometry at Close. Segments outside BeginFigure/EndFigure are dropped.
 class GeometrySink final : public lm_com::Object<ID2D1GeometrySink> {
 public:
-    explicit GeometrySink(ComPtr<PathGeometry> path) : path_(std::move(path)) {}
-    void STDMETHODCALLTYPE SetFillMode(D2D1_FILL_MODE mode) override { if (!closed_) area_.setFillType(fillTypeFor(mode)); }
+    explicit GeometrySink(ComPtr<PathGeometry> path) : path_(std::move(path)) { area_.even_odd = true; }
+    void STDMETHODCALLTYPE SetFillMode(D2D1_FILL_MODE mode) override { if (!closed_) area_.even_odd = mode != D2D1_FILL_MODE_WINDING; }
     void STDMETHODCALLTYPE BeginFigure(D2D1_POINT_2F start, D2D1_FIGURE_BEGIN begin) override {
         if (closed_) return;
         if (open_) EndFigure(D2D1_FIGURE_END_OPEN);
@@ -242,7 +214,7 @@ public:
         if (closed_) return D2DERR_WRONG_STATE;
         const bool balanced = !open_;
         closed_ = true;
-        path_->set(outline_.detach(), area_.detach());
+        path_->set(std::move(outline_), std::move(area_));
         return balanced ? S_OK : D2DERR_WRONG_STATE;
     }
     void STDMETHODCALLTYPE AddLine(D2D1_POINT_2F point) override {
@@ -271,17 +243,16 @@ public:
         if (!arc || !open_ || closed_) return;
         const D2D1_POINT_2F to = arc->point;
         if (to.x == current_.x && to.y == current_.y) return;
-        const SkPoint radii{std::abs(arc->size.width), std::abs(arc->size.height)};
-        const auto size = arc->arcSize == D2D1_ARC_SIZE_LARGE ? SkPathBuilder::kLarge_ArcSize : SkPathBuilder::kSmall_ArcSize;
-        const auto sweep = arc->sweepDirection == D2D1_SWEEP_DIRECTION_CLOCKWISE ? SkPathDirection::kCW : SkPathDirection::kCCW;
-        if (radii.x() == 0 || radii.y() == 0) { AddLine(to); return; }
-        outline_.arcTo(radii, arc->rotationAngle, size, sweep, {to.x, to.y});
-        if (filled_) area_.arcTo(radii, arc->rotationAngle, size, sweep, {to.x, to.y});
+        const float rx = std::abs(arc->size.width), ry = std::abs(arc->size.height);
+        if (rx == 0 || ry == 0) { AddLine(to); return; }
+        const bool large = arc->arcSize == D2D1_ARC_SIZE_LARGE, clockwise = arc->sweepDirection == D2D1_SWEEP_DIRECTION_CLOCKWISE;
+        outline_.arcTo(rx, ry, arc->rotationAngle, large, clockwise, to.x, to.y);
+        if (filled_) area_.arcTo(rx, ry, arc->rotationAngle, large, clockwise, to.x, to.y);
         current_ = to;
     }
 private:
     ComPtr<PathGeometry> path_;
-    SkPathBuilder outline_, area_{SkPathFillType::kEvenOdd};
+    gx::Path outline_, area_;
     D2D1_POINT_2F current_{};
     bool open_ = false, filled_ = false, closed_ = false;
 };
@@ -305,17 +276,17 @@ HRESULT make(Interface** out, Arguments&&... arguments) {
 
 const Geometry* Geometry::from(ID2D1Geometry* geometry) { return dynamic_cast<const Geometry*>(geometry); }
 
-// Radii clamped to half the sides, each on its own (as Direct2D does; Skia would scale both).
-SkPath roundedRectanglePath(const D2D1_ROUNDED_RECT& rounded) {
-    const SkRect rect = SkRect::MakeLTRB(rounded.rect.left, rounded.rect.top, rounded.rect.right, rounded.rect.bottom).makeSorted();
+// Radii clamped to half the sides, each on its own (as Direct2D does).
+gx::Path roundedRectanglePath(const D2D1_ROUNDED_RECT& rounded) {
+    const gx::Rect rect = gx::Rect::LTRB(rounded.rect.left, rounded.rect.top, rounded.rect.right, rounded.rect.bottom).sorted();
     const float rx = std::min(std::abs(rounded.radiusX), rect.width() * 0.5f), ry = std::min(std::abs(rounded.radiusY), rect.height() * 0.5f);
-    if (rx <= 0 || ry <= 0) return rectanglePath({rect.left(), rect.top(), rect.right(), rect.bottom()});
-    return SkPath::RRect(SkRRect::MakeRectXY(rect, rx, ry));
+    if (rx <= 0 || ry <= 0) return gx::Path::Rect_(rect);
+    return gx::Path::RoundRect(rect, rx, ry);
 }
 
-SkPath ellipsePath(const D2D1_ELLIPSE& e) {
+gx::Path ellipsePath(const D2D1_ELLIPSE& e) {
     const float rx = std::abs(e.radiusX), ry = std::abs(e.radiusY);
-    return SkPath::Oval(SkRect::MakeLTRB(e.point.x - rx, e.point.y - ry, e.point.x + rx, e.point.y + ry));
+    return gx::Path::Oval(gx::Rect::LTRB(e.point.x - rx, e.point.y - ry, e.point.x + rx, e.point.y + ry));
 }
 
 HRESULT createRectangleGeometry(const D2D1_RECT_F& rect, ID2D1RectangleGeometry** geometry) {

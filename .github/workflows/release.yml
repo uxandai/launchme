@@ -126,32 +126,27 @@ jobs:
             libwayland-dev wayland-protocols libdecor-0-dev libdrm-dev libgbm-dev libgles-dev \
             libasound2-dev libpipewire-0.3-dev libudev-dev libdbus-1-dev libusb-1.0-0-dev
 
-      # Skia takes the longest; it is rebuilt only when tools/linux/build-skia.sh changes. ~/skia is
-      # where build-skia.sh puts it and where CMake (LAUNCHME_SKIA_DIR) looks by default. Restore and
+      # The Impeller SDK (a pinned Flutter engine revision plus our C ABI extension) takes the longest;
+      # it is rebuilt only when its build inputs change. ~/launchme-impeller/sdk is where
+      # build-impeller.sh puts it and where CMake (LAUNCHME_IMPELLER_DIR) looks by default. Restore and
       # save are separate steps so a build is kept even when a later step fails.
-      - name: Restore Skia
-        id: skia
+      - name: Restore Impeller
+        id: impeller
         uses: actions/cache/restore@v6
         with:
-          path: |
-            ~/skia
-            !~/skia/.git
-            !~/skia/out/Release/obj
-          key: skia-${{ runner.os }}-${{ hashFiles('tools/linux/build-skia.sh') }}
+          path: ~/launchme-impeller/sdk
+          key: impeller-${{ runner.os }}-${{ hashFiles('tools/linux/build-impeller.sh', 'tools/linux/prepare-impeller.py', 'tools/linux/impeller/**') }}
 
-      - name: Build Skia
-        if: steps.skia.outputs.cache-hit != 'true'
-        run: bash tools/linux/build-skia.sh
+      - name: Build Impeller
+        if: steps.impeller.outputs.cache-hit != 'true'
+        run: bash tools/linux/build-impeller.sh
 
-      - name: Save Skia
-        if: steps.skia.outputs.cache-hit != 'true'
+      - name: Save Impeller
+        if: steps.impeller.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6
         with:
-          path: |
-            ~/skia
-            !~/skia/.git
-            !~/skia/out/Release/obj
-          key: ${{ steps.skia.outputs.cache-primary-key }}
+          path: ~/launchme-impeller/sdk
+          key: ${{ steps.impeller.outputs.cache-primary-key }}
 
       # SDL3 is not packaged in Ubuntu 24.04: the version tools/linux/wsl-build-sdl3.sh builds, with
       # the X11, Wayland and audio back ends of SDL's README-linux.
@@ -181,7 +176,7 @@ jobs:
       - name: Build launchme (Release)
         run: |
           cmake -S . -B build/linux -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF \
-            "-DLAUNCHME_SKIA_DIR=$HOME/skia" "-DCMAKE_PREFIX_PATH=$HOME/sdl3"
+            "-DCMAKE_PREFIX_PATH=$HOME/sdl3"
           cmake --build build/linux --target launchme
 
       - name: Fetch linuxdeploy

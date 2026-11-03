@@ -16,26 +16,25 @@ it has been tested far less than on Windows: expect bugs and missing pieces.
 | Platform services | Audio (SDL3), decoding and trailers (FFmpeg), system volume (PulseAudio/PipeWire), controllers (SDL3, hidraw, BlueZ), processes (`/proc`, signals), power (logind), sensors (hwmon), memory, Discord, Steam downloads |
 | Stores | Steam (native, Flatpak, Snap), Heroic (Epic and GOG, launched through its legendary/gogdl backends with the game's Wine/Proton settings), Lutris, Prism Launcher/PolyMC/MultiMC, Amazon Games (Nile), Xbox (the `launchme-xbox` helper), Aurelia; store launchers (Battle.net, EA app, Epic, Ubisoft, Rockstar, GOG Galaxy) installed into a prefix of their own |
 | Launcher window | The full launcher (`cmake/LinuxApp.cmake`): the Win32 surface the shared code calls is implemented on SDL3 (`src/linux/window`, `src/linux/win32`) |
-| Renderer | Direct2D, DirectWrite and WIC on Skia (`src/linux/gfx`): GPU through Vulkan, else OpenGL; fonts through Fontconfig, HarfBuzz and SkParagraph |
+| Renderer | Direct2D, DirectWrite and WIC on Impeller (`src/linux/gfx`, kernel in `src/linux/impeller`): GPU through Vulkan, else OpenGL; fonts through Fontconfig and Impeller's typography; no CPU renderer |
 | Windows games | umu-launcher, Proton or Wine with a prefix manager and per-game options (Settings → Library → Proton i Wine, [LINUX_WINE.md](LINUX_WINE.md)) |
 | Web view | `launchme-browser` helper on GTK 4 + WebKitGTK 6.0 when present, else the user's browser |
 | Plugins | The host loads `linux-x64` packages (`.so`); the Linux build does not package plugins yet |
 | Packaging | An AppImage (`tools/linux/make-appimage.sh`), published with each release and used by the updater |
 | Tests | About 64 CTest suites (`cmake/Linux.cmake`, `cmake/linux/*.cmake`); `webkit_browser_lifecycle` needs a display with EGL |
 
-An optional hybrid Impeller backend and its on/off setting are available in SDK-enabled builds:
-[Impeller build and verification](IMPELLER.md). The initial assessment is in [Renderer decision](RENDERER_DECISION.md).
+The renderer, its SDK build and verification: [IMPELLER.md](IMPELLER.md).
 
 ## Building on Linux
 
 Packages (Arch names): `cmake ninja gcc pkgconf icu openssl libsecret curl sdl3 ffmpeg libpulse libpng
 libjpeg-turbo libwebp expat sqlite systemd-libs glib2 libarchive fontconfig freetype2 harfbuzz`, and `git python
-clang` to build Skia. Optional: `gtk4 webkitgtk-6.0 libsoup3 libx11` (the browser helper), `cargo protobuf` (the
+clang` to build the Impeller SDK. Optional: `gtk4 webkitgtk-6.0 libsoup3 libx11` (the browser helper), `cargo protobuf` (the
 Xbox helper, `tools/build-xbox-helper.sh`), at run time `tesseract` (text-aware cover crops) and `steam-devices`
 (udev rules for the Steam Controller's hidraw access).
 
 ```sh
-tools/linux/build-skia.sh                      # once: Skia into ~/skia (SKIA_DIR); CMake: LAUNCHME_SKIA_DIR
+tools/linux/build-impeller.sh                  # once: the Impeller SDK into ~/launchme-impeller; CMake: LAUNCHME_IMPELLER_DIR
 cmake -S . -B build/linux -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build/linux
 ctest --test-dir build/linux --output-on-failure

@@ -12,7 +12,7 @@ if [[ "$mode" != test ]]; then
         --exclude '/local/' --exclude '/.openai_token' --exclude '*_api_key.txt' --exclude '*_token.*' \
         "$repo/" "$root/src/"
     cmake -S "$root/src" -B "$root/build" -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-        -DLAUNCHME_WITH_IMPELLER=ON -DLAUNCHME_IMPELLER_DIR="${IMPELLER_ROOT:-$HOME/launchme-impeller}/sdk"
+        -DLAUNCHME_IMPELLER_DIR="${IMPELLER_ROOT:-$HOME/launchme-impeller}/sdk"
     if [[ $# -gt 0 ]]; then
         cmake --build "$root/build" --parallel "${LM_JOBS:-8}" --target "$@"
     else

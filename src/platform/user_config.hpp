@@ -408,8 +408,6 @@ struct AppSettings {
     std::map<std::string, std::filesystem::path> system_roms; // System ID -> ROM folder override.
     // Metro: a white page with dark text (the light theme of Windows Phone).
     bool metro_light = false;
-    // Linux only: opt-in Impeller GPU backend, selected once before window creation.
-    bool impeller = false;
 };
 
 // The name or nickname she may call you by (AppSettings::companion_user_name): trimmed, one line,

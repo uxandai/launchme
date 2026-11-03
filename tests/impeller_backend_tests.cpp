@@ -1,25 +1,16 @@
-// Exercises real Impeller GL/Vulkan uploads, drawing, readback, resize and lifecycle.
-// No account, application profile, network, or store actions are involved.
-#include "linux/impeller/internal.hpp"
+// Exercises the Impeller kernel on real GL/Vulkan: uploads, drawing, text, readback, resize and
+// lifecycle. No account, application profile, network, or store actions are involved.
+#include "linux/impeller/kernel.hpp"
 #include "artwork/block_compression.hpp"
 #include "artwork/image_codec.hpp"
-#include "platform/user_config.hpp"
-#include "include/core/SkFont.h"
-#include "include/core/SkFontMgr.h"
-#include "include/core/SkPath.h"
-#include "include/core/SkRRect.h"
-#include "include/core/SkSurface.h"
-#include "include/core/SkShader.h"
-#include "include/core/SkTypeface.h"
-#include "include/effects/SkDashPathEffect.h"
-#include "include/effects/SkGradient.h"
-#include "include/ports/SkFontMgr_fontconfig.h"
-#include "include/ports/SkFontScanner_FreeType.h"
 #include <SDL3/SDL.h>
 #include <array>
 #include <cstdlib>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
+
+namespace gx = lm_impeller;
 
 namespace {
 int failures = 0;
@@ -27,64 +18,66 @@ void check(bool condition, const char* message) {
     std::cout << (condition ? "ok: " : "FAIL: ") << message << '\n';
     if (!condition) ++failures;
 }
-std::vector<uint8_t> pixels(const SkImage* image) {
-    if (!image) return {};
-    std::vector<uint8_t> bytes(static_cast<size_t>(image->width()) * image->height() * 4);
-    if (!image->readPixels(nullptr, SkImageInfo::Make(image->width(), image->height(), kBGRA_8888_SkColorType, kPremul_SkAlphaType),
-        bytes.data(), static_cast<size_t>(image->width()) * 4, 0, 0)) return {};
-    return bytes;
-}
-void capture(const SkImage* image, const std::string& name) {
+struct Rgb { int r, g, b, a; };
+class Pixels {
+public:
+    explicit Pixels(const std::shared_ptr<gx::Image>& image) : width_(image ? image->width() : 0), bytes_(image ? image->pixels() : nullptr) {}
+    bool ok() const { return bytes_ != nullptr; }
+    Rgb at(int x, int y) const {
+        const uint8_t* p = bytes_->data() + (static_cast<size_t>(y) * width_ + x) * 4;
+        return {p[2], p[1], p[0], p[3]};
+    }
+private:
+    int width_;
+    std::shared_ptr<const std::vector<uint8_t>> bytes_;
+};
+void capture(const std::shared_ptr<gx::Image>& image, const std::string& name) {
     const char* dir = std::getenv("LAUNCHME_UI_CAPTURE_DIR");
-    if (!dir || !image) return;
+    if (!dir || !image || !image->pixels()) return;
     const auto encoded = image_codec::encodePng({image_codec::Format::png, static_cast<uint32_t>(image->width()),
-        static_cast<uint32_t>(image->height()), pixels(image)});
+        static_cast<uint32_t>(image->height()), *image->pixels()});
     std::filesystem::create_directories(dir);
     std::ofstream out(std::filesystem::path(dir) / (name + ".png"), std::ios::binary);
     out.write(reinterpret_cast<const char*>(encoded.data()), static_cast<std::streamsize>(encoded.size()));
     check(out.good() && !encoded.empty(), "PNG capture");
 }
-void scene(SkCanvas* canvas, const SkImage* image, const SkTextBlob* text) {
-    canvas->clear(SkColorSetRGB(20, 25, 30));
-    SkPaint paint; paint.setAntiAlias(true); paint.setColor(SK_ColorRED);
-    canvas->drawRect(SkRect::MakeXYWH(8, 8, 40, 32), paint);
-    canvas->save();
-    canvas->translate(90, 10);
-    canvas->clipRRect(SkRRect::MakeRectXY(SkRect::MakeWH(80, 70), 12, 12), true);
-    canvas->saveLayerAlphaf(nullptr, 0.5f);
-    paint.setColor(SK_ColorGREEN);
-    canvas->drawRect(SkRect::MakeWH(100, 100), paint);
-    canvas->restore();
-    canvas->restore();
-    paint.setColor(SK_ColorWHITE); paint.setStyle(SkPaint::kStroke_Style); paint.setStrokeWidth(3);
-    const float dash[]{6, 3}; paint.setPathEffect(SkDashPathEffect::Make(dash, 0));
-    canvas->drawLine(10, 95, 200, 95, paint);
-    paint.setPathEffect(nullptr); paint.setStyle(SkPaint::kFill_Style);
-    if (image) canvas->drawImageRect(image, SkRect::MakeXYWH(10, 120, 96, 96), SkSamplingOptions(SkFilterMode::kNearest), nullptr);
-    if (text) canvas->drawTextBlob(text, 115, 160, paint);
-    const SkColor4f colors[]{{1, 0, 0, 1}, {0, 1, 0, 0.25f}, {0, 0, 1, 0}};
-    const float stops[]{0, 0.5f, 1};
-    const SkPoint ends[]{{115, 195}, {300, 195}};
-    const SkGradient gradient(SkGradient::Colors(colors, stops, SkTileMode::kClamp),
-        SkGradient::Interpolation{SkGradient::Interpolation::InPremul::kYes});
-    paint.setShader(SkShaders::LinearGradient(ends, gradient));
-    canvas->drawRect(SkRect::MakeXYWH(115, 185, 185, 30), paint);
+gx::Paint solid(float r, float g, float b, float a = 1) {
+    gx::Paint paint;
+    paint.color = {r, g, b, a};
+    return paint;
+}
+void scene(gx::Canvas& canvas, const std::shared_ptr<gx::Image>& image, const gx::TextParagraph& text) {
+    canvas.clear({20 / 255.0f, 25 / 255.0f, 30 / 255.0f, 1});
+    canvas.drawRect(gx::Rect::XYWH(8, 8, 40, 32), solid(1, 0, 0));
+    canvas.save();
+    canvas.translate(90, 10);
+    canvas.clipPath(gx::Path::RoundRect(gx::Rect::XYWH(0, 0, 80, 70), 12, 12));
+    canvas.saveLayer(nullptr, 0.5f);
+    canvas.drawRect(gx::Rect::XYWH(0, 0, 100, 100), solid(0, 1, 0));
+    canvas.restore();
+    canvas.restore();
+    gx::Paint line = solid(1, 1, 1);
+    line.stroke = true;
+    line.width = 3;
+    line.dashes = {6, 3};
+    canvas.drawLine({10, 95}, {200, 95}, line);
+    if (image) canvas.drawImageRect(image, gx::Rect::XYWH(0, 0, 4, 4), gx::Rect::XYWH(10, 120, 96, 96), gx::Sampling{true}, nullptr);
+    text.draw(canvas, {115, 130});
+    auto gradient = std::make_shared<gx::Shader>();
+    gradient->kind = gx::Shader::Kind::linear;
+    gradient->p0 = {115, 195};
+    gradient->p1 = {300, 195};
+    gradient->colors = {{1, 0, 0, 1}, {0, 1, 0, 0.25f}, {0, 0, 1, 0}};
+    gradient->positions = {0, 0.5f, 1};
+    gx::Paint fill = solid(0, 0, 0);
+    fill.shader = gradient;
+    canvas.drawRect(gx::Rect::XYWH(115, 185, 185, 30), fill);
 }
 } // namespace
 
 int main(int argc, char** argv) {
     const bool vulkan = argc > 1 && std::string_view(argv[1]) == "vulkan";
     const std::string backend = vulkan ? "vulkan" : "gl";
-    const auto settings_dir = std::filesystem::temp_directory_path() /
-        ("launchme-impeller-settings-" + backend + "-" + std::to_string(SDL_GetPerformanceCounter()));
-    struct Cleanup { std::filesystem::path path; ~Cleanup() { std::error_code error; std::filesystem::remove_all(path, error); } } cleanup{settings_dir};
-    check(!AppSettings{}.impeller && !parseAppSettings("impeller=yes\n").impeller &&
-        parseAppSettings("impeller=1\n").impeller, "renderer opt-in and strict parsing");
-    for (const bool enabled : {true, false}) {
-        AppSettings setting; setting.impeller = enabled;
-        const auto file = settings_dir / "settings.ini";
-        check(saveAppSettings(setting, file) && loadAppSettings(file).impeller == enabled, "renderer setting survives restart/load");
-    }
     if (!SDL_Init(SDL_INIT_VIDEO)) { std::cerr << SDL_GetError() << '\n'; return 77; }
     SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
@@ -93,12 +86,12 @@ int main(int argc, char** argv) {
     SDL_GLContext gl = !vulkan && window ? SDL_GL_CreateContext(window) : nullptr;
     if (!window || (!vulkan && !gl)) { std::cerr << SDL_GetError() << '\n'; SDL_Quit(); return 77; }
     if (gl) SDL_GL_MakeCurrent(window, gl);
-    if (!(vulkan ? lm_impeller::tryVulkan(true) : lm_impeller::tryOpenGl())) {
+    if (!(vulkan ? gx::tryVulkan(true) : gx::tryOpenGl())) {
         std::cerr << "Impeller context unavailable\n";
         if (gl) SDL_GL_DestroyContext(gl);
         SDL_DestroyWindow(window); SDL_Quit(); return 77;
     }
-    const auto context = lm_impeller::resources().context.get();
+    const auto context = gx::context();
     check(LaunchmeImpellerGetAbiVersion() == LAUNCHME_IMPELLER_ABI, "extension ABI");
     const std::array<uint8_t, 8> red{0, 0xf8, 0, 0, 0, 0, 0, 0};
     check(!LaunchmeImpellerTextureNew(context, kLaunchmeImpellerBC1, 4, 4, red.data(), 7), "truncated block refused");
@@ -106,80 +99,112 @@ int main(int argc, char** argv) {
     check(!LaunchmeImpellerTextureNew(context, kLaunchmeImpellerBC1, 0, 4, red.data(), 8), "empty dimensions refused");
     check(!LaunchmeImpellerTextureNew(context, static_cast<LaunchmeImpellerFormat>(99), 4, 4, red.data(), 8), "unknown format refused");
     check(!LaunchmeImpellerTextureNew(nullptr, kLaunchmeImpellerBC1, 4, 4, red.data(), 8), "null context refused");
-    const bool bc = lm_impeller::supportsCompression(1);
+    const bool bc = gx::supportsCompression(1);
     std::cout << "BC1/BC3 capability: " << bc << '\n';
-    auto image = bc ? lm_impeller::compressedImage(1, 4, 4, red.data(), red.size()) : nullptr;
-    if (bc) check(image != nullptr, "BC1 lazy image");
-    auto fonts = SkFontMgr_New_FontConfig(nullptr, SkFontScanner_Make_FreeType());
-    SkFont font(fonts->matchFamilyStyle("DejaVu Sans", SkFontStyle()), 18);
-    auto text = SkTextBlob::MakeFromString("Impeller", font);
-    check(text && !text->bounds().isEmpty(), "font fixture");
-    auto reference = SkSurfaces::Raster(SkImageInfo::MakeN32Premul(320, 240));
-    scene(reference->getCanvas(), image.get(), text.get());
-    auto canvas = lm_impeller::beginFrame(window, 320, 240);
-    check(canvas != nullptr, "frame canvas");
-    sk_sp<SkImage> rendered;
-    if (canvas) {
-        scene(canvas.get(), image.get(), text.get());
-        rendered = lm_impeller::snapshot(canvas.get());
-        check(rendered != nullptr, "GPU snapshot/readback");
-        check(lm_impeller::present(window), "window present after snapshot");
+    std::shared_ptr<gx::Image> image;
+    if (bc) {
+        image = gx::Image::fromCompressed(1, 4, 4, red.data(), red.size());
+        check(image != nullptr, "BC1 lazy image");
     }
-    if (rendered) {
-        const auto actual = pixels(rendered.get()), expected = pixels(reference->makeImageSnapshot().get());
-        check(actual.size() == expected.size(), "readback extent");
-        size_t mismatches = 0; uint64_t total_error = 0;
-        for (size_t i = 0; i < actual.size() && i < expected.size(); ++i) {
-            const int error = std::abs(static_cast<int>(actual[i]) - expected[i]);
-            total_error += error; mismatches += error > 24;
+    gx::ParagraphSpec spec;
+    gx::TextStyle style;
+    style.family = "DejaVu Sans";
+    style.size = 18;
+    style.ink.color = {1, 1, 1, 1};
+    spec.runs.push_back({"Impeller", style});
+    spec.width = 200;
+    const gx::TextParagraph text(spec);
+    check(text.valid() && text.longestLine() > 20 && text.height() > 10 && text.lines().size() == 1, "text fixture lays out");
+    gx::GlyphBox box;
+    check(text.glyphAt(3, box) && box.bounds.width() > 2 && box.begin == 3, "glyph bounds");
+    {
+        // Wrapped text: several lines, line metrics and cluster boxes of every character.
+        gx::ParagraphSpec wrapped;
+        gx::TextStyle plain = style;
+        plain.size = 16;
+        wrapped.runs.push_back({"Steam isn't installed and the other stores have no games. Add a game from disk or turn on GOG, Epic, EA, Ubisoft, Battle.net or Xbox in the settings.", plain});
+        wrapped.width = 300;
+        const gx::TextParagraph many(wrapped);
+        const auto lines = many.lines();
+        check(many.valid() && lines.size() >= 3, "wrapped text has several lines");
+        bool continuous = !lines.empty() && lines.front().start == 0;
+        for (size_t i = 1; i < lines.size(); ++i) continuous = continuous && lines[i].start == lines[i - 1].end;
+        check(continuous, "lines continue each other");
+        bool boxes = true;
+        for (size_t unit = 0; unit < 40; ++unit) {
+            gx::GlyphBox glyph;
+            boxes = boxes && many.glyphAt(unit, glyph) && glyph.bounds.right >= glyph.bounds.left;
         }
-        const double mean = static_cast<double>(total_error) / expected.size();
-        const double changed = static_cast<double>(mismatches) / expected.size();
-        std::cout << "Mean channel error: " << mean << "; channels differing >24: " << changed << '\n';
-        check(mean < 4 && changed < 0.03, "CPU reference parity (AA edge tolerance)");
-        int gradient_error = 0;
-        if (actual.size() == expected.size()) for (size_t x = 116; x < 299; ++x)
-            for (size_t channel = 0; channel < 4; ++channel) {
-                const size_t at = (200 * 320 + x) * 4 + channel;
-                gradient_error = std::max(gradient_error, std::abs(static_cast<int>(actual[at]) - expected[at]));
-            }
-        std::cout << "Gradient maximum channel error: " << gradient_error << '\n';
-        // Bounded 8-bit differences between Skia and GL/Vulkan are permitted; the original
-        // straight-alpha interpolation error was tens of levels and visibly changed the hue.
-        check(actual.size() == expected.size() && gradient_error <= 3, "premultiplied gradient colors (including zero alpha)");
+        check(boxes, "cluster boxes of the first characters");
+    }
+    auto canvas = gx::beginFrame(window, 320, 240);
+    check(canvas != nullptr, "frame canvas");
+    std::shared_ptr<gx::Image> rendered;
+    if (canvas) {
+        scene(*canvas, image, text);
+        rendered = canvas->snapshot();
+        check(rendered != nullptr, "GPU snapshot/readback");
+        check(gx::present(window), "window present after snapshot");
+    }
+    const Pixels actual(rendered);
+    if (actual.ok()) {
+        const auto near = [](int a, int b, int tolerance) { return std::abs(a - b) <= tolerance; };
+        Rgb p = actual.at(20, 20);
+        check(p.r > 245 && p.g < 8 && p.b < 8, "solid rectangle");
+        p = actual.at(130, 40);
+        check(near(p.g, 140, 12) && p.r < 30, "half-transparent layer over the background");
+        p = actual.at(92, 12);
+        check(near(p.r, 20, 4) && near(p.g, 25, 4) && near(p.b, 30, 4), "rounded clip corner leaves the background");
+        p = actual.at(300, 100);
+        check(near(p.r, 20, 4) && near(p.g, 25, 4), "outside everything stays the background");
+        bool ink = false;
+        for (int y = 128; y < 160 && !ink; ++y)
+            for (int x = 115; x < 200 && !ink; ++x) ink = actual.at(x, y).r > 200;
+        check(ink, "paragraph draws glyphs");
+        p = actual.at(115 + 2, 200);
+        check(p.r > 200 && p.g < 40, "gradient starts red");
+        p = actual.at(115 + 92, 200);
+        check(p.g > 30 && p.r < 140, "gradient passes through premultiplied green (no hue shift)");
         if (bc) {
-            const size_t at = (150 * 320 + 50) * 4;
-            check(actual[at + 2] > 240 && actual[at] < 8 && actual[at + 1] < 8, "BC1 texture sampled red");
-            const auto entry = lm_impeller::resources().images.find(image->uniqueID());
-            check(entry != lm_impeller::resources().images.end() && entry->second.bytes == 8, "BC1 upload retains block storage");
+            p = actual.at(50, 150);
+            check(p.r > 240 && p.g < 8 && p.b < 8, "BC1 texture sampled red");
         }
-        capture(rendered.get(), "impeller-" + backend);
-        capture(reference->makeImageSnapshot().get(), "skia-reference-" + backend);
+        capture(rendered, "impeller-" + backend);
     }
     if (bc) {
         std::vector<uint8_t> alpha(4 * 4 * 4);
         for (size_t i = 0; i < alpha.size(); i += 4) { alpha[i + 2] = 128; alpha[i + 3] = 128; }
         const auto blocks = block_compression::encodeBc3(alpha.data(), 4, 4);
-        auto logo = lm_impeller::compressedImage(3, 4, 4, blocks.data(), blocks.size());
-        auto next = lm_impeller::beginFrame(window, 320, 240);
-        next->clear(SK_ColorBLACK);
-        next->drawImage(logo, 0, 0);
-        const auto result = pixels(lm_impeller::snapshot(next.get()).get());
-        check(!result.empty() && result[2] > 110 && result[2] < 145 && result[3] == 255, "BC3 premultiplied alpha");
-        check(lm_impeller::present(window), "BC3 present");
+        auto logo = gx::Image::fromCompressed(3, 4, 4, blocks.data(), blocks.size());
+        auto next = gx::beginFrame(window, 320, 240);
+        next->clear({0, 0, 0, 1});
+        next->drawImageRect(logo, gx::Rect::XYWH(0, 0, 4, 4), gx::Rect::XYWH(0, 0, 4, 4), gx::Sampling{true}, nullptr);
+        const Pixels result(next->snapshot());
+        check(result.ok() && result.at(1, 1).r > 110 && result.at(1, 1).r < 145 && result.at(1, 1).a == 255, "BC3 premultiplied alpha");
+        check(gx::present(window), "BC3 present");
+    }
+    {
+        // Path booleans and measuring, on the CPU.
+        auto a = gx::Path::Rect_(gx::Rect::XYWH(0, 0, 10, 10)), b = gx::Path::Rect_(gx::Rect::XYWH(5, 5, 10, 10));
+        const auto both = gx::Path::combine(a, b, gx::BoolOp::intersect);
+        const gx::Rect overlap = both ? both->tightBounds() : gx::Rect{};
+        check(overlap.width() > 4.9f && overlap.width() < 5.1f && overlap.height() > 4.9f && overlap.height() < 5.1f, "path intersection");
+        check(a.contains(5, 5) && !a.contains(12, 5), "path containment");
+        gx::PathMeasure measure(gx::Path::Rect_(gx::Rect::XYWH(0, 0, 10, 10)));
+        check(measure.length() > 39.9f && measure.length() < 40.1f, "path length");
     }
     for (int i = 0; i < 12; ++i) {
         const int width = i % 2 ? 240 : 320;
         SDL_SetWindowSize(window, width, 240);
         SDL_SyncWindow(window);
-        auto next = lm_impeller::beginFrame(window, width, 240);
+        auto next = gx::beginFrame(window, width, 240);
         check(next != nullptr, "resize/recreate canvas");
-        if (next) { next->clear(SK_ColorBLUE); check(lm_impeller::present(window), "resized present"); }
+        if (next) { next->clear({0, 0, 1, 1}); check(gx::present(window), "resized present"); }
     }
-    lm_impeller::releaseWindow(window);
+    gx::releaseWindow(window);
     canvas.reset();
-    lm_impeller::shutdown();
-    check(!lm_impeller::active(), "context teardown");
+    gx::shutdown();
+    check(!gx::active(), "context teardown");
     if (gl) SDL_GL_DestroyContext(gl);
     SDL_DestroyWindow(window); SDL_Quit();
     return failures ? 1 : 0;

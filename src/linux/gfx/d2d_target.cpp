@@ -1,16 +1,9 @@
-// Direct2D render targets on Skia: the shared drawing (Canvas) and the window and bitmap targets.
-// The canvas matrix is the world transform (times the DPI scale) for every primitive;
-// axis-aligned clips and layers are on Skia's save stack, which Direct2D's strict nesting keeps
-// in step. A layer is a Skia layer only when it has an opacity or an opacity brush; content
-// bounds and geometric masks are clips.
+// Direct2D render targets on the Impeller kernel: the shared drawing (Canvas) and the window and
+// bitmap targets. The canvas matrix is the world transform (times the DPI scale) for every
+// primitive; axis-aligned clips and layers are on the canvas's save stack, which Direct2D's strict
+// nesting keeps in step. A layer is a canvas layer only when it has an opacity or an opacity
+// brush; content bounds and geometric masks are clips.
 #include "d2d_internal.hpp"
-
-#include "include/core/SkM44.h"
-#include "include/core/SkMaskFilter.h"
-#include "include/core/SkRRect.h"
-#include "include/effects/SkShaderMaskFilter.h"
-#include "include/gpu/ganesh/GrDirectContext.h"
-#include "include/gpu/ganesh/GrRecordingContext.h"
 
 #include <algorithm>
 #include <cmath>
@@ -19,7 +12,7 @@ namespace lm_d2d {
 namespace {
 class LayerResource final : public lm_com::Object<ID2D1Layer> {};
 
-// A geometry and how it is drawn: Direct2D tessellates once; Skia draws (and caches) the path.
+// A geometry and how it is drawn: Direct2D tessellates once; Impeller draws the path.
 class Realization final : public lm_com::Object<ID2D1GeometryRealization> {
 public:
     Realization(ComPtr<ID2D1Geometry> geometry, bool filled, float width, ComPtr<ID2D1StrokeStyle> style)
@@ -30,31 +23,31 @@ public:
     const ComPtr<ID2D1StrokeStyle> style;
 };
 
-SkBlendMode blendFor(D2D1_PRIMITIVE_BLEND blend) {
+ImpellerBlendMode blendFor(D2D1_PRIMITIVE_BLEND blend) {
     switch (blend) {
-    case D2D1_PRIMITIVE_BLEND_COPY: return SkBlendMode::kSrc;
-    case D2D1_PRIMITIVE_BLEND_MIN: return SkBlendMode::kDarken;
-    case D2D1_PRIMITIVE_BLEND_ADD: return SkBlendMode::kPlus;
-    case D2D1_PRIMITIVE_BLEND_MAX: return SkBlendMode::kLighten;
-    default: return SkBlendMode::kSrcOver;
+    case D2D1_PRIMITIVE_BLEND_COPY: return kImpellerBlendModeSource;
+    case D2D1_PRIMITIVE_BLEND_MIN: return kImpellerBlendModeDarken;
+    case D2D1_PRIMITIVE_BLEND_ADD: return kImpellerBlendModePlus;
+    case D2D1_PRIMITIVE_BLEND_MAX: return kImpellerBlendModeLighten;
+    default: return kImpellerBlendModeSourceOver;
     }
 }
 
-SkBlendMode blendFor(D2D1_COMPOSITE_MODE mode) {
+ImpellerBlendMode blendFor(D2D1_COMPOSITE_MODE mode) {
     switch (mode) {
-    case D2D1_COMPOSITE_MODE_DESTINATION_OVER: return SkBlendMode::kDstOver;
-    case D2D1_COMPOSITE_MODE_SOURCE_IN: return SkBlendMode::kSrcIn;
-    case D2D1_COMPOSITE_MODE_DESTINATION_IN: return SkBlendMode::kDstIn;
-    case D2D1_COMPOSITE_MODE_SOURCE_OUT: return SkBlendMode::kSrcOut;
-    case D2D1_COMPOSITE_MODE_DESTINATION_OUT: return SkBlendMode::kDstOut;
-    case D2D1_COMPOSITE_MODE_SOURCE_ATOP: return SkBlendMode::kSrcATop;
-    case D2D1_COMPOSITE_MODE_DESTINATION_ATOP: return SkBlendMode::kDstATop;
-    case D2D1_COMPOSITE_MODE_XOR: return SkBlendMode::kXor;
-    case D2D1_COMPOSITE_MODE_PLUS: return SkBlendMode::kPlus;
+    case D2D1_COMPOSITE_MODE_DESTINATION_OVER: return kImpellerBlendModeDestinationOver;
+    case D2D1_COMPOSITE_MODE_SOURCE_IN: return kImpellerBlendModeSourceIn;
+    case D2D1_COMPOSITE_MODE_DESTINATION_IN: return kImpellerBlendModeDestinationIn;
+    case D2D1_COMPOSITE_MODE_SOURCE_OUT: return kImpellerBlendModeSourceOut;
+    case D2D1_COMPOSITE_MODE_DESTINATION_OUT: return kImpellerBlendModeDestinationOut;
+    case D2D1_COMPOSITE_MODE_SOURCE_ATOP: return kImpellerBlendModeSourceATop;
+    case D2D1_COMPOSITE_MODE_DESTINATION_ATOP: return kImpellerBlendModeDestinationATop;
+    case D2D1_COMPOSITE_MODE_XOR: return kImpellerBlendModeXor;
+    case D2D1_COMPOSITE_MODE_PLUS: return kImpellerBlendModePlus;
     case D2D1_COMPOSITE_MODE_SOURCE_COPY:
-    case D2D1_COMPOSITE_MODE_BOUNDED_SOURCE_COPY: return SkBlendMode::kSrc;
-    case D2D1_COMPOSITE_MODE_MASK_INVERT: return SkBlendMode::kDifference;
-    default: return SkBlendMode::kSrcOver;
+    case D2D1_COMPOSITE_MODE_BOUNDED_SOURCE_COPY: return kImpellerBlendModeSource;
+    case D2D1_COMPOSITE_MODE_MASK_INVERT: return kImpellerBlendModeDifference;
+    default: return kImpellerBlendModeSourceOver;
     }
 }
 
@@ -63,16 +56,15 @@ bool unbounded(const D2D1_RECT_F& r) {
     return r.left <= -huge || r.top <= -huge || r.right >= huge || r.bottom >= huge;
 }
 
-bool invertible(const SkMatrix& m) { return m.isFinite() && m.invert(nullptr); }
+bool invertible(const gx::Matrix& m) { return m.isFinite() && m.invert(nullptr); }
 
-GrDirectContext* directOf(SkSurface* surface) {
-    GrRecordingContext* recording = surface ? surface->recordingContext() : nullptr;
-    return recording ? recording->asDirectContext() : nullptr;
+// Direct2D's 3D DrawBitmap matrix (row vectors (x, y, 0, 1), divided by w) as a perspective matrix.
+gx::Matrix perspectiveOf(const D2D1_MATRIX_4X4_F& m) {
+    return gx::Matrix::MakeAll(m._11, m._21, m._41, m._12, m._22, m._42, m._14, m._24, m._44);
 }
 
-// Direct2D's 3D DrawBitmap matrix (row vectors (x, y, 0, 1), divided by w) as a perspective SkMatrix.
-SkMatrix perspectiveOf(const D2D1_MATRIX_4X4_F& m) {
-    return SkMatrix::MakeAll(m._11, m._21, m._41, m._12, m._22, m._42, m._14, m._24, m._44);
+gx::Color straight(const D2D1_COLOR_F& c) {
+    return {std::clamp(c.r, 0.0f, 1.0f), std::clamp(c.g, 0.0f, 1.0f), std::clamp(c.b, 0.0f, 1.0f), std::clamp(c.a, 0.0f, 1.0f)};
 }
 } // namespace
 
@@ -82,66 +74,47 @@ Canvas::~Canvas() = default;
 
 Canvas* Canvas::from(ID2D1RenderTarget* target) { return dynamic_cast<Canvas*>(target); }
 
-void Canvas::attach(sk_sp<SkSurface> surface, int width, int height) {
-    if (surface == surface_ && !impeller_) { width_ = width; height_ = height; return; }
+void Canvas::attach(std::shared_ptr<gx::Canvas> canvas, int width, int height) {
     unwind();
-    commands_.reset();
-    surface_ = std::move(surface);
-    canvas_ = surface_ ? surface_->getCanvas() : nullptr;
-    gpu_ = directOf(surface_.get());
-    impeller_ = false;
+    canvas_ = std::move(canvas);
     width_ = width;
     height_ = height;
 }
 
-void Canvas::attachCommands(std::shared_ptr<SkCanvas> canvas, int width, int height) {
-    unwind();
-    surface_.reset();
-    gpu_ = nullptr;
-    commands_ = std::move(canvas);
-    canvas_ = commands_.get();
-    impeller_ = canvas_ != nullptr;
-    width_ = width;
-    height_ = height;
-}
+std::shared_ptr<gx::Image> Canvas::snapshot() { return canvas_ ? canvas_->snapshot() : nullptr; }
 
-sk_sp<SkImage> Canvas::snapshot() {
-    return impeller_ ? lm_impeller::snapshot(canvas_) : surface_ ? surface_->makeImageSnapshot() : nullptr;
-}
-
-SkMatrix Canvas::world() const {
-    SkMatrix m = toSk(transform_);
+gx::Matrix Canvas::world() const {
+    gx::Matrix m = toGx(transform_);
     m.postScale(dpi_ / 96.0f, dpi_ / 96.0f);
     return m;
 }
 
-SkCanvas* Canvas::prepare() {
+gx::Canvas* Canvas::prepare() {
     if (!canvas_) return nullptr;
-    const SkMatrix matrix = world();
+    const gx::Matrix matrix = world();
     if (!invertible(matrix)) return nullptr; // A collapsed transform draws nothing.
     canvas_->setMatrix(matrix);
-    return canvas_;
+    return canvas_.get();
 }
 
-bool Canvas::brushPaint(ID2D1Brush* brush, SkPaint& paint) const {
+bool Canvas::brushPaint(ID2D1Brush* brush, gx::Paint& paint) const {
     const auto* own = Brush::from(brush);
     if (!own) return false;
-    own->paint(paint, gpu_, 1);
-    paint.setAntiAlias(antialias_ != D2D1_ANTIALIAS_MODE_ALIASED);
-    paint.setBlendMode(blendFor(blend_));
+    own->paint(paint, 1);
+    paint.blend = blendFor(blend_);
     return true;
 }
 
-void Canvas::fillPath(const SkPath& path, ID2D1Brush* brush) {
-    SkPaint paint;
-    SkCanvas* canvas = brushPaint(brush, paint) ? prepare() : nullptr;
+void Canvas::fillPath(const gx::Path& path, ID2D1Brush* brush) {
+    gx::Paint paint;
+    gx::Canvas* canvas = brushPaint(brush, paint) ? prepare() : nullptr;
     if (canvas) canvas->drawPath(path, paint);
 }
 
-void Canvas::strokePath(const SkPath& path, ID2D1Brush* brush, FLOAT width, ID2D1StrokeStyle* style) {
+void Canvas::strokePath(const gx::Path& path, ID2D1Brush* brush, FLOAT width, ID2D1StrokeStyle* style) {
     if (!(width > 0)) return;
-    SkPaint paint;
-    SkCanvas* canvas = brushPaint(brush, paint) ? prepare() : nullptr;
+    gx::Paint paint;
+    gx::Canvas* canvas = brushPaint(brush, paint) ? prepare() : nullptr;
     if (!canvas) return;
     if (const auto* own = StrokeStyle::from(style)) own->apply(paint, width);
     else applyDefaultStroke(paint, width);
@@ -157,7 +130,7 @@ HRESULT Canvas::createBitmap(D2D1_SIZE_U size, const void* data, UINT32 pitch, c
     ComPtr<Bitmap> created;
     const float dpi_x = properties ? properties->dpiX : dpi_, dpi_y = properties ? properties->dpiY : dpi_;
     const HRESULT result = (format.format == DXGI_FORMAT_BC1_UNORM || format.format == DXGI_FORMAT_BC3_UNORM) ?
-        Bitmap::createCompressed(size, data, pitch, format, dpi_x, dpi_y, gpu_, created, impeller_) :
+        Bitmap::createCompressed(size, data, pitch, format, dpi_x, dpi_y, created) :
         Bitmap::create(size, data, pitch, format, dpi_x, dpi_y, created);
     if (SUCCEEDED(result)) *bitmap = created.Detach();
     return result;
@@ -168,9 +141,9 @@ HRESULT Canvas::createBitmap1(D2D1_SIZE_U size, const void* data, UINT32 pitch, 
     *bitmap = nullptr;
     if (!properties) return E_INVALIDARG;
     ComPtr<Bitmap> created;
-    // Compressed artwork into native GPU textures (BC1 on Skia, BC1/BC3 on Impeller).
+    // Compressed artwork into native GPU textures (BC1 and BC3).
     const HRESULT result = (properties->pixelFormat.format == DXGI_FORMAT_BC1_UNORM || properties->pixelFormat.format == DXGI_FORMAT_BC3_UNORM) ?
-        Bitmap::createCompressed(size, data, pitch, properties->pixelFormat, properties->dpiX, properties->dpiY, gpu_, created, impeller_) :
+        Bitmap::createCompressed(size, data, pitch, properties->pixelFormat, properties->dpiX, properties->dpiY, created) :
         Bitmap::create(size, data, pitch, properties->pixelFormat, properties->dpiX, properties->dpiY, created);
     if (SUCCEEDED(result)) *bitmap = created.Detach();
     return result;
@@ -195,7 +168,7 @@ HRESULT Canvas::createCompatibleRenderTarget(const D2D1_SIZE_F* size, const D2D1
     if (wanted.format == DXGI_FORMAT_A8_UNORM) return D2DERR_UNSUPPORTED_PIXEL_FORMAT; // Targets draw in colour.
     ComPtr<Bitmap> bitmap;
     const HRESULT result = Bitmap::create(extent, nullptr, 0, wanted, dpi, dpi, bitmap);
-    return FAILED(result) ? result : createBitmapTarget(std::move(bitmap), gpu_, target);
+    return FAILED(result) ? result : createBitmapTarget(std::move(bitmap), target);
 }
 
 HRESULT Canvas::createLayer(ID2D1Layer** layer) {
@@ -224,28 +197,28 @@ HRESULT Canvas::createStrokedRealization(ID2D1Geometry* geometry, FLOAT width, I
 
 void Canvas::drawLine(D2D1_POINT_2F from, D2D1_POINT_2F to, ID2D1Brush* brush, FLOAT width, ID2D1StrokeStyle* style) {
     if (!(width > 0)) return;
-    SkPaint paint;
-    SkCanvas* canvas = brushPaint(brush, paint) ? prepare() : nullptr;
+    gx::Paint paint;
+    gx::Canvas* canvas = brushPaint(brush, paint) ? prepare() : nullptr;
     if (!canvas) return;
     if (const auto* own = StrokeStyle::from(style)) own->apply(paint, width);
     else applyDefaultStroke(paint, width);
-    canvas->drawLine(from.x, from.y, to.x, to.y, paint);
+    canvas->drawLine({from.x, from.y}, {to.x, to.y}, paint);
 }
 
 void Canvas::drawRectangle(const D2D1_RECT_F* rect, ID2D1Brush* brush, FLOAT width, ID2D1StrokeStyle* style) {
     if (!rect || !(width > 0)) return;
-    SkPaint paint;
-    SkCanvas* canvas = brushPaint(brush, paint) ? prepare() : nullptr;
+    gx::Paint paint;
+    gx::Canvas* canvas = brushPaint(brush, paint) ? prepare() : nullptr;
     if (!canvas) return;
     if (const auto* own = StrokeStyle::from(style)) own->apply(paint, width);
     else applyDefaultStroke(paint, width);
-    canvas->drawRect(toSk(*rect).makeSorted(), paint);
+    canvas->drawRect(toGx(*rect).sorted(), paint);
 }
 
 void Canvas::fillRectangle(const D2D1_RECT_F* rect, ID2D1Brush* brush) {
-    SkPaint paint;
-    SkCanvas* canvas = rect && brushPaint(brush, paint) ? prepare() : nullptr;
-    if (canvas) canvas->drawRect(toSk(*rect).makeSorted(), paint);
+    gx::Paint paint;
+    gx::Canvas* canvas = rect && brushPaint(brush, paint) ? prepare() : nullptr;
+    if (canvas) canvas->drawRect(toGx(*rect).sorted(), paint);
 }
 
 void Canvas::drawRoundedRectangle(const D2D1_ROUNDED_RECT* rounded, ID2D1Brush* brush, FLOAT width, ID2D1StrokeStyle* style) {
@@ -254,13 +227,13 @@ void Canvas::drawRoundedRectangle(const D2D1_ROUNDED_RECT* rounded, ID2D1Brush* 
 
 void Canvas::fillRoundedRectangle(const D2D1_ROUNDED_RECT* rounded, ID2D1Brush* brush) {
     if (!rounded) return;
-    SkPaint paint;
-    SkCanvas* canvas = brushPaint(brush, paint) ? prepare() : nullptr;
+    gx::Paint paint;
+    gx::Canvas* canvas = brushPaint(brush, paint) ? prepare() : nullptr;
     if (!canvas) return;
-    const SkRect rect = toSk(rounded->rect).makeSorted();
+    const gx::Rect rect = toGx(rounded->rect).sorted();
     const float rx = std::min(std::abs(rounded->radiusX), rect.width() * 0.5f), ry = std::min(std::abs(rounded->radiusY), rect.height() * 0.5f);
     if (rx <= 0 || ry <= 0) canvas->drawRect(rect, paint);
-    else canvas->drawRRect(SkRRect::MakeRectXY(rect, rx, ry), paint);
+    else canvas->drawRoundRect(rect, rx, ry, paint);
 }
 
 void Canvas::drawEllipse(const D2D1_ELLIPSE* ellipse, ID2D1Brush* brush, FLOAT width, ID2D1StrokeStyle* style) {
@@ -269,11 +242,11 @@ void Canvas::drawEllipse(const D2D1_ELLIPSE* ellipse, ID2D1Brush* brush, FLOAT w
 
 void Canvas::fillEllipse(const D2D1_ELLIPSE* ellipse, ID2D1Brush* brush) {
     if (!ellipse) return;
-    SkPaint paint;
-    SkCanvas* canvas = brushPaint(brush, paint) ? prepare() : nullptr;
+    gx::Paint paint;
+    gx::Canvas* canvas = brushPaint(brush, paint) ? prepare() : nullptr;
     if (!canvas) return;
     const float rx = std::abs(ellipse->radiusX), ry = std::abs(ellipse->radiusY);
-    canvas->drawOval(SkRect::MakeLTRB(ellipse->point.x - rx, ellipse->point.y - ry, ellipse->point.x + rx, ellipse->point.y + ry), paint);
+    canvas->drawOval(gx::Rect::LTRB(ellipse->point.x - rx, ellipse->point.y - ry, ellipse->point.x + rx, ellipse->point.y + ry), paint);
 }
 
 void Canvas::drawGeometry(ID2D1Geometry* geometry, ID2D1Brush* brush, FLOAT width, ID2D1StrokeStyle* style) {
@@ -286,16 +259,16 @@ void Canvas::fillGeometry(ID2D1Geometry* geometry, ID2D1Brush* brush, ID2D1Brush
     const auto* opacity = Brush::from(opacityBrush);
     if (!opacity) { fillPath(shape->area(), brush); return; }
     // The opacity brush's alpha masks the fill: the fill in a layer, kept where the brush shows.
-    SkPaint paint;
-    SkCanvas* canvas = brushPaint(brush, paint) ? prepare() : nullptr;
+    gx::Paint paint;
+    gx::Canvas* canvas = brushPaint(brush, paint) ? prepare() : nullptr;
     if (!canvas) return;
-    const int restore_to = canvas->getSaveCount();
-    const SkRect bounds = shape->area().getBounds();
-    canvas->saveLayer(&bounds, nullptr);
+    const int restore_to = canvas->saveCount();
+    const gx::Rect bounds = shape->area().bounds();
+    canvas->saveLayer(&bounds, 1);
     canvas->drawPath(shape->area(), paint);
-    SkPaint mask;
-    opacity->paint(mask, gpu_, 1);
-    mask.setBlendMode(SkBlendMode::kDstIn);
+    gx::Paint mask;
+    opacity->paint(mask, 1);
+    mask.blend = kImpellerBlendModeDestinationIn;
     canvas->drawRect(bounds, mask);
     canvas->restoreToCount(restore_to);
 }
@@ -310,48 +283,46 @@ void Canvas::drawGeometryRealization(ID2D1GeometryRealization* realization, ID2D
 // The brush where the mask bitmap's alpha (its source rectangle stretched over the destination) shows.
 void Canvas::fillOpacityMask(ID2D1Bitmap* mask, ID2D1Brush* brush, const D2D1_RECT_F* destination, const D2D1_RECT_F* source) {
     auto* bitmap = Bitmap::from(mask);
-    SkPaint paint;
-    SkCanvas* canvas = bitmap && brushPaint(brush, paint) ? prepare() : nullptr;
-    sk_sp<SkImage> alpha = canvas ? bitmap->image(gpu_) : nullptr;
+    gx::Paint paint;
+    gx::Canvas* canvas = bitmap && brushPaint(brush, paint) ? prepare() : nullptr;
+    std::shared_ptr<gx::Image> alpha = canvas ? bitmap->image() : nullptr;
     if (!alpha) return;
     const auto size = bitmap->GetSize();
     const D2D1_RECT_F whole{0, 0, size.width, size.height};
-    const SkRect to = toSk(destination ? *destination : whole);
+    const gx::Rect to = toGx(destination ? *destination : whole).sorted();
     const D2D1_RECT_F from = source ? *source : whole;
-    const SkRect from_pixels = SkRect::MakeLTRB(from.left * bitmap->scaleX(), from.top * bitmap->scaleY(), from.right * bitmap->scaleX(),
+    const gx::Rect from_pixels = gx::Rect::LTRB(from.left * bitmap->scaleX(), from.top * bitmap->scaleY(), from.right * bitmap->scaleX(),
                                                 from.bottom * bitmap->scaleY());
-    if (to.isEmpty() || from_pixels.isEmpty()) return;
-    const SkMatrix local = SkMatrix::RectToRectOrIdentity(from_pixels, to);
-    paint.setMaskFilter(SkShaderMaskFilter::Make(alpha->makeShader(SkTileMode::kClamp, SkTileMode::kClamp, SkSamplingOptions(SkFilterMode::kLinear), &local)));
+    if (to.empty() || from_pixels.empty()) return;
+    // The brush in a layer, kept where the mask's alpha is.
+    const int restore_to = canvas->saveCount();
+    canvas->saveLayer(&to, 1);
     canvas->drawRect(to, paint);
+    gx::Paint keep;
+    keep.blend = kImpellerBlendModeDestinationIn;
+    canvas->drawImageRect(alpha, from_pixels, to, gx::Sampling{false}, &keep);
+    canvas->restoreToCount(restore_to);
 }
 
 void Canvas::drawBitmap(ID2D1Bitmap* bitmap, const D2D1_RECT_F* destination, FLOAT opacity, D2D1_INTERPOLATION_MODE mode,
                         const D2D1_RECT_F* source, const D2D1_MATRIX_4X4_F* perspective) {
     auto* own = Bitmap::from(bitmap);
     if (!own || !(opacity > 0)) return;
-    SkCanvas* canvas = prepare();
-    sk_sp<SkImage> image = canvas ? own->image(gpu_) : nullptr;
+    gx::Canvas* canvas = prepare();
+    std::shared_ptr<gx::Image> image = canvas ? own->image() : nullptr;
     if (!image) return;
     const auto size = own->GetSize();
     const D2D1_RECT_F whole{0, 0, size.width, size.height};
-    const SkRect to = toSk(destination ? *destination : whole);
+    const gx::Rect to = toGx(destination ? *destination : whole);
     const D2D1_RECT_F from = source ? *source : whole;
-    const SkRect from_pixels = SkRect::MakeLTRB(from.left * own->scaleX(), from.top * own->scaleY(), from.right * own->scaleX(),
+    const gx::Rect from_pixels = gx::Rect::LTRB(from.left * own->scaleX(), from.top * own->scaleY(), from.right * own->scaleX(),
                                                 from.bottom * own->scaleY());
-    if (to.isEmpty() || from_pixels.isEmpty()) return;
+    if (to.empty() || from_pixels.empty()) return;
     if (perspective) canvas->concat(perspectiveOf(*perspective));
-    // Reduced when the destination covers fewer device pixels than the source has.
-    const SkRect shown = canvas->getTotalMatrix().mapRect(to);
-    const bool reducing = shown.width() * shown.height() < from_pixels.width() * from_pixels.height() * 0.9f;
-    SkPaint paint;
-    paint.setAlphaf(std::min(opacity, 1.0f));
-    paint.setAntiAlias(antialias_ != D2D1_ANTIALIAS_MODE_ALIASED);
-    paint.setBlendMode(blendFor(blend_));
-    const bool mipmapped = image->hasMipmaps() || !image->isTextureBacked();
-    const bool part = from_pixels != SkRect::MakeIWH(image->width(), image->height());
-    canvas->drawImageRect(image, from_pixels, to, samplingFor(mode, reducing, mipmapped), &paint,
-                          part ? SkCanvas::kStrict_SrcRectConstraint : SkCanvas::kFast_SrcRectConstraint);
+    gx::Paint paint;
+    paint.color = {0, 0, 0, std::min(opacity, 1.0f)};
+    paint.blend = blendFor(blend_);
+    canvas->drawImageRect(image, from_pixels, to, samplingFor(mode), &paint);
 }
 
 // Effects are computed at the resolution they are shown at (never above the image's own): the
@@ -359,47 +330,50 @@ void Canvas::drawBitmap(ID2D1Bitmap* bitmap, const D2D1_RECT_F* destination, FLO
 // reuses an effect's cached result.
 void Canvas::drawImage(ID2D1Image* image, const D2D1_POINT_2F* offset, const D2D1_RECT_F* imageRectangle, D2D1_INTERPOLATION_MODE mode,
                        D2D1_COMPOSITE_MODE composite) {
-    SkCanvas* canvas = image ? prepare() : nullptr;
+    gx::Canvas* canvas = image ? prepare() : nullptr;
     if (!canvas) return;
     double scale = 1;
     ImageData data;
     if (auto* bitmap = Bitmap::from(image)) {
         scale = bitmap->scaleX();
-        data = {bitmap->image(gpu_), 0, 0};
+        data = {bitmap->image(), 0, 0};
     } else if (auto* source = ImageSource::from(image)) {
-        const SkMatrix w = world();
-        const double device = std::sqrt(std::abs(w.getScaleX() * w.getScaleY() - w.getSkewX() * w.getSkewY()));
+        const gx::Matrix w = world();
+        const double device = std::sqrt(std::abs(static_cast<double>(w.scaleX()) * w.scaleY() - static_cast<double>(w.skewX()) * w.skewY()));
         if (device < 1) scale = std::max(1.0 / 16, std::exp2(std::ceil(std::log2(std::max(device, 1e-6)) * 4) / 4));
-        data = source->render(scale, gpu_);
+        data = source->render(scale);
     }
     if (!data.image) return;
     const D2D1_POINT_2F at = offset ? *offset : D2D1_POINT_2F{0, 0};
-    const int restore_to = canvas->save(); // The clip stays for this draw only.
+    const int restore_to = canvas->saveCount();
+    canvas->save(); // The clip stays for this draw only.
     if (imageRectangle) {
         canvas->translate(at.x - imageRectangle->left, at.y - imageRectangle->top);
-        canvas->clipRect(toSk(*imageRectangle), antialias_ != D2D1_ANTIALIAS_MODE_ALIASED);
+        canvas->clipRect(toGx(*imageRectangle));
     } else {
         canvas->translate(at.x, at.y);
     }
     canvas->scale(static_cast<float>(1 / scale), static_cast<float>(1 / scale));
-    SkPaint paint;
-    paint.setBlendMode(blendFor(composite));
-    paint.setAntiAlias(antialias_ != D2D1_ANTIALIAS_MODE_ALIASED);
-    canvas->drawImage(data.image, static_cast<float>(data.x), static_cast<float>(data.y), samplingFor(mode, false, false), &paint);
+    gx::Paint paint;
+    paint.color = {0, 0, 0, 1};
+    paint.blend = blendFor(composite);
+    const float x = static_cast<float>(data.x), y = static_cast<float>(data.y);
+    canvas->drawImageRect(data.image, gx::Rect::XYWH(0, 0, static_cast<float>(data.image->width()), static_cast<float>(data.image->height())),
+                          gx::Rect::XYWH(x, y, static_cast<float>(data.image->width()), static_cast<float>(data.image->height())), samplingFor(mode), &paint);
     canvas->restoreToCount(restore_to);
 }
 
 // ---- Clips and layers ---------------------------------------------------------------------
 
 // The rectangle's device-space bounding box (a rotated rectangle clips to its bounds).
-void Canvas::pushAxisAlignedClip(const D2D1_RECT_F* rect, D2D1_ANTIALIAS_MODE mode) {
-    stack_.push_back({true, canvas_ ? canvas_->getSaveCount() : 1, world(), nullptr});
+void Canvas::pushAxisAlignedClip(const D2D1_RECT_F* rect, D2D1_ANTIALIAS_MODE) {
+    stack_.push_back({true, canvas_ ? canvas_->saveCount() : 1, world(), nullptr});
     if (!canvas_) return;
     canvas_->save();
     if (!rect) return;
-    const SkRect device = world().mapRect(toSk(*rect).makeSorted());
+    const gx::Rect device = world().mapRect(toGx(*rect).sorted());
     canvas_->resetMatrix();
-    canvas_->clipRect(device, mode != D2D1_ANTIALIAS_MODE_ALIASED);
+    canvas_->clipRect(device);
 }
 
 void Canvas::popAxisAlignedClip() {
@@ -410,23 +384,19 @@ void Canvas::popAxisAlignedClip() {
 }
 
 void Canvas::pushLayer(const D2D1_LAYER_PARAMETERS1& parameters) {
-    const SkMatrix at = world();
-    stack_.push_back({false, canvas_ ? canvas_->getSaveCount() : 1, at, ComPtr<ID2D1Brush>(parameters.opacityBrush)});
+    const gx::Matrix at = world();
+    stack_.push_back({false, canvas_ ? canvas_->saveCount() : 1, at, ComPtr<ID2D1Brush>(parameters.opacityBrush)});
     if (!canvas_) return;
     canvas_->save();
     canvas_->setMatrix(at);
-    if (!unbounded(parameters.contentBounds)) canvas_->clipRect(toSk(parameters.contentBounds).makeSorted(), true);
+    if (!unbounded(parameters.contentBounds)) canvas_->clipRect(toGx(parameters.contentBounds).sorted());
     if (const auto* mask = Geometry::from(parameters.geometricMask)) {
-        const SkMatrix mask_transform = toSk(parameters.maskTransform);
-        if (!invertible(mask_transform)) canvas_->clipRect(SkRect::MakeEmpty()); // A collapsed mask shows nothing.
-        else canvas_->clipPath(mask->area().makeTransform(mask_transform), parameters.maskAntialiasMode != D2D1_ANTIALIAS_MODE_ALIASED);
+        const gx::Matrix mask_transform = toGx(parameters.maskTransform);
+        if (!invertible(mask_transform)) canvas_->clipRect(gx::Rect{}); // A collapsed mask shows nothing.
+        else canvas_->clipPath(mask->area().transformed(mask_transform));
     }
     const float opacity = std::clamp(parameters.opacity, 0.0f, 1.0f);
-    if (opacity < 1 || stack_.back().opacity_brush) {
-        SkPaint paint;
-        paint.setAlphaf(opacity);
-        canvas_->saveLayer(nullptr, opacity < 1 ? &paint : nullptr);
-    }
+    if (opacity < 1 || stack_.back().opacity_brush) canvas_->saveLayer(nullptr, opacity);
 }
 
 void Canvas::popLayer() {
@@ -437,9 +407,9 @@ void Canvas::popLayer() {
     // The opacity brush (in the space the layer was pushed in) keeps the layer where it shows.
     if (const auto* brush = Brush::from(layer.opacity_brush.Get()); brush && invertible(layer.world)) {
         canvas_->setMatrix(layer.world);
-        SkPaint mask;
-        brush->paint(mask, gpu_, 1);
-        mask.setBlendMode(SkBlendMode::kDstIn);
+        gx::Paint mask;
+        brush->paint(mask, 1);
+        mask.blend = kImpellerBlendModeDestinationIn;
         canvas_->drawPaint(mask);
     }
     canvas_->restoreToCount(layer.restore_to);
@@ -454,10 +424,10 @@ void Canvas::unwind() {
 // their pixels opaque: the colour is laid over black.
 void Canvas::clear(const D2D1_COLOR_F* color) {
     if (!canvas_) return;
-    D2D1_COLOR_F c = color ? *color : D2D1_COLOR_F{0, 0, 0, 0};
-    c.r = std::clamp(c.r, 0.0f, 1.0f); c.g = std::clamp(c.g, 0.0f, 1.0f); c.b = std::clamp(c.b, 0.0f, 1.0f); c.a = std::clamp(c.a, 0.0f, 1.0f);
-    if (format_.alphaMode == D2D1_ALPHA_MODE_IGNORE) canvas_->clear(SkColor4f{c.r * c.a, c.g * c.a, c.b * c.a, 1});
-    else canvas_->clear(SkColor4f{c.r, c.g, c.b, c.a});
+    const gx::Color c = straight(color ? *color : D2D1_COLOR_F{0, 0, 0, 0});
+    canvas_->resetMatrix();
+    if (format_.alphaMode == D2D1_ALPHA_MODE_IGNORE) canvas_->clear({c.r * c.a, c.g * c.a, c.b * c.a, 1});
+    else canvas_->clear(c);
 }
 
 void Canvas::beginDraw() {
@@ -475,7 +445,7 @@ HRESULT Canvas::endDraw() {
     const bool balanced = stack_.empty() && !unbalanced_;
     unwind();
     if (!canvas_) return D2DERR_RECREATE_TARGET;
-    changed();
+    finishFrame();
     return balanced ? S_OK : D2DERR_PUSH_POP_UNBALANCED;
 }
 
@@ -491,7 +461,7 @@ D2D1_SIZE_F Canvas::size() const {
 // ---- Targets ------------------------------------------------------------------------------
 
 namespace {
-// A window's frames: the window layer's surface for each one, shown at EndDraw.
+// A window's frames: the window layer's canvas for each one, shown at EndDraw.
 class HwndTarget final : public RenderTarget<ID2D1HwndRenderTarget, ID2D1DeviceContext1> {
 public:
     HwndTarget(HWND window, D2D1_PIXEL_FORMAT format, float dpi) : RenderTarget(format, dpi), window_(window) {}
@@ -509,20 +479,20 @@ protected:
     void prepareFrame() override {
         const D2D1_SIZE_U size = pixelSize();
         const int width = static_cast<int>(size.width), height = static_cast<int>(size.height);
-        // Detach before beginFrame replaces the previous command canvas.
-        attach(sk_sp<SkSurface>{}, width, height);
-        if (auto commands = lm_gfx::windowCanvas(window_, width, height)) attachCommands(std::move(commands), width, height);
-        else attach(lm_gfx::windowSurface(window_, width, height), width, height);
+        // Detach before the window layer replaces the previous frame's canvas.
+        attach(nullptr, width, height);
+        attach(lm_gfx::windowCanvas(window_, width, height), width, height);
     }
 private:
     HWND window_;
 };
 
-// CreateCompatibleRenderTarget: draws into its bitmap's own pixels (GetBitmap shares them).
+// CreateCompatibleRenderTarget: draws into its bitmap's own pixels (GetBitmap shares them): each
+// BeginDraw starts from the pixels so far, EndDraw renders the frame and the bitmap takes it.
 class BitmapTarget final : public RenderTarget<ID2D1BitmapRenderTarget, ID2D1DeviceContext1> {
 public:
-    BitmapTarget(ComPtr<Bitmap> bitmap, GrDirectContext* gpu)
-        : RenderTarget(bitmap->GetPixelFormat(), static_cast<float>(bitmap->scaleX() * 96)), bitmap_(std::move(bitmap)), parent_gpu_(gpu) {
+    explicit BitmapTarget(ComPtr<Bitmap> bitmap)
+        : RenderTarget(bitmap->GetPixelFormat(), static_cast<float>(bitmap->scaleX() * 96)), bitmap_(std::move(bitmap)) {
         setSize(bitmap_->width(), bitmap_->height());
     }
     HRESULT STDMETHODCALLTYPE GetBitmap(ID2D1Bitmap** bitmap) override {
@@ -532,21 +502,33 @@ public:
         return S_OK;
     }
 protected:
-    void changed() override { bitmap_->touch(); }
-    // The bitmap's surface, made at the first BeginDraw (on the parent's GPU, else in memory).
-    void prepareFrame() override { attach(bitmap_->surface(parent_gpu_), bitmap_->width(), bitmap_->height()); }
+    void prepareFrame() override {
+        attach(nullptr, bitmap_->width(), bitmap_->height());
+        if (!gx::active()) return;
+        auto frame = std::make_shared<gx::Canvas>(bitmap_->width(), bitmap_->height());
+        if (!frame->healthy()) return;
+        if (auto image = bitmap_->image()) {
+            gx::Paint copy;
+            copy.color = {0, 0, 0, 1};
+            copy.blend = kImpellerBlendModeSource;
+            const gx::Rect whole = gx::Rect::XYWH(0, 0, static_cast<float>(bitmap_->width()), static_cast<float>(bitmap_->height()));
+            frame->drawImageRect(image, whole, whole, gx::Sampling{true}, &copy);
+        }
+        attach(std::move(frame), bitmap_->width(), bitmap_->height());
+    }
+    void finishFrame() override {
+        if (auto result = snapshot()) bitmap_->setImage(std::move(result));
+    }
 private:
     ComPtr<Bitmap> bitmap_;
-    GrDirectContext* parent_gpu_;
 };
 } // namespace
 
-HRESULT createBitmapTarget(ComPtr<Bitmap> bitmap, GrDirectContext* gpu, ID2D1BitmapRenderTarget** target) {
+HRESULT createBitmapTarget(ComPtr<Bitmap> bitmap, ID2D1BitmapRenderTarget** target) {
     if (!target) return E_POINTER;
     *target = nullptr;
     if (!bitmap || bitmap->alphaOnly()) return E_INVALIDARG;
-    if (gpu != lm_gfx::gpu()) gpu = nullptr; // Another thread: in memory.
-    *target = new BitmapTarget(std::move(bitmap), gpu);
+    *target = new BitmapTarget(std::move(bitmap));
     return S_OK;
 }
 

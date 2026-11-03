@@ -1,236 +1,332 @@
-// Records actual GPU primitives into Impeller. Skia remains the CPU geometry/text helper;
-// unusual paints are rasterized as local images, never as a full-frame presentation backend.
-#include "internal.hpp"
-#include "include/core/SkM44.h"
-#include "include/core/SkPath.h"
-#include "include/core/SkPathUtils.h"
-#include "include/core/SkPathEffect.h"
-#include "include/core/SkRRect.h"
-#include "include/core/SkSurface.h"
-#include "include/core/SkShader.h"
+// Canvas: records drawing as an Impeller display list. Paint and path conversions live here too.
+#include "state.hpp"
+
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 
 namespace lm_impeller {
-Canvas::Canvas(int width, int height) : SkCanvas(width, height), width_(width), height_(height) {
+namespace {
+using PathPtr = PathHandle;
+
+ImpellerRect nativeRect(const Rect& r) { return {r.left, r.top, r.width(), r.height()}; }
+ImpellerColor nativeColor(const Color& c) { return {c.r, c.g, c.b, c.a, kImpellerColorSpaceSRGB}; }
+
+PathPtr nativePath(const Path& path) {
+    PathBuilderHandle builder(ImpellerPathBuilderNew());
+    if (!builder) return {};
+    size_t at = 0;
+    const auto point = [&](size_t i) { return ImpellerPoint{path.points[i].x, path.points[i].y}; };
+    for (const Verb verb : path.verbs) {
+        switch (verb) {
+        case Verb::move: { const auto a = point(at++); ImpellerPathBuilderMoveTo(builder.get(), &a); break; }
+        case Verb::line: { const auto a = point(at++); ImpellerPathBuilderLineTo(builder.get(), &a); break; }
+        case Verb::quad: {
+            const auto a = point(at), b = point(at + 1);
+            at += 2;
+            ImpellerPathBuilderQuadraticCurveTo(builder.get(), &a, &b);
+            break;
+        }
+        case Verb::cubic: {
+            const auto a = point(at), b = point(at + 1), c = point(at + 2);
+            at += 3;
+            ImpellerPathBuilderCubicCurveTo(builder.get(), &a, &b, &c);
+            break;
+        }
+        case Verb::close: ImpellerPathBuilderClose(builder.get()); break;
+        }
+    }
+    return PathPtr(ImpellerPathBuilderTakePathNew(builder.get(), path.even_odd ? kImpellerFillTypeOdd : kImpellerFillTypeNonZero));
+}
+
+// The standalone API interpolates straight colours; Direct2D's gradients interpolate premultiplied.
+// Stops are subdivided where the straight interpolation would be off by more than 1/1024 of a
+// premultiplied channel, which keeps gradients on the GPU without dark fringes at transparent stops.
+struct Stops {
+    std::vector<ImpellerColor> colors;
+    std::vector<float> positions;
+};
+Stops gradientStops(const std::vector<Color>& colors, const std::vector<float>& positions, bool premultiplied) {
+    Stops result;
+    const auto push = [&](const Color& color, float position) {
+        result.colors.push_back(nativeColor(color));
+        result.positions.push_back(position);
+    };
+    if (!premultiplied || colors.size() < 2) {
+        for (size_t i = 0; i < colors.size(); ++i) push(colors[i], positions[i]);
+        return result;
+    }
+    for (size_t i = 1; i < colors.size(); ++i) {
+        const Color a = colors[i - 1], b = colors[i];
+        const auto at = [&](float t) {
+            Color c;
+            c.a = a.a + (b.a - a.a) * t;
+            const auto mix = [&](float from, float to) {
+                return c.a > 0 ? (from * a.a * (1 - t) + to * b.a * t) / c.a : (a.a > 0 ? from : to);
+            };
+            c.r = mix(a.r, b.r); c.g = mix(a.g, b.g); c.b = mix(a.b, b.b);
+            return c;
+        };
+        const auto append = [&](auto&& self, float left, float right, Color start, Color end, unsigned depth) -> void {
+            const float difference = std::max({std::abs(end.r - start.r), std::abs(end.g - start.g), std::abs(end.b - start.b)});
+            if (depth < 12 && difference * std::abs(end.a - start.a) * 0.25f > 1.0f / 1024) {
+                const float middle = (left + right) * 0.5f;
+                const Color color = at(middle);
+                self(self, left, middle, start, color, depth + 1);
+                self(self, middle, right, color, end, depth + 1);
+            } else {
+                push(end, positions[i - 1] + (positions[i] - positions[i - 1]) * right);
+            }
+        };
+        push(at(0), positions[i - 1]);
+        append(append, 0, 1, at(0), at(1), 0);
+    }
+    return result;
+}
+
+ColorSourceHandle nativeSource(const Shader& shader) {
+    const ImpellerMatrix transform = shader.local.native();
+    if (shader.kind == Shader::Kind::image) {
+        if (!shader.image) return {};
+        const ImpellerTexture texture = shader.image->texture();
+        if (!texture) return {};
+        return ColorSourceHandle(ImpellerColorSourceCreateImageNew(texture, shader.tile_x, shader.tile_y,
+            shader.nearest ? kImpellerTextureSamplingNearestNeighbor : kImpellerTextureSamplingLinear, &transform));
+    }
+    if (shader.colors.empty()) return {};
+    const Stops stops = gradientStops(shader.colors, shader.positions, shader.premultiplied);
+    const auto count = static_cast<uint32_t>(stops.colors.size());
+    const ImpellerPoint a{shader.p0.x, shader.p0.y}, b{shader.p1.x, shader.p1.y};
+    switch (shader.kind) {
+    case Shader::Kind::linear:
+        return ColorSourceHandle(ImpellerColorSourceCreateLinearGradientNew(&a, &b, count, stops.colors.data(), stops.positions.data(), shader.tile_x, &transform));
+    case Shader::Kind::radial:
+        return ColorSourceHandle(ImpellerColorSourceCreateRadialGradientNew(&a, shader.r0, count, stops.colors.data(), stops.positions.data(), shader.tile_x, &transform));
+    default:
+        return ColorSourceHandle(ImpellerColorSourceCreateConicalGradientNew(&a, shader.r0, &b, shader.r1, count, stops.colors.data(),
+                                                                             stops.positions.data(), shader.tile_x, &transform));
+    }
+}
+
+PaintHandle nativePaint(const Paint& paint) {
+    PaintHandle result(ImpellerPaintNew());
+    if (!result) return {};
+    const ImpellerColor color = nativeColor(paint.color);
+    ImpellerPaintSetColor(result.get(), &color);
+    ImpellerPaintSetBlendMode(result.get(), paint.blend);
+    ImpellerPaintSetDrawStyle(result.get(), paint.stroke ? kImpellerDrawStyleStroke : kImpellerDrawStyleFill);
+    ImpellerPaintSetStrokeWidth(result.get(), paint.width);
+    ImpellerPaintSetStrokeCap(result.get(), paint.cap);
+    ImpellerPaintSetStrokeJoin(result.get(), paint.join);
+    ImpellerPaintSetStrokeMiter(result.get(), paint.miter);
+    if (paint.shader) {
+        auto source = nativeSource(*paint.shader);
+        if (!source) return {};
+        ImpellerPaintSetColorSource(result.get(), source.get());
+    }
+    if (paint.blur_sigma > 0) {
+        Handle<ImpellerImageFilter, ImpellerImageFilterRelease> blur(ImpellerImageFilterCreateBlurNew(paint.blur_sigma, paint.blur_sigma, paint.blur_tile));
+        if (!blur) return {};
+        ImpellerPaintSetImageFilter(result.get(), blur.get());
+    }
+    if (paint.has_color_matrix) {
+        ImpellerColorMatrix matrix;
+        std::copy(paint.color_matrix, paint.color_matrix + 20, matrix.m);
+        Handle<ImpellerColorFilter, ImpellerColorFilterRelease> filter(ImpellerColorFilterCreateColorMatrixNew(&matrix));
+        if (!filter) return {};
+        ImpellerPaintSetColorFilter(result.get(), filter.get());
+    }
+    return result;
+}
+} // namespace
+
+Canvas::Canvas(int width, int height) : width_(width), height_(height) {
     const ImpellerRect bounds{0, 0, static_cast<float>(width), static_cast<float>(height)};
-    builder_.reset(ImpellerDisplayListBuilderNew(&bounds));
+    builder_ = ImpellerDisplayListBuilderNew(&bounds);
     healthy_ = builder_ != nullptr;
 }
-Canvas::~Canvas() { restoreToCount(1); }
-void Canvas::matrix() {
+
+Canvas::~Canvas() {
+    if (finished_) ImpellerDisplayListRelease(finished_);
+    if (builder_) ImpellerDisplayListBuilderRelease(builder_);
+}
+
+void Canvas::applyMatrix() {
     if (!builder_) return;
-    const auto transform = nativeMatrix(getLocalToDeviceAs3x3());
-    ImpellerDisplayListBuilderSetTransform(builder_.get(), &transform);
-}
-void Canvas::didSetM44(const SkM44&) { matrix(); }
-void Canvas::didConcat44(const SkM44&) { matrix(); }
-void Canvas::didTranslate(SkScalar, SkScalar) { matrix(); }
-void Canvas::didScale(SkScalar, SkScalar) { matrix(); }
-void Canvas::willSave() { if (builder_) ImpellerDisplayListBuilderSave(builder_.get()); }
-void Canvas::willRestore() { if (builder_) ImpellerDisplayListBuilderRestore(builder_.get()); }
-
-SkCanvas::SaveLayerStrategy Canvas::getSaveLayerStrategy(const SaveLayerRec& rec) {
-    (void)SkCanvas::getSaveLayerStrategy(rec);
-    Paint paint;
-    if (rec.fPaint) paint = nativePaint(*rec.fPaint);
-    if ((rec.fPaint && !paint) || rec.fBackdrop) healthy_ = false;
-    SkRect bounds;
-    if (rec.fBounds) bounds = *rec.fBounds;
-    else if (!getLocalClipBounds(&bounds)) bounds = SkRect::MakeEmpty();
-    const auto box = nativeRect(bounds);
-    if (builder_) ImpellerDisplayListBuilderSaveLayer(builder_.get(), &box, paint.get(), nullptr);
-    return kNoLayer_SaveLayerStrategy;
+    const ImpellerMatrix native = matrix_.native();
+    ImpellerDisplayListBuilderSetTransform(builder_, &native);
 }
 
-void Canvas::onClipRect(const SkRect& rect, SkClipOp op, ClipEdgeStyle edge) {
-    SkCanvas::onClipRect(rect, op, edge);
-    const auto box = nativeRect(rect);
-    if (builder_) ImpellerDisplayListBuilderClipRect(builder_.get(), &box, static_cast<ImpellerClipOperation>(op));
-}
-void Canvas::onClipRRect(const SkRRect& rect, SkClipOp op, ClipEdgeStyle edge) {
-    SkCanvas::onClipRRect(rect, op, edge);
-    auto path = nativePath(SkPath::RRect(rect));
-    if (builder_ && path) ImpellerDisplayListBuilderClipPath(builder_.get(), path.get(), static_cast<ImpellerClipOperation>(op));
-    else healthy_ = false;
-}
-void Canvas::onClipPath(const SkPath& shape, SkClipOp op, ClipEdgeStyle edge) {
-    SkCanvas::onClipPath(shape, op, edge);
-    auto path = nativePath(shape);
-    if (builder_ && path) ImpellerDisplayListBuilderClipPath(builder_.get(), path.get(), static_cast<ImpellerClipOperation>(op));
-    else healthy_ = false;
+void Canvas::setMatrix(const Matrix& m) {
+    matrix_ = m;
+    applyMatrix();
 }
 
-void Canvas::onDrawPaint(const SkPaint& paint) {
-    auto native = nativePaint(paint);
-    if (native) ImpellerDisplayListBuilderDrawPaint(builder_.get(), native.get());
-    else {
-        SkRect bounds;
-        if (getLocalClipBounds(&bounds)) rasterPath(SkPath::Rect(bounds), paint);
+void Canvas::save() {
+    stack_.push_back({matrix_});
+    if (builder_) ImpellerDisplayListBuilderSave(builder_);
+}
+
+void Canvas::saveLayer(const Rect* bounds, float alpha) {
+    stack_.push_back({matrix_});
+    if (!builder_) return;
+    Rect area;
+    if (bounds) {
+        area = *bounds;
+    } else {
+        // The target as seen from the current space.
+        Matrix inverse;
+        area = matrix_.invert(&inverse) ? inverse.mapRect(Rect::XYWH(0, 0, static_cast<float>(width_), static_cast<float>(height_)))
+                                        : Rect::XYWH(0, 0, static_cast<float>(width_), static_cast<float>(height_));
     }
-}
-void Canvas::onDrawRect(const SkRect& rect, const SkPaint& paint) {
-    auto native = nativePaint(paint);
-    const auto box = nativeRect(rect);
-    if (native) ImpellerDisplayListBuilderDrawRect(builder_.get(), &box, native.get());
-    else onDrawPath(SkPath::Rect(rect), paint);
-}
-void Canvas::onDrawRRect(const SkRRect& rect, const SkPaint& paint) { onDrawPath(SkPath::RRect(rect), paint); }
-void Canvas::onDrawOval(const SkRect& rect, const SkPaint& paint) {
-    auto native = nativePaint(paint);
-    const auto box = nativeRect(rect);
-    if (native) ImpellerDisplayListBuilderDrawOval(builder_.get(), &box, native.get());
-    else onDrawPath(SkPath::Oval(rect), paint);
-}
-void Canvas::onDrawPath(const SkPath& path, const SkPaint& paint) {
-    if (paint.getPathEffect()) {
-        bool is_fill = false;
-        const SkPath filled = skpathutils::FillPathWithPaint(path, paint, &is_fill);
-        if (is_fill) {
-            SkPaint clean = paint;
-            clean.setPathEffect(nullptr);
-            clean.setStyle(SkPaint::kFill_Style);
-            onDrawPath(filled, clean);
-            return;
-        }
+    const ImpellerRect native = nativeRect(area);
+    PaintHandle paint;
+    if (alpha < 1) {
+        Paint own;
+        own.color = {0, 0, 0, std::clamp(alpha, 0.0f, 1.0f)};
+        paint = nativePaint(own);
     }
-    auto native = nativePaint(paint);
-    if (!native || path.isInverseFillType()) { rasterPath(path, paint); return; }
-    auto shape = nativePath(path);
-    if (!shape) { healthy_ = false; return; }
-    ImpellerDisplayListBuilderDrawPath(builder_.get(), shape.get(), native.get());
+    ImpellerDisplayListBuilderSaveLayer(builder_, &native, paint.get(), nullptr);
 }
-void Canvas::onDrawPoints(PointMode mode, size_t count, const SkPoint points[], const SkPaint& paint) {
-    if (!count) return;
-    const size_t step = mode == kLines_PointMode ? 2 : 1;
-    auto native = nativePaint(paint);
-    if (mode == kPoints_PointMode) {
-        for (size_t i = 0; i < count; ++i) {
-            const float radius = std::max(0.5f, paint.getStrokeWidth() * 0.5f);
-            SkPaint fill = paint; fill.setStyle(SkPaint::kFill_Style);
-            onDrawOval(SkRect::MakeLTRB(points[i].x() - radius, points[i].y() - radius, points[i].x() + radius, points[i].y() + radius), fill);
-        }
+
+void Canvas::restore() {
+    if (stack_.empty()) return;
+    matrix_ = stack_.back().matrix;
+    stack_.pop_back();
+    if (builder_) ImpellerDisplayListBuilderRestore(builder_);
+}
+
+void Canvas::restoreToCount(int count) {
+    while (saveCount() > std::max(1, count)) restore();
+}
+
+void Canvas::clipRect(const Rect& r) {
+    if (!builder_) return;
+    const ImpellerRect native = nativeRect(r.sorted());
+    ImpellerDisplayListBuilderClipRect(builder_, &native, kImpellerClipOperationIntersect);
+}
+
+void Canvas::clipPath(const Path& p) {
+    if (!builder_) return;
+    const auto native = nativePath(p);
+    if (!native) { healthy_ = false; return; }
+    ImpellerDisplayListBuilderClipPath(builder_, native.get(), kImpellerClipOperationIntersect);
+}
+
+void Canvas::drawPaint(const Paint& paint) {
+    const auto native = nativePaint(paint);
+    if (native && builder_) ImpellerDisplayListBuilderDrawPaint(builder_, native.get());
+}
+
+void Canvas::drawRect(const Rect& r, const Paint& paint) {
+    if (paint.stroke && !paint.dashes.empty()) { drawPath(Path::Rect_(r), paint); return; }
+    const auto native = nativePaint(paint);
+    if (!native || !builder_) return;
+    const ImpellerRect box = nativeRect(r.sorted());
+    ImpellerDisplayListBuilderDrawRect(builder_, &box, native.get());
+}
+
+void Canvas::drawRoundRect(const Rect& r, float rx, float ry, const Paint& paint) {
+    if (rx <= 0 || ry <= 0) { drawRect(r, paint); return; }
+    drawPath(Path::RoundRect(r.sorted(), rx, ry), paint);
+}
+
+void Canvas::drawOval(const Rect& r, const Paint& paint) {
+    if (paint.stroke && !paint.dashes.empty()) { drawPath(Path::Oval(r), paint); return; }
+    const auto native = nativePaint(paint);
+    if (!native || !builder_) return;
+    const ImpellerRect box = nativeRect(r.sorted());
+    ImpellerDisplayListBuilderDrawOval(builder_, &box, native.get());
+}
+
+void Canvas::drawPath(const Path& p, const Paint& paint) {
+    if (!builder_ || p.empty()) return;
+    if (paint.stroke && !paint.dashes.empty()) {
+        Paint solid = paint;
+        solid.dashes.clear();
+        const Path pieces = p.dashed(paint.dashes, paint.dash_phase);
+        if (!pieces.empty()) drawPath(pieces, solid);
         return;
     }
-    for (size_t i = 0; i + 1 < count; i += step) {
-        const ImpellerPoint a{points[i].x(), points[i].y()}, b{points[i + 1].x(), points[i + 1].y()};
-        if (native) ImpellerDisplayListBuilderDrawLine(builder_.get(), &a, &b, native.get());
-        else {
-            SkPaint stroke = paint; stroke.setStyle(SkPaint::kStroke_Style);
-            onDrawPath(SkPath::Line(points[i], points[i + 1]), stroke);
+    const auto native = nativePaint(paint);
+    if (!native) return;
+    const auto shape = nativePath(p);
+    if (!shape) { healthy_ = false; return; }
+    ImpellerDisplayListBuilderDrawPath(builder_, shape.get(), native.get());
+}
+
+void Canvas::drawLine(Point a, Point b, const Paint& paint) {
+    if (!builder_) return;
+    if (!paint.dashes.empty()) { Path line; line.addLine(a, b); drawPath(line, paint); return; }
+    const auto native = nativePaint(paint);
+    if (!native) return;
+    const ImpellerPoint from{a.x, a.y}, to{b.x, b.y};
+    ImpellerDisplayListBuilderDrawLine(builder_, &from, &to, native.get());
+}
+
+void Canvas::drawImageRect(const std::shared_ptr<Image>& image, const Rect& source, const Rect& dest, Sampling sampling, const Paint* paint) {
+    if (!image || !builder_ || source.empty() || dest.empty()) return;
+    std::shared_ptr<Image> use = image;
+    Rect from = source;
+    // Drawn much smaller than it is: from a box-filtered reduction, as mipmapping would.
+    if (!sampling.nearest) {
+        const float device = dest.width() * matrix_.maxScale();
+        if (device > 0 && source.width() / device >= 2) {
+            const int level = std::min(8, static_cast<int>(std::floor(std::log2(source.width() / device))));
+            if (auto reduced = image->reduced(level); reduced && reduced != image) {
+                const float sx = static_cast<float>(reduced->width()) / image->width(), sy = static_cast<float>(reduced->height()) / image->height();
+                use = std::move(reduced);
+                from = {source.left * sx, source.top * sy, source.right * sx, source.bottom * sy};
+            }
         }
     }
-}
-
-void Canvas::drawTexture(const SkImage* image, const SkRect& src, const SkRect& dst, const SkSamplingOptions& sampling, const SkPaint& paint) {
-    const auto texture = textureFor(image);
-    auto native = nativePaint(paint);
-    if (!texture || !native) { healthy_ = false; return; }
-    const auto from = nativeRect(src), to = nativeRect(dst);
-    ImpellerDisplayListBuilderDrawTextureRect(builder_.get(), texture, &from, &to,
-        sampling.filter == SkFilterMode::kNearest ? kImpellerTextureSamplingNearestNeighbor : kImpellerTextureSamplingLinear, native.get());
-}
-void Canvas::onDrawImage2(const SkImage* image, SkScalar x, SkScalar y, const SkSamplingOptions& sampling, const SkPaint* paint) {
-    if (!image) return;
-    const auto src = SkRect::MakeIWH(image->width(), image->height());
-    onDrawImageRect2(image, src, src.makeOffset(x, y), sampling, paint, kFast_SrcRectConstraint);
-}
-void Canvas::onDrawImageRect2(const SkImage* image, const SkRect& src, const SkRect& dst, const SkSamplingOptions& sampling,
-                             const SkPaint* paint, SrcRectConstraint) {
-    if (!image || src.isEmpty() || dst.isEmpty()) return;
-    drawTexture(image, src, dst, sampling, paint ? *paint : SkPaint{});
-}
-
-void Canvas::rasterPath(const SkPath& path, const SkPaint& paint) {
-    SkRect bounds = path.getBounds();
-    if (path.isInverseFillType() && !getLocalClipBounds(&bounds)) return;
-    if (paint.canComputeFastBounds()) paint.computeFastBounds(bounds, &bounds);
-    const auto transform = getLocalToDeviceAs3x3();
-    SkIRect pixels = transform.mapRect(bounds).makeOutset(2, 2).roundOut();
-    if (!pixels.intersect(SkIRect::MakeWH(width_, height_))) return;
-    if (static_cast<uint64_t>(pixels.width()) * pixels.height() > 16u * 1024u * 1024u) { healthy_ = false; return; }
-    auto surface = SkSurfaces::Raster(SkImageInfo::MakeN32Premul(pixels.width(), pixels.height()));
-    if (!surface) { healthy_ = false; return; }
-    auto* canvas = surface->getCanvas();
-    canvas->clear(SK_ColorTRANSPARENT);
-    canvas->translate(-pixels.left(), -pixels.top());
-    canvas->concat(transform);
-    SkPaint raster = paint;
-    raster.setBlendMode(SkBlendMode::kSrcOver);
-    canvas->drawPath(path, raster);
-    auto image = surface->makeImageSnapshot();
-    SkPaint copy;
-    copy.setBlendMode(paint.asBlendMode().value_or(SkBlendMode::kSrcOver));
-    ImpellerDisplayListBuilderResetTransform(builder_.get());
-    drawTexture(image.get(), SkRect::MakeIWH(image->width(), image->height()), SkRect::Make(pixels), SkSamplingOptions(SkFilterMode::kNearest), copy);
-    matrix();
-}
-
-void Canvas::onDrawTextBlob(const SkTextBlob* blob, SkScalar x, SkScalar y, const SkPaint& paint) {
-    if (!blob || blob->bounds().isEmpty()) return;
-    auto& r = resources();
-    const float scale = std::clamp(std::ceil(std::max(1.0f, getLocalToDeviceAs3x3().getMaxScale()) * 4) / 4, 1.0f, 8.0f);
-    const bool cacheable = !paint.getShader();
-    TextEntry* found = nullptr;
-    if (cacheable) for (auto& entry : r.texts)
-        if (entry.blob->uniqueID() == blob->uniqueID() && entry.scale == scale && entry.paint == paint) { found = &entry; break; }
-    TextEntry temporary;
-    if (!found) {
-        SkRect bounds = blob->bounds().makeOutset(2 / scale, 2 / scale);
-        if (paint.canComputeFastBounds()) paint.computeFastBounds(bounds, &bounds);
-        const SkIRect pixels = SkMatrix::Scale(scale, scale).mapRect(bounds).roundOut();
-        if (pixels.isEmpty()) return;
-        if (pixels.width() > 16384 || pixels.height() > 16384 || static_cast<uint64_t>(pixels.width()) * pixels.height() > 16u * 1024u * 1024u) { healthy_ = false; return; }
-        auto surface = SkSurfaces::Raster(SkImageInfo::MakeN32Premul(pixels.width(), pixels.height()));
-        if (!surface) { healthy_ = false; return; }
-        auto* canvas = surface->getCanvas();
-        canvas->clear(SK_ColorTRANSPARENT);
-        canvas->translate(-pixels.left(), -pixels.top());
-        canvas->scale(scale, scale);
-        // A gradient text brush is in the caller's coordinates rather than in blob space.
-        SkPaint raster = paint;
-        raster.setBlendMode(SkBlendMode::kSrcOver);
-        if (auto shader = raster.refShader()) raster.setShader(shader->makeWithLocalMatrix(SkMatrix::Translate(-x, -y)));
-        canvas->drawTextBlob(blob, 0, 0, raster);
-        temporary = {sk_ref_sp(blob), paint, scale, SkRect::MakeLTRB(pixels.left() / scale, pixels.top() / scale,
-            pixels.right() / scale, pixels.bottom() / scale), surface->makeImageSnapshot(), r.frame};
-        if (cacheable) { r.texts.push_back(std::move(temporary)); found = &r.texts.back(); }
-        else found = &temporary;
+    const ImpellerTexture texture = use->texture();
+    if (!texture) { healthy_ = false; return; }
+    PaintHandle native;
+    if (paint) {
+        native = nativePaint(*paint);
+        if (!native) return;
     }
-    found->used = r.frame;
-    SkPaint copy;
-    copy.setBlendMode(paint.asBlendMode().value_or(SkBlendMode::kSrcOver));
-    drawTexture(found->image.get(), SkRect::MakeIWH(found->image->width(), found->image->height()), found->bounds.makeOffset(x, y),
-        SkSamplingOptions(SkFilterMode::kLinear), copy);
+    const ImpellerRect src = nativeRect(from), dst = nativeRect(dest);
+    ImpellerDisplayListBuilderDrawTextureRect(builder_, texture, &src, &dst,
+        sampling.nearest ? kImpellerTextureSamplingNearestNeighbor : kImpellerTextureSamplingLinear, native.get());
+}
+
+void Canvas::drawParagraph(ImpellerParagraph paragraph, Point origin) {
+    if (!builder_ || !paragraph) return;
+    const ImpellerPoint at{origin.x, origin.y};
+    ImpellerDisplayListBuilderDrawParagraph(builder_, paragraph, &at);
+}
+
+void Canvas::clear(Color color) {
+    Paint paint;
+    paint.color = color;
+    paint.blend = kImpellerBlendModeSource;
+    drawPaint(paint);
 }
 
 ImpellerDisplayList Canvas::finish() {
-    if (!healthy_ || !builder_ || getSaveCount() != 1) return nullptr;
-    finished_.reset(ImpellerDisplayListBuilderCreateDisplayListNew(builder_.get()));
-    if (!finished_) { healthy_ = false; return nullptr; }
+    if (!healthy_ || !builder_ || !stack_.empty()) return nullptr;
+    ImpellerDisplayList list = ImpellerDisplayListBuilderCreateDisplayListNew(builder_);
+    if (!list) { healthy_ = false; return nullptr; }
+    if (finished_) ImpellerDisplayListRelease(finished_);
+    finished_ = list;
     const ImpellerRect bounds{0, 0, static_cast<float>(width_), static_cast<float>(height_)};
-    builder_.reset(ImpellerDisplayListBuilderNew(&bounds));
-    if (!builder_) { healthy_ = false; return nullptr; }
-    ImpellerDisplayListBuilderDrawDisplayList(builder_.get(), finished_.get(), 1);
-    matrix();
-    return finished_.get();
+    ImpellerDisplayListBuilder next = ImpellerDisplayListBuilderNew(&bounds);
+    if (!next) { healthy_ = false; return nullptr; }
+    ImpellerDisplayListBuilderRelease(builder_);
+    builder_ = next;
+    ImpellerDisplayListBuilderDrawDisplayList(builder_, finished_, 1);
+    applyMatrix();
+    return finished_;
 }
 
-sk_sp<SkImage> Canvas::snapshot() {
+std::shared_ptr<Image> Canvas::snapshot() {
+    if (!active()) return nullptr;
     const auto list = finish();
     if (!list) return nullptr;
-    Texture texture(LaunchmeImpellerRenderToTextureNew(resources().context.get(), list, width_, height_));
-    if (!texture) return nullptr;
-    auto surface = SkSurfaces::Raster(SkImageInfo::Make(width_, height_, kRGBA_8888_SkColorType, kPremul_SkAlphaType));
-    SkPixmap pixels;
-    if (!surface || !surface->peekPixels(&pixels) || pixels.rowBytes() != static_cast<size_t>(width_) * 4) return nullptr;
-    if (!LaunchmeImpellerTextureRead(resources().context.get(), texture.get(), static_cast<uint8_t*>(pixels.writable_addr()),
-        static_cast<uint64_t>(width_) * height_ * 4)) return nullptr;
-    surface->notifyContentWillChange(SkSurface::kRetain_ContentChangeMode);
-    return surface->makeImageSnapshot();
+    ImpellerTexture texture = LaunchmeImpellerRenderToTextureNew(context(), list, width_, height_);
+    return texture ? Image::fromTexture(texture, width_, height_) : nullptr;
 }
-sk_sp<SkImage> snapshot(SkCanvas* canvas) {
-    auto* own = dynamic_cast<Canvas*>(canvas);
-    return own && active() ? own->snapshot() : nullptr;
-}
+PaintHandle makeNativePaint(const Paint& paint) { return nativePaint(paint); }
 } // namespace lm_impeller

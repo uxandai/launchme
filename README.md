@@ -297,7 +297,7 @@ a screen or a test: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 ### Linux (highly experimental, WIP)
 
 **Highly experimental, work in progress.** The full launcher (TV mode and the desktop window) builds and runs
-natively on Linux from the same sources: SDL3 for the window, input and sound, Skia on the GPU (Vulkan, else
+natively on Linux from the same sources: SDL3 for the window, input and sound, Impeller on the GPU (Vulkan, else
 OpenGL) in place of Direct2D/DirectWrite. It reads Steam (native, Flatpak, Snap), Heroic (Epic and GOG), Lutris,
 Prism Launcher and your own games, and runs Windows games through umu-launcher, Proton or Wine with a prefix
 manager and per-game options (Settings → *Compatibility*, [docs/LINUX_WINE.md](docs/LINUX_WINE.md)): a game keeps
@@ -307,11 +307,11 @@ and store launchers (Battle.net, EA app, Epic, Ubisoft, Rockstar, GOG Galaxy) in
 It has been tested far less than the Windows build: expect crashes, missing features (no FPS reading; the in-game
 Guide opens in the launcher's window; web pages need WebKitGTK) and changes between versions. Bug reports are welcome.
 
-Status, building (Skia is built from source by `tools/linux/build-skia.sh`) and conventions:
+Status, building (the Impeller SDK is built from source by `tools/linux/build-impeller.sh`) and conventions:
 [docs/linux-port.md](docs/linux-port.md).
 
 ```sh
-tools/linux/build-skia.sh                  # once: Skia into ~/skia (or -DLAUNCHME_SKIA_DIR=<checkout>)
+tools/linux/build-impeller.sh              # once: the Impeller SDK into ~/launchme-impeller (or -DLAUNCHME_IMPELLER_DIR=<sdk>)
 cmake -S . -B build/linux -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build/linux
 ctest --test-dir build/linux               # optional

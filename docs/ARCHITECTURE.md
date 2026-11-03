@@ -32,12 +32,12 @@ workers and comes back as posted messages.
 | `src/model/` | Plain data: `Game`, launch options and their catalog, controllers, notifications. |
 | `src/plugins/` | The plugin host for the C ABI in `sdk/`. |
 | `src/friends/`, `src/i18n/` | Steam friends; the translation tables. |
-| `src/linux/` | The Linux port: the Win32/Direct2D/DirectWrite/WIC surface the shared code calls, implemented on SDL3 and Skia, and the WebKitGTK browser helper. |
+| `src/linux/` | The Linux port: the Win32/Direct2D/DirectWrite/WIC surface the shared code calls, implemented on SDL3 and Impeller, and the WebKitGTK browser helper. |
 | `plugins/` | Public plugins built with the launcher: HowLongToBeat and Achievements. |
 | `sdk/` | `launchme_plugin.h` and an example plugin. |
 | `helpers/xbox/` | The Rust helper for the Xbox account (built separately). |
 | `tests/` | Unit tests (`*_tests.cpp`) and the UI regression cases (`*_ui_cases.hpp`) of `launcher_ui_tests`. |
-| `tools/` | `build.ps1`, probes for real services (manual), `tools/linux/` (Skia, AppImage, WSL scripts). |
+| `tools/` | `build.ps1`, probes for real services (manual), `tools/linux/` (Impeller SDK, AppImage, WSL scripts). |
 | `cmake/` | Source lists and the Linux, companion and dependency modules. |
 | `changelog/`, `docs/`, `_website/` | Release notes, guides, the landing page. |
 
@@ -65,14 +65,12 @@ blocks where the GPU samples them (`artwork/block_compression.cpp`, kept on disk
 `ui/texture_cache.cpp`); `renderer_resources.cpp` creates, discards and uploads them and
 `renderer.cpp` counts their memory. Small drawing helpers shared by the
 renderer files (`color`, `box`, `smoothFade`, `upper`) are in `renderer_internal.hpp`
-(`render_detail`); desktop mode's in `desktop_render_internal.hpp`. On Linux the same calls reach Skia
+(`render_detail`); desktop mode's in `desktop_render_internal.hpp`. On Linux the same calls reach Impeller
 through `src/linux/gfx`.
 
-Linux can also build the experimental Impeller backend (`cmake/Impeller.cmake`,
-`src/linux/impeller`). The `impeller` setting selects it at the next startup. It records GPU
-display lists behind the same Direct2D surface, retaining Skia's CPU geometry, text and effects.
-The pinned standalone SDK is extended through a small C ABI for BC1/BC3 uploads and readback;
-engine-private C++/Skia objects stay inside its shared library. See [IMPELLER.md](IMPELLER.md).
+On Linux Impeller is the only renderer (`cmake/Impeller.cmake`, kernel in `src/linux/impeller`): it
+records GPU display lists behind the same Direct2D surface, text included. The pinned standalone SDK
+is extended through a small C ABI for BC1/BC3 uploads and readback. See [IMPELLER.md](IMPELLER.md).
 
 ## Shared helpers
 

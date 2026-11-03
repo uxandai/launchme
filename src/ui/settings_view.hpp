@@ -71,7 +71,7 @@ enum class Id { font, home_layout, ui_accent, accent, uninstalled, emulation, co
                    updated_row, discovery_row, home_tab_icons, flix_rail, excluded_games, excluded_game, excluded_restore_all,
                    // System → Wydajność: the low memory mode (AppSettings::low_memory) and Kompresja grafik
                    // (AppSettings::texture_compression).
-                   low_memory, texture_compression, impeller,
+                   low_memory, texture_compression,
                    // Biblioteka → Uruchamianie: hidden in the notification area while a game runs (src/app/tray.cpp).
                    hide_while_playing, aurelia, aurelia_open, aurelia_cloud, aurelia_default,
                    // Biblioteka → Amazon Games: Nile (the helper), the sign-in address, sync and sign-out.

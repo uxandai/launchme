@@ -61,16 +61,6 @@ int main() {
     const auto root = std::filesystem::temp_directory_path() / (L"launchme-settings-" + std::to_wstring(GetCurrentProcessId()));
     struct Cleanup { std::filesystem::path path; ~Cleanup() { std::error_code ec; std::filesystem::remove_all(path, ec); } } cleanup{root};
     const auto file = root / "settings.ini";
-    // The renderer choice is opt-in, strict, and persisted independently of artwork compression.
-    if (AppSettings{}.impeller || parseAppSettings("impeller=yes\n").impeller ||
-        parseAppSettings("impeller=1junk\n").impeller || !parseAppSettings("impeller=1\n").impeller ||
-        parseAppSettings("impeller=1\nimpeller=0\n").impeller) return 490;
-    for (const bool enabled : {false, true}) {
-        auto selected = config; selected.impeller = enabled; selected.texture_compression = !enabled;
-        if (!saveAppSettings(selected, file)) return 491;
-        const auto restored = loadAppSettings(file);
-        if (restored.impeller != enabled || restored.texture_compression != !enabled) return 492;
-    }
     {
         auto feed = config;
         feed.companion_feed_folder = L"C:\\Zdjęcia\\companion_feed";

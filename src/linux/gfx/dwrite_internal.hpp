@@ -1,21 +1,13 @@
 #pragma once
-// Linux only: the DirectWrite port's private types, shared by dwrite_*.cpp. SkParagraph lays text
-// out (HarfBuzz shapes it, ICU breaks lines, fontconfig picks fonts and fallbacks) with unhinted,
-// unrounded positions in DIPs, so a layout measures the same under any transform it is drawn
-// with. This port then places the lines as DirectWrite does (alignment without trailing
-// whitespace, line spacing, paragraph alignment, trimming) and draws the glyphs itself, a
-// drawing effect's brush per range. SkParagraph counts UTF-8 and UTF-16 units; the API counts
-// wchar_t (UTF-32) units.
+// Linux only: the DirectWrite port's private types, shared by dwrite_*.cpp. Impeller's typography
+// lays text out (HarfBuzz shapes it, ICU breaks lines, fontconfig picks fonts and fallbacks) in
+// DIPs, so a layout measures the same under any transform it is drawn with. This port places the
+// lines as DirectWrite does (alignment without trailing whitespace, paragraph alignment, line
+// spacing, trimming) and draws the paragraph, a drawing effect's brush per range. The paragraph
+// counts UTF-16 units; the API counts wchar_t (UTF-32) units.
 #include "gfx_internal.hpp"
 #include "../win32/dwrite_3.h"
 #include "../win32/wrl/client.h"
-
-#include "include/core/SkFont.h"
-#include "include/core/SkFontMgr.h"
-#include "include/core/SkFontStyle.h"
-#include "include/core/SkTextBlob.h"
-#include "modules/skparagraph/include/FontCollection.h"
-#include "modules/skparagraph/include/Paragraph.h"
 
 #include <memory>
 #include <string>
@@ -23,21 +15,18 @@
 
 namespace lm_dwrite {
 using Microsoft::WRL::ComPtr;
-namespace textlayout = skia::textlayout;
+namespace gx = lm_impeller;
 
 // ---- Fonts (dwrite_fonts.cpp) -------------------------------------------------------------
 
-// The calling thread's font collection (fontconfig's fonts, the registered application fonts,
-// fallback on). Replaced when font files are registered: layouts built with an older one lay
-// themselves out again.
-const sk_sp<textlayout::FontCollection>& threadFontCollection();
+// Changes whenever application fonts are registered: layouts built before lay themselves out again.
+unsigned fontGeneration();
 
 // The family to ask for `family` (DirectWrite matches family names ignoring case): the
 // collection's own family, an installed one, or the Linux stand-in for a Windows family.
 std::string resolveFamily(const std::wstring& family, IDWriteFontCollection* collection);
 // The system collection (not AddRef'd): installed families and the aliased Windows ones.
 IDWriteFontCollection* systemFontCollection();
-SkFontStyle fontStyle(DWRITE_FONT_WEIGHT weight, DWRITE_FONT_STYLE style, DWRITE_FONT_STRETCH stretch);
 
 // IDWriteFactory3's font sets: files loaded as application fonts (every face of a file).
 HRESULT createFontFaceReference(std::string path, IDWriteFontFaceReference** reference);
@@ -159,7 +148,7 @@ public:
 
     // Draws the layout with its box's top-left corner at (x, y), in `paint` (drawing effects in
     // their brushes).
-    void draw(SkCanvas* canvas, float x, float y, const SkPaint& paint);
+    void draw(gx::Canvas* canvas, float x, float y, const gx::Paint& paint);
 
 private:
     // A laid-out line. Positions are DIPs; `left` is where the line starts in the layout box
@@ -169,15 +158,14 @@ private:
         float left = 0, top = 0, height = 0, baseline = 0;
         float width = 0, full_width = 0; // Without and with trailing whitespace.
         bool trimmed = false;
-        // Where SkParagraph placed it (glyphs and boxes move from there by `left`, `top`).
-        float sk_left = 0, sk_baseline = 0, sk_top = 0, sk_bottom = 0;
+        float p_baseline = 0; // Where the paragraph placed the baseline.
     };
-    // Glyphs of one style, ready to draw at the layout's origin.
-    struct Run {
-        sk_sp<SkTextBlob> blob;
-        UINT32 style = 0;   // Index into styles_ (any when styles_ is empty).
-        bool underline = false;
-        SkRect underline_rect;
+    // How the paragraph is shaped: the geometry every drawing of the layout shares.
+    struct Shape {
+        gx::TextAlign align = gx::TextAlign::left;
+        unsigned max_lines = 0;
+        bool ellipsis = false;
+        float width = 0;
     };
 
     TextLayout(const FormatState& format, const WCHAR* text, UINT32 length, float maxWidth, float maxHeight);
@@ -187,13 +175,15 @@ private:
     template <class Apply> HRESULT style(DWRITE_TEXT_RANGE range, bool relayout, Apply apply);
     // Lays the text out on the calling thread's fonts when anything changed.
     void layOut();
-    std::unique_ptr<textlayout::Paragraph> build(size_t max_lines, bool ellipsis) const;
-    void measure(textlayout::Paragraph& paragraph);
-    void collectRuns(textlayout::Paragraph& paragraph);
-    UINT32 characterOfUtf8(size_t byte) const;
+    // The paragraph's runs: split where the layout changes (`fine`: also where the ink changes);
+    // `ink` fills each run in turn.
+    gx::ParagraphSpec specFor(const Shape& shape, bool fine, const gx::Paint* paint) const;
+    std::unique_ptr<gx::TextParagraph> build(const Shape& shape) const;
+    void measure(const gx::TextParagraph& paragraph);
     UINT32 characterOfUtf16(size_t unit) const;
     float layoutWidth() const;
-    int lineAtSkiaY(float y) const;
+    // Where the paragraph's first baseline sits against the line spacing's (the drawing's vertical shift).
+    float paragraphDrop() const { return lines_.empty() ? 0 : lines_[0].baseline - lines_[0].p_baseline; }
 
     std::wstring text_;
     std::string utf8_;
@@ -203,12 +193,16 @@ private:
     std::vector<CharStyle> styles_;  // One per character; empty until a range setter runs.
     bool restyled_ = false;          // Effects or underlines changed: runs again, no new layout.
 
-    sk_sp<textlayout::FontCollection> collection_; // The fonts it was laid out with.
-    std::unique_ptr<textlayout::Paragraph> laid_; // SkParagraph's layout.
+    unsigned fonts_ = 0;                     // fontGeneration() it was laid out with.
+    Shape shape_;
+    float shift_ = 0;                        // Horizontal offset of an unwrapped paragraph in its box.
+    std::unique_ptr<gx::TextParagraph> laid_; // The layout (and its measuring).
+    // The last drawing: its inks and paragraph.
+    std::unique_ptr<gx::TextParagraph> drawn_;
+    std::vector<gx::Color> drawn_inks_;
     bool dirty_ = true;
     UINT32 shown_ = 0; // Characters laid out (before trimmed text).
     std::vector<Line> lines_;
-    std::vector<Run> runs_;
     DWRITE_TEXT_METRICS metrics_{};
 };
 } // namespace lm_dwrite

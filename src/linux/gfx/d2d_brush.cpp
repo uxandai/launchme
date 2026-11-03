@@ -1,22 +1,17 @@
-// Direct2D brushes as Skia paints. A brush lies in the render target's world space mapped by its
+// Direct2D brushes as kernel paints. A brush lies in the render target's world space mapped by its
 // own transform: the shader's local matrix is the brush transform, the canvas matrix the world
 // transform. Shaders are kept until a property changes; the opacity is the paint's alpha.
 #include "d2d_internal.hpp"
-
-#include "include/core/SkColorSpace.h"
-#include "include/effects/SkGradient.h"
-#include "include/gpu/ganesh/GrDirectContext.h"
-#include "include/gpu/ganesh/GrRecordingContext.h"
 
 #include <algorithm>
 
 namespace lm_d2d {
 namespace {
-SkTileMode tileFor(D2D1_EXTEND_MODE mode) {
+ImpellerTileMode tileFor(D2D1_EXTEND_MODE mode) {
     switch (mode) {
-    case D2D1_EXTEND_MODE_WRAP: return SkTileMode::kRepeat;
-    case D2D1_EXTEND_MODE_MIRROR: return SkTileMode::kMirror;
-    default: return SkTileMode::kClamp;
+    case D2D1_EXTEND_MODE_WRAP: return kImpellerTileModeRepeat;
+    case D2D1_EXTEND_MODE_MIRROR: return kImpellerTileModeMirror;
+    default: return kImpellerTileModeClamp;
     }
 }
 
@@ -36,7 +31,7 @@ protected:
     float alpha(float extra) const { return std::clamp(opacity_ * extra, 0.0f, 1.0f); }
     float opacity_ = 1;
     D2D1_MATRIX_3X2_F transform_ = D2D1::IdentityMatrix();
-    mutable sk_sp<SkShader> shader_; // Reset by any setter that changes it.
+    mutable gx::ShaderPtr shader_; // Reset by any setter that changes it.
 };
 
 class SolidColorBrush final : public BrushObject<ID2D1SolidColorBrush> {
@@ -44,10 +39,10 @@ public:
     SolidColorBrush(const D2D1_COLOR_F& color, const D2D1_BRUSH_PROPERTIES* properties) : BrushObject(properties), color_(color) {}
     void STDMETHODCALLTYPE SetColor(const D2D1_COLOR_F* color) override { if (color) color_ = *color; }
     D2D1_COLOR_F STDMETHODCALLTYPE GetColor() const override { return color_; }
-    void paint(SkPaint& paint, GrDirectContext*, float extra) const override {
-        paint.setShader(nullptr);
-        paint.setColor4f({std::clamp(color_.r, 0.0f, 1.0f), std::clamp(color_.g, 0.0f, 1.0f), std::clamp(color_.b, 0.0f, 1.0f),
-                          std::clamp(color_.a, 0.0f, 1.0f) * alpha(extra)});
+    void paint(gx::Paint& paint, float extra) const override {
+        paint.shader = nullptr;
+        paint.color = {std::clamp(color_.r, 0.0f, 1.0f), std::clamp(color_.g, 0.0f, 1.0f), std::clamp(color_.b, 0.0f, 1.0f),
+                       std::clamp(color_.a, 0.0f, 1.0f) * alpha(extra)};
     }
 private:
     D2D1_COLOR_F color_;
@@ -65,27 +60,32 @@ public:
     }
     UINT32 STDMETHODCALLTYPE GetGradientStopCount() const override { return static_cast<UINT32>(colors_.size()); }
     // Interpolated in premultiplied colour, as Direct2D does (no dark fringe toward transparent stops).
-    SkGradient gradient() const {
-        return SkGradient(SkGradient::Colors(colors_, positions_, tileFor(extend_)),
-                          SkGradient::Interpolation{SkGradient::Interpolation::InPremul::kYes});
+    std::shared_ptr<gx::Shader> shader(gx::Shader::Kind kind) const {
+        auto result = std::make_shared<gx::Shader>();
+        result->kind = kind;
+        result->colors = colors_;
+        result->positions = positions_;
+        result->premultiplied = true;
+        result->tile_x = result->tile_y = tileFor(extend_);
+        return result;
     }
-    SkColor4f last() const { return colors_.empty() ? SkColors::kTransparent : colors_.back(); }
+    gx::Color last() const { return colors_.empty() ? gx::Color{} : colors_.back(); }
 private:
-    std::vector<SkColor4f> colors_;
+    std::vector<gx::Color> colors_;
     std::vector<float> positions_;
     D2D1_EXTEND_MODE extend_;
 };
 
 // A gradient's shader, or its last colour when the gradient is degenerate.
-void shaderPaint(SkPaint& paint, const sk_sp<SkShader>& shader, const GradientStopCollection& stops, float alpha) {
+void shaderPaint(gx::Paint& paint, const gx::ShaderPtr& shader, const GradientStopCollection& stops, float alpha) {
     if (shader) {
-        paint.setShader(shader);
-        paint.setColor4f({0, 0, 0, alpha});
+        paint.shader = shader;
+        paint.color = {0, 0, 0, alpha};
     } else {
-        SkColor4f color = stops.last();
-        color.fA *= alpha;
-        paint.setShader(nullptr);
-        paint.setColor4f(color);
+        gx::Color color = stops.last();
+        color.a *= alpha;
+        paint.shader = nullptr;
+        paint.color = color;
     }
 }
 
@@ -98,11 +98,16 @@ public:
     void STDMETHODCALLTYPE SetEndPoint(D2D1_POINT_2F point) override { gradient_.endPoint = point; shader_.reset(); }
     D2D1_POINT_2F STDMETHODCALLTYPE GetStartPoint() const override { return gradient_.startPoint; }
     D2D1_POINT_2F STDMETHODCALLTYPE GetEndPoint() const override { return gradient_.endPoint; }
-    void paint(SkPaint& paint, GrDirectContext*, float extra) const override {
+    void paint(gx::Paint& paint, float extra) const override {
         if (!shader_) {
-            const SkPoint points[2] = {{gradient_.startPoint.x, gradient_.startPoint.y}, {gradient_.endPoint.x, gradient_.endPoint.y}};
-            const SkMatrix local = toSk(transform_);
-            if (points[0] != points[1]) shader_ = SkShaders::LinearGradient(points, stops_->gradient(), &local);
+            const gx::Point a{gradient_.startPoint.x, gradient_.startPoint.y}, b{gradient_.endPoint.x, gradient_.endPoint.y};
+            if (!(a == b)) {
+                auto shader = stops_->shader(gx::Shader::Kind::linear);
+                shader->p0 = a;
+                shader->p1 = b;
+                shader->local = toGx(transform_);
+                shader_ = std::move(shader);
+            }
         }
         shaderPaint(paint, shader_, *stops_.Get(), alpha(extra));
     }
@@ -126,16 +131,28 @@ public:
     D2D1_POINT_2F STDMETHODCALLTYPE GetGradientOriginOffset() const override { return gradient_.gradientOriginOffset; }
     FLOAT STDMETHODCALLTYPE GetRadiusX() const override { return gradient_.radiusX; }
     FLOAT STDMETHODCALLTYPE GetRadiusY() const override { return gradient_.radiusY; }
-    void paint(SkPaint& paint, GrDirectContext*, float extra) const override {
+    void paint(gx::Paint& paint, float extra) const override {
         const float rx = std::abs(gradient_.radiusX), ry = std::abs(gradient_.radiusY);
-        if (rx < 1e-6f || ry < 1e-6f) { paint.setShader(nullptr); paint.setColor4f(SkColors::kTransparent); return; }
+        if (rx < 1e-6f || ry < 1e-6f) { paint.shader = nullptr; paint.color = {}; return; }
         if (!shader_) {
-            SkMatrix local = toSk(transform_);
+            gx::Matrix local = toGx(transform_);
             local.preTranslate(gradient_.center.x, gradient_.center.y);
             local.preScale(rx, ry);
-            const SkPoint focus{gradient_.gradientOriginOffset.x / rx, gradient_.gradientOriginOffset.y / ry};
-            shader_ = focus.isZero() ? SkShaders::RadialGradient({0, 0}, 1, stops_->gradient(), &local)
-                                     : SkShaders::TwoPointConicalGradient(focus, 0, {0, 0}, 1, stops_->gradient(), &local);
+            const gx::Point focus{gradient_.gradientOriginOffset.x / rx, gradient_.gradientOriginOffset.y / ry};
+            std::shared_ptr<gx::Shader> shader;
+            if (focus.x == 0 && focus.y == 0) {
+                shader = stops_->shader(gx::Shader::Kind::radial);
+                shader->p0 = {0, 0};
+                shader->r0 = 1;
+            } else {
+                shader = stops_->shader(gx::Shader::Kind::conical);
+                shader->p0 = focus;
+                shader->r0 = 0;
+                shader->p1 = {0, 0};
+                shader->r1 = 1;
+            }
+            shader->local = local;
+            shader_ = std::move(shader);
         }
         shaderPaint(paint, shader_, *stops_.Get(), alpha(extra));
     }
@@ -160,15 +177,19 @@ public:
     void STDMETHODCALLTYPE SetInterpolationMode(D2D1_BITMAP_INTERPOLATION_MODE mode) override { interpolation_ = mode; }
     void STDMETHODCALLTYPE SetBitmap(ID2D1Bitmap* bitmap) override { bitmap_ = Bitmap::from(bitmap); }
     // Made per draw: the bitmap's pixels may have changed (a render target's).
-    void paint(SkPaint& paint, GrDirectContext* gpu, float extra) const override {
-        sk_sp<SkImage> image = bitmap_ ? bitmap_->image(gpu) : nullptr;
-        if (!image) { paint.setShader(nullptr); paint.setColor4f(SkColors::kTransparent); return; }
-        SkMatrix local = toSk(transform_);
-        local.preScale(static_cast<float>(1 / bitmap_->scaleX()), static_cast<float>(1 / bitmap_->scaleY()));
-        const SkSamplingOptions sampling(interpolation_ == D2D1_BITMAP_INTERPOLATION_MODE_NEAREST_NEIGHBOR ? SkFilterMode::kNearest
-                                                                                                            : SkFilterMode::kLinear);
-        paint.setShader(image->makeShader(tileFor(extend_x_), tileFor(extend_y_), sampling, &local));
-        paint.setColor4f({0, 0, 0, alpha(extra)});
+    void paint(gx::Paint& paint, float extra) const override {
+        std::shared_ptr<gx::Image> image = bitmap_ ? bitmap_->image() : nullptr;
+        if (!image) { paint.shader = nullptr; paint.color = {}; return; }
+        auto shader = std::make_shared<gx::Shader>();
+        shader->kind = gx::Shader::Kind::image;
+        shader->image = std::move(image);
+        shader->local = toGx(transform_);
+        shader->local.preScale(static_cast<float>(1 / bitmap_->scaleX()), static_cast<float>(1 / bitmap_->scaleY()));
+        shader->tile_x = tileFor(extend_x_);
+        shader->tile_y = tileFor(extend_y_);
+        shader->nearest = interpolation_ == D2D1_BITMAP_INTERPOLATION_MODE_NEAREST_NEIGHBOR;
+        paint.shader = std::move(shader);
+        paint.color = {0, 0, 0, alpha(extra)};
     }
 private:
     ComPtr<Bitmap> bitmap_;
@@ -219,11 +240,10 @@ HRESULT createBitmapBrush(ID2D1Bitmap* bitmap, const D2D1_BITMAP_BRUSH_PROPERTIE
 } // namespace lm_d2d
 
 namespace lm_gfx {
-bool brushPaint(IUnknown* brush, SkCanvas* canvas, SkPaint& paint) {
+bool brushPaint(IUnknown* brush, lm_impeller::Paint& paint) {
     const auto* own = lm_d2d::Brush::from(brush);
     if (!own) return false;
-    GrRecordingContext* recording = canvas ? canvas->recordingContext() : nullptr;
-    own->paint(paint, recording ? recording->asDirectContext() : nullptr, 1);
+    own->paint(paint, 1);
     return true;
 }
 } // namespace lm_gfx

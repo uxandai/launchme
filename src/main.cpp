@@ -12,7 +12,6 @@
 #include <string>
 #ifndef _WIN32
 #include "linux/window/window_system.hpp"
-#include "linux/impeller/selection.hpp"
 #include <cerrno>
 #include <chrono>
 #include <cstdlib>
@@ -876,7 +875,6 @@ int main(int argc, char** argv) {
         return 1;
     };
     // SDL's video, events and gamepads on this (the main) thread: Wayland or X11.
-    lm_impeller::request(loadAppSettings().impeller);
     if (std::string error; !lm_window::start(error)) return startupFailure(L"Launchme cannot start: no display (SDL video)", error);
     if (const HRESULT com = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED); FAILED(com))
         return startupFailure(L"Launchme cannot start: COM initialization failed", {});

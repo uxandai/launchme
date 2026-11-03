@@ -1,20 +1,11 @@
 #pragma once
-// Linux only: the Direct2D port's private types, shared by d2d_*.cpp. Drawing goes through a
-// Skia canvas (on the GPU for window targets and their offscreen targets, in memory for WIC
-// targets and other threads); geometry is SkPath, brushes are shaders, bitmaps are SkImages.
+// Linux only: the Direct2D port's private types, shared by d2d_*.cpp. Drawing goes through the
+// Impeller kernel (src/linux/impeller): a render target records a display list that the GPU
+// renders; geometry is gx::Path, brushes are gx::Shader, bitmaps are gx::Image.
 #include "gfx_internal.hpp"
-#include "../impeller/backend.hpp"
+#include "../impeller/kernel.hpp"
 #include "../win32/d2d1_2.h"
 #include "../win32/wrl/client.h"
-
-#include "include/core/SkCanvas.h"
-#include "include/core/SkImage.h"
-#include "include/core/SkMatrix.h"
-#include "include/core/SkPaint.h"
-#include "include/core/SkPath.h"
-#include "include/core/SkSamplingOptions.h"
-#include "include/core/SkShader.h"
-#include "include/core/SkSurface.h"
 
 #include <cstdint>
 #include <mutex>
@@ -23,34 +14,25 @@
 
 namespace lm_d2d {
 using Microsoft::WRL::ComPtr;
+namespace gx = lm_impeller;
 
 // A fresh stamp for content that changed (bitmap pixels, effect settings): never repeats.
 uint64_t newVersion();
 
-// Direct2D's row-vector matrix as Skia's.
-inline SkMatrix toSk(const D2D1_MATRIX_3X2_F& m) { return SkMatrix::MakeAll(m._11, m._21, m._31, m._12, m._22, m._32, 0, 0, 1); }
-inline SkRect toSk(const D2D1_RECT_F& r) { return SkRect::MakeLTRB(r.left, r.top, r.right, r.bottom); }
-// Premultiplied BGRA (Direct2D's B8G8R8A8 in memory) at `width` x `height`.
-inline SkImageInfo bgraInfo(int width, int height, SkAlphaType alpha = kPremul_SkAlphaType) {
-    return SkImageInfo::Make(width, height, kBGRA_8888_SkColorType, alpha);
-}
-// The GPU context for drawing on this thread (null: in memory).
-inline GrDirectContext* threadGpu() { return lm_gfx::gpu(); }
-// A surface for offscreen drawing: on `gpu` when given, else in memory. Null when it cannot be made.
-sk_sp<SkSurface> makeSurface(GrDirectContext* gpu, const SkImageInfo& info, bool mipmaps = false);
-// `image` usable on a canvas of `gpu` (null: in memory): uploaded or read back as needed.
-sk_sp<SkImage> imageFor(GrDirectContext* gpu, sk_sp<SkImage> image);
+// Direct2D's row-vector matrix as the kernel's column-vector one.
+inline gx::Matrix toGx(const D2D1_MATRIX_3X2_F& m) { return gx::Matrix::MakeAll(m._11, m._21, m._31, m._12, m._22, m._32, 0, 0, 1); }
+inline gx::Rect toGx(const D2D1_RECT_F& r) { return gx::Rect::LTRB(r.left, r.top, r.right, r.bottom); }
 
 // ---- Geometry (d2d_geometry.cpp) ----------------------------------------------------------
 
-// Every geometry object of this port: its figures as Skia paths in its own space.
+// Every geometry object of this port: its figures as paths in its own space.
 class Geometry {
 public:
     virtual ~Geometry() = default;
     // All figures (what a stroke draws).
-    virtual const SkPath& outline() const = 0;
+    virtual const gx::Path& outline() const = 0;
     // The filled figures only, with the fill rule (what a fill draws).
-    virtual const SkPath& area() const = 0;
+    virtual const gx::Path& area() const = 0;
     static const Geometry* from(ID2D1Geometry* geometry);
 };
 
@@ -60,9 +42,9 @@ HRESULT createEllipseGeometry(const D2D1_ELLIPSE& ellipse, ID2D1EllipseGeometry*
 HRESULT createGeometryGroup(D2D1_FILL_MODE fillMode, ID2D1Geometry** geometries, UINT32 count, ID2D1GeometryGroup** group);
 HRESULT createTransformedGeometry(ID2D1Geometry* source, const D2D1_MATRIX_3X2_F& transform, ID2D1TransformedGeometry** geometry);
 HRESULT createPathGeometry(ID2D1PathGeometry** geometry);
-// The shapes drawn directly (FillRoundedRectangle, DrawEllipse…), as their geometry objects have them.
-SkPath roundedRectanglePath(const D2D1_ROUNDED_RECT& rounded);
-SkPath ellipsePath(const D2D1_ELLIPSE& ellipse);
+// The shapes drawn directly (FillRoundedRectangle, DrawEllipse...), as their geometry objects have them.
+gx::Path roundedRectanglePath(const D2D1_ROUNDED_RECT& rounded);
+gx::Path ellipsePath(const D2D1_ELLIPSE& ellipse);
 
 // ---- Stroke styles (d2d_factory.cpp) ------------------------------------------------------
 
@@ -70,45 +52,45 @@ class StrokeStyle final : public lm_com::Object<ID2D1StrokeStyle> {
 public:
     StrokeStyle(const D2D1_STROKE_STYLE_PROPERTIES& properties, const FLOAT* dashes, UINT32 count);
     // Caps, join, miter limit and dashes for a stroke `width` wide.
-    void apply(SkPaint& paint, float width) const;
+    void apply(gx::Paint& paint, float width) const;
     static const StrokeStyle* from(ID2D1StrokeStyle* style);
 private:
     D2D1_STROKE_STYLE_PROPERTIES properties_;
     std::vector<float> dashes_; // In stroke widths.
 };
 // The defaults of a stroke without a style: flat caps, mitred joins.
-void applyDefaultStroke(SkPaint& paint, float width);
+void applyDefaultStroke(gx::Paint& paint, float width);
 
 // ---- Images (d2d_bitmap.cpp, d2d_effects.cpp) ---------------------------------------------
 
 // Effect inputs and results: `image` placed at (x, y) in pixels of the resolution it was asked
 // for (`scale` pixels per DIP).
 struct ImageData {
-    sk_sp<SkImage> image; // Empty for nothing.
+    std::shared_ptr<gx::Image> image; // Empty for nothing.
     int x = 0, y = 0;
 };
 class ImageSource {
 public:
     virtual ~ImageSource() = default;
-    // The image at `scale` pixels per DIP, for a canvas of `gpu` (null: in memory).
-    virtual ImageData render(double scale, GrDirectContext* gpu) = 0;
+    // The image at `scale` pixels per DIP.
+    virtual ImageData render(double scale) = 0;
     // Changes whenever what render() returns would change.
     virtual uint64_t version() const = 0;
     static ImageSource* from(ID2D1Image* image);
 };
 
-// Pixels as an SkImage (in memory, or a GPU texture once drawn on the GPU), or a surface for a
-// bitmap a render target draws into or pixels are copied into.
+// Pixels as a gx::Image (premultiplied BGRA, or BC1/BC3 blocks on the GPU); a bitmap a render
+// target draws into takes the render's result as its image.
 class Bitmap final : public lm_com::Object<ID2D1Bitmap1>, public ImageSource {
 public:
     // Pixels from memory in `format` (nullptr: transparent). Fails for formats it cannot hold
     // (block-compressed ones among them: createCompressed).
     static HRESULT create(D2D1_SIZE_U size, const void* data, UINT32 pitch, D2D1_PIXEL_FORMAT format, float dpiX, float dpiY,
                           ComPtr<Bitmap>& out);
-    // BC1 blocks straight into a GPU texture of `gpu` (blockCompressionSupported): an eighth of BGRA's
-    // memory. Fails without such a GPU, or for another format.
+    // BC1/BC3 blocks straight into a GPU texture (blockCompressionSupported): an eighth (a quarter)
+    // of BGRA's memory. Fails without such a GPU, or for another format.
     static HRESULT createCompressed(D2D1_SIZE_U size, const void* data, UINT32 pitch, D2D1_PIXEL_FORMAT format, float dpiX, float dpiY,
-                                    GrDirectContext* gpu, ComPtr<Bitmap>& out, bool impeller = false);
+                                    ComPtr<Bitmap>& out);
     static Bitmap* from(ID2D1Image* image);
 
     D2D1_SIZE_F STDMETHODCALLTYPE GetSize() const override;
@@ -119,52 +101,48 @@ public:
                                                    const D2D1_RECT_U* srcRect) override;
     HRESULT STDMETHODCALLTYPE CopyFromMemory(const D2D1_RECT_U* dstRect, const void* srcData, UINT32 pitch) override;
 
-    ImageData render(double scale, GrDirectContext* gpu) override;
+    ImageData render(double scale) override;
     uint64_t version() const override { return version_; }
 
-    // The pixels for a canvas of `gpu` (null: in memory); a GPU upload keeps mipmaps.
-    sk_sp<SkImage> image(GrDirectContext* gpu);
-    // The surface drawing goes into (made on `gpu` when there is none yet); the pixels so far stay.
-    sk_sp<SkSurface> surface(GrDirectContext* gpu);
+    // The current pixels (a bitmap nothing was drawn into is transparent: an empty image is made on demand).
+    std::shared_ptr<gx::Image> image();
+    // A render target's result replaces the pixels.
+    void setImage(std::shared_ptr<gx::Image> image);
     int width() const { return width_; }
     int height() const { return height_; }
     // Pixels per DIP.
     double scaleX() const { return dpi_x_ / 96.0; }
     double scaleY() const { return dpi_y_ / 96.0; }
     bool alphaOnly() const { return format_.format == DXGI_FORMAT_A8_UNORM; }
-    // The pixels changed (drawn into by its render target).
-    void touch() { version_ = newVersion(); snapshot_.reset(); }
+
 private:
     Bitmap(int width, int height, D2D1_PIXEL_FORMAT format, float dpiX, float dpiY);
-    HRESULT copyFrom(sk_sp<SkImage> source, const D2D1_POINT_2U* destPoint, const D2D1_RECT_U* srcRect);
-    SkImageInfo info() const;
+    HRESULT copyFrom(std::shared_ptr<gx::Image> source, const D2D1_POINT_2U* destPoint, const D2D1_RECT_U* srcRect);
 
     int width_, height_;
     D2D1_PIXEL_FORMAT format_;
     float dpi_x_, dpi_y_;
     uint64_t version_;
-    sk_sp<SkImage> image_;      // The pixels, when there is no surface.
-    sk_sp<SkSurface> surface_;  // The pixels of a drawn-into bitmap.
-    sk_sp<SkImage> snapshot_;   // surface_'s pixels as last read.
-    ImageData scaled_;          // render() at another size.
+    std::shared_ptr<gx::Image> image_; // Null while nothing was drawn or copied in (transparent).
+    ImageData scaled_;                 // render() at another size.
     uint64_t scaled_version_ = 0;
     double scaled_scale_ = 0;
 };
 // The pixel format a bitmap or render target gets for a requested one (unknown parts filled in).
 D2D1_PIXEL_FORMAT resolveFormat(D2D1_PIXEL_FORMAT format);
-// A block-compressed format `gpu` samples (BC1 on Vulkan or OpenGL drivers that have it); never in memory.
-bool blockCompressionSupported(GrDirectContext* gpu, DXGI_FORMAT format);
-// Interpolation modes as Skia sampling, for drawing `pixels` source pixels into `shown` device pixels.
-SkSamplingOptions samplingFor(D2D1_INTERPOLATION_MODE mode, bool reducing, bool mipmapped);
+// A block-compressed format the GPU samples (BC1/BC3 on drivers that have them); never in memory.
+bool blockCompressionSupported(DXGI_FORMAT format);
+// Interpolation modes as sampling.
+gx::Sampling samplingFor(D2D1_INTERPOLATION_MODE mode);
 
 // ---- Brushes (d2d_brush.cpp) --------------------------------------------------------------
 
 class Brush {
 public:
     virtual ~Brush() = default;
-    // Sets the paint's colour or shader (in the render target's world space) and alpha, for a
-    // canvas of `gpu` (null: in memory); `extra`: an opacity multiplied in (a layer's).
-    virtual void paint(SkPaint& paint, GrDirectContext* gpu, float extra = 1) const = 0;
+    // Sets the paint's colour or shader (in the render target's world space) and alpha; `extra`: an
+    // opacity multiplied in (a layer's).
+    virtual void paint(gx::Paint& paint, float extra = 1) const = 0;
     static const Brush* from(IUnknown* brush);
 };
 HRESULT createSolidColorBrush(const D2D1_COLOR_F& color, const D2D1_BRUSH_PROPERTIES* properties, ID2D1SolidColorBrush** brush);
@@ -188,17 +166,14 @@ HRESULT createWicTarget(IWICBitmap* target, const D2D1_RENDER_TARGET_PROPERTIES&
 
 // ---- Render targets (d2d_target.cpp, text in d2d_text.cpp) --------------------------------
 
-// The drawing every render target shares: state, clips and layers over a Skia canvas on the
-// target's surface. Method names follow ID2D1RenderTarget / ID2D1DeviceContext1's.
+// The drawing every render target shares: state, clips and layers over a recording canvas on the
+// target's frame. Method names follow ID2D1RenderTarget / ID2D1DeviceContext1's.
 class Canvas {
 public:
     virtual ~Canvas();
     static Canvas* from(ID2D1RenderTarget* target);
-    // What was drawn so far (pushed clips and layers aside), as an image.
-    sk_sp<SkImage> snapshot();
-    // The GPU context the target draws with (null: in memory).
-    GrDirectContext* gpu() const { return gpu_; }
-    bool usesImpeller() const { return impeller_; }
+    // What was drawn so far (pushed clips and layers aside), rendered as an image.
+    std::shared_ptr<gx::Image> snapshot();
 
     HRESULT createBitmap(D2D1_SIZE_U size, const void* data, UINT32 pitch, const D2D1_BITMAP_PROPERTIES* properties, ID2D1Bitmap** bitmap);
     HRESULT createBitmap1(D2D1_SIZE_U size, const void* data, UINT32 pitch, const D2D1_BITMAP_PROPERTIES1* properties, ID2D1Bitmap1** bitmap);
@@ -252,37 +227,34 @@ public:
 protected:
     // `format`: resolved; an IGNORE alpha mode keeps the pixels opaque. `dpi`: 96 for one pixel per DIP.
     Canvas(D2D1_PIXEL_FORMAT format, float dpi);
-    // The surface drawn into until the next attach (null: nothing to draw into).
-    void attach(sk_sp<SkSurface> surface, int width, int height);
-    void attachCommands(std::shared_ptr<SkCanvas> canvas, int width, int height);
+    // The canvas drawn into until the next attach (null: nothing to draw into).
+    void attach(std::shared_ptr<gx::Canvas> canvas, int width, int height);
     void setSize(int width, int height) { width_ = width; height_ = height; }
-    SkSurface* surface() const { return surface_.get(); }
-    // BeginDraw (before `prepareFrame`) and EndDraw: the target's pixels change.
+    // BeginDraw (before `prepareFrame`): the target's pixels will change.
     virtual void changed() {}
-    // BeginDraw: a window target fetches its frame's surface here.
+    // BeginDraw: a target gets its frame's canvas here.
     virtual void prepareFrame() {}
+    // EndDraw, after the stack is unwound: a bitmap target keeps the frame's result.
+    virtual void finishFrame() {}
+    gx::Canvas* canvas() const { return canvas_.get(); }
 
 private:
     struct Layer {
         bool clip = false;           // PushAxisAlignedClip; otherwise a layer.
-        int restore_to = 1;          // Skia's save count before it.
-        SkMatrix world;              // The transform when pushed (an opacity brush lies in it).
+        int restore_to = 1;          // The canvas's save count before it.
+        gx::Matrix world;            // The transform when pushed (an opacity brush lies in it).
         ComPtr<ID2D1Brush> opacity_brush;
     };
     // The canvas set for a primitive (matrix = world transform); null when nothing can be drawn.
-    SkCanvas* prepare();
-    SkMatrix world() const;
-    // A paint for the brush with the target's antialiasing and blend.
-    bool brushPaint(ID2D1Brush* brush, SkPaint& paint) const;
-    void fillPath(const SkPath& path, ID2D1Brush* brush);
-    void strokePath(const SkPath& path, ID2D1Brush* brush, FLOAT width, ID2D1StrokeStyle* style);
+    gx::Canvas* prepare();
+    gx::Matrix world() const;
+    // A paint for the brush with the target's blend.
+    bool brushPaint(ID2D1Brush* brush, gx::Paint& paint) const;
+    void fillPath(const gx::Path& path, ID2D1Brush* brush);
+    void strokePath(const gx::Path& path, ID2D1Brush* brush, FLOAT width, ID2D1StrokeStyle* style);
     void unwind();
 
-    sk_sp<SkSurface> surface_;
-    SkCanvas* canvas_ = nullptr;
-    std::shared_ptr<SkCanvas> commands_; // May outlive the HWND; never leave a dangling command canvas.
-    GrDirectContext* gpu_ = nullptr;
-    bool impeller_ = false;
+    std::shared_ptr<gx::Canvas> canvas_;
     int width_ = 0, height_ = 0;
     D2D1_PIXEL_FORMAT format_;
     float dpi_;
@@ -412,8 +384,7 @@ public:
     BOOL STDMETHODCALLTYPE IsDxgiFormatSupported(DXGI_FORMAT format) const override {
         return format == DXGI_FORMAT_B8G8R8A8_UNORM || format == DXGI_FORMAT_B8G8R8A8_UNORM_SRGB || format == DXGI_FORMAT_B8G8R8X8_UNORM ||
                format == DXGI_FORMAT_R8G8B8A8_UNORM || format == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB || format == DXGI_FORMAT_A8_UNORM ||
-                blockCompressionSupported(gpu(), format) ||
-                (usesImpeller() && lm_impeller::supportsCompression(format == DXGI_FORMAT_BC1_UNORM ? 1 : format == DXGI_FORMAT_BC3_UNORM ? 3 : 0));
+                blockCompressionSupported(format);
     }
     void STDMETHODCALLTYPE SetPrimitiveBlend(D2D1_PRIMITIVE_BLEND blend) override { setPrimitiveBlend(blend); }
     D2D1_PRIMITIVE_BLEND STDMETHODCALLTYPE GetPrimitiveBlend() const override { return primitiveBlend(); }
@@ -436,8 +407,8 @@ protected:
     RenderTarget(D2D1_PIXEL_FORMAT format, float dpi) : Canvas(format, dpi) {}
 };
 
-// A render target drawing into `bitmap`'s pixels (CreateCompatibleRenderTarget) with `gpu`'s context.
-HRESULT createBitmapTarget(ComPtr<Bitmap> bitmap, GrDirectContext* gpu, ID2D1BitmapRenderTarget** target);
+// A render target drawing into `bitmap`'s pixels (CreateCompatibleRenderTarget).
+HRESULT createBitmapTarget(ComPtr<Bitmap> bitmap, ID2D1BitmapRenderTarget** target);
 HRESULT createHwndTarget(const D2D1_RENDER_TARGET_PROPERTIES& properties, const D2D1_HWND_RENDER_TARGET_PROPERTIES& window,
                          ID2D1HwndRenderTarget** target);
 } // namespace lm_d2d
