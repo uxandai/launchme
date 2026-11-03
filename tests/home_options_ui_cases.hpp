@@ -66,6 +66,10 @@ int LauncherUiTest::homeOptions(HWND window) {
     if (app.flixRailFocused() || static_cast<int>(app.flix_row_) != rowOf("emulation") || app.flixRailActive(app.flixRailItems()) != emulation_icon) return 7910;
     app.navigate(-1); app.back();
     if (app.flixRailFocused() || static_cast<int>(app.flix_row_) != rowOf("emulation")) return 7911;
+    // The rail's Menu icon opens the quick bar from any row, not only the first (its row is Emulacja here).
+    app.flixRailAccept(static_cast<int>(items.size()) - 2);
+    if (!app.quick_open_ || app.flix_row_ == 0) return 8349;
+    app.closeQuick(); settle();
     // The mouse: Start's icon scrolls back to the first row.
     {
         const auto view = app.renderer_.viewport();

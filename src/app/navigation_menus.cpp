@@ -10,7 +10,7 @@
 #include <algorithm>
 
 void Launcher::openQuick() {
-    if ((category_ != 0 && !metroActive() && !psfiveActive()) || pending_launch_ || friends_open_ || category_menu_open_) return;
+    if ((category_ != 0 && !metroActive() && !psfiveActive() && !flixActive()) || pending_launch_ || friends_open_ || category_menu_open_) return;
     dismissMenu();
     metro_tabs_ = false;
     quick_selected_ = 0;
