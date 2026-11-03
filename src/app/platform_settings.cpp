@@ -108,7 +108,8 @@ void Launcher::pcSettingsRows() {
         add({Id::steam_install_dialog, Control::toggle, tr(L"Instalacja Steam w launcherze"),
             tr(L"Biblioteka gry wybierana w launcherze, z wolnym miejscem; Steam pobiera ją po ponownym uruchomieniu w tle."),
             {}, settings_.steam_install_dialog});
-        Row integration{Id::aurelia, Control::toggle, tr(L"Rozszerzona integracja Aurelia"), aurelia_ui::notice(), {}, settings_.aurelia};
+        Row integration{Id::aurelia, Control::toggle, tr(L"Rozszerzona integracja Aurelia"),
+            tr(L"Osobny program do zarządzania grami Steam bez klienta Steam: instalacja, aktualizacje, zapisy w chmurze, DLC i Warsztat. Szczegóły na jego stronie."), {}, settings_.aurelia};
         integration.section = L"Aurelia"; add(std::move(integration));
         // Aurelia instead of the Steam client: the library comes from it too (after a restart, as the
         // library worker starts once), and every game installs, updates and starts through it.

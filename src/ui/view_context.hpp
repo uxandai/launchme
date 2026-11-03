@@ -493,6 +493,7 @@ struct ViewContext {
     std::optional<PsfiveDetails> psfive_details;
     // Metro's light theme (Opcje układu → Jasny motyw).
     bool metro_light = false;
+    bool snitch_colour_icons = false; // Snitch: a few dock discs in colour.
     // The game menu as the large dialog with icons (Okna i podpowiedzi → Duże menu gry).
     bool menu_dialog = false;
     const Notification* notification = nullptr; // Borrowed for the duration of paint().

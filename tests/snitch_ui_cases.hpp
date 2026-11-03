@@ -54,6 +54,9 @@ int LauncherUiTest::snitch(HWND window) {
     app.changeCategory(1); app.quickMove(1); settle();
     if (!app.quick_open_ || app.quick_selected_ != 1 || app.cards_[2].emphasis > 0.01f) return 8206;
     if (!capture(L"snitch-dock.png")) return 8207;
+    app.settings_.snitch_colour_icons = true; settle(); // Opcje układu → Kolorowe ikony: a few discs in colour.
+    if (!capture(L"snitch-dock-colour.png")) return 8223;
+    app.settings_.snitch_colour_icons = false; settle();
     app.changeCategory(-1); settle();
     if (app.quick_open_ || gameKey(app.cards_[app.selected_].game) != key) return 8208;
     app.openContextMenu(); settle();

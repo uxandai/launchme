@@ -47,8 +47,8 @@ bool Launcher::settingsExtraToggle(const Row& row) {
         settingsChanged(); audio_.context();
         return true;
     }
-    if (row.id == Id::metro_light || row.id == Id::menu_dialog) {
-        auto& flag = row.id == Id::metro_light ? settings_.metro_light : settings_.menu_dialog;
+    if (row.id == Id::metro_light || row.id == Id::menu_dialog || row.id == Id::snitch_colour_icons) {
+        auto& flag = row.id == Id::metro_light ? settings_.metro_light : row.id == Id::snitch_colour_icons ? settings_.snitch_colour_icons : settings_.menu_dialog;
         flag = !flag;
         settingsChanged(); audio_.context(); // Visual only.
         return true;

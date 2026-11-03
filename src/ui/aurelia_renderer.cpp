@@ -57,7 +57,7 @@ void Renderer::drawAurelia() {
     // Setup: a plain note under the header, measured, so the rows start below its last line.
     if (s.page == aurelia_ui::Page::setup && s.login == aurelia_ui::State::Login::none) {
         const float width = p.right - p.left - 2 * layout.pad;
-        s.notice_height = paragraph(aurelia_ui::notice(), p.left + layout.pad, p.top + layout.header, width, settings_body_font_.Get(), palette::muted(), 3);
+        s.notice_height = paragraph(aurelia_ui::notice(), p.left + layout.pad, p.top + layout.header, width, settings_body_font_.Get(), palette::muted(), 8);
     } else s.notice_height = 0;
     if (layout.showsQr(s)) {
         // The sign-in's QR code, then what to do with it.
@@ -149,7 +149,7 @@ void Renderer::drawDesktopAurelia() {
     const float text_width = width - 44;
     const float subtitle = s.subtitle.empty() || s.confirmation ? 0.0f : 24.0f;
     const float note = s.page == aurelia_ui::Page::setup && !s.confirmation && s.login == aurelia_ui::State::Login::none ?
-        paragraph(aurelia_ui::notice(), 0, 0, text_width, desktop_small_font_.Get(), palette::muted(), 4, false) + 14 : 0.0f;
+        paragraph(aurelia_ui::notice(), 0, 0, text_width, desktop_small_font_.Get(), palette::muted(), 9, false) + 14 : 0.0f;
     const float status = s.status.empty() ? 0.0f : 28.0f;
     // The sign-in's QR code under the note.
     const bool qr = s.page == aurelia_ui::Page::setup && !s.confirmation && s.login == aurelia_ui::State::Login::form && !s.qr.empty() && s.qr_size > 0;
@@ -191,7 +191,7 @@ void Renderer::drawDesktopAurelia() {
         return;
     }
     if (subtitle > 0) { textLine(s.subtitle, p.left + 22, y + 8, p.right - p.left - 44, desktop_small_font_.Get(), palette::muted()); y += subtitle; }
-    if (note > 0) { paragraph(aurelia_ui::notice(), p.left + 22, y + 2, text_width, desktop_small_font_.Get(), palette::muted(), 4); y += note; }
+    if (note > 0) { paragraph(aurelia_ui::notice(), p.left + 22, y + 2, text_width, desktop_small_font_.Get(), palette::muted(), 9); y += note; }
     if (qr) {
         const float cx = (p.left + p.right) * 0.5f;
         drawQrCode({cx - qr_side * 0.5f, y + 2, cx + qr_side * 0.5f, y + 2 + qr_side}, s.qr, s.qr_size);

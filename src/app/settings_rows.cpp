@@ -206,6 +206,9 @@ void Launcher::buildSettingsRows() {
                 add({Id::metro_light, Control::toggle, tr(L"Jasny motyw"),
                     tr(L"Białe tło i ciemne napisy, jak jasny motyw Windows Phone. Kafle zostają kolorowe."), {}, settings_.metro_light});
             }
+            if (settings_.home_layout == HomeLayout::snitch)
+                add({Id::snitch_colour_icons, Control::toggle, tr(L"Kolorowe ikony"),
+                    tr(L"Kilka ikon dolnego paska w kolorach, jak w prawdziwym Switchu: szukaj, biblioteka, sklep i kontrolery."), {}, settings_.snitch_colour_icons});
             if (settings_.home_layout == HomeLayout::psfive) {
                 const int size = std::clamp(static_cast<int>(settings_.psfive_size), 0, 2);
                 add({Id::psfive_size, Control::slider, tr(L"Rozmiar kafelków PSfive"),
@@ -338,12 +341,13 @@ void Launcher::buildSettingsRows() {
         const auto layout_name = layout.value;
         add(std::move(layout));
         {
-            // The chosen layout's own options on their page (snitch has none).
+            // The chosen layout's own options on their page.
             const wchar_t* options = settings_.home_layout == HomeLayout::shelves ? trKey(L"Stała lista kategorii, pionowe plakaty, kafelek „Wszystkie” i informacje pod logo.") :
                                      settings_.home_layout == HomeLayout::xmb ? trKey(L"Pionowe plakaty i rozmiar kafelków.") :
                                      settings_.home_layout == HomeLayout::flix ? trKey(L"Rozmiar kafelków, kafelek „Wszystkie”, pasek kategorii i boczny.") :
                                      settings_.home_layout == HomeLayout::metro ? trKey(L"Efekt 3D stron obok bieżącej.") :
-                                     settings_.home_layout == HomeLayout::psfive ? trKey(L"Rozmiar kafelków i zegar.") : nullptr;
+                                     settings_.home_layout == HomeLayout::psfive ? trKey(L"Rozmiar kafelków i zegar.") :
+                                     settings_.home_layout == HomeLayout::snitch ? trKey(L"Kolorowe ikony dolnego paska.") : nullptr;
             if (options) pageRow(Page::layout_options, tr(L"Opcje układu"), tr(options), layout_name);
         }
         add({Id::launch_tv_mode, Control::toggle, tr(L"Uruchamiaj w trybie TV"),

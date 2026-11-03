@@ -246,6 +246,7 @@ bool parseExtraSetting(AppSettings& settings, std::string_view key, std::string_
     if (key == "psfive_details") return flag(settings.psfive_details);
     if (key == "menu_dialog") return flag(settings.menu_dialog);
     if (key == "metro_light") return flag(settings.metro_light);
+    if (key == "snitch_colour_icons") return flag(settings.snitch_colour_icons);
     if (key == "metro_category_tabs") return flag(settings.metro_category_tabs);
     if (key == "flix_category_tabs") return flag(settings.flix_category_tabs);
     if (key == "psfive_category_tabs") return flag(settings.psfive_category_tabs);
@@ -880,6 +881,7 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
     output << "psfive_details=" << settings.psfive_details << '\n';
     output << "menu_dialog=" << settings.menu_dialog << '\n';
     output << "metro_light=" << settings.metro_light << '\n';
+    output << "snitch_colour_icons=" << settings.snitch_colour_icons << '\n';
     output << "emulation_source=" << (settings.emulation_source == AppSettings::EmulationSource::steam ? "steam" : "roms") << '\n';
     output << "emulation_roms=" << text_encoding::utf8Lenient(settings.emulation_roms.wstring()) << '\n';
     for (const auto& [system, folder] : settings.system_roms)

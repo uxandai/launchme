@@ -218,7 +218,9 @@ constexpr Entry entries[] = {
     {L"Wysyłanie…", L"Sending…"},
     {L"Wykonaj", L"Apply"},
     {L"Enter / A: wybierz · Esc / B: wstecz · PgUp / PgDn: przewijaj", L"Enter / A: select · Esc / B: back · PgUp / PgDn: scroll"},
-    {L"Głównie do gier single player / offline. Niektóre gry, zwłaszcza multiplayer i korzystające z DRM lub Steamworks, mogą wymagać uruchomionego klienta Steam.", L"Primarily for single-player / offline games. Some games, especially multiplayer titles and those using DRM or Steamworks, may require the Steam client to be running."},
+    {L"Osobny program do zarządzania grami Steam bez klienta Steam: instalacja, aktualizacje, zapisy w chmurze, DLC i Warsztat. Szczegóły na jego stronie.", L"A separate program that manages Steam games without the Steam client: installs, updates, cloud saves, DLC and Workshop. Details on its page."},
+    {L"Aurelia to osobny, opcjonalny program, który loguje się na Twoje konto Steam i pozwala Launchme zarządzać grami bez klienta Steam: instalować je i aktualizować, wybierać wersje i gałęzie, synchronizować zapisy w chmurze, obsługiwać DLC i Warsztat oraz czatować ze znajomymi.\n\nNajlepiej działa z grami single player / offline. Niektóre gry, zwłaszcza multiplayer i korzystające z DRM lub Steamworks, mogą nadal wymagać uruchomionego klienta Steam.",
+     L"Aurelia is a separate, optional program that signs in to your Steam account and lets Launchme manage games without the Steam client: install and update them, pick versions and branches, sync cloud saves, handle DLC and Workshop, and chat with friends.\n\nIt works best with single-player / offline games. Some games, especially multiplayer titles and those using DRM or Steamworks, may still require the Steam client to be running."},
     // Basics: launching, diagnostics, settings safety, uninstalling.
     {L"Historia biblioteki była uszkodzona", L"Library history was damaged"},
     {L"Odzyskano, co się dało. Oryginał: library-state.damaged.ini", L"Everything readable was recovered. Original: library-state.damaged.ini"},
@@ -2941,6 +2943,10 @@ constexpr Entry entries[] = {
     {L"Duże menu gry", L"Large game menu"},
     {L"Menu gry (ekran główny, Szczegóły, biblioteki) jako duże przewijane okno z ikoną przy każdej opcji.", L"The game menu (home screen, Details, libraries) as a large scrolling window with an icon beside each option."},
     {L"Jasny motyw", L"Light theme"},
+    {L"Kolorowe ikony", L"Coloured icons"},
+    {L"Kilka ikon dolnego paska w kolorach, jak w prawdziwym Switchu: szukaj, biblioteka, sklep i kontrolery.",
+     L"A few of the bottom bar's icons in colour, as on the real Switch: search, library, store and controllers."},
+    {L"Kolorowe ikony dolnego paska.", L"Coloured icons in the bottom bar."},
     {L"Białe tło i ciemne napisy, jak jasny motyw Windows Phone. Kafle zostają kolorowe.", L"A white page and dark text, like the light theme of Windows Phone. The tiles stay coloured."},
     // 0.5.0: emulated games from the ROM folder, Dodaj grę picking PC or emulated by itself.
     {L"Osobny rząd konsol z grami z emulatorów, zamiast kolekcji Steam ROM Manager.", L"A separate row of consoles with your emulated games, instead of the Steam ROM Manager collections."},

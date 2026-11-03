@@ -17,6 +17,8 @@ struct SteamStats {
     bool operator==(const SteamStats&) const = default;
 };
 SteamStats readSteamStats(const std::filesystem::path& steam_root, uint64_t steam_id, uint32_t app_id);
+// Only the play time, from the same parsed file: cheap enough for the UI thread, a list asks for every visible row.
+std::optional<uint32_t> readSteamPlaytime(const std::filesystem::path& steam_root, uint64_t steam_id, uint32_t app_id);
 
 // "36 min", "1,5 godz." / "1.5 h", "124 godz." / "124 h" in the UI language.
 std::wstring formatPlaytime(uint32_t minutes);

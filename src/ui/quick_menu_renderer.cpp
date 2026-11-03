@@ -33,8 +33,19 @@ void Renderer::drawQuickPanel() {
     const auto base = snitch ? D2D1::Matrix3x2F::Scale(compact, compact) *
         D2D1::Matrix3x2F::Translation(width * (1 - compact) * 0.5f, snitch_layout::dockY(viewport_.height) - cy * compact) * screen : screen;
     target_->SetTransform(base);
+    // Snitch's dock discs: grey, or (Opcje układu → Kolorowe ikony) a few in the real Switch's colours.
+    const auto disc = [&](quick_menu::Action action) {
+        if (context_->snitch_colour_icons) switch (action) {
+        case quick_menu::Action::search: return color(0.90f, 0.10f, 0.22f);      // News red.
+        case quick_menu::Action::store: return color(1.00f, 0.47f, 0.00f);       // eShop orange.
+        case quick_menu::Action::library: return color(0.15f, 0.62f, 0.90f);     // Album blue.
+        case quick_menu::Action::controllers: return color(0.00f, 0.76f, 0.86f); // Controllers cyan.
+        default: break;
+        }
+        return color(0.31f, 0.31f, 0.31f);
+    };
     if (snitch) for (int i = 0; i < quick_menu::count(store); ++i) {
-        brush(color(0.31f, 0.31f, 0.31f));
+        brush(disc(quick_menu::action(i, store, false)));
         target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(quick_menu::center(width, i, store), cy), 44, 44), solid_.Get());
     }
     if (quick_fade_ && !snitch) {

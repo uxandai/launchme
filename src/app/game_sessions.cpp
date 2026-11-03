@@ -4,6 +4,8 @@
 #ifndef _WIN32
 #include "../library/steam_registry.hpp"
 #endif
+#include "../library/steam.hpp"
+#include "../library/steam_stats.hpp"
 
 #include <algorithm>
 #include <cwctype>
@@ -520,7 +522,13 @@ void Launcher::pollReturnFocus() {
 // "Edytuj metadane" sets a value counted on from there.
 std::optional<uint32_t> Launcher::automaticPlaytime(const Game& game, std::optional<uint32_t> steam) const {
     // A Steam game: Steam's own count, else Aurelia's (its library gives the account's play time).
-    if (steamArtwork(game)) return steam ? steam : game.store_playtime_minutes ? std::optional<uint32_t>(game.store_playtime_minutes) : std::nullopt;
+    if (steamArtwork(game)) {
+        if (steam) return steam;
+        // Not read by the store-page worker yet (a list shows many rows, that one reads one by one): Steam's own file, which is cheap.
+        static const auto root = findSteamRoot();
+        if (const auto local = readSteamPlaytime(root, account_, game.app_id)) return local;
+        return game.store_playtime_minutes ? std::optional<uint32_t>(game.store_playtime_minutes) : std::nullopt;
+    }
     return std::optional<uint32_t>(std::max(localPlaytime(game), game.store_playtime_minutes));
 }
 std::optional<uint32_t> Launcher::gamePlaytime(const Game& game, std::optional<uint32_t> steam) const {

@@ -43,7 +43,9 @@ int LauncherUiTest::themeStudio(HWND window) {
     if (app.settings_.home_layout == first || app.theme_.options[0].current != static_cast<int>(app.settings_.home_layout)) return 8106;
     key(VK_RIGHT); key(VK_RIGHT); // XMB, Flix, Metro: its options differ.
     if (app.settings_.home_layout != AppSettings::HomeLayout::metro || find(Id::metro_light) < 0 || find(Id::flix_rail) >= 0) return 8107;
-    key(VK_LEFT); key(VK_LEFT); key(VK_LEFT); key(VK_LEFT); // Back to the shelves.
+    key(VK_RIGHT); key(VK_RIGHT); // PSfive, snitch: its coloured dock icons are in the studio too.
+    if (app.settings_.home_layout != AppSettings::HomeLayout::snitch || find(Id::snitch_colour_icons) < 0 || find(Id::metro_light) >= 0) return 8348;
+    key(VK_LEFT); key(VK_LEFT); key(VK_LEFT); key(VK_LEFT); key(VK_LEFT); key(VK_LEFT); // Back to the shelves.
     if (app.settings_.home_layout != AppSettings::HomeLayout::shelves || find(Id::shelves_posters) < 0) return 8108;
     // A switch: Down to it, Enter flips it, Left and Right set it.
     key(VK_DOWN);

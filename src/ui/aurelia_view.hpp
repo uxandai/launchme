@@ -11,7 +11,7 @@
 
 namespace aurelia_ui {
 inline const wchar_t* notice() {
-    return tr(L"Głównie do gier single player / offline. Niektóre gry, zwłaszcza multiplayer i korzystające z DRM lub Steamworks, mogą wymagać uruchomionego klienta Steam.");
+    return tr(L"Aurelia to osobny, opcjonalny program, który loguje się na Twoje konto Steam i pozwala Launchme zarządzać grami bez klienta Steam: instalować je i aktualizować, wybierać wersje i gałęzie, synchronizować zapisy w chmurze, obsługiwać DLC i Warsztat oraz czatować ze znajomymi.\n\nNajlepiej działa z grami single player / offline. Niektóre gry, zwłaszcza multiplayer i korzystające z DRM lub Steamworks, mogą nadal wymagać uruchomionego klienta Steam.");
 }
 enum class Page { setup, game, cloud, dlc, versions, branches, workshop, libraries };
 enum class Action {

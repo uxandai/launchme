@@ -120,7 +120,7 @@ enum class Id { font, home_layout, ui_accent, accent, uninstalled, emulation, co
                    // Interfejs → Tryb TV: the special tiles in the first row; the "+" tile (Dodaj grę).
                    home_tiles, add_game_tile,
                    // Opcje układu: PSfive's details under the row; Metro's light theme. Okna: the game menu as a dialog.
-                   psfive_details, metro_light, menu_dialog, emulation_source, emulation_folder, emulation_folder_reset,
+                   psfive_details, metro_light, snitch_colour_icons, menu_dialog, emulation_source, emulation_folder, emulation_folder_reset,
                    // Biblioteka → Emulacja (src/app/emulation_settings.cpp): a system's row (Row::key its folder),
                    // the other systems' fold; a system's page: its emulator, how it was found, the program
                    // chosen by hand and its reset, the launch arguments and the command they make.

@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <charconv>
+#include <chrono>
 #include <cmath>
 #include <fstream>
 #include <mutex>
@@ -80,26 +81,37 @@ uint32_t appId(const json::Value& value) {
 }
 }
 
-SteamStats readSteamStats(const std::filesystem::path& steam_root, uint64_t steam_id, uint32_t app_id) {
-    SteamStats result;
-    if (steam_id <= steam_id_offset || !app_id) return result;
-    const auto config = steam_root / L"userdata" / std::to_wstring(steam_id - steam_id_offset) / L"config";
-    {
-        static std::mutex mutex;
-        static std::filesystem::path cached_file;
-        static std::filesystem::file_time_type cached_time{};
-        static std::unordered_map<uint32_t, uint32_t> cached;
-        const auto file = config / L"localconfig.vdf";
+std::optional<uint32_t> readSteamPlaytime(const std::filesystem::path& steam_root, uint64_t steam_id, uint32_t app_id) {
+    if (steam_id <= steam_id_offset || !app_id) return std::nullopt;
+    static std::mutex mutex;
+    static std::filesystem::path cached_file;
+    static std::filesystem::file_time_type cached_time{};
+    static std::chrono::steady_clock::time_point checked{};
+    static std::unordered_map<uint32_t, uint32_t> cached;
+    const auto file = steam_root / L"userdata" / std::to_wstring(steam_id - steam_id_offset) / L"config" / L"localconfig.vdf";
+    std::lock_guard lock(mutex);
+    // The file is looked at again at most every two seconds: a list asks for every visible row on each frame.
+    const auto now = std::chrono::steady_clock::now();
+    if (file != cached_file || now - checked >= std::chrono::seconds(2)) {
+        checked = now;
         std::error_code ec;
         const auto time = std::filesystem::last_write_time(file, ec);
-        std::lock_guard lock(mutex);
-        if (!ec && (file != cached_file || time != cached_time)) {
+        if (ec) { cached.clear(); cached_file = file; cached_time = {}; }
+        else if (file != cached_file || time != cached_time) {
             std::ifstream input(file, std::ios::binary);
             cached = input ? playtimes(input) : std::unordered_map<uint32_t, uint32_t>{};
             cached_file = file; cached_time = time;
         }
-        if (!ec) if (const auto found = cached.find(app_id); found != cached.end()) result.playtime_minutes = found->second;
     }
+    if (const auto found = cached.find(app_id); found != cached.end()) return found->second;
+    return std::nullopt;
+}
+
+SteamStats readSteamStats(const std::filesystem::path& steam_root, uint64_t steam_id, uint32_t app_id) {
+    SteamStats result;
+    if (steam_id <= steam_id_offset || !app_id) return result;
+    const auto config = steam_root / L"userdata" / std::to_wstring(steam_id - steam_id_offset) / L"config";
+    result.playtime_minutes = readSteamPlaytime(steam_root, steam_id, app_id);
     // Exact: the client's achievement schema and the account's unlock bits (appcache/stats).
     if (const auto [unlocked, total] = localAchievementCounts(steam_root, steam_id, app_id); total) {
         result.achievements_unlocked = unlocked;

@@ -316,6 +316,9 @@ int main() {
     auto steam_look = config; steam_look.shelves_steam = steam_look.shelves_posters = true;
     if (AppSettings{}.shelves_steam || !parseAppSettings("shelves_steam=1\n").shelves_posters || parseAppSettings("shelves_steam=on\n").shelves_steam ||
         !saveAppSettings(steam_look, file) || !loadAppSettings(file).shelves_steam || !saveAppSettings(config, file)) return 8346;
+    // Snitch's coloured dock icons: off by default, strict 0/1.
+    if (AppSettings{}.snitch_colour_icons || !parseAppSettings("snitch_colour_icons=1\n").snitch_colour_icons ||
+        parseAppSettings("snitch_colour_icons=on\n").snitch_colour_icons) return 8347;
     // Sound folder and files picked from it (UTF-8): an absolute folder, plain file names only.
     auto picked = config; picked.sound_folder = L"C:\\Muzyka ąę"; picked.music_file = L"Temat ł.mp3"; picked.boot_file = L"start.wav";
     if (!saveAppSettings(picked, file)) return 51;

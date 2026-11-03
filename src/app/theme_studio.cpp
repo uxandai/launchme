@@ -148,6 +148,8 @@ void Launcher::themeBuildOptions() {
             toggle(Id::psfive_details, L"Szczegóły pod rzędem", s.psfive_details);
             toggle(Id::psfive_category_tabs, L"Pasek kategorii", s.psfive_category_tabs);
             if (!s.psfive_category_tabs) toggle(Id::home_tab_icons, L"Ikony zamiast nazw", s.home_tab_icons);
+        } else if (s.home_layout == HomeLayout::snitch) {
+            toggle(Id::snitch_colour_icons, L"Kolorowe ikony", s.snitch_colour_icons);
         }
         cards(Id::home_tiles, Look::place, L"Kafle Wszystkie, Glance, Tarot i Towarzyszka", static_cast<int>(s.home_tiles),
               {{tr(placeName(0))}, {tr(placeName(1))}, {tr(placeName(2))}});

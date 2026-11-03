@@ -649,6 +649,7 @@ void Launcher::paint(bool overlay) {
         }
     }
     context.metro_light = settings_.metro_light;
+    context.snitch_colour_icons = settings_.snitch_colour_icons;
     context.menu_dialog = menuDialog();
     context.friends_progress = friends_progress_;
     context.friends = &friends_;
