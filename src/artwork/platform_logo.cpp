@@ -5,7 +5,7 @@
 #include "../library/studios.hpp"
 #include "../platform/text_encoding.hpp"
 
-// Linux: src/linux/win32 (Direct2D on Skia, DirectWrite on SkParagraph, WIC on image_codec).
+// Linux: src/linux/win32 (Direct2D and DirectWrite on Impeller, WIC on image_codec).
 #include <d2d1.h>
 #include <dwrite.h>
 #include <wincodec.h>

@@ -425,7 +425,7 @@ private:
     // device turns into D2DERR_RECREATE_TARGET as an HWND target's EndDraw reports it.
     void beginFrame();
     HRESULT finishFrame(HRESULT drawn);
-    // The target's Direct2D device (Windows; Skia manages its own caches on Linux): its texture cache
+    // The target's Direct2D device (Windows; Impeller manages its own caches on Linux): its texture cache
     // bounded (low memory: less), and caches unused for a while let go when the screen changes (at
     // most every 10 s).
 #ifdef _WIN32

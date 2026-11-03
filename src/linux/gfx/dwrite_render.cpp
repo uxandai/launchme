@@ -1,25 +1,35 @@
-// Drawing DirectWrite layouts with Skia: the layout's text blobs in the target's paint, ranges
-// with a drawing effect in that brush's paint, underlines as rectangles. DrawText keeps the
-// layouts it made (per thread, by format, text and box), so the same text drawn every frame is
-// shaped once and its blobs stay in the GPU's text cache.
+// Drawing DirectWrite layouts with Impeller: the layout's paragraph in the target's paint, ranges
+// with a drawing effect in that brush's paint. DrawText keeps the layouts it made (per thread, by
+// format, text and box), so the same text drawn every frame is shaped once; a layout keeps its
+// last drawing's paragraph while the inks stay the same.
 #include "dwrite_internal.hpp"
-
-#include "include/core/SkCanvas.h"
 
 #include <algorithm>
 #include <list>
 #include <unordered_map>
 
 namespace lm_dwrite {
-void TextLayout::draw(SkCanvas* canvas, float x, float y, const SkPaint& paint) {
+void TextLayout::draw(gx::Canvas* canvas, float x, float y, const gx::Paint& paint) {
     layOut();
-    for (const Run& run : runs_) {
-        const CharStyle* style = styles_.empty() ? nullptr : &styles_[run.style];
-        SkPaint ink = paint;
-        if (style && style->effect && !lm_gfx::brushPaint(style->effect.Get(), canvas, ink)) ink = paint;
-        canvas->drawTextBlob(run.blob, x, y, ink);
-        if (run.underline) canvas->drawRect(run.underline_rect.makeOffset(x, y), ink);
+    if (!laid_ || !canvas) return;
+    // The inks of this drawing: the paint, and each drawing effect's brush.
+    gx::ParagraphSpec spec = specFor(shape_, true, &paint);
+    std::vector<gx::Color> inks;
+    bool cacheable = true;
+    for (const auto& run : spec.runs) {
+        inks.push_back(run.style.ink.color);
+        cacheable = cacheable && !run.style.ink.shader && !run.style.ink.has_color_matrix;
     }
+    const bool same = drawn_ && cacheable && inks.size() == drawn_inks_.size() &&
+                      std::equal(inks.begin(), inks.end(), drawn_inks_.begin(), [](const gx::Color& a, const gx::Color& b) {
+                          return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a;
+                      });
+    if (!same) {
+        drawn_ = std::make_unique<gx::TextParagraph>(spec);
+        drawn_inks_ = cacheable ? std::move(inks) : std::vector<gx::Color>{};
+        if (!cacheable) { auto once = std::move(drawn_); if (once && once->valid()) once->draw(*canvas, {x + shift_, y + metrics_.top + paragraphDrop()}); return; }
+    }
+    if (drawn_ && drawn_->valid()) drawn_->draw(*canvas, {x + shift_, y + metrics_.top + paragraphDrop()});
 }
 
 namespace {
@@ -71,20 +81,21 @@ private:
 } // namespace lm_dwrite
 
 namespace lm_gfx {
-void drawTextLayout(SkCanvas* canvas, IDWriteTextLayout* layout, float x, float y, const SkPaint& paint, bool) {
+void drawTextLayout(lm_impeller::Canvas* canvas, IDWriteTextLayout* layout, float x, float y, const lm_impeller::Paint& paint, bool) {
     if (auto* own = lm_dwrite::TextLayout::from(layout)) own->draw(canvas, x, y, paint);
 }
 
 // The same layout and clip as a text layout of the box's size drawn at its corner with
 // D2D1_DRAW_TEXT_OPTIONS_CLIP, so both draw the same pixels.
-void drawText(SkCanvas* canvas, const wchar_t* text, UINT32 length, IDWriteTextFormat* format, float left, float top, float right,
-              float bottom, bool clip, const SkPaint& paint, bool) {
+void drawText(lm_impeller::Canvas* canvas, const wchar_t* text, UINT32 length, IDWriteTextFormat* format, float left, float top, float right,
+              float bottom, bool clip, const lm_impeller::Paint& paint, bool) {
     thread_local lm_dwrite::LayoutCache cache;
     const float width = std::max(0.0f, right - left), height = std::max(0.0f, bottom - top);
     const auto layout = cache.get(text, length, format, width, height);
     if (!layout) return;
-    const int restore_to = canvas->save();
-    if (clip) canvas->clipRect(SkRect::MakeXYWH(left, top, width, height), true);
+    const int restore_to = canvas->saveCount();
+    canvas->save();
+    if (clip) canvas->clipRect(lm_impeller::Rect::XYWH(left, top, width, height));
     layout->draw(canvas, left, top, paint);
     canvas->restoreToCount(restore_to);
 }

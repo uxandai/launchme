@@ -1,19 +1,17 @@
 // The Direct2D factory: geometries, stroke styles and render targets.
 #include "d2d_internal.hpp"
 
-#include "include/effects/SkDashPathEffect.h"
-
 #include <algorithm>
 #include <numeric>
 
 namespace lm_d2d {
 namespace {
-SkPaint::Cap capFor(D2D1_CAP_STYLE cap) {
+ImpellerStrokeCap capFor(D2D1_CAP_STYLE cap) {
     switch (cap) {
-    case D2D1_CAP_STYLE_SQUARE: return SkPaint::kSquare_Cap;
+    case D2D1_CAP_STYLE_SQUARE: return kImpellerStrokeCapSquare;
     case D2D1_CAP_STYLE_ROUND:
-    case D2D1_CAP_STYLE_TRIANGLE: return SkPaint::kRound_Cap; // Skia has no pointed cap; round reaches as far.
-    default: return SkPaint::kButt_Cap;
+    case D2D1_CAP_STYLE_TRIANGLE: return kImpellerStrokeCapRound; // There is no pointed cap; round reaches as far.
+    default: return kImpellerStrokeCapButt;
     }
 }
 
@@ -79,36 +77,36 @@ StrokeStyle::StrokeStyle(const D2D1_STROKE_STYLE_PROPERTIES& properties, const F
 
 const StrokeStyle* StrokeStyle::from(ID2D1StrokeStyle* style) { return dynamic_cast<const StrokeStyle*>(style); }
 
-// Direct2D's miter limit is in half stroke widths, Skia's in stroke widths. A plain MITER join
-// clips long miters on Direct2D; Skia bevels them.
-void StrokeStyle::apply(SkPaint& paint, float width) const {
+// Direct2D's miter limit is in half stroke widths, the stroker's in stroke widths.
+void StrokeStyle::apply(gx::Paint& paint, float width) const {
     const bool dashed = !dashes_.empty();
-    paint.setStyle(SkPaint::kStroke_Style);
-    paint.setStrokeWidth(width);
-    paint.setStrokeCap(capFor(dashed ? properties_.dashCap : properties_.startCap));
+    paint.stroke = true;
+    paint.width = width;
+    paint.cap = capFor(dashed ? properties_.dashCap : properties_.startCap);
     switch (properties_.lineJoin) {
-    case D2D1_LINE_JOIN_BEVEL: paint.setStrokeJoin(SkPaint::kBevel_Join); break;
-    case D2D1_LINE_JOIN_ROUND: paint.setStrokeJoin(SkPaint::kRound_Join); break;
-    default: paint.setStrokeJoin(SkPaint::kMiter_Join); break;
+    case D2D1_LINE_JOIN_BEVEL: paint.join = kImpellerStrokeJoinBevel; break;
+    case D2D1_LINE_JOIN_ROUND: paint.join = kImpellerStrokeJoinRound; break;
+    default: paint.join = kImpellerStrokeJoinMiter; break;
     }
-    paint.setStrokeMiter(std::max(1.0f, properties_.miterLimit) * 0.5f);
+    paint.miter = std::max(1.0f, properties_.miterLimit) * 0.5f;
+    paint.dashes.clear();
     if (!dashed || width <= 0) return;
     // Zero-length dashes are dots with round or square dash caps: a hair-length dash, taken from
-    // the gap after it, so every stroker draws them.
-    std::vector<SkScalar> lengths;
-    for (const float dash : dashes_) lengths.push_back(dash * width);
+    // the gap after it, so the stroker draws them.
+    for (const float dash : dashes_) paint.dashes.push_back(dash * width);
     const float hair = width * 0.01f;
-    for (size_t i = 0; i + 1 < lengths.size() && properties_.dashCap != D2D1_CAP_STYLE_FLAT; i += 2)
-        if (lengths[i] == 0) { lengths[i] = hair; lengths[i + 1] = std::max(0.0f, lengths[i + 1] - hair); }
-    paint.setPathEffect(SkDashPathEffect::Make(lengths, properties_.dashOffset * width));
+    for (size_t i = 0; i + 1 < paint.dashes.size() && properties_.dashCap != D2D1_CAP_STYLE_FLAT; i += 2)
+        if (paint.dashes[i] == 0) { paint.dashes[i] = hair; paint.dashes[i + 1] = std::max(0.0f, paint.dashes[i + 1] - hair); }
+    paint.dash_phase = properties_.dashOffset * width;
 }
 
-void applyDefaultStroke(SkPaint& paint, float width) {
-    paint.setStyle(SkPaint::kStroke_Style);
-    paint.setStrokeWidth(width);
-    paint.setStrokeCap(SkPaint::kButt_Cap);
-    paint.setStrokeJoin(SkPaint::kMiter_Join);
-    paint.setStrokeMiter(5); // Direct2D's 10 half widths.
+void applyDefaultStroke(gx::Paint& paint, float width) {
+    paint.stroke = true;
+    paint.width = width;
+    paint.cap = kImpellerStrokeCapButt;
+    paint.join = kImpellerStrokeJoinMiter;
+    paint.miter = 5; // Direct2D's 10 half widths.
+    paint.dashes.clear();
 }
 } // namespace lm_d2d
 

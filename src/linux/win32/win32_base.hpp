@@ -1,7 +1,7 @@
 #pragma once
 // Linux only. The Windows-shaped surface the launcher's window, input and drawing code is written
 // against (src/app, src/ui, src/main.cpp): the base types, COM's IUnknown and GUIDs. The
-// implementations behind it are real ports: Direct2D on Skia, DirectWrite on SkParagraph, WIC on
+// implementations behind it are real ports: Direct2D and DirectWrite on Impeller, WIC on
 // image_codec and the window manager on SDL3 (src/linux/gfx, src/linux/window). Only the parts
 // the launcher uses exist; nothing here pretends to be Wine. docs/linux-port.md, phase 3.
 #ifdef _WIN32

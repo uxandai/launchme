@@ -9,7 +9,7 @@
 // - The device is the renderer's own: its caches can be trimmed (behind a game), Direct2D's
 //   texture cache bounded, and video frames decoded straight into textures on it.
 // The layered Guide overlay and UI-test captures keep their own targets; Linux has none of this
-// (src/linux implements ID2D1HwndRenderTarget on Skia).
+// (src/linux implements ID2D1HwndRenderTarget on Impeller).
 #ifdef _WIN32
 #include <d2d1_1.h>
 #include <d3d11.h>

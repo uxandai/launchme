@@ -1,6 +1,6 @@
 #pragma once
 // Linux only: Direct2D's core interfaces with the Windows SDK's names, values and signatures,
-// implemented on Skia (src/linux/gfx/d2d_*.cpp). Only what the launcher calls is declared;
+// implemented on Impeller (src/linux/gfx/d2d_*.cpp). Only what the launcher calls is declared;
 // the vtables are this port's own, not Windows'.
 #include "dcommon.h"
 

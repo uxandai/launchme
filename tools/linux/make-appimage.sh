@@ -33,6 +33,7 @@ strip --strip-debug "$APPDIR/usr/bin/launchme"
 cp -r "$BUILD/assets" "$APPDIR/usr/bin/assets"
 [ -d "$BUILD/companion-model" ] && cp -r "$BUILD/companion-model" "$APPDIR/usr/bin/companion-model"
 cp "$SRC/LICENSE" "$APPDIR/usr/bin/LICENSE.txt"
+if [ -d "$BUILD/licenses" ]; then cp -r "$BUILD/licenses" "$APPDIR/usr/bin/licenses"; fi
 
 # The desktop entry and the icon.
 cat > "$OUT/launchme.desktop" <<EOF

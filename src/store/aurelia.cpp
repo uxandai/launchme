@@ -81,8 +81,8 @@ std::vector<std::wstring> arguments(const Request& r) {
     case C::install_forget: add({L"install", L"forget", app}); if (r.delete_files) add({L"--delete-files"}); break;
     case C::duplicates: add({L"duplicates"}); break;
     // The library root must be absolute; Steam is never stopped or restarted for the user.
-    case C::relink: if (!r.folder.is_absolute()) return {}; add({L"relink", app, r.folder.native()}); break;
-    case C::import_files: if (!r.folder.is_absolute()) return {}; add({L"import", app, r.folder.native()}); break;
+    case C::relink: if (!r.folder.is_absolute()) return {}; add({L"relink", app, r.folder.wstring()}); break;
+    case C::import_files: if (!r.folder.is_absolute()) return {}; add({L"import", app, r.folder.wstring()}); break;
 #ifdef _WIN32
     case C::install: add({L"install", app, L"--platform", L"windows"}); if (!r.folder.empty()) add({L"--library", r.folder.native()}); break;
 #else

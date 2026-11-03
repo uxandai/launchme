@@ -1,5 +1,5 @@
 #pragma once
-// Linux only: the DXGI pixel formats Direct2D bitmaps name (src/linux/gfx, Skia).
+// Linux only: the DXGI pixel formats Direct2D bitmaps name (src/linux/gfx).
 enum DXGI_FORMAT : unsigned {
     DXGI_FORMAT_UNKNOWN = 0,
     DXGI_FORMAT_R8G8B8A8_UNORM = 28,

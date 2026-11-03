@@ -1,6 +1,6 @@
 #pragma once
 // Linux only: DirectWrite's core interfaces with the Windows SDK's names, values and signatures,
-// implemented on SkParagraph, fontconfig and HarfBuzz (src/linux/gfx/dwrite_*.cpp). Only
+// implemented on Impeller typography and fontconfig (src/linux/gfx/dwrite_*.cpp). Only
 // what the launcher calls is declared; the vtables are this port's own, not Windows'. Text
 // positions and lengths count wchar_t units, which are UTF-32 code points here.
 #include "dcommon.h"

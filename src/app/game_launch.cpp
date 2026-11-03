@@ -41,6 +41,8 @@ void Launcher::enterDown(bool repeated) {
     if (psfiveDetailsShown()) { psfiveDetailsAccept(); return; } // The details under the row: their screenshot or game.
     if (psfiveActions()) { psfiveActivate(); return; } // "Graj" / "…" act at once, no hold.
     if (psfiveTopFocused()) { psfiveTopActivate(); return; } // The top bar acts immediately too.
+    // No games: nothing to hold for, so Enter presses the empty home's focused button at once (as Space does).
+    if (emptyHomeActive()) { emptyHomeActivate(empty_focus_); return; }
     if (cards_.empty()) return;
     if (cards_[selected_].game.kind == GameKind::platform ||
         cards_[selected_].game.kind == GameKind::pc_platform ||
