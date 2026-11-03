@@ -33,7 +33,9 @@ constexpr float logo_width = 420, logo_height = 150, logo_gap = 56;
 constexpr float tabs_left = 77, tab_gap = 48;
 constexpr size_t visible_tabs = 3;
 enum TopItem { top_widgets, top_menu };
-constexpr int top_count = 2;
+// The Widgets and Menu icons in the top bar are gone (the quick bar and the drawers open as on the other layouts);
+// their drawing, hit test and focus stay and fall silent at zero.
+constexpr int top_count = 0;
 // The clock's box fits a 12-hour "12:00 PM" (#3), right-aligned, so a 24-hour "14:05" sits at its end.
 constexpr float bar_margin = 72, clock_width = 150, clock_gap = 40, icon_radius = 26, icon_step = 70;
 
@@ -115,8 +117,9 @@ inline int hitTop(float x, float y, float width, bool with_clock) {
 struct MoreMenu {
     static constexpr float row_height = 52, padding = 8, menu_width = 350;
     settings_ui::Rect panel;
-    size_t count;
-    MoreMenu(float width, float height, size_t categories, float anchor) : count(categories > visible_tabs ? categories - visible_tabs : 0) {
+    size_t count, first; // `first`: the first category in the list (the tabs before it are in the bar).
+    MoreMenu(float width, float height, size_t categories, float anchor, size_t first_category = visible_tabs)
+        : count(categories > first_category ? categories - first_category : 0), first(first_category) {
         const float left = std::clamp(anchor, 24.0f, std::max(24.0f, width - menu_width - 24));
         const float top = top_center + 34;
         // Clear of the button hints along the bottom edge (Wybierz / Zamknij while it is open).
@@ -125,7 +128,7 @@ struct MoreMenu {
     float top() const { return panel.top + padding; }
     float bottom() const { return panel.bottom - padding; }
     float maxScroll() const { return std::max(0.0f, static_cast<float>(count) * row_height - (bottom() - top())); }
-    float rowTop(int category, float scroll) const { return top() + (category - static_cast<int>(visible_tabs)) * row_height - scroll; }
+    float rowTop(int category, float scroll) const { return top() + (category - static_cast<int>(first)) * row_height - scroll; }
     settings_ui::Rect revealed(float progress) const {
         const float t = std::clamp(progress, 0.0f, 1.0f), eased = t * t * (3 - 2 * t);
         const float inset = 12 * (1 - eased);
@@ -136,7 +139,7 @@ struct MoreMenu {
         const auto visible = revealed(progress);
         if (!visible.contains(x, y) || y < top() || y >= visible.bottom - padding) return -1;
         const int row = static_cast<int>((y - top() + scroll) / row_height);
-        return row >= 0 && row < static_cast<int>(count) ? row + static_cast<int>(visible_tabs) : -1;
+        return row >= 0 && row < static_cast<int>(count) ? row + static_cast<int>(first) : -1;
     }
 };
 } // namespace psfive_layout

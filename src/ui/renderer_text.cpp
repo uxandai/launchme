@@ -14,10 +14,13 @@ using namespace render_detail;
 bool Renderer::font(ComPtr<IDWriteTextFormat>& destination, float size, DWRITE_FONT_WEIGHT weight,
                     DWRITE_TEXT_ALIGNMENT alignment) {
     HRESULT hr = E_FAIL;
-    if (sst_fonts_ && font_family_ == L"SST") hr = dwrite_->CreateTextFormat(L"SST", sst_fonts_.Get(), weight,
+    if (lexend_fonts_ && font_family_ == L"Lexend") hr = dwrite_->CreateTextFormat(L"Lexend", lexend_fonts_.Get(), weight,
                                                    DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL,
                                                    size, L"pl-PL", destination.GetAddressOf());
-    else if (font_family_ != L"SST")
+    else if (sst_fonts_ && font_family_ == L"SST") hr = dwrite_->CreateTextFormat(L"SST", sst_fonts_.Get(), weight,
+                                                   DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL,
+                                                   size, L"pl-PL", destination.GetAddressOf());
+    else if (font_family_ != L"SST" && font_family_ != L"Lexend")
         hr = dwrite_->CreateTextFormat(font_family_.c_str(), nullptr, weight,
                                       DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL,
                                       size, L"pl-PL", destination.GetAddressOf());

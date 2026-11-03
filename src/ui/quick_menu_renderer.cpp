@@ -117,55 +117,7 @@ void Renderer::drawQuickPanel() {
     target_->SetTransform(screen);
 }
 
-// Flix with the menu's icons at the top: each quick-bar icon at half size on a small glass circle,
-// right to left from the platform badge (Glance and her avatar follow: drawGlanceShortcut,
-// drawCompanionPill). The one under the pointer lights up and names itself underneath.
-void Renderer::drawFlixIcons() {
-    const float alpha = context_->flix_icons_alpha;
-    if (!context_->flix_icons || alpha < 0.004f) return;
-    const int store = static_cast<int>(context_->plugin_menu.size());
-    const int quick = quick_menu::count(store), total = std::max(context_->flix_icon_total, quick);
-    D2D1_MATRIX_3X2_F saved{};
-    target_->GetTransform(&saved);
-    const int focus = context_->flix_icon_focus;
-    for (int i = 0; i < quick; ++i) {
-        const auto r = home_widgets::icons::at(i, total, viewport_.width);
-        const float cx = (r.left + r.right) * 0.5f, cy = (r.top + r.bottom) * 0.5f;
-        const bool hovered = context_->flix_icon_hover == i, focused = focus == i;
-        if (focused) { // The pad's icon: a white disc with a dark glyph, as on the quick bar.
-            brush(color(0.96f, 0.96f, 0.96f, alpha));
-            target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), (r.right - r.left) * 0.5f + 2, (r.bottom - r.top) * 0.5f + 2), solid_.Get());
-        } else drawWidgetPill(D2D1::RectF(r.left, r.top, r.right, r.bottom), alpha, hovered ? 1.0f : 0.0f);
-        target_->SetTransform(D2D1::Matrix3x2F::Scale(0.48f, 0.48f, D2D1::Point2F(cx, cy)) * saved);
-        drawQuickGlyph(quick_menu::action(i, store), cx, cy, focused ? color(0.06f, 0.06f, 0.07f, alpha) : color(0.95f, 0.95f, 0.95f, alpha), i, false);
-        target_->SetTransform(saved);
-        if (quick_menu::action(i, store) == quick_menu::Action::downloads && context_->downloads_moving > 0) {
-            // How many games are transferring: a small accent dot on the icon's corner.
-            const float bx = r.right - 4, by = r.top + 4;
-            brush(uiAccent(alpha)); target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(bx, by), 7, 7), solid_.Get());
-        }
-    }
-    // The focused (else the hovered) icon's name, to the left of the row.
-    const int named = focus >= 0 ? focus : context_->flix_icon_hover;
-    std::wstring caption;
-    if (named >= 0 && named < quick) {
-        const auto action = quick_menu::action(named, store);
-        caption = action == quick_menu::Action::store && quick_menu::pluginIndex(named) < store ?
-            context_->plugin_menu[static_cast<size_t>(quick_menu::pluginIndex(named))] : std::wstring(quick_menu::caption(action));
-    } else if (named >= quick && named < total) {
-        // Glance's icon right after the quick ones, her avatar last.
-        if (named == quick && context_->flix_icon_glance) caption = L"Glance";
-        else if (context_->companion) caption = context_->companion->name;
-    }
-    if (!caption.empty()) {
-        const auto first = home_widgets::icons::at(0, total, viewport_.width);
-        textLine(caption, first.left - 16 - 360, (first.top + first.bottom) * 0.5f, 360, settings_body_font_.Get(),
-                 color(0.94f, 0.94f, 0.94f, alpha), DWRITE_TEXT_ALIGNMENT_TRAILING);
-    }
-}
-
-// One quick-bar icon centred on (x, cy), about 44 px across: the bar, Flix's small top-right icons
-// (scaled by the caller's transform) and the Guide overlay's bar.
+// One quick-bar icon centred on (x, cy), about 44 px across: the bar and the Guide overlay's bar.
 void Renderer::drawQuickGlyph(quick_menu::Action action, float x, float cy, D2D1_COLOR_F ink, int index, bool home) {
     brush(ink);
     if (action == quick_menu::Action::dashboard) {

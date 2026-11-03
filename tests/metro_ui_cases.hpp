@@ -257,6 +257,23 @@ int LauncherUiTest::metro(HWND window) {
     }
     app.settings_.shelves_posters = false; app.showCategory(0); settle();
     if (std::abs(app.cards_[0].aspect - 1) > 0.001f) return 2766;
+    // "Wygląd Steam": posters, and Ostatnio grane as one row of one height with a wide first tile; the focus does not grow it.
+    app.settings_.shelves_posters = app.settings_.shelves_steam = true; app.showCategory(0); settle();
+    if (!app.shelfSteamRow() || app.cards_.size() < 3 || !isGame(app.cards_[0].game)) return 8340;
+    if (!app.shelfWideCard(0) || app.shelfWideCard(1)) return 8341;
+    for (const size_t focus : {size_t{0}, size_t{2}}) {
+        app.selected_ = focus; settle();
+        for (size_t i = 0; i < app.cards_.size(); ++i) {
+            const auto& card = app.cards_[i];
+            const float aspect = i == 0 ? 460.0f / 215.0f : 2.0f / 3.0f;
+            if (std::abs(card.size - carousel::steam_row::height) > 1 || std::abs(card.aspect - aspect) > 0.001f) return 8342;
+            if (i + 1 < app.cards_.size() && app.cards_[i + 1].x < card.x + card.width() - 0.5f) return 8343;
+        }
+    }
+    if (!capture(L"shelves-steam.png")) return 8344;
+    app.settings_.shelves_steam = false; app.showCategory(0); settle();
+    if (app.shelfSteamRow() || app.shelfWideCard(0) || std::abs(app.cards_[0].aspect - 2.0f / 3.0f) > 0.001f) return 8345;
+    app.settings_.shelves_posters = false; app.showCategory(0); settle();
     // "Kafelek „Wszystkie” w rzędach" on the default layout: first on game shelves (not Recent or
     // stores), a 2x2 preview of the covers (posters: a game's background); it opens the library.
     app.openSettings(); app.settings_state_.selectCategory(0); app.buildSettingsRows();

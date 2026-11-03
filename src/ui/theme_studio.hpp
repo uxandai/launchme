@@ -14,9 +14,12 @@
 namespace theme_ui {
 using Rect = settings_ui::Rect;
 enum class Tab { layout, wallpaper, tiles, colors, fonts, other, looks };
-inline constexpr int tab_count = 7;
-inline constexpr const wchar_t* tab_names[tab_count] = {trKey(L"Układ"), trKey(L"Tapeta"), trKey(L"Kafelki"), trKey(L"Kolory"),
-                                                        trKey(L"Czcionki"), trKey(L"Inne"), trKey(L"Wyglądy")};
+// TODO: the Looks tab (Wyglądy: Cofnij zmiany, Zapisz wygląd, the saved looks) is hidden for now. Its state, rows,
+// drawing, the preset files and the tests stay; set this to true to bring it back as the last tab.
+inline constexpr bool looks_tab_shown = false;
+inline constexpr int tab_count = looks_tab_shown ? 7 : 6;
+inline constexpr const wchar_t* tab_names[] = {trKey(L"Układ"), trKey(L"Tapeta"), trKey(L"Kafelki"), trKey(L"Kolory"),
+                                               trKey(L"Czcionki"), trKey(L"Inne"), trKey(L"Wyglądy")};
 
 // cards: a strip of pictures, one chosen; toggle: a switch; slider: − track +; action: a button.
 enum class Kind { cards, toggle, slider, action };
@@ -80,7 +83,7 @@ struct State {
     size_t demo_origin = 0;     // Where the home's focus was before the demo.
     int demo_dir = 1;
     // Which tab each option came from, for the preview's emphasis (e.g. fonts show the text sample larger).
-    Tab current() const { return static_cast<Tab>(std::clamp(tab, 0, tab_count - 1)); }
+    Tab current() const { return static_cast<Tab>(std::clamp(tab, 0, tab_count - 1)); } // Never the hidden Looks tab.
     static constexpr int undo_item = 0, save_item = 1, first_saved = 2;
     int items() const { return first_saved + static_cast<int>(saved.size()); }
 };

@@ -121,6 +121,7 @@ bool parseLookSetting(AppSettings& settings, std::string_view key, std::string_v
     if (key == "flix_top_icons") return true; // Retired: Flix has no icons in the corner any more.
     if (key == "hide_while_playing") return flag(settings.hide_while_playing);
     if (key == "shelves_hero_facts") return flag(settings.shelves_hero_facts);
+    if (key == "shelves_steam") { flag(settings.shelves_steam); if (settings.shelves_steam) settings.shelves_posters = true; return true; }
     if (key == "focus_gap") {
         // 0 / 1 were the first version's off / outside.
         if (value == "0" || value == "none") settings.focus_gap = AppSettings::FocusGap::none;
@@ -202,6 +203,12 @@ bool parseEmulatorSetting(AppSettings& settings, std::string_view key, std::stri
 // 0.4.9: artwork sources, the wallpaper, home tiles, PSfive's details, the menu dialog, Metro's light theme.
 bool parseExtraSetting(AppSettings& settings, std::string_view key, std::string_view value) {
     const auto flag = [&](bool& target) { if (value == "0" || value == "1") target = value == "1"; return true; };
+    if (key == "psfive_dim") { // PSfive: the extra darkening of the background.
+        float level = 0;
+        const auto result = std::from_chars(value.data(), value.data() + value.size(), level);
+        if (result.ec == std::errc{} && result.ptr == value.data() + value.size() && std::isfinite(level)) settings.psfive_dim = std::clamp(level, 0.0f, 1.0f);
+        return true;
+    }
     if (key == "artwork_sources_off") {
         settings.artwork_sources_off.clear();
         while (!value.empty()) {
@@ -636,6 +643,7 @@ AppSettings parseAppSettings(std::string_view text) {
             else if (value == "Segoe UI") settings.font_family = L"Segoe UI";
             else if (value == "Consolas") settings.font_family = L"Consolas";
             else if (value == "Arial") settings.font_family = L"Arial";
+            else if (value == "Lexend") settings.font_family = L"Lexend";
         } else if (key == "home_layout") {
             if (value == "xmb") settings.home_layout = AppSettings::HomeLayout::xmb;
             else if (value == "flix") settings.home_layout = AppSettings::HomeLayout::flix;
@@ -838,9 +846,11 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
     output << "psfive_size=" << (settings.psfive_size == AppSettings::XmbSize::compact ? "small" :
                                 settings.psfive_size == AppSettings::XmbSize::large ? "large" : "default") << '\n';
     output << "psfive_clock=" << settings.psfive_clock << '\n';
+    output << "psfive_dim=" << std::clamp(settings.psfive_dim, 0.0f, 1.0f) << '\n';
     output << "show_categories=" << settings.show_categories << '\n';
     output << "xmb_posters=" << settings.xmb_posters << '\n';
     output << "shelves_posters=" << settings.shelves_posters << '\n';
+    output << "shelves_steam=" << settings.shelves_steam << '\n';
     output << "shelves_category_all=" << settings.shelves_category_all << '\n';
     output << "xmb_size=" << (settings.xmb_size == AppSettings::XmbSize::compact ? "small" :
                              settings.xmb_size == AppSettings::XmbSize::large ? "large" : "default") << '\n';

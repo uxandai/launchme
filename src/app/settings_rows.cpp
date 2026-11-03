@@ -63,6 +63,7 @@ std::wstring Launcher::settingsPageTitle(const settings_ui::PageFrame* frame) co
     case Page::layout_options: return tr(L"Opcje układu: ") + std::wstring(tr(home_layouts[std::clamp(static_cast<int>(settings_.home_layout), 0, home_layout_count - 1)]));
     case Page::cover_focus: return tr(L"Zaznaczona okładka");
     case Page::backdrop: return tr(L"Tło i szkło");
+    case Page::settings_search: return tr(L"Szukaj w ustawieniach");
     case Page::appearance_all: return tr(L"Wszystkie opcje wyglądu");
     case Page::videos: return tr(L"Filmy w tle");
     case Page::service_keys: return tr(L"Klucze usług");
@@ -138,7 +139,8 @@ void Launcher::buildSettingsRows() {
         row.key = std::to_string(static_cast<int>(target));
         add(std::move(row));
     };
-    switch (static_cast<settings_ui::Category>(settings_state_.category)) {
+    if (settings_state_.at(Page::settings_search)) settingsSearchRows(add);
+    else switch (static_cast<settings_ui::Category>(settings_state_.category)) {
     case settings_ui::Category::appearance: {
         const auto accentRow = [&](Id id, const wchar_t* title, const wchar_t* description, uint32_t current,
                                    const auto& colors, const auto& names) {
@@ -167,6 +169,8 @@ void Launcher::buildSettingsRows() {
                     tr(L"Stała lista po lewej stronie zamiast wysuwanej szuflady."), {}, settings_.show_categories});
                 add({Id::shelves_posters, Control::toggle, tr(L"Pionowe plakaty"),
                     tr(L"Plakaty gier zamiast kwadratowych okładek na półkach. Sklepy i konsole zostają kwadratowe."), {}, settings_.shelves_posters});
+                add({Id::shelves_steam, Control::toggle, tr(L"Wygląd Steam"),
+                    tr(L"Plakaty; w „Ostatnio grane” pierwszy kafel jest szeroki, wszystkie tej samej wysokości, a zaznaczony nie rośnie."), {}, settings_.shelves_steam});
                 add({Id::shelves_category_all, Control::toggle, tr(L"Kafelek „Wszystkie” w rzędach"),
                     tr(L"Pierwszy na każdej półce z grami; otwiera bibliotekę jej kategorii."), {}, settings_.shelves_category_all});
                 add({Id::shelves_hero_facts, Control::toggle, tr(L"Informacje pod logo"),
@@ -207,7 +211,10 @@ void Launcher::buildSettingsRows() {
                 add({Id::psfive_size, Control::slider, tr(L"Rozmiar kafelków PSfive"),
                     tr(L"Mały, domyślny lub duży — dla kafelków w rzędzie."), tr(xmb_sizes[size]), false, size / 2.0f});
                 add({Id::psfive_clock, Control::toggle, tr(L"Zegar"),
-                    tr(L"Godzina w prawym górnym rogu, obok ikon szukania i menu."), {}, settings_.psfive_clock});
+                    tr(L"Godzina w prawym górnym rogu."), {}, settings_.psfive_clock});
+                add({Id::psfive_dim, Control::slider, tr(L"Przyciemnienie tła"),
+                    tr(L"Ciemniejszy obraz tła zaznaczonej gry. 0%: tak jak dotąd."), percent(settings_.psfive_dim), false,
+                    std::clamp(settings_.psfive_dim, 0.0f, 1.0f)});
                 add({Id::psfive_details, Control::toggle, tr(L"Szczegóły pod rzędem"),
                     tr(L"W dół z przycisków Graj / …: opis, informacje, zrzuty ekranu i podobne gry. Menu otwiera się wtedy ruchem w górę nad zakładkami."),
                     {}, settings_.psfive_details});

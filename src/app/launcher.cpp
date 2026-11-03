@@ -417,6 +417,7 @@ void Launcher::snapCardsForTransition() {
     const bool xmb = xmbActive(), flix = flixActive(), metro = metroActive(), psfive = psfiveActive(), list = libraryList();
     const bool psfive_buttons = psfive && (psfiveActions() || psfiveTopFocused());
     const float shelf_aspect = shelfPosters() ? 2.0f / 3.0f : 1.0f;
+    const bool steam_row = shelfSteamRow(); // Wygląd Steam: the first row's own geometry (steamTarget).
     const float compact_size = grid ? grid_layout::cell(view.width) :
                                carousel::smallSize(cards_.size(), view.width - shelf_inset, fixed_row);
     for (size_t i = 0; i < cards_.size(); ++i) {
@@ -460,6 +461,7 @@ void Launcher::snapCardsForTransition() {
             if (!grid) aspect = shelf_aspect;
             target_y = grid ? grid_layout::top(i, view.width, grid_scroll_) :
                        carousel::bottom(view.height) - target_size - (quick_open_ ? 100.0f : 0.0f);
+            if (steam_row && !grid) steamTarget(i, view, shelf_inset, target_x, target_y, target_size, aspect);
             if (rail) {
                 if (i < selected_) target_x -= category_rail::Layout::hidden_card_offset;
                 if (i != selected_) target_y -= category_rail::Layout::compact_lift;
@@ -470,7 +472,7 @@ void Launcher::snapCardsForTransition() {
         card.size = target_size;
         card.aspect = aspect;
         card.opacity = 1.0f;
-        card.emphasis = i == selected_ && !quick_open_ && !flixIconsFocused() && !flixRailFocused() && !(metro && metro_tabs_) && !psfive_buttons && !searchBackFocused() &&
+        card.emphasis = i == selected_ && !quick_open_ && !flixRailFocused() && !(metro && metro_tabs_) && !psfive_buttons && !searchBackFocused() &&
             !(libraryControls() && (library_controls_.focus >= 0 || library_controls_.open() ||
                                     (libraryOverview() && library_controls_.action >= 0))) ? 1.0f : 0.0f;
         if (renderer_.hasCover(i) || renderer_.hasPoster(i)) card.cover_opacity = 1.0f;
@@ -608,6 +610,7 @@ void Launcher::tick() {
     const bool psfive_buttons = psfive && (psfiveActions() || psfiveTopFocused());
     // Shelves of posters: 2:3 cards as wide as the square covers (so 1.5x as tall).
     const float shelf_aspect = shelfPosters() ? 2.0f / 3.0f : 1.0f;
+    const bool steam_row = shelfSteamRow(); // Wygląd Steam: the first row's own geometry (steamTarget).
     // Per frame, not per card: a library grid can hold thousands of cards.
     const float compact_size = grid ? grid_layout::cell(view.width) :
                                carousel::smallSize(cards_.size(), view.width - shelf_inset, fixed_row);
@@ -710,6 +713,7 @@ void Launcher::tick() {
             if (!grid) aspect = shelf_aspect;
             target_y = grid ? grid_layout::top(i, view.width, grid_scroll_) :
                        carousel::bottom(view.height) - target_size - (quick_open_ ? 100.0f : 0.0f);
+            if (steam_row && !grid) steamTarget(i, view, shelf_inset, target_x, target_y, target_size, aspect);
             if (rail) {
                 // Keep earlier covers (including their shadows) behind the rail's clip.
                 if (i < selected_) target_x -= category_rail::Layout::hidden_card_offset;
@@ -723,7 +727,7 @@ void Launcher::tick() {
         }
         card.aspect = aspect;
         if (i == selected_) { focus_x = target_x; focus_y = target_y; focus_w = target_size * aspect; focus_h = target_size; }
-        const float emphasis = i == selected_ && !quick_open_ && !flixIconsFocused() && !flixRailFocused() && !(metro && metro_tabs_) && !psfive_buttons && !searchBackFocused() &&
+        const float emphasis = i == selected_ && !quick_open_ && !flixRailFocused() && !(metro && metro_tabs_) && !psfive_buttons && !searchBackFocused() &&
             !(libraryControls() && (library_controls_.focus >= 0 || library_controls_.open() ||
                                     (libraryOverview() && library_controls_.action >= 0))) ? 1.0f : 0.0f; // Przegląd: its panel's buttons.
         // PSfive at start-up: the row slides in from the right, small, tile after tile, then the first

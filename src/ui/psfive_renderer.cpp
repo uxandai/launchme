@@ -27,6 +27,10 @@ void Renderer::drawPsfive() {
         psfive_shade_->SetEndPoint(D2D1::Point2F(0, height));
         target_->FillRectangle(D2D1::RectF(0, 0, width, height), psfive_shade_.Get());
     }
+    if (context_->psfive_dim > 0.003f) { // Settings → PSfive → Przyciemnienie tła.
+        brush(D2D1::ColorF(0.008f, 0.012f, 0.016f, context_->psfive_dim * 0.8f));
+        target_->FillRectangle(D2D1::RectF(0, 0, width, height), solid_.Get());
+    }
     beginScreenForeground();
     drawPsfiveTopBar();
     drawPsfiveLabel();
@@ -143,7 +147,7 @@ void Renderer::drawPsfiveTopBar() {
     const auto& tabs = context_->home_tabs.empty() ? context_->psfive_tabs : none;
     psfive_tab_rects_.assign(tabs.size(), {});
     float x = tabs_left;
-    const float available = topItem(top_widgets, width, with_clock).left - 48 - tabs_left;
+    const float available = (with_clock ? clock(width).left - clock_gap : width - bar_margin) - 48 - tabs_left;
     const float max_tab = tabs.empty() ? 0 : std::max(40.0f, (available - (tabs.size() - 1) * tab_gap) / tabs.size());
     for (size_t i = 0; i < tabs.size() && psfive_tab_font_ && psfive_tab_idle_font_; ++i) {
         const bool shown = static_cast<int>(i) == context_->psfive_tab;
@@ -153,9 +157,13 @@ void Renderer::drawPsfiveTopBar() {
         const wchar_t icon = i < context_->psfive_tab_glyphs.size() ? context_->psfive_tab_glyphs[i] : 0;
         const float w = icon ? 34.0f : std::min(max_tab, textAdvance(tabs[i], psfive_tab_font_.Get()));
         psfive_tab_rects_[i] = {x - 16, top_center - 25, x + w + 16, top_center + 25};
-        if (icon) // Ikony zamiast nazw: the bold one in full, the others dimmed as the idle weight reads.
+        if (icon) { // Ikony zamiast nazw: the bold one in full, the others dimmed as the idle weight reads.
             desktopGlyph(icon, x + w * 0.5f, top_center, 28.0f, gray(0.97f, opacity * (bold ? 1.0f : 0.62f)));
-        else if (i == visible_tabs && textAdvance(tabs[i], font) > w) {
+            if (shown) { // A small dot under the shown category's icon (the dimming alone is easy to miss).
+                brush(gray(0.97f, opacity));
+                target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(x + w * 0.5f, top_center + 25), 2.6f, 2.6f), solid_.Get());
+            }
+        } else if (i == context_->psfive_visible_tabs && textAdvance(tabs[i], font) > w) {
             // Keep the overflow affordance visible even when a long category name is clipped.
             const float dots = textAdvance(L"...", font);
             textLine(tabs[i].substr(0, tabs[i].size() - 3), x, top_center, w - dots, font, gray(0.97f, opacity));
@@ -195,10 +203,10 @@ void Renderer::drawPsfiveTopBar() {
 }
 
 void Renderer::drawPsfiveMoreMenu() {
-    if (!context_->categories || context_->categories->size() <= psfive_layout::visible_tabs) return;
+    if (!context_->categories || context_->categories->size() <= context_->psfive_visible_tabs) return;
     const float alpha = smoothFade(context_->category_menu_progress);
     if (alpha < 0.004f) return;
-    const auto layout = psfiveMoreMenu(context_->categories->size());
+    const auto layout = psfiveMoreMenu(context_->categories->size(), context_->psfive_visible_tabs);
     const auto r = layout.revealed(context_->category_menu_progress);
     const auto shape = D2D1::RoundedRect(D2D1::RectF(r.left, r.top, r.right, r.bottom), 18, 18);
     const auto glass = glassPanel(shape);
@@ -206,11 +214,11 @@ void Renderer::drawPsfiveMoreMenu() {
     const float bottom = r.bottom - layout.padding;
     target_->PushAxisAlignedClip(D2D1::RectF(r.left + 6, layout.top(), r.right - 6, bottom), D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
     const float selected = std::clamp(context_->psfive_menu_glide.value_or(static_cast<float>(context_->category_cursor)),
-        static_cast<float>(psfive_layout::visible_tabs), static_cast<float>(context_->categories->size() - 1));
-    const float highlight = layout.top() + (selected - psfive_layout::visible_tabs) * layout.row_height - context_->category_scroll;
+        static_cast<float>(context_->psfive_visible_tabs), static_cast<float>(context_->categories->size() - 1));
+    const float highlight = layout.top() + (selected - static_cast<float>(context_->psfive_visible_tabs)) * layout.row_height - context_->category_scroll;
     brush(gray(1, 0.16f * alpha));
     target_->FillRoundedRectangle(pill(D2D1::RectF(r.left + 8, highlight + 2, r.right - 8, highlight + layout.row_height - 2)), solid_.Get());
-    for (size_t i = psfive_layout::visible_tabs; i < context_->categories->size(); ++i) {
+    for (size_t i = context_->psfive_visible_tabs; i < context_->categories->size(); ++i) {
         const float y = layout.rowTop(static_cast<int>(i), context_->category_scroll);
         if (y + layout.row_height <= layout.top() || y >= bottom) continue;
         const bool focused = static_cast<int>(i) == context_->category_cursor;

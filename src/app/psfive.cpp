@@ -33,7 +33,7 @@ bool Launcher::psfiveTopActive() const {
 
 float Launcher::psfiveMenuScroll() const {
     const float scroll = psfive_menu_motion_.valid ? psfive_menu_motion_.scroll.value : category_menu_scroll_;
-    return std::clamp(scroll, 0.0f, renderer_.psfiveMoreMenu(categories_.size()).maxScroll());
+    return std::clamp(scroll, 0.0f, renderer_.psfiveMoreMenu(categories_.size(), psfiveVisibleTabs()).maxScroll());
 }
 
 bool Launcher::psfiveAllTile() const {
@@ -60,16 +60,26 @@ void Launcher::psfiveFocusAction(int action) {
 
 // Its own top bar: three categories and "Więcej..."; with "Pasek kategorii" (psfiveStrip) every
 // category is a tab of the strip in the middle, with no overflow.
+// With the icons on, the categories that have one (the platforms, emulation, publishers, developers, favourites)
+// are small enough to all stand in the bar; "Więcej..." keeps the rest.
+size_t Launcher::psfiveVisibleTabs() const {
+    size_t shown = psfive_layout::visible_tabs;
+    if (settings_.home_tab_icons && !psfiveStrip())
+        for (size_t i = 0; i < categories_.size(); ++i)
+            if (homeTabGlyph(i)) shown = std::max(shown, i + 1);
+    return std::min(shown, categories_.size());
+}
+
 std::vector<size_t> Launcher::psfiveTabs() const {
     std::vector<size_t> tabs;
-    const size_t shown = psfiveStrip() ? categories_.size() : std::min(categories_.size(), psfive_layout::visible_tabs);
+    const size_t shown = psfiveStrip() ? categories_.size() : psfiveVisibleTabs();
     for (size_t i = 0; i < shown; ++i) tabs.push_back(i);
     return tabs;
 }
 
 int Launcher::psfiveTabCount() const {
     if (psfiveStrip()) return static_cast<int>(categories_.size());
-    return static_cast<int>(std::min(categories_.size(), psfive_layout::visible_tabs + 1));
+    return static_cast<int>(std::min(categories_.size(), psfiveVisibleTabs() + 1));
 }
 
 int Launcher::psfiveActiveTab() const {
@@ -96,7 +106,7 @@ void Launcher::psfiveFocusTop(int item) {
     if (next >= 0) psfive_action_ = -1;
     if (next == psfive_top_) return;
     psfive_top_ = next;
-    if (!psfiveStrip() && next == static_cast<int>(psfive_layout::visible_tabs) && next < psfiveTabCount()) openCategoryMenu();
+    if (!psfiveStrip() && next == static_cast<int>(psfiveVisibleTabs()) && next < psfiveTabCount()) openCategoryMenu();
     if (hwnd_) InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
@@ -180,7 +190,7 @@ void Launcher::psfiveVertical(int amount) {
     const bool details = settings_.psfive_details;
     if (psfiveTopFocused()) { // The top bar: Down back to the row.
         if (amount > 0) {
-            if (!psfiveStrip() && psfive_top_ == static_cast<int>(psfive_layout::visible_tabs) && psfive_top_ < psfiveTabCount()) openCategoryMenu();
+            if (!psfiveStrip() && psfive_top_ == static_cast<int>(psfiveVisibleTabs()) && psfive_top_ < psfiveTabCount()) openCategoryMenu();
             else { psfiveFocusTop(-1); audio_.navigate(); }
         }
         else if (details) openQuick(); // Up past the very top: the menu.
@@ -239,13 +249,13 @@ void Launcher::psfiveHover(float x, float y) {
     const bool top = tab >= 0 || strip || psfive_layout::hitTop(x, y, view.width, settings_.psfive_clock) >= 0 ||
         (settings_.psfive_clock && psfive_layout::clock(view.width).contains(x, y));
     if (top != psfive_top_hover_) { psfive_top_hover_ = top; InvalidateRect(hwnd_, nullptr, FALSE); }
-    const bool more = categories_.size() > psfive_layout::visible_tabs &&
-        tab == static_cast<int>(psfive_layout::visible_tabs);
+    const bool more = categories_.size() > psfiveVisibleTabs() &&
+        tab == static_cast<int>(psfiveVisibleTabs());
     const bool entered = more && !psfive_more_hover_;
     psfive_more_hover_ = more;
     if (entered && !category_menu_open_) openCategoryMenu();
     if (category_menu_open_) {
-        const int row = renderer_.psfiveMoreMenu(categories_.size()).hit(x, y, psfiveMenuScroll(), category_menu_progress_);
+        const int row = renderer_.psfiveMoreMenu(categories_.size(), psfiveVisibleTabs()).hit(x, y, psfiveMenuScroll(), category_menu_progress_);
         if (row >= 0 && row != category_cursor_) {
             category_cursor_ = row;
             InvalidateRect(hwnd_, nullptr, FALSE);

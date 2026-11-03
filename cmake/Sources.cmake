@@ -46,6 +46,7 @@ set(LAUNCHME_APP_SOURCES
     src/app/settings_rows.cpp
     src/app/settings_devices.cpp
     src/app/settings_text.cpp
+    src/app/settings_search.cpp
     src/app/settings_color.cpp
     src/app/input_hints.cpp
     src/app/tour.cpp

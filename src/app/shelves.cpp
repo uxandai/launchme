@@ -7,6 +7,7 @@
 #include "../library/emulation_platforms.hpp"
 #include "../library/emulation_scan.hpp"
 #include "../library/search.hpp"
+#include "../ui/carousel.hpp"
 #include "../ui/grid_layout.hpp"
 #include "../ui/psfive_layout.hpp"
 #include "../ui/snitch_layout.hpp"
@@ -628,6 +629,23 @@ bool Launcher::shelfPosters() const {
         screen_ != ScreenMode::shelves || category_ >= categories_.size()) return false;
     const auto& games = categories_[category_].games;
     return std::any_of(games.begin(), games.end(), [](const Game& game) { return isGame(game); });
+}
+
+bool Launcher::shelfSteamRow() const {
+    return settings_.shelves_steam && category_ == 0 && !cards_.empty() && shelfPosters();
+}
+
+bool Launcher::shelfWideCard(size_t index) const {
+    return index == 0 && shelfSteamRow() && isGame(cards_[0].game);
+}
+
+// Wygląd Steam: one height for the whole row, the focused tile included; see carousel::steam_row.
+void Launcher::steamTarget(size_t index, const Viewport& view, float inset, float& x, float& y, float& size, float& aspect) const {
+    const bool wide = shelfWideCard(0);
+    size = carousel::steam_row::height;
+    aspect = carousel::steam_row::aspect(index, wide);
+    x = inset + carousel::steam_row::left(index, selected_, wide, view.width - inset);
+    y = carousel::bottom(view.height) - size - (quick_open_ ? 100.0f : 0.0f);
 }
 
 // The tiles that open the launcher's own screens, for the first row: Wszystkie gry (with a

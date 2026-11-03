@@ -11,8 +11,6 @@
 
 void Launcher::openQuick() {
     if ((category_ != 0 && !metroActive() && !psfiveActive()) || pending_launch_ || friends_open_ || category_menu_open_) return;
-    // Flix with the menu's icons at the top: they are the bar (no second one at the bottom).
-    if (flixIconsShown() && flixActive() && screen_ == ScreenMode::shelves) { flixFocusIcons(); return; }
     dismissMenu();
     metro_tabs_ = false;
     quick_selected_ = 0;
@@ -112,15 +110,15 @@ void Launcher::focusCategoryRail(bool focus) {
 void Launcher::openCategoryMenu() {
     if (categoryRailActive()) { focusCategoryRail(true); return; }
     if (metroActive() || snitchActive()) return; // Metro has tabs; snitch has no categories.
-    if (psfiveActive() && (categories_.size() <= psfive_layout::visible_tabs || psfiveStrip())) return; // The strip has every category.
+    if (psfiveActive() && (categories_.size() <= psfiveVisibleTabs() || psfiveStrip())) return; // The strip has every category.
     if (categories_.size() < 2 || pending_launch_) return;
     dismissMenu();
     if (friends_open_) closeFriends();
     category_cursor_ = static_cast<int>(category_);
     if (psfiveActive()) {
-        category_cursor_ = std::max(static_cast<int>(psfive_layout::visible_tabs), category_cursor_);
+        category_cursor_ = std::max(static_cast<int>(psfiveVisibleTabs()), category_cursor_);
         psfive_action_ = -1;
-        psfive_top_ = static_cast<int>(psfive_layout::visible_tabs);
+        psfive_top_ = static_cast<int>(psfiveVisibleTabs());
     }
     category_menu_scroll_ = 0;
     ensureCategoryCursorVisible();
@@ -152,7 +150,7 @@ void Launcher::categoryMenuHorizontal(int amount, bool repeated) {
 
 void Launcher::categoryMenuMove(int amount) {
     if (!category_menu_open_ || categories_.empty()) return;
-    const int first = psfiveActive() ? static_cast<int>(psfive_layout::visible_tabs) : 0;
+    const int first = psfiveActive() ? static_cast<int>(psfiveVisibleTabs()) : 0;
     if (first >= static_cast<int>(categories_.size())) { closeCategoryMenu(); return; }
     const int next = std::clamp(category_cursor_ + amount, first, static_cast<int>(categories_.size()) - 1);
     if (next == category_cursor_) { navigationBoundary(); return; }
@@ -164,7 +162,7 @@ void Launcher::categoryMenuMove(int amount) {
 
 void Launcher::ensureCategoryCursorVisible() {
     if (psfiveActive()) {
-        const auto layout = renderer_.psfiveMoreMenu(categories_.size());
+        const auto layout = renderer_.psfiveMoreMenu(categories_.size(), psfiveVisibleTabs());
         const float row = layout.rowTop(category_cursor_, category_menu_scroll_);
         if (row < layout.top()) category_menu_scroll_ += row - layout.top();
         else if (row + layout.row_height > layout.bottom()) category_menu_scroll_ += row + layout.row_height - layout.bottom();
@@ -184,7 +182,7 @@ void Launcher::ensureCategoryCursorVisible() {
 void Launcher::scrollCategoryMenu(int amount) {
     if (!category_menu_open_) return;
     if (psfiveActive()) {
-        const auto layout = renderer_.psfiveMoreMenu(categories_.size());
+        const auto layout = renderer_.psfiveMoreMenu(categories_.size(), psfiveVisibleTabs());
         category_menu_scroll_ = std::clamp(category_menu_scroll_ + amount * layout.row_height, 0.0f, layout.maxScroll());
         InvalidateRect(hwnd_, nullptr, FALSE);
         return;

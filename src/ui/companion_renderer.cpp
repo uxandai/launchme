@@ -292,22 +292,6 @@ void Renderer::drawCompanionFace(companion::Look look, const avatar::Pose& pose,
 // Flix: a slim pill — her face in a circle, her name and her key.
 void Renderer::drawCompanionPill(D2D1_RECT_F rect, float alpha, float hover) {
     const auto& view = *context_->companion;
-    if (context_->flix_icons) {
-        // Flix with the menu's icons at the top: only her face, as one more small icon (her name on hover).
-        const float shown = alpha * context_->flix_icons_alpha;
-        if (shown <= 0.003f) return;
-        const float cx = (rect.left + rect.right) * 0.5f, cy = (rect.top + rect.bottom) * 0.5f;
-        drawCompanionFace(view.look, view.pose, cx, cy, (rect.bottom - rect.top) * 0.5f, shown, view.costume);
-        // The pad's icon (the last one): a white ring; her name stands left of the row (drawFlixIcons).
-        if (context_->flix_icon_focus >= 0 && context_->flix_icon_focus == context_->flix_icon_total - 1) {
-            brush(gray(0.97f, shown));
-            target_->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), (rect.bottom - rect.top) * 0.5f + 2, (rect.bottom - rect.top) * 0.5f + 2), solid_.Get(), 3.0f);
-        } else if (hover > 0.004f) {
-            brush(gray(1, 0.55f * hover * shown));
-            target_->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), (rect.bottom - rect.top) * 0.5f + 1, (rect.bottom - rect.top) * 0.5f + 1), solid_.Get(), 1.5f);
-        }
-        return;
-    }
     drawWidgetPill(rect, alpha, hover);
     const float cy = (rect.top + rect.bottom) * 0.5f, face = (rect.bottom - rect.top) * 0.5f - 4;
     const float cx = rect.left + 4 + face;

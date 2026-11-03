@@ -26,7 +26,7 @@ enum class Id { font, home_layout, ui_accent, accent, uninstalled, emulation, co
                 ea_callback, ea_refresh, ea_remove, battlenet_import, battlenet_callback, battlenet_remove, steam_controller, focus_spring, flix_size,
                 plugin_install, plugin_enabled, plugin_setting, plugin_remove, pc_connect, pc_client, pc_refresh, pc_excluded, steam_sync,
                  drm_scan, drm_background, drm_add_root, drm_root, drm_game, show_private, drm_games, tour, panel_borders,
-                 flix_category_all, accept_action, console_colors, metro_3d, shelves_posters, shelves_category_all, sound_folder, collection_manage, windowed,
+                 flix_category_all, accept_action, console_colors, metro_3d, shelves_posters, shelves_steam, shelves_category_all, sound_folder, collection_manage, windowed,
                  glow_level, glow_pulse, glow_trace, screenscraper, screenscraper_open, game_videos, video_folder, video_folder_reset, screenscraper_test, screenscraper_clear, video_delay, video_volume, steam_trailers, emulation_names, emulation_rom_art, trailer_space, background_grid, background_grid_style, psfive_size, psfive_clock, custom_games,
                  // Settings 2.0.
                   glass, input_hints, hint_glyphs, audio_sources, system_volume, bt_audio, bt_devices, windows_sound, controller_pads, collections_open,
@@ -136,7 +136,11 @@ enum class Id { font, home_layout, ui_accent, accent, uninstalled, emulation, co
                    // Biblioteka → Uruchamianie: FPS widget's one-time ETW permission (src/platform/etw_access.cpp).
                    fps_access, fps_graph, fps_limiter, fps_limit, fps_limit_precise, fps_limit_mode, fps_badges, hud_enabled, hud_layout, hud_label_colors, hud_size, cpu_temp_source, hud_pin, fps_game_limit, fps_limiter_status,
                    // Sterowanie → Przycisk Guide: Guide in a game opens on the widgets.
-                   guide_open_widgets };
+                   guide_open_widgets,
+                   // Search in Settings (src/app/settings_search.cpp): the field, and a found setting (Row::key its place in the index).
+                   settings_search, settings_hit,
+                   // Opcje układu → PSfive: how much darker the background picture is.
+                   psfive_dim };
 inline bool hasOptionsButton(Id id) { return id == Id::plugin_enabled || id == Id::pc_platform; }
 // layout: drawn preview tiles in the row (one per home layout); Row::choice is the active one.
 // count: Row::value as a large number with a chevron; activating opens a sub-list.
@@ -166,6 +170,7 @@ enum class Page {
     hidden_studios, // Biblioteka → Ukryci wydawcy i developerzy: each one with a switch to show it again.
     excluded_games, // Biblioteka → Widoczność → Wykluczone gry: each title with Przywróć.
     drm_roots, // DRM-free → Katalogi: adding a folder and every folder with its removal.
+    settings_search, // Search in every category's settings: the field and the settings found (src/app/settings_search.cpp).
     appearance_all // Interfejs → Wszystkie opcje wyglądu: the classic list of every appearance setting (the studio has them as pictures).
 };
 // A row drawn as tiles, with State::tile picking one of them.
@@ -217,7 +222,8 @@ inline constexpr auto categories = std::to_array<CategoryInfo>({
 });
 // Indexed like AppSettings::HintGlyphs.
 inline constexpr std::array<const wchar_t*, 4> hint_glyph_styles{trKey(L"Automatycznie"), L"Xbox", L"PlayStation", L"Nintendo"};
-inline constexpr std::array<const wchar_t*, 4> fonts{L"SST", L"Segoe UI", L"Consolas", L"Arial"};
+// Lexend (OFL, Google Fonts) travels with the program: assets/fonts/Lexend-*.ttf.
+inline constexpr std::array<const wchar_t*, 5> fonts{L"SST", L"Segoe UI", L"Consolas", L"Arial", L"Lexend"};
 // Indexed like AppSettings::ScreensaverStyle.
 inline constexpr std::array<const wchar_t*, 3> screensaver_styles{trKey(L"Tła gier"), trKey(L"Pudełka 3D"), trKey(L"Płyty")};
 // Console colours keep their brand names in every language. After the presets each accent

@@ -312,6 +312,10 @@ int main() {
     auto posters = config; posters.shelves_posters = true; // Default layout posters: off by default, strict 0/1.
     if (AppSettings{}.shelves_posters || !parseAppSettings("shelves_posters=1\n").shelves_posters || parseAppSettings("shelves_posters=on\n").shelves_posters ||
         !saveAppSettings(posters, file) || !loadAppSettings(file).shelves_posters || !saveAppSettings(config, file)) return 50;
+    // Wygląd Steam: off by default, strict 0/1, and it implies the posters.
+    auto steam_look = config; steam_look.shelves_steam = steam_look.shelves_posters = true;
+    if (AppSettings{}.shelves_steam || !parseAppSettings("shelves_steam=1\n").shelves_posters || parseAppSettings("shelves_steam=on\n").shelves_steam ||
+        !saveAppSettings(steam_look, file) || !loadAppSettings(file).shelves_steam || !saveAppSettings(config, file)) return 8346;
     // Sound folder and files picked from it (UTF-8): an absolute folder, plain file names only.
     auto picked = config; picked.sound_folder = L"C:\\Muzyka ąę"; picked.music_file = L"Temat ł.mp3"; picked.boot_file = L"start.wav";
     if (!saveAppSettings(picked, file)) return 51;

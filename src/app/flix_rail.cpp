@@ -39,7 +39,7 @@ void Launcher::flixRailFocus(int index) {
     const auto items = flixRailItems();
     if (index >= 0 && items.empty()) return;
     flix_rail_focus_ = index < 0 ? -1 : std::clamp(index, 0, static_cast<int>(items.size()) - 1);
-    if (flix_rail_focus_ >= 0) { flix_icon_focus_ = -1; dismissMenu(); }
+    if (flix_rail_focus_ >= 0) dismissMenu();
     audio_.navigate();
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
