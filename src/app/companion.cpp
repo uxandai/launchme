@@ -59,7 +59,7 @@ home_widgets::Spots Launcher::homeWidgetSpots() const {
         if (spots.glance) spots.glance = settings_ui::Rect{left, 60, left + home_widgets::glance_pill_width, 100};
     }
     // Flix with the menu's icons at the top: Glance and her avatar as two more small icons in that row.
-    if (flixIconsShown()) home_widgets::icons::place(spots, quick_menu::count(static_cast<int>(plugin_menu_.size())), view.width);
+    if (flixIconsShown()) home_widgets::icons::place(spots, quick_menu::count(quick_menu::store_slots), view.width);
     // PSfive's details sheet covers the corner where they stand.
     if (psfive_details_progress_ > 0.001f && psfiveActive()) { spots.glance.reset(); spots.companion.reset(); }
     return spots;
@@ -70,14 +70,14 @@ bool Launcher::flixIconsShown() const {
     return settings_.flix_top_icons && settings_.home_layout == AppSettings::HomeLayout::flix && !desktop_mode_;
 }
 int Launcher::flixIconCount() const {
-    return quick_menu::count(static_cast<int>(plugin_menu_.size())) + (settings_.glance ? 1 : 0) + (settings_.companion ? 1 : 0);
+    return quick_menu::count(quick_menu::store_slots) + (settings_.glance ? 1 : 0) + (settings_.companion ? 1 : 0);
 }
 // A click on one of the quick icons (Glance and her avatar answer through their spots).
 bool Launcher::flixIconClick(float x, float y, bool double_click) {
     if (!flixIconsShown() || !homeOverlayAvailable()) return false;
     const auto view = renderer_.viewport();
     const int item = home_widgets::icons::hit(x, y, flixIconCount(), view.width);
-    if (item < 0 || item >= quick_menu::count(static_cast<int>(plugin_menu_.size()))) return false;
+    if (item < 0 || item >= quick_menu::count(quick_menu::store_slots)) return false;
     if (!double_click) { quick_open_ = true; quick_selected_ = item; quickAccept(); }
     return true;
 }
@@ -105,7 +105,7 @@ void Launcher::flixIconsLeave() {
 }
 // Enter on an icon: a quick-bar item as the bar would open it, then Glance and her avatar.
 void Launcher::flixIconAccept() {
-    const int item = flix_icon_focus_, quick = quick_menu::count(static_cast<int>(plugin_menu_.size()));
+    const int item = flix_icon_focus_, quick = quick_menu::count(quick_menu::store_slots);
     flix_icon_focus_ = -1;
     if (item < quick) { quick_open_ = true; quick_selected_ = item; quickAccept(); return; }
     if (settings_.glance && item == quick) { if (glanceAvailable()) openGlance(); return; }

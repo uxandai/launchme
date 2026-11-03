@@ -23,7 +23,7 @@ const wchar_t* iconText(quick_menu::Action action) {
     switch (action) {
     case quick_menu::Action::search: return tr(L"Szukanie po tytule we wszystkich bibliotekach.");
     case quick_menu::Action::library: return tr(L"Cała biblioteka w wybranym widoku, z sortowaniem i filtrami.");
-    case quick_menu::Action::store: return tr(L"Strona dodana przez plugin.");
+    case quick_menu::Action::store: return tr(L"Pluginy sklepów w jednym miejscu: zakładki przełączają sklepy.");
     case quick_menu::Action::downloads: return tr(L"Pobierania i aktualizacje gier ze Steam, GOG, Epic i Battle.net.");
     case quick_menu::Action::controllers: return tr(L"Podłączone kontrolery, baterie i parowanie Bluetooth.");
     case quick_menu::Action::audio: return tr(L"Wyjście i wejście dźwięku oraz ich głośność.");
@@ -34,7 +34,7 @@ const wchar_t* iconText(quick_menu::Action action) {
 }
 }
 
-int Launcher::tourIcons() const { return quick_menu::count(static_cast<int>(plugin_menu_.size())); }
+int Launcher::tourIcons() const { return quick_menu::count(quick_menu::store_slots); }
 
 // XMB keeps its top row, and the game menu beside it, at the top of the screen; so does PSfive.
 bool Launcher::tourCardAtBottom() const {
@@ -312,14 +312,12 @@ void Launcher::tourView(TourView& view) const {
         how = metroActive() || snitchActive() ? tr(L"Ruch w dół z dolnego rzędu kafli albo przycisk Guide / PS (klawisz Home).") :
               psfiveActive() ? tr(L"Ikona menu w prawym górnym rogu, ruch w dół z przycisków Graj / … albo przycisk Guide / PS (klawisz Home).") :
                               tr(L"Ruch w górę z pierwszego rzędu albo przycisk Guide / PS (klawisz Home).");
-        const int plugins = static_cast<int>(plugin_menu_.size()), icon = std::clamp(tour_.icon, 0, tourIcons() - 1);
+        const int plugins = quick_menu::store_slots, icon = std::clamp(tour_.icon, 0, tourIcons() - 1);
         const auto action = quick_menu::action(icon, plugins);
         view.progress = static_cast<float>(icon + 1) / static_cast<float>(tourIcons());
         if (quick_open_ || quick_progress_ > 0.01f) {
             target = Target::quick_bar;
-            const int plugin = quick_menu::pluginIndex(icon);
-            view.bubble_title = action == quick_menu::Action::store && plugin >= 0 && plugin < plugins ?
-                plugin_menu_[static_cast<size_t>(plugin)].item.title.localized() : std::wstring(quick_menu::caption(action));
+            view.bubble_title = quick_menu::caption(action);
         }
         what = iconText(action);
         break;

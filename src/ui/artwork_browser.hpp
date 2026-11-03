@@ -64,10 +64,20 @@ struct State {
     }
     ArtworkKind kind() const { return wallpaper ? ArtworkKind::hero : kinds[static_cast<size_t>(std::clamp(category, 0, 5))]; }
     bool videoWallpapers() const { return wallpaper && category == 1; }
-    bool providerChoice() const { return (wallpaper || kind() != ArtworkKind::disc) && choices.size() > 1; }
+    // The types the player has set an artwork for (a filled dot on the list and on the "Z dysku" board, else an empty one).
+    std::array<bool, 6> custom{};
+    bool hasLocal() const { return std::find(choices.begin(), choices.end(), ArtworkProvider::local) != choices.end(); }
+    // The sources offered for the type in view: Płyta has ScreenScraper (and the player's own files).
+    std::vector<ArtworkProvider> shown() const {
+        if (wallpaper || kind() != ArtworkKind::disc) return choices;
+        std::vector<ArtworkProvider> list{ArtworkProvider::screenscraper};
+        if (hasLocal()) list.push_back(ArtworkProvider::local);
+        return list;
+    }
+    bool providerChoice() const { return shown().size() > 1; }
     // The gallery's source: Płyta always ScreenScraper; otherwise the chosen one while it is offered.
     ArtworkProvider activeProvider() const {
-        if (!wallpaper && kind() == ArtworkKind::disc) return ArtworkProvider::screenscraper;
+        if (!wallpaper && kind() == ArtworkKind::disc) return provider == ArtworkProvider::local && hasLocal() ? ArtworkProvider::local : ArtworkProvider::screenscraper;
         if (std::find(choices.begin(), choices.end(), provider) != choices.end()) return provider;
         return choices.empty() ? ArtworkProvider::steamgriddb : choices.front();
     }
@@ -167,15 +177,18 @@ struct Layout {
         return next ? settings_ui::Rect{center + 30, y, base().railRight() - 22, y + 48} :
                       settings_ui::Rect{56, y, center - 30, y + 48};
     }
-    // Panel: the type list, then "Wskaż plik…".
-    static constexpr float local_row_step = 54;
+    // Panel: a board of the six types as small illustrations (3 x 2), then "Wskaż plik…".
+    static constexpr int board_columns = 3;
+    static constexpr float tile_h = 150, tile_gap = 14;
     settings_ui::Rect localPanel() const {
-        const float w = std::min(620.0f, width - 96), h = 83 + static_cast<float>(kinds.size()) * local_row_step + 16 + 44 + 28;
+        const float w = std::min(700.0f, width - 96), h = 83 + 2 * tile_h + tile_gap + 22 + 44 + 28;
         return {(width - w) * 0.5f, (height - h) * 0.5f, (width + w) * 0.5f, (height + h) * 0.5f};
     }
     settings_ui::Rect localChoice(int index) const {
         const auto p = localPanel();
-        return {p.left + 18, p.top + 83 + index * local_row_step, p.right - 18, p.top + 133 + index * local_row_step};
+        const float tile_w = (p.right - p.left - 36 - (board_columns - 1) * tile_gap) / board_columns;
+        const float x = p.left + 18 + (index % board_columns) * (tile_w + tile_gap), y = p.top + 83 + (index / board_columns) * (tile_h + tile_gap);
+        return {x, y, x + tile_w, y + tile_h};
     }
     settings_ui::Rect localPick() const {
         const auto p = localPanel();
@@ -188,6 +201,6 @@ struct Layout {
     }
 };
 inline Layout State::layout(float width, float height) const {
-    return {width, height, kind(), providerChoice(), static_cast<int>(choices.size()), railCount(), !wallpaper};
+    return {width, height, kind(), providerChoice(), static_cast<int>(shown().size()), railCount(), !wallpaper};
 }
 }

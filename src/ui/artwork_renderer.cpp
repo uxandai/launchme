@@ -21,6 +21,44 @@ void Renderer::setArtworkThumbnail(size_t index, std::vector<uint8_t> bytes, boo
     createBitmap(image);
 }
 
+// A type drawn as a small picture in its own proportions, fitted in the rectangle (the "Z dysku" board, the lists).
+void Renderer::drawKindIllustration(ArtworkKind kind, float left, float top, float right, float bottom, bool lit) {
+    const float aspect = kind == ArtworkKind::hero ? 2.4f : kind == ArtworkKind::landscape ? 920.0f / 430.0f : kind == ArtworkKind::poster ? 2.0f / 3.0f :
+                         kind == ArtworkKind::logo ? 2.2f : 1.0f;
+    const float room_w = right - left, room_h = bottom - top;
+    float w = std::min(room_w, room_h * aspect), h = w / aspect;
+    const float x = (left + right - w) * 0.5f, y = (top + bottom - h) * 0.5f;
+    const auto body = D2D1::ColorF(1, 1, 1, lit ? 0.20f : 0.11f), edge = D2D1::ColorF(1, 1, 1, lit ? 0.75f : 0.38f);
+    if (kind == ArtworkKind::disc) {
+        const float r = std::min(w, h) * 0.5f, cx = (left + right) * 0.5f, cy = (top + bottom) * 0.5f;
+        brush(body); target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), r, r), solid_.Get());
+        brush(edge); target_->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), r, r), solid_.Get(), 1.5f);
+        brush(D2D1::ColorF(0.04f, 0.045f, 0.055f)); target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), r * 0.22f, r * 0.22f), solid_.Get());
+        brush(edge); target_->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), r * 0.22f, r * 0.22f), solid_.Get(), 1.2f);
+        return;
+    }
+    const float radius = std::min(w, h) * 0.08f + 2;
+    const auto shape = D2D1::RoundedRect(D2D1::RectF(x, y, x + w, y + h), radius, radius);
+    brush(body); target_->FillRoundedRectangle(shape, solid_.Get());
+    brush(edge); target_->DrawRoundedRectangle(shape, solid_.Get(), 1.5f);
+    if (kind == ArtworkKind::logo) { // Two bars of lettering.
+        const float bar = h * 0.14f;
+        for (float row : {0.30f, 0.58f}) {
+            const float by = y + h * row, bw = w * (row < 0.4f ? 0.62f : 0.40f), bx = x + (w - bw) * 0.5f;
+            brush(edge); target_->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(bx, by, bx + bw, by + bar), bar * 0.5f, bar * 0.5f), solid_.Get());
+        }
+    } else if (kind == ArtworkKind::hero) { // A horizon over a sky.
+        brush(edge); target_->FillRectangle(D2D1::RectF(x + 1.5f, y + h * 0.66f, x + w - 1.5f, y + h * 0.66f + 1.5f), solid_.Get());
+    }
+}
+
+// "Set" mark of a type: a filled dot when the player has chosen an artwork for it, an empty ring when not.
+void Renderer::drawSetDot(float cx, float cy, bool set, D2D1_COLOR_F ink) {
+    if (set) { brush(ink); target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), 5.0f, 5.0f), solid_.Get()); return; }
+    ink.a *= 0.55f;
+    brush(ink); target_->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), 4.5f, 4.5f), solid_.Get(), 1.5f);
+}
+
 void Renderer::drawArtworkBrowser() {
     target_->Clear(D2D1::ColorF(0.022f, 0.024f, 0.030f));
     if (!context_->artwork_browser) return;
@@ -113,8 +151,9 @@ void Renderer::drawArtworkBrowser() {
     for (int i = 0; i < state.railCount(); ++i) {
         const auto r = base.rail(i);
         const bool active = state.category == i, focus = active && type_focus;
-        textLine(tr(state.railName(i)), r.left + 25, center(r), r.right - r.left - 50,
+        textLine(tr(state.railName(i)), r.left + 25, center(r), r.right - r.left - 74,
                  category_font_.Get(), focus ? shade(0.08f) : active ? shade(0.95f) : shade(0.57f));
+        if (!state.wallpaper) drawSetDot(r.right - 28, center(r), state.custom[static_cast<size_t>(i)], focus ? shade(0.08f) : shade(0.85f));
     }
     // "Z dysku…" opens the type/file panel.
     const auto caption = [&](settings_ui::Rect r, const std::wstring& label, bool focus) {
@@ -196,11 +235,12 @@ void Renderer::drawArtworkBrowser() {
         const auto list = layout.providerList();
         fill(list, shade(0.09f, 0.98f), 16);
         if (panel_borders_) { brush(shade(1, 0.16f)); target_->DrawRoundedRectangle(D2D1::RoundedRect(box(list), 16, 16), solid_.Get(), 1.0f); }
-        for (int i = 0; i < static_cast<int>(state.choices.size()); ++i) {
+        const auto offered = state.shown();
+        for (int i = 0; i < static_cast<int>(offered.size()); ++i) {
             const auto r = layout.providerRow(i);
             const bool focused = state.provider_row == i;
             if (focused) fillPill(r, shade(0.95f));
-            const auto provider = state.choices[static_cast<size_t>(i)];
+            const auto provider = offered[static_cast<size_t>(i)];
             textLine(artwork_ui::providerName(provider), r.left + 18, center(r), r.right - r.left - 60, menu_font_.Get(), focused ? shade(0.08f) : shade(0.91f));
             if (provider == state.activeProvider()) {
                 const float y = center(r);
@@ -224,14 +264,15 @@ void Renderer::drawArtworkBrowser() {
               category_font_.Get(), shade(0.95f), settings_body_font_.Get(), shade(0.62f), 1, true);
     for (int i = 0; i < static_cast<int>(artwork_ui::kinds.size()); ++i) {
         const auto r = layout.localChoice(i);
-        if (state.local_row == i) fillPill(r, shade(1, 0.10f));
-        textLine(tr(artwork_ui::names[i]), r.left + 18, center(r), r.right - r.left - 66, settings_body_font_.Get(), shade(0.91f));
-        if (state.local_kind == i) {
-            const float y = center(r);
-            line(r.right - 31, y, r.right - 26, y + 5, uiAccent(), 2);
-            line(r.right - 26, y + 5, r.right - 17, y - 5, uiAccent(), 2);
-        }
+        const bool focused = state.local_row == i, chosen = state.local_kind == i;
+        fill(r, shade(1, focused ? 0.11f : 0.05f), 14);
+        if (chosen) { brush(uiAccent(0.9f)); target_->DrawRoundedRectangle(D2D1::RoundedRect(box(r), 14, 14), solid_.Get(), 2.0f); }
+        drawKindIllustration(artwork_ui::kinds[static_cast<size_t>(i)], r.left + 24, r.top + 18, r.right - 24, r.bottom - 52, focused || chosen);
+        textLine(tr(artwork_ui::names[i]), r.left + 12, r.bottom - 26, r.right - r.left - 24, settings_body_font_.Get(), shade(0.91f), DWRITE_TEXT_ALIGNMENT_CENTER);
+        drawSetDot(r.right - 20, r.top + 20, state.custom[static_cast<size_t>(i)], shade(0.9f)); // Set already: a filled dot.
     }
+    textLine(tr(L"Pełna kropka: grafika już ustawiona"), panel.left + 28, layout.localPick().top - 11, panel.right - panel.left - 56,
+             toast_sub_font_.Get(), shade(0.5f));
     const auto pick = layout.localPick();
     const bool pick_focus = state.local_row == artwork_ui::State::local_pick_row;
     const auto pick_ink = drawButton(box(pick), pick_focus ? 1.0f : 0.0f, 1, false);

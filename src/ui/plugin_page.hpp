@@ -1,6 +1,7 @@
 #pragma once
 #include "../plugins/json.hpp"
 #include "../platform/text_encoding.hpp"
+#include "grid_columns.hpp"
 #include <algorithm>
 
 namespace plugin_ui {
@@ -47,17 +48,29 @@ struct Layout {
     bool drawer;
     bool dialog;
     float top, left;
-    Layout(float width, float height, bool drawer = false, bool dialog = false) : width(width), height(height), drawer(drawer), dialog(dialog && !drawer), top(drawer ? 112.0f : 166.0f), left(drawer ? 24.0f : 64.0f) {
+    Layout(float width, float height, bool drawer = false, bool dialog = false) : width(width), height(height), drawer(drawer), dialog(dialog && !drawer), top(drawer ? 112.0f : 190.0f), left(drawer ? 24.0f : grid_layout::left(width, 0)) {
         if (this->dialog) { left = (width - std::min(1000.0f, width - 80)) * 0.5f + 32; top = panelTop() + 144; }
     }
+    // The Stores' tab strip sits at the height of the back button (centre 82), not the library's 55.
+    static constexpr float tabs_drop = 27;
+    // The frame every page and the stores' catalog share: back circle, state line, search field, content from `top`.
+    static float columnLeft(float width) { return grid_layout::left(width, 0); }
+    static constexpr float status_top = 108;
+    float fieldTop() const { return 134; }
+    // The search field of a full page (Page::query): a pill across the column, above the list.
+    struct Box { float left, top, right, bottom; bool contains(float x, float y) const { return x >= left && x < right && y >= top && y < bottom; } };
+    Box field() const { return {left - 6, fieldTop(), width - left + 6, fieldTop() + 50}; }
+    bool framed() const { return !drawer && !dialog; }
+    static Box backBox(float width) { const float l = columnLeft(width); return {l, 58, l + 48, 106}; }
     float panelTop() const { return std::max(32.0f, (height - 640) * 0.5f); }
     float bottom() const { return dialog ? std::min(height - 40, panelTop() + 640) - 24 : height - (drawer ? 16 : 36); }
-    float backLeft() const { return dialog ? left : drawer ? 24.0f : 64.0f; }
+    float backLeft() const { return dialog ? left : drawer ? 24.0f : left; }
     float backTop() const { return dialog ? panelTop() + 24 : drawer ? 38.0f : 58.0f; }
     float maxScroll(const Page& page) const { return std::max(0.0f, page.total - (bottom() - top)); }
     float rowTop(const Page& page, size_t i) const { return top + page.rows[i].top - page.scroll; }
     bool back(float x, float y) const { const float size = drawer ? 36.0f : 48.0f; return x >= backLeft() && x < backLeft() + size && y >= backTop() && y < backTop() + size; }
     int hit(const Page& page, float x, float y) const {
+        if (framed() && !page.rows.empty() && page.rows.front().input && field().contains(x, y)) return 0;
         if (x < left || x >= width - left || y < top || y >= bottom()) return -2;
         for (size_t i = 0; i < page.rows.size(); ++i) if (page.rows[i].actionable() && y >= rowTop(page, i) && y < rowTop(page, i) + page.rows[i].height() - 6) return static_cast<int>(i);
         return -2;
@@ -92,6 +105,7 @@ inline Page parse(const json::Value& input, std::string plugin) {
     if (const auto* search = input.get("search")) {
         Row row; row.input = true;
         row.command = text(*search, "command"); row.title = text_encoding::wide(text(*search, "placeholder"));
+        if (!page.dialog) row.extent = 0.001f; // A page's field sits in the frame above the list (Layout::field); a dialog keeps it in the flow.
         page.query = text_encoding::wide(text(*search, "query"));
         if (search->type != json::Value::Type::object || row.command.empty() || !validCommand(row.command) || row.title.size() > 256 ||
             page.query.size() > query_limit || page.query.find_first_of(std::wstring(L"\0\r\n", 3)) != page.query.npos)

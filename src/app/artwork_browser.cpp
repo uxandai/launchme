@@ -61,7 +61,18 @@ GridPage providerPage(const Game& game, ArtworkKind kind, ArtworkProvider provid
     GridPage page;
     page.provider = provider;
     std::unordered_set<uint32_t> seen;
-    if (provider == ArtworkProvider::screenscraper) {
+    if (provider == ArtworkProvider::local) {
+        // The player's own files of this type, newest first; the picture is the variant itself.
+        const auto cache = coverCacheDirectory();
+        for (const auto id : localArtworkIds(game, kind, cache)) {
+            GridAsset asset;
+            asset.id = id;
+            asset.url = asset.thumbnail = artworkVariantPath(game, kind, id, cache).wstring();
+            asset.author = tr(L"Z dysku");
+            page.assets.push_back(std::move(asset));
+        }
+        if (page.assets.empty()) page.error = tr(L"Brak własnych grafik tego typu. Dodaj plik przez „Z dysku…”.");
+    } else if (provider == ArtworkProvider::screenscraper) {
         auto gallery = kind == ArtworkKind::disc ? screenscraperDiscGallery(game, userConfigDirectory()) :
             screenscraperGallery(game, screenscraperTypes(kind), userConfigDirectory());
         page.error = std::move(gallery.error);
@@ -166,11 +177,12 @@ void Launcher::initializeArtworkBrowser() {
                 const bool thumbnail = job.type == ArtworkBrowserMessage::Type::thumbnail;
                 // ES-DE files are on disk already: no thumbnail copies of them.
                 const bool esde = job.provider == ArtworkProvider::esde;
-                const auto file = thumbnail && esde ? std::filesystem::path(job.asset.url) : thumbnail ? cache.parent_path() / L"artwork" / L"thumbnails" /
+                const bool own_file = job.provider == ArtworkProvider::local; // The player's file, already a variant: no copy, no download.
+                const auto file = (thumbnail && esde) || own_file ? (own_file ? artworkVariantPath(job.game, job.kind, job.asset.id, cache) : std::filesystem::path(job.asset.url)) : thumbnail ? cache.parent_path() / L"artwork" / L"thumbnails" /
                     artworkKindSlug(job.kind) / (std::to_wstring(job.asset.id) + L".img") :
                     artworkVariantPath(job.game, job.kind, job.asset.id, cache);
                 result->bytes = cachedImage(file);
-                if (result->bytes.empty()) {
+                if (result->bytes.empty() && !own_file) {
                     result->bytes = job.provider == ArtworkProvider::screenscraper ? screenscraperImage(job.asset.url, thumbnail) :
                                     esde ? cachedImage(std::filesystem::path(job.asset.url)) :
                                     artwork_sources::own(job.provider) ? artwork_sources::download(job.provider, job.asset, thumbnail) :
@@ -199,6 +211,14 @@ void Launcher::initializeArtworkBrowser() {
     });
 }
 
+// Which types of this game have an artwork the player set (a filled dot; an empty one when none).
+void Launcher::refreshArtworkSet() {
+    auto& state = artwork_state_;
+    if (state.wallpaper) return;
+    const auto cache = coverCacheDirectory();
+    for (size_t i = 0; i < artwork_ui::kinds.size(); ++i) state.custom[i] = selectedArtworkId(state.game, artwork_ui::kinds[i], cache) != 0;
+}
+
 void Launcher::openArtworkBrowser(const Game& game) {
     if (!isGame(game) || gameKey(game).empty() || pending_launch_) return;
     desktopLeaveLibrary(); rememberPlace();
@@ -221,6 +241,7 @@ void Launcher::openArtworkBrowser(const Game& game) {
     artwork_state_.category = artwork_ui::category(opened_from);
     artwork_state_.choices = artworkChoices(artwork_state_);
     artwork_state_.provider = artwork_state_.choices.front();
+    refreshArtworkSet();
     dismissMenu();
     menu_progress_ = 0;
     closeFriends();
@@ -281,6 +302,7 @@ std::vector<ArtworkProvider> Launcher::artworkChoices(const artwork_ui::State& s
                                 ArtworkProvider::titledb, ArtworkProvider::thegamesdb, ArtworkProvider::wikimedia})
         if (on(provider) && artwork_sources::applicable(provider, state.game)) choices.push_back(provider);
     if (choices.empty()) choices.push_back(ArtworkProvider::steamgriddb);
+    if (hasLocalArtwork(state.game, coverCacheDirectory())) choices.push_back(ArtworkProvider::local); // What was added from disk.
     return choices;
 }
 
@@ -464,6 +486,7 @@ void Launcher::requestArtworkThumbnails() {
 }
 
 void Launcher::onArtworkBrowser(std::unique_ptr<ArtworkBrowserMessage> message) {
+    bool local_added = false;
     if (!artworkOpen() || message->generation != artwork_jobs_->generation.load()) return;
     auto& state = artwork_state_;
     if (message->type == ArtworkBrowserMessage::Type::preview) {
@@ -550,7 +573,8 @@ void Launcher::onArtworkBrowser(std::unique_ptr<ArtworkBrowserMessage> message) 
             state.status = tr(L"Nie można zastosować grafiki.");
         if (state.status.empty()) {
             state.applied_id = message->asset_id;
-            if (local) state.status = tr(L"Zastosowano grafikę z dysku.");
+            refreshArtworkSet();
+            if (local) { state.status = tr(L"Zastosowano grafikę z dysku."); local_added = true; }
             const auto key = gameKey(state.game);
             invalidateArtwork(state.game, coverKind(kind));
             auto& cached = art_.at(key);
@@ -566,6 +590,13 @@ void Launcher::onArtworkBrowser(std::unique_ptr<ArtworkBrowserMessage> message) 
             trimArt();
             audio_.context();
         }
+    }
+    if (local_added) { // The added picture in the "Lokalne" gallery of its type, checked as the one in use.
+        const auto done = state.status;
+        artwork_pages_.clear();
+        state.provider = ArtworkProvider::local;
+        loadArtworkPage();
+        state.status = done;
     }
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
@@ -615,9 +646,10 @@ void Launcher::pickLocalWallpaper() {
 
 void Launcher::cycleArtworkProvider() {
     auto& state = artwork_state_;
-    if (!artworkOpen() || !state.providerChoice() || state.applying || state.choices.empty()) return;
-    const auto at = std::find(state.choices.begin(), state.choices.end(), state.activeProvider()) - state.choices.begin();
-    state.provider = state.choices[static_cast<size_t>(at + 1) % state.choices.size()];
+    const auto offered = state.shown();
+    if (!artworkOpen() || !state.providerChoice() || state.applying || offered.empty()) return;
+    const auto at = std::find(offered.begin(), offered.end(), state.activeProvider()) - offered.begin();
+    state.provider = offered[static_cast<size_t>(at + 1) % offered.size()];
     state.page = 0;
     state.source = state.override_source;
     loadArtworkPage();
@@ -627,8 +659,9 @@ void Launcher::cycleArtworkProvider() {
 void Launcher::chooseArtworkProvider(int index) {
     auto& state = artwork_state_;
     state.provider_open = false;
-    if (!artworkOpen() || !state.providerChoice() || state.applying || index < 0 || index >= static_cast<int>(state.choices.size())) return;
-    const auto chosen = state.choices[static_cast<size_t>(index)];
+    const auto offered = state.shown();
+    if (!artworkOpen() || !state.providerChoice() || state.applying || index < 0 || index >= static_cast<int>(offered.size())) return;
+    const auto chosen = offered[static_cast<size_t>(index)];
     audio_.context();
     if (chosen != state.activeProvider()) {
         state.provider = chosen;
@@ -645,7 +678,8 @@ void Launcher::openArtworkProviders() {
     if (!artworkOpen() || !state.providerChoice() || state.applying) return;
     state.local_focus = state.crop_focus = state.back_focus = state.gallery = state.search_focus = false;
     state.provider_focus = state.provider_open = true;
-    state.provider_row = std::max(0, static_cast<int>(std::find(state.choices.begin(), state.choices.end(), state.activeProvider()) - state.choices.begin()));
+    const auto offered = state.shown();
+    state.provider_row = std::max(0, static_cast<int>(std::find(offered.begin(), offered.end(), state.activeProvider()) - offered.begin()));
     audio_.context();
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
@@ -691,6 +725,8 @@ void Launcher::applyLocalArtwork(const std::filesystem::path& picked) {
     state.local_open = false;
     // The chosen type's gallery behind it; the file is read and applied on a worker.
     if (state.category != kind || state.results_mode) { state.category = kind; state.page = 0; state.source = state.override_source; loadArtworkPage(); }
+    // The file becomes one of the game's "Lokalne" pictures: that source is offered from now on.
+    if (!state.hasLocal()) state.choices.push_back(ArtworkProvider::local);
     state.applying = true;
     state.status = tr(L"Wczytywanie grafiki…");
     ArtworkBrowserJob job;
@@ -711,18 +747,25 @@ void Launcher::artworkMove(int horizontal, int vertical) {
     const auto view = renderer_.viewport();
     const auto layout = state.layout(view.width, view.height);
     if (state.local_open) {
-        // Panel: the types, then "Wskaż plik…".
+        // Panel: the board of types (3 x 2), then "Wskaż plik…" under it.
+        constexpr int columns = artwork_ui::Layout::board_columns, pick = artwork_ui::State::local_pick_row;
+        int next = state.local_row;
+        if (horizontal && next != pick) next = std::clamp(next + (horizontal > 0 ? 1 : -1), 0, pick - 1);
         if (vertical) {
-            const int next = std::clamp(state.local_row + vertical, 0, artwork_ui::State::local_pick_row);
-            if (next == state.local_row) navigationBoundary(); else audio_.navigate();
-            state.local_row = next;
+            const int rows = (pick + columns - 1) / columns; // The tile rows; the button is one more.
+            const int column = next == pick ? std::clamp(state.local_kind, 0, pick - 1) % columns : next % columns;
+            const int row = std::clamp((next == pick ? rows : next / columns) + vertical, 0, rows);
+            next = row >= rows ? pick : std::min(pick - 1, row * columns + column);
         }
+        if (next == state.local_row) { if (horizontal || vertical) navigationBoundary(); }
+        else audio_.navigate();
+        state.local_row = next;
         InvalidateRect(hwnd_, nullptr, FALSE); return;
     }
     // "Źródło"'s open list: Up/Down between the providers (A picks, Back closes).
     if (state.provider_open) {
         if (vertical) {
-            const int next = std::clamp(state.provider_row + vertical, 0, std::max(0, static_cast<int>(state.choices.size()) - 1));
+            const int next = std::clamp(state.provider_row + vertical, 0, std::max(0, static_cast<int>(state.shown().size()) - 1));
             if (next == state.provider_row) navigationBoundary(); else audio_.navigate();
             state.provider_row = next;
         }

@@ -14,7 +14,8 @@ struct GridAsset {
 // stores and databases of artwork_sources.hpp; and the wallpaper sources of wallpaper_sources.hpp
 // (pictures: Wallhaven, Danbooru; videos: MotionBGs, Steam's animated profile backgrounds).
 enum class ArtworkProvider { steamgriddb, screenscraper, esde, steam, gog, xbox, nintendo, gametdb, titledb, thegamesdb, wikimedia,
-                             wallhaven, danbooru, motionbgs, steam_backgrounds };
+                             wallhaven, danbooru, motionbgs, steam_backgrounds,
+                             local }; // local: the files the player added from disk (Zmień grafikę → Z dysku…)
 struct GridPage {
     std::vector<GridAsset> assets;
     GridSource source;

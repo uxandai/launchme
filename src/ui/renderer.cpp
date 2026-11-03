@@ -508,6 +508,7 @@ void Renderer::paint(const std::vector<GameCard>& cards, size_t selected, bool s
         else if (context.desktop_sheet && context.screen == ScreenMode::downloads) drawDesktopDownloadsPage();
         else if (context.desktop_sheet && context.screen == ScreenMode::glance) drawDesktopGlance();
         else if (context.desktop_sheet && context.screen == ScreenMode::store) drawDesktopStore();
+        else if (context.desktop_sheet && context.screen == ScreenMode::plugin_page) drawDesktopStorePage();
         else if (context.desktop_embed) drawDesktopEmbedded();
         else if (context.screen == ScreenMode::settings) drawSettings();
         else if (context.screen == ScreenMode::plugin_page) drawPluginPage();
@@ -610,7 +611,8 @@ void Renderer::paint(const std::vector<GameCard>& cards, size_t selected, bool s
             // retain the whole-screen entrance. A failed foreground target stays live.
             const bool wallpaper = context.desktop_sheet || context.desktop_embed || context.screen == ScreenMode::shelves || context.screen == ScreenMode::platform_games ||
                                    context.screen == ScreenMode::details || context.screen == ScreenMode::glance ||
-                                   context.screen == ScreenMode::companion || gridScreen(context.screen);
+                                   context.screen == ScreenMode::companion || gridScreen(context.screen) ||
+                                   (context.screen == ScreenMode::plugin_page && !context.store_tabs.empty());
             if (!wallpaper && context.screen_transition < 0.999f) drawScreenTransition(context.screen_transition);
             drawNotification();
             drawVolumeIndicator();

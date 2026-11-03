@@ -137,6 +137,15 @@ void Launcher::paint(bool overlay) {
         context.library_tab = libraryTabIndex(tabs);
         if (library_tab_glide_.valid) context.library_tab_glide = library_tab_glide_.value.value;
     }
+    if (storeTabsShown()) {
+        for (const auto& entry : plugin_menu_) context.store_tabs.push_back({entry.item.title.localized(), 0, {}, true});
+        context.store_tab = storeTabIndex();
+        context.strip_hints = settings_.input_hints; context.hint_device = hintDevice(); // The LB/RB caps beside the strip, as in the library.
+        if (screen_ == ScreenMode::store) {
+            // The catalog screen draws them in the library's place.
+            context.library_tabs = context.store_tabs; context.library_tab = context.store_tab;
+        }
+    }
     if (homeTabsShown()) {
         for (const auto& tab : homeTabs()) context.home_tabs.push_back({tab.title, tab.count, tab.mark});
         // Metro's glides with its pages; Flix's and PSfive's with their own spring.
@@ -229,10 +238,9 @@ void Launcher::paint(bool overlay) {
     context.secret_selected = settings_secret_selected_;
     context.secret_cancel = settings_secret_cancel_;
     context.secret_browse = settings_secret_browse_;
-    for (const auto& item : plugin_menu_) {
-        context.plugin_menu.push_back(item.item.title.localized());
-        context.plugin_menu_glyphs.push_back(item.item.glyph);
-    }
+    // One dock entry for every store plugin (its tabs switch between them); shown even with none.
+    context.plugin_menu.push_back(tr(L"Sklepy"));
+    context.plugin_menu_glyphs.push_back("store");
     for (size_t i = 0; i < plugin_widgets_.size(); ++i) {
         const auto& action = plugin_widgets_[i];
         const auto* owner = plugins_.find(action.plugin);

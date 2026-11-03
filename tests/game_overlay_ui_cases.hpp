@@ -65,7 +65,7 @@ int LauncherUiTest::gameOverlay(HWND window) {
     const auto animate = [&] {
         for (int frame = 0; frame < 30 && app.gameOverlayOpen(); ++frame) app.tickGameOverlay(app.overlay_tick_at_ + 16);
     };
-    const int plugins = static_cast<int>(app.plugin_menu_.size());
+    const int plugins = quick_menu::store_slots;
     int widgets_index = -1;
     for (int i = 0; i < quick_menu::count(plugins, true); ++i)
         if (quick_menu::action(i, plugins, true) == quick_menu::Action::widgets) widgets_index = i;

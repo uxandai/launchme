@@ -22,8 +22,11 @@ settings_ui::Rect inflate(settings_ui::Rect r, float x, float y) { return {r.lef
 
 std::wstring desktopPlayedWhen(uint64_t seconds); // desktop.cpp
 
+// A store plugin page in the store's sheet (the same frame as the catalog); other plugin pages stay a TV screen in a sheet.
+bool Launcher::desktopStorePage() const { return desktop_mode_ && screen_ == ScreenMode::plugin_page && storeTabsShown(); }
+
 bool Launcher::desktopSheet() const {
-    return desktop_mode_ && (screen_ == ScreenMode::settings || screen_ == ScreenMode::details || screen_ == ScreenMode::artwork ||
+    return desktopStorePage() || desktop_mode_ && (screen_ == ScreenMode::settings || screen_ == ScreenMode::details || screen_ == ScreenMode::artwork ||
                              screen_ == ScreenMode::downloads || screen_ == ScreenMode::glance || screen_ == ScreenMode::store);
 }
 
@@ -76,7 +79,7 @@ bool Launcher::desktopStoreKey(WPARAM key) {
 }
 
 bool Launcher::desktopEmbedded() const {
-    return desktop_mode_ && (screen_ == ScreenMode::devices || screen_ == ScreenMode::crop || screen_ == ScreenMode::plugin_page);
+    return desktop_mode_ && (screen_ == ScreenMode::devices || screen_ == ScreenMode::crop || (screen_ == ScreenMode::plugin_page && !desktopStorePage()));
 }
 
 void Launcher::desktopEmbedMap(float& mouse_x, float& mouse_y) const {
@@ -100,7 +103,7 @@ float Launcher::desktopSheetViewHeight() const {
         const auto p = artworkSheet(view.width, view.height).panel();
         return std::max(0.0f, p.bottom - 60 - (p.top + sheet_header + 76));
     }
-    if (screen_ == ScreenMode::store) { // Below its field and state line.
+    if (screen_ == ScreenMode::store || screen_ == ScreenMode::plugin_page) { // Below its field and state line.
         const auto sheet = artworkSheet(view.width, view.height);
         return std::max(0.0f, sheet.panel().bottom - 12 - storeGrid(sheet).top);
     }
@@ -113,9 +116,30 @@ float Launcher::desktopSheetViewHeight() const {
 }
 
 void Launcher::desktopPageActivate(const SheetHit& hit, bool double_click) {
+    if (screen_ == ScreenMode::plugin_page) { // A store plugin page: the catalog's frame, its rows below.
+        const bool search = !plugin_page_.rows.empty() && plugin_page_.rows.front().input;
+        switch (hit.kind) {
+        case K::close: back(); return;
+        case K::nav: switchStoreTab(hit.index - storeTabIndex()); return;
+        case K::field: if (search) plugin_page_.focus = 0; return;
+        case K::action:
+            if (!search) return;
+            if (hit.index == 1) plugin_page_.query.clear(); // The clear button.
+            else { plugin_page_.focus = 0; pluginPageAccept(); } // Szukaj.
+            return;
+        case K::tile:
+            if (hit.index >= 0 && static_cast<size_t>(hit.index) < plugin_page_.rows.size()) {
+                plugin_page_.focus = hit.index; selected_ = static_cast<size_t>(hit.index);
+                pluginPageAccept();
+            }
+            return;
+        default: return;
+        }
+    }
     if (screen_ == ScreenMode::store) {
         switch (hit.kind) {
         case K::close: back(); return;
+        case K::nav: switchStoreTab(hit.index - storeTabIndex()); return; // The Stores' tabs in the header.
         case K::action:
             if (hit.index == 1) { search_query_.clear(); search_after_ = 0; } // ✕ in the field.
             if (hit.index == 0 && search_query_.empty()) return;
@@ -599,6 +623,7 @@ bool Launcher::tickDesktopSheet(float dt) {
                           screen_ == ScreenMode::downloads ? std::string("downloads") :
                           screen_ == ScreenMode::glance ? "glance/" + std::to_string(glance_.section) :
                           screen_ == ScreenMode::store ? "store/" + std::to_string(store_jobs_->generation.load()) : // Each search starts at the top.
+                          screen_ == ScreenMode::plugin_page ? "plugin/" + plugin_page_.plugin + '/' + text_encoding::utf8(plugin_page_.title) :
                           "artwork/" + std::to_string(artwork_state_.category) + '/' + std::to_string(artwork_state_.page) + (artwork_state_.results_mode ? "/r" : "");
         if (page != desktop_sheet_page_) { desktop_sheet_page_ = page; desktop_sheet_scroll_ = desktop_sheet_scroll_target_ = 0; paint = true; }
         const float limit = std::max(0.0f, renderer_.desktopSheetHeight() - desktopSheetViewHeight());
@@ -613,6 +638,18 @@ bool Launcher::tickDesktopSheet(float dt) {
         }
         if (screen_ == ScreenMode::artwork && (artwork_state_.loading || artwork_state_.applying)) paint = true; // Placeholders pulse.
         if (screen_ == ScreenMode::glance && glance_.loading) paint = true;
+        if (screen_ == ScreenMode::plugin_page) { // A store's page: keys bring the focused row into view; the art follows the scroll.
+            const auto phase = GetTickCount64() / 530;
+            if (phase != desktop_sheet_caret_) { desktop_sheet_caret_ = phase; paint = true; }
+            if (desktop_sheet_keyboard_ && plugin_page_.focus >= 0 && plugin_page_.focus != desktop_sheet_row_ && plugin_page_.focus < static_cast<int>(plugin_page_.rows.size())) {
+                const auto& row = plugin_page_.rows[static_cast<size_t>(plugin_page_.focus)];
+                const float view_height = desktopSheetViewHeight();
+                if (row.top < desktop_sheet_scroll_target_) desktop_sheet_scroll_target_ = row.top;
+                else if (row.top + row.height() > desktop_sheet_scroll_target_ + view_height) desktop_sheet_scroll_target_ = row.top + row.height() - view_height;
+            }
+            desktop_sheet_row_ = plugin_page_.focus;
+            if (std::abs(plugin_page_.scroll - desktop_sheet_scroll_) > 1.0f) { plugin_page_.scroll = desktop_sheet_scroll_; requestPluginPageArt(); }
+        }
         if (screen_ == ScreenMode::store) { // The field's caret blinks; placeholders pulse while it searches.
             const auto phase = GetTickCount64() / 530;
             if (phase != desktop_sheet_caret_) { desktop_sheet_caret_ = phase; paint = true; }

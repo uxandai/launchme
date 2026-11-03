@@ -177,7 +177,7 @@ int LauncherUiTest::uiRefresh(HWND window) {
     app.settings_.flix_top_icons = true;
     app.showCategory(0); settle();
     if (!app.flixIconsShown()) return 7770;
-    const int quick = quick_menu::count(static_cast<int>(app.plugin_menu_.size()));
+    const int quick = quick_menu::count(quick_menu::store_slots);
     if (app.flixIconCount() != quick + 2) return 7771;
     {
         const auto spots = app.homeWidgetSpots();
@@ -247,6 +247,80 @@ int LauncherUiTest::uiRefresh(HWND window) {
         const auto button = empty.emptyHomeLayout().button(empty_library::platforms);
         empty.click((button.left + button.right) * 0.5f * empty_view.scale, (button.top + button.bottom) * 0.5f * empty_view.scale, false);
         if (!empty.settingsOpen()) return 7789;
+    }
+
+    // Stores: every "menu" plugin shares one dock entry and one desktop tool, always there. With no
+    // store plugin it opens a page saying so (no tabs); with several, LB/RB (PgUp/PgDn) walk their tabs.
+    {
+        Launcher stores;
+        stores.settings_.launch_animation = false;
+        stores.settings_.glance = stores.settings_.companion = false;
+        stores.hwnd_ = window; stores.execute_ = fakeExecute;
+        if (!stores.renderer_.initialize(window)) return 99301;
+        if (quick_menu::count(quick_menu::store_slots) != 9 || quick_menu::action(2, quick_menu::store_slots) != quick_menu::Action::store) return 99302;
+        const auto tools = stores.desktopTools();
+        if (std::find(tools.begin(), tools.end(), desktop_ui::Tool::store) == tools.end()) return 99303; // Shown with no plugin at all.
+        stores.openStores();
+        if (stores.screen_ != ScreenMode::plugin_page || stores.plugin_page_.title != tr(L"Sklepy") || stores.storeTabsShown()) return 99304;
+        stores.back();
+        stores.plugin_menu_.resize(3);
+        for (size_t i = 0; i < 3; ++i) { stores.plugin_menu_[i].plugin = "store" + std::to_string(i); }
+        static const wchar_t* const names[] = {L"Store", L"EmuStore", L"Bazaar"};
+        for (size_t i = 0; i < 3; ++i) stores.plugin_menu_[i].item.title.pl = stores.plugin_menu_[i].item.title.en = names[i];
+        stores.stores_open_ = true; stores.screen_ = ScreenMode::plugin_page; stores.store_tab_ = 0;
+        if (!stores.storeTabsShown()) return 99305;
+        {
+            wchar_t folder[4096]{};
+            const auto count = GetEnvironmentVariableW(L"LAUNCHME_UI_CAPTURE_DIR", folder, 4096);
+            if (count && count < 4096) {
+                stores.store_tab_ = 1;
+                if (!stores.renderer_.captureForTest(std::filesystem::path(folder) / L"stores-tabs.png", [&] { stores.paint(); })) return 99310;
+                // The two kinds of store side by side: a plugin's page and a catalog, in Tryb TV and in the desktop window.
+                plugin_ui::Page page; page.plugin = "store1"; page.title = L"EmuStore"; page.status = L"3 wyniki";
+                const auto add = [&](plugin_ui::Row row) { row.top = page.total; page.total += row.height(); page.rows.push_back(std::move(row)); };
+                plugin_ui::Row field; field.input = true; field.extent = 0.001f; field.command = "search"; field.title = L"Szukaj w EmuStore…"; add(field);
+                plugin_ui::Row heading; heading.heading = true; heading.title = L"Gry"; add(heading);
+                for (const auto* name : {L"Super Mario Odyssey", L"The Legend of Zelda", L"Metroid Dread"}) {
+                    plugin_ui::Row item; item.title = name; item.subtitle = L"Nintendo Switch · 4.2 GB"; item.command = "open"; add(item);
+                }
+                page.focus = 2;
+                stores.plugin_page_ = page;
+                const auto shot = [&](const wchar_t* name) { return stores.renderer_.captureForTest(std::filesystem::path(folder) / name, [&] { stores.paint(); }); };
+                if (!shot(L"stores-page-tv.png")) return 99314;
+                stores.desktop_mode_ = true;
+                if (!shot(L"stores-page-desktop.png")) return 99315;
+                stores.desktop_mode_ = false;
+                stores.screen_ = ScreenMode::store; stores.store_tab_ = 0; stores.search_query_ = L"mario";
+                for (const auto* name : {L"Mario Kart", L"Super Mario Odyssey", L"Mario Party", L"Luigi's Mansion"}) {
+                    Game game{static_cast<uint32_t>(1000 + stores.store_results_.size()), name}; stores.store_results_.push_back(game);
+                }
+                stores.rebuildCards(true);
+                for (int frame = 0; frame < 35; ++frame) { stores.last_frame_ -= std::chrono::milliseconds(50); stores.tick(); }
+                if (!shot(L"stores-catalog-tv.png")) return 99316;
+                stores.desktop_mode_ = true;
+                if (!shot(L"stores-catalog-desktop.png")) return 99317;
+                stores.desktop_mode_ = false;
+                stores.screen_ = ScreenMode::plugin_page; stores.store_results_.clear();
+                stores.store_tab_ = 0;
+            }
+        }
+        stores.switchStoreTab(1);
+        if (stores.store_tab_ != 1) return 99306;
+        stores.switchStoreTab(5); stores.switchStoreTab(1);
+        if (stores.store_tab_ != 2) return 99307; // The last tab stops there.
+        stores.switchStoreTab(-1);
+        if (stores.store_tab_ != 1) return 99308;
+        // Opening Stores shows the screen and its tabs at once (a placeholder until the plugin answers).
+        stores.screen_ = ScreenMode::shelves; stores.stores_open_ = false;
+        stores.openStores();
+        if (stores.screen_ != ScreenMode::plugin_page || !stores.storeTabsShown() || stores.store_tab_ != 1) return 99311;
+        stores.screen_ = ScreenMode::store; // A store plugin's catalog screen keeps the tabs.
+        if (!stores.storeTabsShown()) return 99312;
+        stores.stores_open_ = false; // Opened from elsewhere (a game's Dodaj): none.
+        if (stores.storeTabsShown()) return 99313;
+        stores.stores_open_ = true;
+        stores.screen_ = ScreenMode::shelves;
+        if (stores.storeTabsShown()) return 99309; // Tabs belong to the page only.
     }
     return 0;
 }

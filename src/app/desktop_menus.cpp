@@ -232,22 +232,6 @@ void Launcher::desktopOpenCollectionsMenu(float x, float y) {
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
-void Launcher::desktopOpenStoreMenu() {
-    const auto tools = desktopTools();
-    const auto at = std::find(tools.begin(), tools.end(), Tool::store);
-    const auto r = desktopLayout().tool(static_cast<int>(at - tools.begin()));
-    Menu menu;
-    menu.kind = Menu::Kind::store;
-    menu.x = r.right; menu.y = r.bottom + 6; menu.align_right = true;
-    for (size_t i = 0; i < plugin_menu_.size(); ++i) {
-        MenuItem item{Action::store_page, plugin_menu_[i].item.title.localized(), {}, glyph::shop};
-        item.value = static_cast<int>(i);
-        menu.items.push_back(std::move(item));
-    }
-    desktop_menu_ = std::move(menu);
-    InvalidateRect(hwnd_, nullptr, FALSE);
-}
-
 void Launcher::desktopMenuKey(WPARAM key) {
     if (!desktop_menu_) return;
     auto& menu = *desktop_menu_;
@@ -373,9 +357,6 @@ void Launcher::desktopMenuPick(const desktop_ui::MenuItem& item, bool /*from_sub
         if (!cards_.empty()) desktopFocus(selected_);
         return;
     case Action::clear_marks: desktop_marked_.clear(); InvalidateRect(hwnd_, nullptr, FALSE); return;
-    case Action::store_page:
-        if (item.value >= 0 && item.value < static_cast<int>(plugin_menu_.size())) pluginAction(plugin_menu_[static_cast<size_t>(item.value)]);
-        return;
     case Action::downloads: openDownloads(); return;
     case Action::section_rename: desktopCollectionDialog(item.key, Page::name); return;
     case Action::section_games: desktopCollectionDialog(item.key, Page::games); return;

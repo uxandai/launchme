@@ -89,7 +89,7 @@ void Launcher::animateFocus(float dt, float target_x, float target_y, float targ
 
     // Quick bar: the circle glides to the focused icon (snapped when the bar opens).
     if (quick_open_ || quick_progress_ > 0.003f) {
-        const float target = quick_menu::center(view.width, quick_selected_, static_cast<int>(plugin_menu_.size()));
+        const float target = quick_menu::center(view.width, quick_selected_, quick_menu::store_slots);
         if (!quick_circle_valid_) { quick_circle_.snap(target); quick_circle_valid_ = true; }
         else quick_circle_.step(target, dt, tuning.omega, tuning.zeta);
         if (!quick_circle_.settled(target)) needs_paint = true;

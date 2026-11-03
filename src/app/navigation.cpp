@@ -349,6 +349,9 @@ void Launcher::onCharacter(wchar_t character) {
     }
     if (friendChatOpen() && topDialog() == Modal::none) { friendChatCharacter(character); return; } // The drawer's conversation.
     if (desktopActive() && desktopCharacter(character)) return; // Type-to-search in the desktop window.
+    // A store page: any letter typed anywhere on it goes into its search field.
+    if (screen_ == ScreenMode::plugin_page && !plugin_drawer_active_ && !friends_open_ && !plugin_page_.dialog && !plugin_page_.typing() &&
+        !plugin_page_.rows.empty() && plugin_page_.rows.front().input && character > L' ' && character != 127) plugin_page_.focus = 0;
     if (pluginPageTyping()) { pluginPageType(character); return; }
     if (companionTyping()) { companionType(character); return; }
     if (artworkOpen()) {

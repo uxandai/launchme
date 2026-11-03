@@ -509,7 +509,7 @@ void Launcher::controllerInput(const PadReading& state) {
     const bool home_shoulders = ((metroActive() || psfiveActive()) && !menu_open_) ||
         (homeShoulderCategories() && !menu_open_ && !friends_open_ && !quick_open_ && !category_menu_open_);
     const bool shoulders_page = settingsOpen() || artworkOpen() || cropOpen() || devicesOpen() || home_shoulders ||
-                                (libraryTabsShown() && !menu_open_);
+                                (libraryTabsShown() && !menu_open_) || (storeTabsShown() && !pluginPageTyping());
     const int shoulder = pressed(XINPUT_GAMEPAD_LEFT_SHOULDER) ? -1 : pressed(XINPUT_GAMEPAD_RIGHT_SHOULDER) ? 1 : 0;
     if (cropOpen()) {
         if (shoulder) cropTab(shoulder);
@@ -518,6 +518,7 @@ void Launcher::controllerInput(const PadReading& state) {
     if (shoulder && settingsOpen() && !settings_state_.editing) { noteUserInput(); settingsShoulder(shoulder); }
     if (shoulder && artworkOpen()) artworkPage(shoulder);
     if (shoulder && devicesOpen()) deviceColumn(shoulder);
+    if (shoulder && storeTabsShown() && !pluginPageTyping()) { noteUserInput(); switchStoreTab(shoulder); }
     if (shoulder && libraryTabsShown() && !menu_open_) { noteUserInput(); switchLibraryTab(shoulder); } // Kinowy / Przegląd categories.
     if (shoulder && home_shoulders) { noteUserInput(); homePage(shoulder); } // Metro pages, PSfive tabs, the other layouts' categories.
     int direction = 0;

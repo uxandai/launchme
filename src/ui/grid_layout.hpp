@@ -8,20 +8,10 @@
 #include "../library/view_options.hpp"
 #include "settings_view.hpp"
 #include "coverflow_layout.hpp"
+#include "grid_columns.hpp"
 
 namespace grid_layout {
 inline bool hitBack(float x, float y) { return x >= 16 && x < 52 && y >= 35 && y < 71; }
-inline int columns(float width) { return std::clamp(static_cast<int>((width - 120) / 202), 3, 8); }
-inline float cell(float width) {
-    const int count = columns(width);
-    return std::min(186.0f, (width - 112.0f - (count - 1) * 25.0f) / count);
-}
-inline float left(float width, size_t index) {
-    const int count = columns(width);
-    const float size = cell(width), gap = 25.0f;
-    const float total = count * size + (count - 1) * gap;
-    return (width - total) * 0.5f + (index % count) * (size + gap);
-}
 inline float top(size_t index, float width, float scroll, bool posters = false) {
     return 190.0f + (index / columns(width)) * (cell(width) * (posters ? 1.5f : 1) + 64.0f) - scroll;
 }
@@ -176,8 +166,8 @@ inline settings_ui::Rect tab(float offset, float width, float current) {
     return {c - half, top, c + half, top + height};
 }
 // Offset from the active tab; the first selection exposes two following tabs.
-inline std::optional<int> hit(float x, float y, float width, int current) {
-    if (y < top || y >= top + height) return std::nullopt;
+inline std::optional<int> hit(float x, float y, float width, int current, float dy = 0) {
+    if (y < top + dy || y >= top + dy + height) return std::nullopt;
     const float offset = (x - center(width)) / slot(width);
     if (std::abs(offset) > 1.5f) return std::nullopt;
     return static_cast<int>(std::lround(offset - focusOffset(static_cast<float>(current))));
@@ -193,8 +183,8 @@ inline settings_ui::Rect tab(float offset, float width, float current) {
     return {c - half, top, c + half, top + height};
 }
 // Offset from the active category.
-inline std::optional<int> hit(float x, float y, float width, int current) {
-    if (y < top || y >= top + height) return std::nullopt;
+inline std::optional<int> hit(float x, float y, float width, int current, float dy = 0) {
+    if (y < top + dy || y >= top + dy + height) return std::nullopt;
     const float offset = (x - center(width)) / slot(width);
     if (std::abs(offset) > 1.5f) return std::nullopt;
     return static_cast<int>(std::lround(offset - focusOffset(static_cast<float>(current))));

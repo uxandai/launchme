@@ -2,6 +2,7 @@
 // TV. Each entry runs launchme.exe --jump=<command>; a running launcher receives it from that second
 // process (main.cpp, WM_COPYDATA), a starting one from its own arguments.
 #include "launcher.hpp"
+#include "../platform/app_identity.hpp"
 #include "../platform/text_encoding.hpp"
 
 #ifdef _WIN32
@@ -135,6 +136,7 @@ void Launcher::pollJumpList() {
     const std::wstring exe = path;
     ComPtr<ICustomDestinationList> list;
     if (FAILED(CoCreateInstance(CLSID_DestinationList, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(list.GetAddressOf())))) return;
+    list->SetAppID(app_identity::id);
     UINT slots = 0;
     ComPtr<IObjectArray> removed;
     if (FAILED(list->BeginList(&slots, IID_PPV_ARGS(removed.GetAddressOf())))) return;

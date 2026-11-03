@@ -136,6 +136,7 @@ void Launcher::inputHints(ViewContext& context) const {
             add(HintButton::accept, tr(L"Wybierz"));
             if (pad && !plugin_page_.rows.empty() && plugin_page_.rows.front().input) add(HintButton::search, tr(L"Szukaj"));
         }
+        if (storeTabsShown() && plugin_menu_.size() > 1) add(HintButton::shoulders, tr(L"Sklepy"));
         add(HintButton::back, tr(L"Wstecz"));
         return;
     case ScreenMode::devices:
@@ -155,6 +156,7 @@ void Launcher::inputHints(ViewContext& context) const {
     case ScreenMode::store:
     case ScreenMode::platform_games:
         play();
+        if (storeTabsShown() && plugin_menu_.size() > 1) add(HintButton::shoulders, tr(L"Sklepy"));
         if (pad) add(HintButton::search, tr(L"Szukaj"));
         else if (screen_ == ScreenMode::library) add(HintButton::type, tr(L"Szukaj"));
         if (libraryTabsShown()) add(HintButton::shoulders, tr(L"Kategorie"));

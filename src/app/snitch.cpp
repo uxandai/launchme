@@ -17,7 +17,7 @@ void Launcher::snitchTarget(size_t index, float& x, float& y, float& size, float
 bool Launcher::snitchClick(float x, float y, bool double_click) {
     if (!snitchActive() || menu_open_ || friends_open_ || category_menu_open_ || pending_launch_) return false;
     const auto view = renderer_.viewport();
-    const int item = snitch_layout::hitDock(view.width, view.height, x, y, static_cast<int>(plugin_menu_.size()));
+    const int item = snitch_layout::hitDock(view.width, view.height, x, y, quick_menu::store_slots);
     if (item >= 0) {
         if (!double_click) { quick_open_ = true; quick_selected_ = item; quickAccept(); }
         return true;

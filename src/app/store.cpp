@@ -62,6 +62,14 @@ void Launcher::initializeStore() {
 }
 
 void Launcher::openStore() {
+    // Reached from the Stores tabs (or opened from a store plugin's page there), the catalog screen keeps them.
+    if (screen_ != ScreenMode::plugin_page && screen_ != ScreenMode::store) stores_open_ = stores_opening_;
+    stores_opening_ = false;
+    if (stores_open_) {
+        const auto found = std::find_if(plugin_menu_.begin(), plugin_menu_.end(), [&](const auto& entry) { return entry.plugin == catalog_plugin_; });
+        if (found != plugin_menu_.end() && !(store_tab_ >= 0 && store_tab_ < static_cast<int>(plugin_menu_.size()) && plugin_menu_[static_cast<size_t>(store_tab_)].plugin == catalog_plugin_))
+            store_tab_ = static_cast<int>(found - plugin_menu_.begin());
+    }
     desktopLeaveLibrary(); rememberPlace();
     if (!storeEnabled()) return;
     screen_ = ScreenMode::store;

@@ -53,7 +53,7 @@ int LauncherUiTest::tour(HWND window) {
     if (app.quick_selected_ != 1) return 2413;
     const int icons = app.tourIcons();
     while (app.quick_selected_ + 2 < icons) app.tourKey(VK_RETURN, false);
-    if (quick_menu::action(app.quick_selected_, static_cast<int>(app.plugin_menu_.size())) != quick_menu::Action::settings) return 2414;
+    if (quick_menu::action(app.quick_selected_, quick_menu::store_slots) != quick_menu::Action::settings) return 2414;
     if (!capture(L"tour-quick-bar-settings.png")) return 2415;
     app.tourKey(VK_RETURN, false);
     if (app.quick_selected_ != icons - 1 || app.tour_.step != 3) return 2416;

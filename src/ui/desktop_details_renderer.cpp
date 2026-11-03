@@ -398,8 +398,9 @@ void Renderer::drawDesktopArtwork() {
         const SheetHit hit{Kind::nav, i};
         const bool active = state->category == i && !state->results_mode;
         if (!active && hover(hit) > 0) desktopFill(r, 8, gray(1, 0.045f));
-        textLine(tr(artwork_ui::names[static_cast<size_t>(i)]), r.left + 16, middle(r), r.right - r.left - 24, active ? desktop_strong_font_.Get() : desktop_font_.Get(),
+        textLine(tr(artwork_ui::names[static_cast<size_t>(i)]), r.left + 16, middle(r), r.right - r.left - 48, active ? desktop_strong_font_.Get() : desktop_font_.Get(),
                  active ? palette::text() : gray(0.8f));
+        drawSetDot(r.right - 20, middle(r), state->custom[static_cast<size_t>(i)], active ? palette::text() : gray(0.75f)); // Set: filled.
         if (!state->applying) desktopHot(hit, r);
         ny += 38;
     }
@@ -548,21 +549,25 @@ void Renderer::drawDesktopArtwork() {
     // "Z dysku": which type the picked file becomes, then the file.
     if (state->local_open) {
         desktopFill(p, 14, gray(0, 0.45f));
-        const auto d = sheet.dialog(420, 120 + 36.0f * static_cast<float>(artwork_ui::kinds.size()));
+        const auto d = sheet.dialog(560, 352);
         desktopShadow(d, 12, 1.2f);
         desktopFill(d, 12, popup_bg);
         desktopStroke(d, 12, gray(1, 0.1f));
         desktopHot({Kind::dialog}, d);
         textLine(tr(L"Grafika z dysku"), d.left + 24, d.top + 32, d.right - d.left - 48, desktop_title_font_.Get(), palette::text());
-        float ry = d.top + 56;
+        // A board of the six types as small pictures in their proportions; a filled dot marks one already set.
+        const float gap = 12, tile_w = (d.right - d.left - 48 - 2 * gap) / 3, tile_h = 100;
         for (int i = 0; i < static_cast<int>(artwork_ui::kinds.size()); ++i) {
-            const Rect r{d.left + 16, ry, d.right - 16, ry + 34};
+            const float tx = d.left + 24 + static_cast<float>(i % 3) * (tile_w + gap), ty = d.top + 58 + static_cast<float>(i / 3) * (tile_h + gap);
+            const Rect r{tx, ty, tx + tile_w, ty + tile_h};
             const SheetHit hit{Kind::dropdown_item, i};
-            if (state->local_kind == i) desktopFill(r, 7, gray(1, 0.08f)); else if (hover(hit) > 0) desktopFill(r, 7, gray(1, 0.05f));
-            if (state->local_kind == i) desktopGlyph(glyph::check, r.left + 16, middle(r), 11, uiAccent());
-            textLine(tr(artwork_ui::names[static_cast<size_t>(i)]), r.left + 34, middle(r), r.right - r.left - 44, desktop_font_.Get(), palette::text());
+            const bool chosen = state->local_kind == i;
+            desktopFill(r, 10, gray(1, chosen ? 0.09f : hover(hit) > 0 ? 0.06f : 0.035f));
+            if (chosen) desktopStroke(r, 10, uiAccent(0.9f), 1.5f);
+            drawKindIllustration(artwork_ui::kinds[static_cast<size_t>(i)], r.left + 16, r.top + 10, r.right - 16, r.bottom - 30, chosen);
+            textLine(tr(artwork_ui::names[static_cast<size_t>(i)]), r.left + 6, r.bottom - 15, r.right - r.left - 12, desktop_small_font_.Get(), palette::text(), DWRITE_TEXT_ALIGNMENT_CENTER);
+            drawSetDot(r.right - 14, r.top + 14, state->custom[static_cast<size_t>(i)], gray(0.9f));
             desktopHot(hit, r);
-            ry += 36;
         }
         const Rect pick{d.right - 24 - 150, d.bottom - 24 - 36, d.right - 24, d.bottom - 24}, cancel{pick.left - 120, pick.top, pick.left - 10, pick.bottom};
         desktopButton(cancel, 1, hover({Kind::dialog_cancel}), pressed({Kind::dialog_cancel}), true, 0, tr(L"Anuluj"));

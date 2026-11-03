@@ -66,7 +66,7 @@ int LauncherUiTest::snitch(HWND window) {
     app.back(); settle();
     if (!app.snitchActive() || app.category_ || app.selected_ != 12) return 8211;
     // Persistent dock accepts a single click while the game row owns keyboard focus.
-    const int plugins = static_cast<int>(app.plugin_menu_.size());
+    const int plugins = quick_menu::store_slots;
     const int settings = quick_menu::count(plugins) - 2;
     const float x = snitch_layout::dockX(view.width, settings, plugins), y = snitch_layout::dockY(view.height);
     if (!app.hoverButton(x * view.scale, y * view.scale)) return 8212;

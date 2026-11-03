@@ -191,13 +191,14 @@ int LauncherUiTest::drmFree(HWND window) {
     if (!art.local_focus || art.local_open) return 2141;
     app.artworkAccept();
     if (!art.local_open || art.local_kind != art.category || !picks.empty()) return 2142;
+    app.launch_animation_started_.reset();
     if (!capture(L"artwork-from-disk.png")) return 2143;
-    for (int i = 0; i < 6; ++i) app.artworkMove(0, -1); // Up to "Okładka".
+    app.artworkMove(0, -1); app.artworkMove(-1, 0); app.artworkMove(-1, 0); // The board is 3 x 2: up a row, two tiles left: "Okładka".
     app.artworkAccept();                                  // Chosen; focus moves to "Wskaż plik…".
     if (art.local_kind != 0 || art.local_row != artwork_ui::State::local_pick_row || !art.local_open) return 2144;
     app.back();                                           // Back closes only the panel.
     if (art.local_open || !app.artworkOpen()) return 2145;
-    app.artworkAccept(); app.artworkMove(0, -10); app.artworkAccept(); app.artworkAccept();
+    app.artworkAccept(); app.artworkMove(0, -10); app.artworkMove(-1, 0); app.artworkMove(-1, 0); app.artworkAccept(); app.artworkAccept();
     if (picks.size() != 1 || art.local_open || !art.applying || art.category != 0) return 2146;
     {
         std::lock_guard lock(app.artwork_jobs_->mutex);
@@ -214,6 +215,12 @@ int LauncherUiTest::drmFree(HWND window) {
     const auto* bound = app.art_.find(gameKey(celeste_game));
     if (art.applying || art.status != L"Zastosowano grafikę z dysku." || !bound || !bound->cover ||
         selectedArtworkId(celeste_game, ArtworkKind::cover, coverCacheDirectory()) != local_id) return 2149;
+    // The added file is a variant of the game's own "Lokalne" source: shown there, set (a filled dot).
+    if (!hasLocalArtwork(celeste_game, coverCacheDirectory()) || localArtworkIds(celeste_game, ArtworkKind::cover, coverCacheDirectory()) != std::vector<uint32_t>{local_id}) return 2290;
+    if (art.provider != ArtworkProvider::local || !art.hasLocal() || !art.custom[0] || art.custom[1]) return 2291;
+    if (std::find(art.choices.begin(), art.choices.end(), ArtworkProvider::local) == art.choices.end()) return 2292;
+    app.launch_animation_started_.reset();
+    if (!capture(L"artwork-local-source.png")) return 2293;
 
     // Back sits above the types (top left): Up from the first type reaches it, Down returns; Right
     // enters the search field, whose selected text is replaced by typing.
@@ -356,6 +363,10 @@ int LauncherUiTest::drmFree(HWND window) {
         app.openArtworkBrowser(celeste_game);
         art.category = artwork_ui::category(ArtworkKind::cover);
         if (!capture(L"artwork-square-crop-desktop.png")) return 2194;
+        app.openLocalArtwork();   // The "Z dysku" board on the desktop: types as pictures, a dot for each one set.
+        if (!art.local_open || !capture(L"artwork-from-disk-desktop.png")) return 2294;
+        app.back();
+        if (art.local_open) return 2295;
         const auto crop_hotspot = [&] {
             app.paint();
             const auto& hot = app.renderer_.desktopHotspots();

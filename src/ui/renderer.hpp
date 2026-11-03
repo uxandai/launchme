@@ -604,6 +604,7 @@ private:
     void drawEmptyLibrary(); // The TV home without games: why, and its three buttons (empty_library.hpp).
     void drawGrid();
     void drawPluginPage(float left = 0, bool drawer = false);
+    void drawStoreField(float left, float top, float right, float bottom, const std::wstring& query, const std::wstring& placeholder, bool typing, size_t caret);
     void drawDownloads(); // Pobierania (src/ui/downloads_renderer.cpp).
     void drawGlance();
     void drawGlanceTimelineCard(size_t index, settings_ui::Rect rect, float alpha, float weight);
@@ -744,6 +745,8 @@ private:
     // Desktop: the same card over the Osiągnięcia page of the Szczegóły sheet.
     void drawDesktopAchievementCard(const achievements_ui::State& state);
     void drawArtworkBrowser();
+    void drawKindIllustration(ArtworkKind kind, float left, float top, float right, float bottom, bool lit);
+    void drawSetDot(float cx, float cy, bool set, D2D1_COLOR_F ink);
     void drawDevices();
     void drawAudioDevices();
     void drawDeviceFocus(bool editing); // Gliding focus frame of the devices screen, if any.
@@ -771,7 +774,7 @@ private:
     bool drawCinematicFacts(float x, float center_y, float width, float alpha);
     void drawLibraryTabs();     // Kinowy / Przegląd: the category strip.
     void drawHomeTabs();        // Metro / Flix: the same strip, centred (ViewContext::home_tabs).
-    void drawCategoryStrip(const std::vector<ViewContext::LibraryTab>& tabs, float glide, bool home, float alpha, bool focused);
+    void drawCategoryStrip(const std::vector<ViewContext::LibraryTab>& tabs, float glide, bool home, float alpha, bool focused, float dy = 0, bool fit = false);
     float drawShoulderHint(bool next, float edge, float cy, float alpha); // Beside the strip; `edge` the side facing it.
     void drawLibraryOverview(); // Przegląd: tiles, then drawOverviewPanel.
     void drawOverviewPanel();
@@ -900,6 +903,9 @@ private:
     void drawDesktopDownloadsPage(); // src/ui/desktop_pages_renderer.cpp
     void drawDesktopGlance();
     void drawDesktopStore();
+    void drawDesktopStorePage();
+    void drawDesktopStoreChrome(const desktop_ui::Sheet& sheet, const desktop_ui::SheetView& view, const std::wstring& query, size_t caret,
+                                const std::wstring& placeholder, const std::wstring& state, bool field_shown);
     void drawDesktopEmbedded(); // Urządzenia, kadrowanie, plugin pages inside a desktop sheet.
     void desktopHot(desktop_ui::SheetHit hit, settings_ui::Rect rect) { desktop_hotspots_.push_back({hit, rect}); }
     // Desktop dialogs over desktop pages (src/ui/desktop_dialogs_renderer.cpp).

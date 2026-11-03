@@ -269,45 +269,121 @@ void Renderer::drawDesktopEmbedded() {
 
 // ---- Sklep ---------------------------------------------------------------------------------------
 
+// The frame every store shares on the desktop (the catalog and a store plugin page): the tabs in the
+// header, the search field with its clear button and Szukaj, and the state line below it.
+void Renderer::drawDesktopStoreChrome(const desktop_ui::Sheet& sheet, const desktop_ui::SheetView& view, const std::wstring& query, size_t caret,
+                                      const std::wstring& placeholder, const std::wstring& state, bool field_shown) {
+    const bool tabbed = !context_->store_tabs.empty();
+    drawDesktopSheetFrame(sheet, view, tabbed ? std::wstring{} : std::wstring(tr(L"Sklep")), false);
+    desktopHot({Kind::close}, sheet.close());
+    const auto p = sheet.panel(), h = sheet.header();
+    const auto hovered = [&](SheetHit hit) { return view.hover == hit ? 1.0f : 0.0f; };
+    // The Stores' tabs in the header, where the title was: one pill per store plugin (the active one filled).
+    if (tabbed) {
+        float tx = p.left + 20;
+        const float ty = middle(h) - 17;
+        for (size_t i = 0; i < context_->store_tabs.size(); ++i) {
+            const auto& label = context_->store_tabs[i].title;
+            const bool active = static_cast<int>(i) == context_->store_tab;
+            const float w = std::ceil(textAdvance(label, active ? desktop_strong_font_.Get() : desktop_font_.Get())) + 32;
+            const Rect r{tx, ty, tx + w, ty + 34};
+            const SheetHit hit{Kind::nav, static_cast<int>(i)};
+            if (active) desktopFill(r, 17, gray(1, 0.1f));
+            else if (hovered(hit) > 0) desktopFill(r, 17, gray(1, 0.05f));
+            textLine(label, r.left + 14, middle(r), r.right - r.left - 28, active ? desktop_strong_font_.Get() : desktop_font_.Get(), active ? palette::text() : gray(0.72f));
+            desktopHot(hit, r);
+            tx += w + 6;
+        }
+    }
+    const float left = p.left + 24, right = p.right - 24;
+    const Rect field{left, h.bottom + 14, right - 112, h.bottom + 52};
+    if (field_shown) {
+        const bool blink = (GetTickCount64() / 530) % 2 == 0;
+        desktopFill(field, 9, gray(1, 0.07f));
+        desktopStroke({field.left - 1, field.top - 1, field.right + 1, field.bottom + 1}, 10, uiAccent(0.9f), 1.5f);
+        desktopGlyph(glyph::search, field.left + 18, middle(field), 13, palette::muted());
+        const auto m = typeMetrics(desktop_font_.Get());
+        const float text_left = field.left + 36, text_right = field.right - (query.empty() ? 12 : 36);
+        if (query.empty()) {
+            if (blink) desktopFill({text_left, middle(field) - 9, text_left + 1.5f, middle(field) + 9}, 0, palette::text());
+            textLine(placeholder, text_left + 5, middle(field), text_right - text_left - 5, desktop_font_.Get(), palette::muted(0.85f));
+        } else {
+            fieldText(query, std::min(caret, query.size()), blink, text_left, middle(field) - m.line * 0.5f, text_right - text_left, m.line,
+                      desktop_font_.Get(), palette::text());
+            const Rect clear{field.right - 32, field.top + 5, field.right - 6, field.bottom - 5};
+            if (hovered({Kind::action, 1}) > 0) desktopFill(clear, 6, gray(1, 0.08f));
+            desktopGlyph(glyph::close, (clear.left + clear.right) * 0.5f, middle(clear), 10, palette::muted());
+            desktopHot({Kind::action, 1}, clear);
+        }
+        desktopHot({Kind::field}, {field.left, field.top, field.right - (query.empty() ? 0 : 34), field.bottom});
+        const Rect search{right - 100, field.top, right, field.bottom};
+        desktopButton(search, 1, hovered({Kind::action, 0}), view.pressed == SheetHit{Kind::action, 0}, !query.empty(), 0, tr(L"Szukaj"));
+        desktopHot({Kind::action, 0}, search);
+    }
+    if (!state.empty()) textLine(state, left + 2, field.bottom + 20, right - left - 4, desktop_small_font_.Get(), palette::muted());
+}
+
+// A store plugin page in the store's sheet: the shared frame, then its rows as a native list.
+void Renderer::drawDesktopStorePage() {
+    const auto& view = *context_->desktop_sheet;
+    desktop_hotspots_.clear();
+    const auto sheet = artworkSheet(viewport_.width, viewport_.height);
+    const auto& page = *context_->plugin_page;
+    const bool search = !page.rows.empty() && page.rows.front().input;
+    drawDesktopStoreChrome(sheet, view, page.query, page.query.size(), search ? page.rows.front().title : std::wstring{}, page.status, search);
+    const auto p = sheet.panel();
+    const auto grid = storeGrid(sheet);
+    const float left = p.left + 24, right = p.right - 24;
+    target_->PushAxisAlignedClip(D2D1::RectF(p.left + 1, grid.top - 10, p.right - 1, p.bottom - 1), D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
+    for (size_t i = 0; i < page.rows.size(); ++i) {
+        const auto& row = page.rows[i];
+        if (row.input) continue;
+        const float y = grid.top + row.top - view.scroll, h = row.height();
+        if (y + h < grid.top - 10 || y > p.bottom) continue;
+        if (row.heading) {
+            textLine(row.title, left + 4, y + h * 0.5f + 6, right - left - 8, desktop_strong_font_.Get(), palette::muted());
+            continue;
+        }
+        const SheetHit hit{Kind::tile, static_cast<int>(i)};
+        const Rect r{left, y, right, y + h - 6};
+        const bool focused = view.keyboard && page.focus == static_cast<int>(i);
+        const bool hover = row.actionable() && view.hover == hit;
+        if (hover || focused) desktopFill(r, 10, gray(1, focused ? 0.10f : 0.06f));
+        if (focused) desktopStroke(r, 10, uiAccent(), 2.0f);
+        float x = left + 14;
+        if (!row.game_key.empty() || !row.download_id.empty()) {
+            const float size = !row.download_id.empty() ? 88.0f : 62.0f, top = r.top + ((r.bottom - r.top) - size) * 0.5f;
+            const Rect art{x, top, x + size, top + size};
+            desktopFill(art, 8, rgb(0.12f, 0.15f, 0.18f));
+            if (i < covers_.size()) fillImage(covers_[i], box(art), 8, reveal(covers_[i]), false);
+            x += size + 16;
+        }
+        const auto ink = row.enabled ? palette::text() : gray(0.45f);
+        if (row.hasSubtitle()) {
+            textLine(row.title, x, middle(r) - 11, right - x - 14, desktop_font_.Get(), ink);
+            textLine(row.subtitle, x, middle(r) + 12, right - x - 14, desktop_small_font_.Get(), palette::muted());
+        } else textLine(row.title, x, middle(r), right - x - 14, desktop_font_.Get(), ink);
+        if (row.actionable()) desktopHot(hit, r);
+    }
+    target_->PopAxisAlignedClip();
+    desktop_sheet_height_ = page.total + 12;
+}
+
 void Renderer::drawDesktopStore() {
     const auto& view = *context_->desktop_sheet;
     desktop_hotspots_.clear();
     const auto sheet = artworkSheet(viewport_.width, viewport_.height);
-    drawDesktopSheetFrame(sheet, view, tr(L"Sklep"), false);
-    desktopHot({Kind::close}, sheet.close());
-    const auto p = sheet.panel(), h = sheet.header();
-    const auto hovered = [&](SheetHit hit) { return view.hover == hit ? 1.0f : 0.0f; };
-    // The search field: whatever is typed on the page goes into it.
-    const float left = p.left + 24, right = p.right - 24;
-    const Rect field{left, h.bottom + 14, right - 112, h.bottom + 52};
+    const auto p = sheet.panel();
     const auto& query = context_->search_query;
-    const bool blink = (GetTickCount64() / 530) % 2 == 0;
-    desktopFill(field, 9, gray(1, 0.07f));
-    desktopStroke({field.left - 1, field.top - 1, field.right + 1, field.bottom + 1}, 10, uiAccent(0.9f), 1.5f);
-    desktopGlyph(glyph::search, field.left + 18, middle(field), 13, palette::muted());
-    const auto m = typeMetrics(desktop_font_.Get());
-    const float text_left = field.left + 36, text_right = field.right - (query.empty() ? 12 : 36);
-    if (query.empty()) {
-        if (blink) desktopFill({text_left, middle(field) - 9, text_left + 1.5f, middle(field) + 9}, 0, palette::text());
-        textLine(tr(L"Szukaj tytułu lub AppID…"), text_left + 5, middle(field), text_right - text_left - 5, desktop_font_.Get(), palette::muted(0.85f));
-    } else {
-        fieldText(query, std::min(context_->search_caret, query.size()), blink, text_left, middle(field) - m.line * 0.5f, text_right - text_left, m.line,
-                  desktop_font_.Get(), palette::text());
-        const Rect clear{field.right - 32, field.top + 5, field.right - 6, field.bottom - 5};
-        if (hovered({Kind::action, 1}) > 0) desktopFill(clear, 6, gray(1, 0.08f));
-        desktopGlyph(glyph::close, (clear.left + clear.right) * 0.5f, middle(clear), 10, palette::muted());
-        desktopHot({Kind::action, 1}, clear);
-    }
-    desktopHot({Kind::field}, {field.left, field.top, field.right - (query.empty() ? 0 : 34), field.bottom});
-    const Rect search{right - 100, field.top, right, field.bottom};
-    desktopButton(search, 1, hovered({Kind::action, 0}), view.pressed == SheetHit{Kind::action, 0}, !query.empty(), 0, tr(L"Szukaj"));
-    desktopHot({Kind::action, 0}, search);
-    const auto grid = storeGrid(sheet);
     const size_t count = cards_ ? cards_->size() : 0;
     // The state line: searching, found, the store's error.
     std::wstring state = context_->store_status;
     if (state.empty() && count && !view.store_loading) state = std::wstring(tr(L"Wyniki")) + L": " + std::to_wstring(count);
-    if (!state.empty()) textLine(state, left + 2, field.bottom + 20, right - left - 4, desktop_small_font_.Get(), palette::muted());
+    drawDesktopStoreChrome(sheet, view, query, context_->search_caret, tr(L"Szukaj tytułu lub AppID…"), state, true);
+    const auto hovered = [&](SheetHit hit) { return view.hover == hit ? 1.0f : 0.0f; };
+    const float left = p.left + 24, right = p.right - 24;
+    (void)right;
+    const auto grid = storeGrid(sheet);
     target_->PushAxisAlignedClip(D2D1::RectF(p.left + 1, grid.top - 10, p.right - 1, p.bottom - 1), D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
     if (!count) {
         desktop_sheet_height_ = 0;

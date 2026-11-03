@@ -75,7 +75,7 @@ std::vector<desktop_ui::Tool> Launcher::desktopTools() const {
     tools.push_back(Tool::friends); // Widżety (the drawer: the profile, friends, sensors, plugins), first.
     if (settings_.glance) tools.push_back(Tool::glance);
     if (settings_.tarot) tools.push_back(Tool::tarot);
-    if (!plugin_menu_.empty()) tools.push_back(Tool::store);
+    tools.push_back(Tool::store); // Always there: with no store plugin it says so.
     tools.push_back(Tool::downloads);
     tools.push_back(Tool::tv);
     tools.push_back(Tool::settings);

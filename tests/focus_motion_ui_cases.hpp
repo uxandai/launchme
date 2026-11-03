@@ -71,8 +71,8 @@ int LauncherUiTest::focusMotion(HWND window) {
     app.showCategory(0); app.openQuick();
     if (!app.quick_open_) return 1616;
     settle();
-    const float first = quick_menu::center(view.width, 0, static_cast<int>(app.plugin_menu_.size()));
-    const float second = quick_menu::center(view.width, 1, static_cast<int>(app.plugin_menu_.size()));
+    const float first = quick_menu::center(view.width, 0, quick_menu::store_slots);
+    const float second = quick_menu::center(view.width, 1, quick_menu::store_slots);
     if (std::abs(app.quick_circle_.value - first) > 0.5f) return 1617;
     app.quickMove(1); frame(33);
     if (!(app.quick_circle_.value > first + 1 && app.quick_circle_.value < second - 1)) return 1618;

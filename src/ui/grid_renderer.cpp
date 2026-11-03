@@ -1,5 +1,6 @@
 // Renderer: the grid screens (libraries, Search, the Store) and the quick-scroll letter.
 #include "renderer.hpp"
+#include "plugin_page.hpp"
 #include "renderer_internal.hpp"
 #include "grid_layout.hpp"
 
@@ -44,12 +45,18 @@ void Renderer::drawGrid() {
     beginScreenForeground();
     // Back: a glass circle with the white dot (white with a dark dot while it has the focus; in
     // the library the bar's white pill glides onto it: drawLibraryControls).
+    const bool store = context_->screen == ScreenMode::store;
+    if (store) { // The stores share one frame (plugin_ui::Layout): the same back circle as a plugin page's.
+        const auto box = plugin_ui::Layout::backBox(viewport_.width);
+        const auto ink = drawButton(D2D1::RectF(box.left, box.top, box.right, box.bottom), context_->grid_back ? 1.0f : 0.0f, 1, false);
+        brush(ink); target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F((box.left + box.right) * 0.5f, (box.top + box.bottom) * 0.5f), 3, 3), solid_.Get());
+    } else {
     if (context_->library_controls) {
         drawButtonGlass(D2D1::RectF(16, 35, 52, 71), 1, false);
         brush(buttonInk(0));
     } else brush(drawButton(D2D1::RectF(16, 35, 52, 71), context_->grid_back ? 1.0f : 0.0f, 1, false));
     target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(34, 53), 3, 3), solid_.Get());
-    const bool store = context_->screen == ScreenMode::store;
+    }
     const bool searching = context_->screen == ScreenMode::search || store;
     // The library's own search field: the header stays put while it is open, like the search screen.
     const auto* library = context_->screen == ScreenMode::library ? context_->library_controls : nullptr;
@@ -60,11 +67,15 @@ void Renderer::drawGrid() {
         smoothFade(1.0f - context_->grid_scroll / 165.0f);
     const float lift = pinned ? 0.0f : context_->grid_scroll * 0.24f;
     // The title, unless the category tabs take its place in the top bar.
-    if (header_alpha > 0.004f && context_->library_tabs.empty())
+    if (header_alpha > 0.004f && context_->library_tabs.empty() && !store)
         text(store ? std::wstring(tr(L"SKLEP")) : searching ? std::wstring(tr(L"SZUKAJ GIER")) : context_->library_title, 68,
              37 - lift, context_->library_controls ? library_ui::Layout{width}.filters().left - 92 : width - 136, 45,
              category_font_.Get(), color(0.78f, 0.78f, 0.78f, header_alpha));
-    if (searching) {
+    if (store) {
+        const plugin_ui::Layout frame{viewport_.width, viewport_.height};
+        const auto box = frame.field();
+        drawStoreField(box.left, box.top, box.right, box.bottom, context_->search_query, tr(L"Wpisz tytuł gry…"), true, context_->search_caret);
+    } else if (searching) {
         const auto& query = context_->search_query;
         if (query.empty())
             text(store ? tr(L"Szukaj tytułu lub AppID…") : tr(L"Wpisz tytuł gry…"), 66, 99, width - 130, 71, hero_font_.Get(), color(0.53f, 0.53f, 0.53f));
@@ -83,7 +94,7 @@ void Renderer::drawGrid() {
         }
     }
     if (store) {
-        text(context_->store_status, 68, 165, width - 136, 26, settings_body_font_.Get(), color(0.6f, 0.65f, 0.65f));
+        text(context_->store_status, plugin_ui::Layout::columnLeft(width), plugin_ui::Layout::status_top, width - 2 * plugin_ui::Layout::columnLeft(width), 28, toast_sub_font_.Get(), D2D1::ColorF(0.65f, 0.65f, 0.65f));
     }
     drawLibraryTabs();
     if (!context_->library_note.empty() && header_alpha > 0.004f)
@@ -128,7 +139,7 @@ void Renderer::drawGrid() {
         // Under the pinned header (from the search field's foot): the first row's focused tile grows a
         // little and keeps its whole outline.
         if (pinned)
-            target_->PushAxisAlignedClip(D2D1::RectF(0, 174, width, viewport_.height), D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
+            target_->PushAxisAlignedClip(D2D1::RectF(0, store ? 188.0f : 174.0f, width, viewport_.height), D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
         for (size_t i = 0; i < cards_->size(); ++i) {
             if (i == selected_) continue;
             drawCard((*cards_)[i], i);

@@ -2,6 +2,7 @@
 #include "app/message_dispatch.hpp"
 #include "platform/diagnostics.hpp"
 #include "platform/frame_clock.hpp"
+#include "platform/app_identity.hpp"
 #include "platform/text_encoding.hpp"
 
 #include <Windows.h>
@@ -367,6 +368,7 @@ LRESULT CALLBACK windowProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lpara
             else if (wparam == VK_PRIOR && app->artworkOpen()) app->artworkPage(-1);
             else if (wparam == VK_NEXT && app->artworkOpen()) app->artworkPage(1);
             else if ((wparam == VK_PRIOR || wparam == VK_NEXT) && app->settingsOpen()) app->settingsShoulder(wparam == VK_PRIOR ? -1 : 1);
+            else if ((wparam == VK_PRIOR || wparam == VK_NEXT) && app->storeTabsShown()) app->switchStoreTab(wparam == VK_PRIOR ? -1 : 1);
             else if ((wparam == VK_PRIOR || wparam == VK_NEXT) && app->libraryTabsShown()) app->switchLibraryTab(wparam == VK_PRIOR ? -1 : 1);
             else if (wparam == VK_PRIOR || wparam == VK_NEXT) app->homePage(wparam == VK_PRIOR ? -1 : 1); // Metro pages; elsewhere nothing.
             else if (wparam == 'H' && !app->searching() && (GetKeyState(VK_CONTROL) & 0x8000)) app->togglePrivateCategory();
@@ -565,6 +567,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show_command) {
         MessageBoxW(nullptr, text, L"Launchme", MB_ICONERROR | MB_OK);
         return 1;
     };
+    app_identity::setProcess(); // Before any window: the taskbar groups and pins by it.
     if (const HRESULT com = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED); FAILED(com))
         return startupFailure(L"Launchme cannot start: COM initialization failed", com);
     WNDCLASSEXW wc{sizeof(wc)};
@@ -590,6 +593,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show_command) {
         return startupFailure(L"Launchme cannot start: the window or its graphics could not be created. See launchme.log in %LOCALAPPDATA%\\Launchme", error);
     }
     main_window = hwnd;
+    app_identity::setWindow(hwnd);
     // Running elevated (a user's "Run as administrator"): a second start, the Jump List and dropped
     // files come from normal-integrity processes and would otherwise be blocked (UIPI).
     for (const UINT allowed : {static_cast<UINT>(WM_COPYDATA), static_cast<UINT>(WM_DROPFILES), 0x0049u /* WM_COPYGLOBALDATA */})

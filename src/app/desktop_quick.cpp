@@ -107,14 +107,13 @@ void Launcher::desktopQuickUpdate() {
         {"add", L"Dodaj grę z dysku", glyph::add},
         {"refresh", L"Odśwież biblioteki", glyph::refresh},
         {"downloads", L"Pobierania", glyph::download},
-        {"store", L"Sklep", glyph::shop},
+        {"store", L"Sklepy", glyph::shop},
         {"settings", L"Ustawienia", glyph::settings},
         {"tv", L"Przejdź do trybu TV", glyph::tv},
     };
     for (const auto& action : actions) {
         const std::wstring title = tr(action.title);
         if (!query.empty() && !matchScore(title, query)) continue;
-        if (std::string_view(action.name) == "store" && plugin_menu_.empty()) continue;
         items.push_back({QuickItem::Kind::action, title, tr(L"Polecenie"), action.icon, {}, action.name});
     }
     if (items.size() > static_cast<size_t>(quick_rows)) items.resize(static_cast<size_t>(quick_rows));

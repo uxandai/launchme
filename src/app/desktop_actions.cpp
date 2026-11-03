@@ -190,8 +190,7 @@ void Launcher::desktopToolPick(desktop_ui::Tool tool) {
     case Tool::tarot: openTarot(); return;
     case Tool::companion: openCompanion(); return;
     case Tool::store:
-        if (plugin_menu_.size() == 1) pluginAction(plugin_menu_.front());
-        else desktopOpenStoreMenu();
+        openStores();
         return;
     case Tool::friends: toggleFriendsDrawer(); return; // The widgets themselves, as Tryb TV's drawer.
     case Tool::downloads: desktopToggleDownloads(); return;

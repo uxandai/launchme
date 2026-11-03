@@ -179,7 +179,7 @@ Settings → System → Help → **Open folder** (the version row) opens it.
   DRM and Steamworks titles, may require the Steam client (Family Sharing games on Windows always do). See the
   [Aurelia guide](docs/AURELIA.md).
 - **Artwork**: SteamGridDB covers, heroes (the sharp 3840 px ones first), logos and posters with OCR-assisted cropping,
-  a variant browser (*Change artwork*: its *Source* list adds the Steam store, GOG, Xbox / Microsoft Store,
+  a variant browser (*Change artwork*: *From disk…* keeps your own files as the *Local* source and marks the types already set; its *Source* list adds the Steam store, GOG, Xbox / Microsoft Store,
   Nintendo eShop, GameTDB, TitleDB, TheGamesDB and Wikimedia Commons, each switched on or off in Settings → Media &
   data → *Artwork sources*) and *Adjust crop* for covers and backgrounds; where SteamGridDB has nothing, the store's own
   art (Epic, Ubisoft Connect, GOG, EA, Battle.net, Amazon Games). Epic account games use Epic's box art as their poster.

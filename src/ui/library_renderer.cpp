@@ -1,6 +1,7 @@
 #include "renderer.hpp"
 #include "renderer_internal.hpp"
 #include "grid_layout.hpp"
+#include "plugin_page.hpp"
 #include "../library/steam_stats.hpp"
 
 #include <algorithm>
@@ -823,7 +824,7 @@ void Renderer::drawLibraryDetailed() {
 // fades with the bar as the grid scrolls.
 void Renderer::drawLibraryTabs() {
     drawCategoryStrip(context_->library_tabs, context_->library_tab_glide.value_or(static_cast<float>(context_->library_tab)),
-                      false, libraryBarAlpha(), false);
+                      context_->screen == ScreenMode::store, libraryBarAlpha(), false, context_->screen == ScreenMode::store ? plugin_ui::Layout::tabs_drop : 0.0f, context_->screen == ScreenMode::store); // The stores' strip sits level with their Back circle.
 }
 
 // Metro, Flix and PSfive (their "Pasek kategorii" option): the library's strip in the middle of the screen.
@@ -847,19 +848,27 @@ float Renderer::drawShoulderHint(bool next, float edge, float cy, float alpha) {
 // `home`: centred on the screen (library_tabs::home), else in the library's top bar. Both show three
 // tabs, the first one at the left and later selections in the middle. `focused`: the strip has the
 // pad focus (Metro's and PSfive's Up from the tiles).
-void Renderer::drawCategoryStrip(const std::vector<ViewContext::LibraryTab>& tabs, float glide, bool home, float bar, bool focused) {
+void Renderer::drawCategoryStrip(const std::vector<ViewContext::LibraryTab>& tabs, float glide, bool home, float bar, bool focused, float dy, bool fit) {
     if (tabs.empty() || bar < 0.01f) return;
     const float width = viewport_.width;
     const float slot = home ? library_tabs::home::slot(width) : library_tabs::slot(width);
     const float cx = home ? library_tabs::home::center(width) : library_tabs::center(width);
     const float shift = library_tabs::focusOffset(glide);
-    const auto tabAt = [&](float offset) { return home ? library_tabs::home::tab(offset, width, glide) : library_tabs::tab(offset, width, glide); };
-    const float cy = library_tabs::top + library_tabs::height * 0.5f;
+    // fit: a strip of one to three tabs takes only the room they need, centred (the stores').
+    fit = fit && tabs.size() <= 3;
+    const float slots = fit ? static_cast<float>(tabs.size()) : 3.0f, half_span = slots * 0.5f * slot;
+    const auto tabAt = [&](float offset) {
+        auto r = home ? library_tabs::home::tab(offset, width, glide) : library_tabs::tab(offset, width, glide);
+        if (fit) { const float c = cx + (offset + glide - (slots - 1) * 0.5f) * slot, half = slot * 0.5f - 10; r = {c - half, library_tabs::top, c + half, library_tabs::top + library_tabs::height}; }
+        r.top += dy; r.bottom += dy; // dy: the strip lowered to the height of a page's own back button.
+        return r;
+    };
+    const float cy = library_tabs::top + dy + library_tabs::height * 0.5f;
     if (context_->strip_hints && tabs.size() > 1) {
         // Dimmer where there is nothing more that way.
         const float first = std::clamp(glide, 0.0f, 1.0f), last = std::clamp(static_cast<float>(tabs.size() - 1) - glide, 0.0f, 1.0f);
-        drawShoulderHint(false, cx - 1.5f * slot - 8, cy, bar * std::lerp(0.4f, 1.0f, first));
-        drawShoulderHint(true, cx + 1.5f * slot + 8, cy, bar * std::lerp(0.4f, 1.0f, last));
+        drawShoulderHint(false, cx - half_span - 8, cy, bar * std::lerp(0.4f, 1.0f, first));
+        drawShoulderHint(true, cx + half_span + 8, cy, bar * std::lerp(0.4f, 1.0f, last));
     }
     const auto pill = tabAt(0);
     const auto shape = D2D1::RoundedRect(box(pill), library_tabs::height * 0.5f, library_tabs::height * 0.5f);
@@ -869,11 +878,11 @@ void Renderer::drawCategoryStrip(const std::vector<ViewContext::LibraryTab>& tab
         if (SUCCEEDED(factory_->CreateRoundedRectangleGeometry(shape, outline.GetAddressOf())))
             drawCoverOutline(outline.Get(), D2D1::ColorF(0.94f, 0.96f, 0.97f), bar, true);
     }
-    target_->PushAxisAlignedClip(D2D1::RectF(cx - 1.5f * slot, library_tabs::top - 2, cx + 1.5f * slot, library_tabs::top + library_tabs::height + 2),
+    target_->PushAxisAlignedClip(D2D1::RectF(cx - half_span, library_tabs::top + dy - 2, cx + half_span, library_tabs::top + dy + library_tabs::height + 2),
                                  D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
     for (size_t i = 0; i < tabs.size(); ++i) {
         const float offset = static_cast<float>(i) - glide;
-        const float position = offset + shift;
+        const float position = fit ? 0.0f : offset + shift;
         if (std::abs(position) > 2.0f) continue;
         const float focus = std::clamp(1 - std::abs(offset), 0.0f, 1.0f);
         const float alpha = std::clamp(2.0f - std::abs(position), 0.0f, 1.0f) * bar;
@@ -887,7 +896,7 @@ void Renderer::drawCategoryStrip(const std::vector<ViewContext::LibraryTab>& tab
         std::wstring title = tabs[i].title;
         if (!title.empty()) CharUpperBuffW(title.data(), static_cast<DWORD>(title.size()));
         // A home page without games of its own (Metro's start) has no count.
-        const bool counted = !home || tabs[i].count;
+        const bool counted = (!home || tabs[i].count) && !tabs[i].uncounted;
         const std::wstring count = std::to_wstring(tabs[i].count);
         const float count_width = counted ? std::ceil(textAdvance(count, toast_sub_font_.Get())) + 14 : 0.0f;
         const float room = r.right - r.left - 24 - (counted ? count_width + 8 : 0.0f);

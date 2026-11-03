@@ -281,11 +281,13 @@ struct ViewContext {
     struct LibraryRow { std::wstring year, playtime, rating; };
     std::map<size_t, LibraryRow> library_rows; // Visible rows only, assembled from memory before rendering.
     // Library category tabs (title, games), the shown one and its gliding position.
-    struct LibraryTab { std::wstring title; size_t count = 0; std::wstring mark; }; // mark: a studio's logo in place of the title.
+    struct LibraryTab { std::wstring title; size_t count = 0; std::wstring mark; bool uncounted = false; }; // mark: a studio's logo in place of the title.
     std::vector<LibraryTab> library_tabs;
     std::wstring library_note; // Under the tabs: what the screen is (the board of studio logos).
     int library_tab = 0;
     std::optional<float> library_tab_glide;
+    std::vector<LibraryTab> store_tabs; // The Stores page: one tab per store plugin, in place of the page title.
+    int store_tab = 0;
     // Metro and Flix home (their "Pasek kategorii" option): the same strip at the top in the middle.
     // home_tab: the shown category's (fractional while gliding) index; home_tabs_focus: Metro's Up from the tiles.
     std::vector<LibraryTab> home_tabs;

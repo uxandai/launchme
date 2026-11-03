@@ -179,7 +179,7 @@ void Launcher::tickGameOverlay(uint64_t now) {
     if (!gameOverlayOpen() || now <= overlay_tick_at_) return;
     const float seconds = static_cast<float>(now - overlay_tick_at_) / 1000;
     overlay_tick_at_ = now;
-    const float x = quick_menu::center(drawerViewport().width, overlay_selected_, static_cast<int>(plugin_menu_.size()), true);
+    const float x = quick_menu::center(drawerViewport().width, overlay_selected_, quick_menu::store_slots, true);
     bool moved = overlay_motion_.step(seconds, overlay_closing_, friends_open_, x);
     animateMenuFocus(std::min(seconds, 0.05f), moved); // The drawer's focus frame and the dialog's highlight glide here too.
     if (overlay_closing_ && overlay_motion_.hidden()) { closeGameOverlay(true); return; }
@@ -234,7 +234,7 @@ bool Launcher::openGameOverlay(const GameWindow& target, bool widgets_first) {
     const auto rect = monitorRect(target.window);
     SetWindowPos(game_overlay_->handle(), nullptr, rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top,
         SWP_NOZORDER | SWP_NOACTIVATE);
-    overlay_motion_.open(quick_menu::center(drawerViewport().width, 0, static_cast<int>(plugin_menu_.size()), true));
+    overlay_motion_.open(quick_menu::center(drawerViewport().width, 0, quick_menu::store_slots, true));
     updateGuideHotkey();
     overlay_monitor_.configure(true, settings_.game_fps, target.window);
     bool shown = false;
@@ -374,7 +374,7 @@ void Launcher::overlayKey(WPARAM key, bool repeated) {
         else if (key == VK_DOWN) friendsMove(1);
     } else if (key == VK_LEFT || key == VK_RIGHT) {
         const int next = std::clamp(overlay_selected_ + (key == VK_LEFT ? -1 : 1), 0,
-            quick_menu::count(static_cast<int>(plugin_menu_.size()), true) - 1);
+            quick_menu::count(quick_menu::store_slots, true) - 1);
         if (next != overlay_selected_) { overlay_selected_ = next; audio_.navigate(); }
     }
     invalidateGameOverlay();
@@ -403,7 +403,7 @@ void Launcher::overlayClick(float x, float y) {
             }
         }
     } else {
-        const int hit = quick_menu::hit(view.width, view.height, x, y, static_cast<int>(plugin_menu_.size()), true, overlay_motion_.bar);
+        const int hit = quick_menu::hit(view.width, view.height, x, y, quick_menu::store_slots, true, overlay_motion_.bar);
         if (hit >= 0) { overlay_selected_ = hit; overlayAccept(); }
         else if (y < view.height - 160) dismissGameOverlay(); // The group spacer is not a button or an outside click.
     }

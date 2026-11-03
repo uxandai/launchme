@@ -620,6 +620,14 @@ public:
     // Kinowy / Przegląd: the category tab strip over the library (LB/RB, PgUp/PgDn, click).
     bool libraryTabsShown() const;
     void switchLibraryTab(int amount);
+    // Stores: every "menu" plugin shares one dock entry / desktop tool. Its page carries a tab strip (as the
+    // library's) that switches between the plugins; with none it is a page saying so.
+    void openStores();
+    bool storeTabsShown() const;
+    int storeTabIndex() const;
+    void switchStoreTab(int amount);
+    bool storeTabClick(float x, float y);
+    bool gridBackHit(float x, float y) const;
     void settingsWheel(float mouse_x, int amount);
     void mouseMove(float mouse_x, float mouse_y);
     void mouseLeave();
@@ -815,6 +823,7 @@ public:
     // Urządzenia, kadrowanie and plugin pages inside a desktop sheet (desktop_settings.cpp): client
     // pixels → their canvas's pixels (unchanged elsewhere).
     bool desktopEmbedded() const;
+    bool desktopStorePage() const;
     void desktopEmbedMap(float& mouse_x, float& mouse_y) const;
     // "Chowaj do zasobnika podczas gry" (src/app/tray.cpp): once a game started here is confirmed
     // running, the window leaves the taskbar and Alt+Tab and an icon in the notification area stands
@@ -1826,6 +1835,7 @@ private:
     void openArtworkProviders();          // Tryb TV: "Źródło"'s list, right of the search field.
     void chooseArtworkProvider(int index); // Its row picked (artwork_ui::providers order); closes the list.
     void closeLocalArtwork();
+    void refreshArtworkSet();
     void pickLocalArtwork();
     void applyLocalArtwork(const std::filesystem::path& picked);
     void leaveArtworkSearch(); // Field → types; an unsearched edit gets the gallery back.
@@ -2225,6 +2235,8 @@ private:
     plugin_ui::Page plugin_page_;
     bool plugin_drawer_active_ = false;
     std::string plugin_page_action_;
+    bool stores_open_ = false, stores_opening_ = false; // The page was opened through the Stores entry / is being.
+    int store_tab_ = 0;
     std::vector<Game> plugin_page_games_;
     uint32_t plugin_epoch_ = 0;
     std::map<std::string, std::vector<plugins::Download>> plugin_downloads_;
@@ -2952,7 +2964,6 @@ private:
     void desktopOpenSectionMenu(int entry, float x, float y);
     void desktopOpenSortMenu();
     void desktopOpenCollectionsMenu(float x, float y);
-    void desktopOpenStoreMenu();
     std::vector<desktop_ui::MenuItem> desktopCollectionItems(const std::vector<Game>& games) const;
     void desktopMenuKey(WPARAM key);
     void desktopMenuPick(const desktop_ui::MenuItem& item, bool from_sub);

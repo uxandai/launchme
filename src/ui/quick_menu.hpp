@@ -9,6 +9,8 @@ namespace quick_menu {
 // Widgety, Ustawienia, Zasilanie. The Guide overlay (over a game) has its own, shorter bar: Start, "Zamknij grę",
 // Kontrolery, Dźwięk, Widgety, Ustawienia, Zasilanie (no search, library, store or downloads in front of a game).
 enum class Action { search, library, store, controllers, audio, settings, power, dashboard, close_game, downloads, widgets };
+// All store plugins (the "menu" contributions) share ONE entry, always shown: its tabs switch between them.
+inline constexpr int store_slots = 1;
 inline int prefix(bool guide) { return guide ? 2 : 0; }
 inline constexpr int guide_count = 7;
 inline int count(int plugins, bool guide = false) { return guide ? guide_count : 8 + plugins; }
@@ -42,7 +44,7 @@ inline const wchar_t* caption(Action action) {
     switch (action) {
     case Action::search: return tr(L"Szukaj");
     case Action::library: return tr(L"Wszystkie gry");
-    case Action::store: return tr(L"Sklep");
+    case Action::store: return tr(L"Sklepy");
     case Action::settings: return tr(L"Ustawienia");
     case Action::controllers: return tr(L"Kontrolery");
     case Action::dashboard: return tr(L"Start");

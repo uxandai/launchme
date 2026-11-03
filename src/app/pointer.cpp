@@ -14,6 +14,12 @@
 
 #include <cmath>
 
+// The grid's Back circle; the stores' catalog keeps it where a plugin page has it.
+bool Launcher::gridBackHit(float x, float y) const {
+    if (screen_ == ScreenMode::store) return plugin_ui::Layout::backBox(renderer_.viewport().width).contains(x, y);
+    return grid_layout::hitBack(x, y);
+}
+
 void Launcher::click(float mouse_x, float mouse_y, bool double_click) {
     if (launchAnimationActive()) return;
     // A TV screen inside the desktop window: its window buttons stay above every layer.
@@ -130,8 +136,8 @@ void Launcher::click(float mouse_x, float mouse_y, bool double_click) {
     if (quick_open_) {
         if (snitchActive()) { closeQuick(); return; }
         if (y >= view.height - 112 && y <= view.height - 12) {
-            for (int i = 0; i < quick_menu::count(static_cast<int>(plugin_menu_.size())); ++i) {
-                if (std::abs(x - quick_menu::center(view.width, i, static_cast<int>(plugin_menu_.size()))) < 43) {
+            for (int i = 0; i < quick_menu::count(quick_menu::store_slots); ++i) {
+                if (std::abs(x - quick_menu::center(view.width, i, quick_menu::store_slots)) < 43) {
                     quick_selected_ = i;
                     quickAccept();
                     return;
@@ -177,7 +183,7 @@ void Launcher::click(float mouse_x, float mouse_y, bool double_click) {
         if (index) { friends_cursor_ = *index; friendsChat(); }
         return;
     }
-    if (gridScreen(screen_) && grid_layout::hitBack(x, y)) { back(); return; }
+    if (gridScreen(screen_) && gridBackHit(x, y)) { back(); return; }
     if (!menu_open_ && libraryClick(x, y, double_click)) return;
     if (psfiveClick(x, y, double_click)) return; // PSfive "Graj" / "…".
     if (achievementsOpen()) { if (!double_click) achievementsClick(x, y); return; }
@@ -226,6 +232,7 @@ void Launcher::click(float mouse_x, float mouse_y, bool double_click) {
             return;
         }
     }
+    if (storeTabClick(x, y)) return; // The Stores' tabs on the catalog screen.
     if (homeTabsClick(x, y)) return; // Metro / Flix "Pasek kategorii".
     if (metroActive()) { // A Metro tab: its page, focus on the page's tile.
         if (const int tab = renderer_.metroTabAt(x, y); tab >= 0 && static_cast<size_t>(tab) < metro_pages_.size()) {
@@ -374,15 +381,15 @@ bool Launcher::hoverButton(float mouse_x, float mouse_y) const {
                layout.hitRow(x, y, static_cast<int>(settings_rows_.size()), settings_state_.offset()) >= 0;
     }
     if (snitchActive() && !friends_open_ && !menu_open_ && !pending_launch_ &&
-        (snitch_layout::hitDock(view.width, view.height, x, y, static_cast<int>(plugin_menu_.size())) >= 0 ||
+        (snitch_layout::hitDock(view.width, view.height, x, y, quick_menu::store_slots) >= 0 ||
          snitch_layout::profile().contains(x, y))) return true;
     if (flixIconsShown() && homeOverlayAvailable() && home_widgets::icons::hit(x, y, flixIconCount(), view.width) >= 0) return true;
     if (flixRailAt(x, y) >= 0) return true;
     if (emptyHomeActive() && emptyHomeLayout().hit(x, y) >= 0) return true;
     if (quick_open_) {
         if (snitchActive()) return false;
-        for (int i = 0; i < quick_menu::count(static_cast<int>(plugin_menu_.size())); ++i)
-            if (std::abs(x - quick_menu::center(view.width, i, static_cast<int>(plugin_menu_.size()))) < 43 &&
+        for (int i = 0; i < quick_menu::count(quick_menu::store_slots); ++i)
+            if (std::abs(x - quick_menu::center(view.width, i, quick_menu::store_slots)) < 43 &&
                 y >= view.height - 112 && y <= view.height - 12) return true;
         return false;
     }
@@ -410,7 +417,7 @@ bool Launcher::hoverButton(float mouse_x, float mouse_y) const {
     if (category_menu_open_ && overCategoryMenu(mouse_x)) {
         return category_menu::hit(y, view.height, categories_.size(), category_menu_scroll_) >= 0;
     }
-    if (gridScreen(screen_) && grid_layout::hitBack(x, y) && !(libraryControls() && library_controls_.open())) return true;
+    if (gridScreen(screen_) && gridBackHit(x, y) && !(libraryControls() && library_controls_.open())) return true;
     if (libraryControls()) {
         const library_ui::Layout layout{view.width};
         if (library_controls_.panel == library_ui::Panel::filters) return layout.hitChoice(x, y) >= 0;

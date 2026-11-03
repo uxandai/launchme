@@ -1872,7 +1872,7 @@ int LauncherUiTest::power(HWND window) {
     app.showCategory(0);
     // Quick bar "Zasilanie" opens the menu instead of closing the launcher at once.
     app.openQuick();
-    app.quick_selected_ = quick_menu::count(static_cast<int>(app.plugin_menu_.size())) - 1;
+    app.quick_selected_ = quick_menu::count(quick_menu::store_slots) - 1;
     app.quickAccept();
     MSG close{};
     if (!app.powerMenuOpen() || app.quickOpen() || PeekMessageW(&close, window, WM_CLOSE, WM_CLOSE, PM_NOREMOVE) ||

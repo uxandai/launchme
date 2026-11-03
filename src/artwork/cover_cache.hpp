@@ -25,6 +25,11 @@ bool cacheArtworkVariant(const Game& game, ArtworkKind kind, uint32_t asset_id,
                          const std::vector<uint8_t>& bytes, const std::filesystem::path& cache);
 bool selectArtworkVariant(const Game& game, ArtworkKind kind, uint32_t asset_id,
                           const std::filesystem::path& cache);
+// The files the player added from disk (variant IDs from 0x80000000), newest first; whether the game has any
+// of any type; and whether a variant of the type is the one chosen (the "set" dots of Zmień grafikę).
+inline constexpr uint32_t local_artwork_first_id = 0x80000000u;
+std::vector<uint32_t> localArtworkIds(const Game& game, ArtworkKind kind, const std::filesystem::path& cache);
+bool hasLocalArtwork(const Game& game, const std::filesystem::path& cache);
 // Downloaded artwork of a non-Steam game (and with `selections`, the user's picks), so a
 // renamed game is matched again and a removed one leaves nothing behind.
 bool removeGameArtwork(const Game& game, const std::filesystem::path& cache, bool selections);

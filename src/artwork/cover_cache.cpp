@@ -574,6 +574,35 @@ bool cacheArtworkVariant(const Game& game, ArtworkKind kind, uint32_t asset_id,
            atomicBytes(artworkVariantPath(game, kind, asset_id, cache), bytes.data(), bytes.size());
 }
 
+std::vector<uint32_t> localArtworkIds(const Game& game, ArtworkKind kind, const std::filesystem::path& cache) {
+    std::vector<std::pair<std::filesystem::file_time_type, uint32_t>> found;
+    if (!isGame(game) || gameKey(game).empty()) return {};
+    std::error_code error;
+    const auto folder = selectionFolder(game, cache) / artworkKindSlug(kind);
+    for (std::filesystem::directory_iterator it(folder, error), end; !error && it != end; it.increment(error)) {
+        const auto& path = it->path();
+        if (path.extension() != L".img") continue;
+        const auto stem = path.stem().wstring();
+        if (stem.empty() || stem.size() > 10 || stem.find_first_not_of(L"0123456789") != stem.npos) continue;
+        const auto id = static_cast<uint64_t>(std::stoull(stem));
+        if (id < local_artwork_first_id || id > 0xFFFFFFFFull) continue;
+        std::error_code stat;
+        const auto size = it->file_size(stat);
+        if (stat || size < 128 || size > 20 * 1024 * 1024) continue;
+        found.emplace_back(it->last_write_time(stat), static_cast<uint32_t>(id));
+    }
+    std::sort(found.begin(), found.end(), [](const auto& a, const auto& b) { return a.first != b.first ? a.first > b.first : a.second < b.second; });
+    std::vector<uint32_t> ids;
+    for (const auto& item : found) ids.push_back(item.second);
+    return ids;
+}
+
+bool hasLocalArtwork(const Game& game, const std::filesystem::path& cache) {
+    for (const auto kind : {ArtworkKind::cover, ArtworkKind::hero, ArtworkKind::logo, ArtworkKind::poster, ArtworkKind::landscape, ArtworkKind::disc})
+        if (!localArtworkIds(game, kind, cache).empty()) return true;
+    return false;
+}
+
 bool removeGameArtwork(const Game& game, const std::filesystem::path& cache, bool selections) {
     // Steam artwork shares one cache folder; only per-game folders can be removed.
     if (!isGame(game) || gameKey(game).empty() || steamArtwork(game)) return false;

@@ -172,8 +172,8 @@ void Launcher::refreshPluginContributions() {
     dashboardEdit(false); // A changing contribution set cancels an in-flight drag.
     plugin_widget_text_.clear();
     for (const auto& w : plugin_widgets_) plugin_widget_text_.push_back(w.item.text.localized());
-    quick_selected_ = std::clamp(quick_selected_, 0, quick_menu::count(static_cast<int>(plugin_menu_.size())) - 1);
-    overlay_selected_ = std::clamp(overlay_selected_, 0, quick_menu::count(static_cast<int>(plugin_menu_.size()), true) - 1);
+    quick_selected_ = std::clamp(quick_selected_, 0, quick_menu::count(quick_menu::store_slots) - 1);
+    overlay_selected_ = std::clamp(overlay_selected_, 0, quick_menu::count(quick_menu::store_slots, true) - 1);
     dashboard_tile_ = std::min(dashboard_tile_, dashboardTileCount() - 1);
     if (screen_ == ScreenMode::details)
         detail_action_ = std::clamp(detail_action_, -1, std::max({lastDetailAction(), achievementsDetailAction(), ratingDetailAction(), pluginDetailAction()}));

@@ -28,7 +28,7 @@ void Launcher::closeQuick() {
 
 void Launcher::quickMove(int amount) {
     if (!quick_open_) return;
-    const int next = std::clamp(quick_selected_ + amount, 0, quick_menu::count(static_cast<int>(plugin_menu_.size())) - 1);
+    const int next = std::clamp(quick_selected_ + amount, 0, quick_menu::count(quick_menu::store_slots) - 1);
     if (next == quick_selected_) { navigationBoundary(); return; }
     quick_selected_ = next;
     audio_.navigate();
@@ -37,11 +37,11 @@ void Launcher::quickMove(int amount) {
 
 void Launcher::quickAccept() {
     if (!quick_open_) return;
-    const auto action = quick_menu::action(quick_selected_, static_cast<int>(plugin_menu_.size()));
+    const auto action = quick_menu::action(quick_selected_, quick_menu::store_slots);
     closeQuick();
     if (action == quick_menu::Action::search) openSearch();
     else if (action == quick_menu::Action::library) openLibrary();
-    else if (action == quick_menu::Action::store) pluginAction(plugin_menu_.at(quick_selected_ - 2));
+    else if (action == quick_menu::Action::store) openStores();
     else if (action == quick_menu::Action::settings) openSettings();
     else if (action == quick_menu::Action::controllers) openDevices(devices::Panel::controllers);
     else if (action == quick_menu::Action::audio) openDevices(devices::Panel::audio);
