@@ -7,6 +7,7 @@
 
 #include <dlfcn.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -17,9 +18,46 @@ namespace {
 struct Window {
     std::shared_ptr<Canvas> canvas;
     SwapchainHandle swapchain;
+    VkSurfaceKHR surface = nullptr;
+    int swapchain_width = 0, swapchain_height = 0;
+    bool sized_by_window = false; // The surface has no size of its own (Wayland), see surfaceCapabilities.
     bool offscreen = false; // No surface to present to (a headless device).
 };
 std::unordered_map<SDL_Window*, Window> windows;
+std::unordered_map<VkSurfaceKHR, Window*> surfaces;
+
+// VkSurfaceCapabilitiesKHR up to the extents, which is all that is changed here.
+struct SurfaceCapabilities {
+    uint32_t min_image_count, max_image_count;
+    uint32_t current_width, current_height;
+    uint32_t min_width, min_height;
+    uint32_t max_width, max_height;
+};
+constexpr uint32_t extent_undefined = 0xFFFFFFFF;
+using GetSurfaceCapabilities = int32_t (*)(void* physical, VkSurfaceKHR surface, SurfaceCapabilities* capabilities);
+GetSurfaceCapabilities real_surface_capabilities = nullptr;
+
+// Impeller's C API creates every swapchain at 1x1 and clamps that to the surface's extents. X11
+// gives the window's size as both limits; a Wayland surface has no size until a swapchain gives it
+// one, so the window would show one stretched pixel. Here such a surface reports its window's size.
+int32_t surfaceCapabilities(void* physical, VkSurfaceKHR surface, SurfaceCapabilities* capabilities) {
+    const int32_t result = real_surface_capabilities(physical, surface, capabilities);
+    const auto it = surfaces.find(surface);
+    if (result != 0 || it == surfaces.end() || capabilities->current_width != extent_undefined) return result;
+    Window& w = *it->second;
+    w.sized_by_window = true;
+    capabilities->current_width = capabilities->min_width = capabilities->max_width =
+        std::clamp(static_cast<uint32_t>(w.swapchain_width), capabilities->min_width, capabilities->max_width);
+    capabilities->current_height = capabilities->min_height = capabilities->max_height =
+        std::clamp(static_cast<uint32_t>(w.swapchain_height), capabilities->min_height, capabilities->max_height);
+    return result;
+}
+
+void destroySwapchain(Window& w) {
+    w.swapchain.reset();
+    surfaces.erase(w.surface);
+    w.surface = nullptr;
+}
 
 // The head of VkPhysicalDeviceProperties: enough to name the device and tell software from hardware.
 struct DeviceProperties {
@@ -75,7 +113,12 @@ bool tryVulkan(bool allow_software) {
     if (!SDL_Vulkan_GetVkGetInstanceProcAddr()) return false;
     const GetProc get_proc = [](void* instance, const char* name) -> void* {
         const auto get = reinterpret_cast<void* (*)(void*, const char*)>(SDL_Vulkan_GetVkGetInstanceProcAddr());
-        return get ? get(instance, name) : nullptr;
+        void* found = get ? get(instance, name) : nullptr;
+        if (found && !std::strcmp(name, "vkGetPhysicalDeviceSurfaceCapabilitiesKHR")) {
+            real_surface_capabilities = reinterpret_cast<GetSurfaceCapabilities>(found);
+            return reinterpret_cast<void*>(surfaceCapabilities);
+        }
+        return found;
     };
     return createVulkan(get_proc, std::getenv("LAUNCHME_IMPELLER_VALIDATION") != nullptr, [&](const ImpellerContextVulkanInfo& info, const DeviceProperties& p) {
         if (!allow_software && p.device_type == device_type_cpu) return false;
@@ -124,14 +167,23 @@ std::shared_ptr<Canvas> beginFrame(SDL_Window* window, int width, int height) {
     w.canvas.reset();
     ++s.frame;
     trimImages(s.frame);
+    int pixel_width = 0, pixel_height = 0;
+    SDL_GetWindowSizeInPixels(window, &pixel_width, &pixel_height);
+    // Nothing tells Impeller that a surface sized by its window has resized: a new swapchain.
+    if (w.swapchain && w.sized_by_window && pixel_width > 0 && pixel_height > 0 &&
+        (pixel_width != w.swapchain_width || pixel_height != w.swapchain_height)) destroySwapchain(w);
     if (s.vulkan && !w.swapchain && !w.offscreen) {
         ImpellerContextVulkanInfo info{};
         VkSurfaceKHR surface = nullptr;
         if (!ImpellerContextGetVulkanInfo(s.context.get(), &info)) return nullptr;
         if (SDL_Vulkan_CreateSurface(window, static_cast<VkInstance>(info.vk_instance), nullptr, &surface)) {
+            w.surface = surface;
+            w.swapchain_width = pixel_width > 0 ? pixel_width : width;
+            w.swapchain_height = pixel_height > 0 ? pixel_height : height;
+            surfaces[surface] = &w;
             // Ownership of the VkSurfaceKHR passes to Impeller.
             w.swapchain.reset(ImpellerVulkanSwapchainCreateNew(s.context.get(), reinterpret_cast<void*>(surface)));
-            if (!w.swapchain) return nullptr;
+            if (!w.swapchain) { destroySwapchain(w); return nullptr; }
         } else if (s.headless) {
             w.offscreen = true;
         } else {
@@ -168,9 +220,15 @@ bool present(SDL_Window* window) {
     return s.vulkan ? ImpellerSurfacePresent(surface.get()) : SDL_GL_SwapWindow(window);
 }
 
-void releaseWindow(SDL_Window* window) { windows.erase(window); }
+void releaseWindow(SDL_Window* window) {
+    if (const auto it = windows.find(window); it != windows.end()) {
+        destroySwapchain(it->second);
+        windows.erase(it);
+    }
+}
 
 void shutdown() {
+    for (auto& [window, w] : windows) destroySwapchain(w);
     windows.clear();
     releaseAllImages();
     auto& s = state();
