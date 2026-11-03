@@ -737,7 +737,7 @@ void Renderer::clearVideo() {
 }
 
 bool Renderer::animating() const {
-    return decoder_.pending() > 0 || decoder_.completed() != decoded_seen_ || uploads_left_ ||
+    return status_fading_ || decoder_.pending() > 0 || decoder_.completed() != decoded_seen_ || uploads_left_ ||
            std::chrono::steady_clock::now() - cinematic_changed_ < std::chrono::milliseconds(350) || cinematic_waiting_ ||
            hero_mix_ < 1 || hero_waiting_ || std::abs(home_wallpaper_mix_ - home_wallpaper_target_) > 0.002f ||
            (desktop_viewport_ && std::chrono::steady_clock::now() - desktop_hero_changed_ < std::chrono::milliseconds(320)) ||

@@ -1136,9 +1136,16 @@ public:
         const auto saved_library = loadLibraryState(userConfigDirectory() / L"library-state.ini");
         if (!saved_library) return 84;
         app.library_state_ = *saved_library;
+        // Restoring the saved place never takes over a screen the user opened meanwhile (Settings): only the home screen gives way.
+        app.overlay_return_ = GameWindow{}; // Settings opened from Guide over a game.
         app.restore_pending_ = true; app.restorePlace();
-        if (app.screen_ != ScreenMode::library || library_view::selectionKey(app.cards_[app.selected_].game) != bookmark.selection ||
-            std::abs(app.grid_scroll_ - bookmark.scroll) > 0.1f) return 84;
+        if (app.screen_ != ScreenMode::settings || app.restore_pending_) return 8401;
+        app.overlay_return_.reset();
+        app.screen_ = ScreenMode::shelves; // Back on the home screen: now the place is restored.
+        app.restore_pending_ = true; app.restorePlace();
+        if (app.screen_ != ScreenMode::library) return 8402 + 10 * static_cast<int>(app.screen_);
+        if (library_view::selectionKey(app.cards_[app.selected_].game) != bookmark.selection) return 8403;
+        if (std::abs(app.grid_scroll_ - bookmark.scroll) > 0.1f) return 8404;
         // F6/Y opens the filter menu on the current order; moving only highlights.
         app.focusLibraryControls();
         if (!app.library_controls_.open() || app.library_controls_.focus != library_ui::filters_button) return 85;

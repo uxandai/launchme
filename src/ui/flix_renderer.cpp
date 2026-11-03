@@ -143,6 +143,7 @@ void Renderer::drawRectangularCard(const GameCard& card, size_t index, float alp
           D2D1::ColorF(0.07f, 0.08f, 0.09f, 0.94f * transparency));
     target_->FillGeometry(shape.Get(), solid_.Get());
     const auto session = sessionOf(game);
+    const float status_fade = game.installation.active() ? 1.0f : statusFade(game);
     const bool frozen = session == SessionState::frozen;
     Cover* poster = index < posters_.size() && posters_[index].bitmap ? &posters_[index] : nullptr;
     Cover* cover = index < covers_.size() && covers_[index].bitmap ? &covers_[index] : nullptr;
@@ -232,7 +233,7 @@ void Renderer::drawRectangularCard(const GameCard& card, size_t index, float alp
         }
     }
     if (game.installation.active() || session != SessionState::none)
-        drawCardStatusShade(x, y, tile_w, tile_h, transparency, shape.Get());
+        drawCardStatusShade(x, y, tile_w, tile_h, transparency * status_fade, shape.Get());
     // The accent outline fades into the plain edge of the other tiles as `emphasis` drops; with the
     // focus gap it stands an empty ring away from the tile.
     const float ring = context_->focus_ring ? 0.0f : emphasis;
@@ -267,8 +268,8 @@ void Renderer::drawRectangularCard(const GameCard& card, size_t index, float alp
         const auto percent = install.percent();
         drawCardStatus(x, y, tile_w, tile_h, transparency, installationText(install), percent ? *percent / 100.0f : 0.0f, uiAccent(transparency));
     } else if (session != SessionState::none) {
-        drawCardBadge(x, y, tile_w, tile_h, transparency, frozen);
-        drawCardStatus(x, y, tile_w, tile_h, transparency, frozen ? tr(L"Wstrzymana") : tr(L"W grze"));
+        drawCardBadge(x, y, tile_w, tile_h, transparency * status_fade, frozen);
+        drawCardStatus(x, y, tile_w, tile_h, transparency * status_fade, frozen ? tr(L"Wstrzymana") : tr(L"W grze"));
     } else if (emphasis > 0.004f && isGame(game) && !game.installed && game.kind != GameKind::catalog && !cinematic) // Library tiles: the dimming says it.
         text(localFileGame(game.source) ? missingFileBadge(game) : tr(L"DO INSTALACJI"), x + 8, y + tile_h - 36, tile_w - 16, 28,
              button_font_.Get(), gray(0.95f, emphasis * transparency));

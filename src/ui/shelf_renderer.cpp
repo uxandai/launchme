@@ -434,8 +434,9 @@ void Renderer::drawLibraryShelf() {
         const float radius = (r.right - r.left) * shelf_layout::corner;
         if (SUCCEEDED(factory_->CreateRoundedRectangleGeometry(D2D1::RoundedRect(D2D1::RectF(r.left, r.top, r.right, r.bottom), radius, radius),
                                                                box.GetAddressOf()))) {
-            drawCardStatusShade(r.left, r.top, r.right - r.left, r.bottom - r.top, facing, box.Get());
-            drawCardStatus(r.left, r.top, r.right - r.left, r.bottom - r.top, facing, card.game.installation.active() ?
+            const float status_fade = card.game.installation.active() ? 1.0f : statusFade(card.game);
+            drawCardStatusShade(r.left, r.top, r.right - r.left, r.bottom - r.top, facing * status_fade, box.Get());
+            drawCardStatus(r.left, r.top, r.right - r.left, r.bottom - r.top, facing * status_fade, card.game.installation.active() ?
                 installationText(card.game.installation) : session == SessionState::frozen ? tr(L"Wstrzymana") : tr(L"W grze"));
         }
     }

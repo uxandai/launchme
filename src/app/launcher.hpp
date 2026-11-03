@@ -1190,11 +1190,14 @@ private:
     void dismissGameOverlay();
     void tickGameOverlay(uint64_t now);
     void overlayDashboard();
+    // Controllers, Sound and Settings opened from Guide over a game: leaving them (back on the home screen) returns to
+    // that game instead of staying in the launcher.
+    std::optional<GameWindow> overlay_return_;
+    void pollOverlayReturn();
     void overlayKey(WPARAM key, bool repeated = false);
     void overlayKeyboard(WPARAM key, bool repeated, bool shift_tab);
     void overlayClick(float x, float y);
     void overlayAccept();
-    void confirmOverlayClose();
     bool overlayForeground(HWND window) const {
         return gameOverlayOpen() && (window == overlay_target_->window || (game_overlay_ && window == game_overlay_->handle()));
     }
@@ -1224,7 +1227,6 @@ private:
     GameOverlayMonitor::Snapshot overlay_snapshot_;
     std::optional<GameWindow> overlay_target_;
     int overlay_selected_ = 0;
-    std::optional<int> overlay_close_confirm_;
     bool overlay_opening_ = false;
     bool overlay_closing_ = false;
     GuideMotion overlay_motion_;
@@ -1374,6 +1376,7 @@ private:
     void navigationBoundary() { navigation_edge_ = true; focusBoundary(); }
     // Focus motion (src/app/focus_motion.cpp): quick bar circle, Settings highlights and the
     // experimental spring outline of the focused cover (settings focus_spring).
+    void animateMenuFocus(float dt, bool& needs_paint);
     void animateFocus(float dt, float target_x, float target_y, float target_w, float target_h, bool& needs_paint);
     void focusContext(ViewContext& context) const;
     void focusBoundary(); // A list edge was hit in nav_direction_: the outline bumps and glows.
@@ -1391,10 +1394,14 @@ private:
     void powerMenuAccept();
     void powerMenuClick(float x, float y);
     // The widget on the game's screen: its options in the power menu's layer (src/app/hud_menu.cpp).
-    enum class HudAction { master, pin, graph, layout, colors, size, limiter, limit, mode, close };
-    struct HudMenuRow { HudAction action; std::wstring label; wchar_t icon; bool gap; std::string key; int toggle = -1; std::wstring value; }; // toggle: -1 none, 0 off, 1 on; value: shown with arrows.
+    enum class HudAction { master, pin, graph, layout, colors, size, limiter, limit, mode, close, suspend_game, close_game };
+    enum class MenuKind { hud, game_close }; // What the layer shows: the widget options, or the close menu of the game behind Guide.
+    struct HudMenuRow { HudAction action; std::wstring label; wchar_t icon; bool gap; std::string key; int toggle = -1; std::wstring value; bool danger = false; }; // toggle: -1 none, 0 off, 1 on; value: shown with arrows.
     static constexpr int hud_menu_window = 8; // Rows shown at once; more scroll.
     void openHudMenu();
+    void openGameCloseMenu(); // Guide's "Zamknij grę": Wstrzymaj (when quick resume is on), Zamknij grę, Anuluj.
+    void closeOverlayGame();
+    void suspendOverlayGame();
     void buildHudMenu();
     void hudMenuApply(int direction); // 0: choose; -1 / +1: Left / Right.
     void hudMenuFollow();
@@ -2704,6 +2711,7 @@ private:
     // Power menu: selected row while open, rows offered on this machine.
     std::optional<int> power_menu_;
     std::vector<power_menu::Item> power_items_;
+    MenuKind hud_menu_kind_ = MenuKind::hud;
     int hud_menu_first_ = 0;      // The first row of the window shown.
     bool hud_menu_ = false;       // The layer shows hud_menu_rows_ (the widget's options) instead of power_items_.
     std::vector<HudMenuRow> hud_menu_rows_;

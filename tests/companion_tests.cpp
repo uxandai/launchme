@@ -847,6 +847,22 @@ int providers() {
         seen[0].headers.find(L"x-goog-api-key: AIzaGeminiKey0123456789abcdefghijklmno\r\n") != 0 || seen[0].headers.find(L"Authorization") != std::wstring::npos ||
         seen[0].body.find("\"thinkingBudget\":0") == std::string::npos) return 511;
 
+    // Google's 503 ("high demand") stays on the newest model for a while: the next Flash answers, a Pro is never tried.
+    seen.clear();
+    reply = ask(gemini, L"sys", {{true, L"hej"}}, [&](const std::wstring& url, const std::wstring& headers, const std::string& body) {
+        seen.push_back({url, headers, body});
+        if (url.find(L"gemini-3.8-flash") != std::wstring::npos) return HttpResponse{503, {}};
+        return respond(words);
+    });
+    if (!reply.ok || seen.empty() || seen.back().url.find(L"gemini-3.7-flash") == std::wstring::npos) return 9870;
+    seen.clear();
+    reply = ask(gemini, L"sys", {{true, L"hej"}}, [&](const std::wstring& url, const std::wstring& headers, const std::string& body) {
+        seen.push_back({url, headers, body});
+        return HttpResponse{503, {}};
+    });
+    for (const auto& call : seen) if (call.url.find(L"pro") != std::wstring::npos) return 9871;
+    if (reply.ok || reply.status != 503) return 9872;
+
     // Claude: the newest Opus of the list, a tool_use round, then words.
     claude.token = L"sk-ant-test-claude-0123456789abcdef";
     seen.clear();

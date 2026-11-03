@@ -312,15 +312,34 @@ int LauncherUiTest::gameOverlay(HWND window) {
     };
     if (!app.openGameOverlay(target)) return 1840;
     animate();
+    const bool saved_quick_resume = app.settings_.quick_resume;
+    app.settings_.quick_resume = false;
+    const auto closeMenu = [&] { return app.power_menu_ && app.hud_menu_ && app.hud_menu_kind_ == Launcher::MenuKind::game_close; };
     app.overlayKey(VK_RIGHT); app.overlayKey(VK_RETURN);
-    if (app.overlay_close_confirm_ != 1 || !terminated.empty()) return 1841;
+    // A menu like Zasilanie: Zamknij grę (danger) and Anuluj, Anuluj chosen first. Without quick resume no Wstrzymaj.
+    if (!closeMenu() || app.hud_menu_rows_.size() != 2 || *app.power_menu_ != 1 || !terminated.empty()) return 1841;
+    if (!app.hud_menu_rows_[0].danger || app.hud_menu_rows_[0].action != Launcher::HudAction::close_game) return 1848;
     if (!capture(L"game-guide-close-confirm.png")) return 1842;
     app.overlayKey(VK_RETURN, true);
-    if (app.overlay_close_confirm_ != 1 || !terminated.empty()) return 1843;
+    if (!closeMenu() || !terminated.empty()) return 1843;
     app.overlayKey(VK_RETURN); // Default Cancel.
-    if (app.overlay_close_confirm_ || !app.gameOverlayOpen() || !terminated.empty()) return 1844;
+    if (app.power_menu_ || !app.gameOverlayOpen() || !terminated.empty()) return 1844;
     app.overlayAccept(); app.overlayKey(VK_ESCAPE);
-    if (app.overlay_close_confirm_ || !terminated.empty()) return 1845;
+    if (app.power_menu_ || !app.gameOverlayOpen() || !terminated.empty()) return 1845;
+    // With quick resume on, the first row suspends the game and returns to the launcher; a denial keeps Guide open.
+    app.settings_.quick_resume = true;
+    std::vector<uint32_t> suspended;
+    bool deny_suspend = true;
+    app.quick_resume_.suspend = [&](std::vector<GameProcess>& processes) {
+        for (const auto& process : processes) suspended.push_back(process.pid);
+        return deny_suspend ? process_freeze::Result::denied : process_freeze::Result::ok;
+    };
+    app.overlayAccept();
+    if (!closeMenu() || app.hud_menu_rows_.size() != 3 || app.hud_menu_rows_[0].action != Launcher::HudAction::suspend_game) return 1849;
+    app.overlayKey(VK_UP); app.overlayKey(VK_UP); app.overlayKey(VK_RETURN);
+    if (app.power_menu_ || !app.gameOverlayOpen() || suspended != std::vector<uint32_t>{1234} || app.notifications_.empty() ||
+        app.game_sessions_.at(gameKey(game)).frozen()) return 1850;
+    app.settings_.quick_resume = false; app.notifications_.clear(); // Back to two rows for the close flow below.
     app.overlayAccept(); app.overlayKey(VK_UP); app.overlayKey(VK_RETURN);
     if (!app.gameOverlayOpen() || !app.game_sessions_.contains(gameKey(game)) ||
         terminated != std::vector<uint32_t>{1234} || app.notifications_.empty()) return 1846;
@@ -328,6 +347,25 @@ int LauncherUiTest::gameOverlay(HWND window) {
     app.overlayAccept(); app.overlayKey(VK_UP); app.overlayKey(VK_RETURN);
     if (app.gameOverlayOpen() || app.game_sessions_.contains(gameKey(game)) || !app.game_sessions_.contains(gameKey(other)) ||
         terminated != std::vector<uint32_t>{1234, 1234} || focused != window) return 1847;
+    app.settings_.quick_resume = saved_quick_resume;
+
+    // Controllers, Sound and Settings from Guide: leaving them returns to the game.
+    for (const int index : {5, 3, 2}) { // Settings, Sound, Controllers.
+        app.game_sessions_.try_emplace(gameKey(game), 0).first->second.observe(GameActivity::running, 1);
+        app.trackSession(gameKey(game), game, {target.process});
+        app.overlayKey(VK_HOME); // Whatever was open before.
+        if (!app.openGameOverlay(target)) return 9873;
+        animate();
+        app.overlay_selected_ = index;
+        focused = window;
+        app.overlayAccept();
+        if (app.gameOverlayOpen() || !app.overlay_return_ || !(app.settingsOpen() || app.devicesOpen())) return 9874;
+        app.tick();
+        if (!app.overlay_return_ || focused != window) return 9875; // Still in the screen: no return yet.
+        app.back();
+        app.tick();
+        if (app.overlay_return_ || focused != target.window) return 9876;
+    }
 
     // Options never opens Guide: normal presses, holding, a virtual identity handoff,
     // and reconnecting with the button down. No window/focus side effects.

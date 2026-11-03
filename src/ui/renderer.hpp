@@ -534,7 +534,10 @@ private:
     void fillSquircle(ID2D1Brush* brush);
     void strokeSquircle(ID2D1Brush* brush, float width);
     Microsoft::WRL::ComPtr<ID2D1Geometry> tileShape(D2D1_RECT_F box, AppSettings::TileShape shape) const;
+    // The session a tile shows. A status ("W grze", "Wstrzymana") fades in when it begins and out when it ends, so the
+    // state lingers here (with its last value) until the fade is done; statusFade() is its opacity, 1 when steady.
     SessionState sessionOf(const Game& game) const;
+    float statusFade(const Game& game) const;
     // Fill under a store or console logo tile: consoles on their platform colour (or dark with
     // console_colors_ off), stores always dark. Shared by drawCard and drawRectangularCard.
     D2D1_COLOR_F platformTileFill(const Game& game, float alpha) const;
@@ -1028,6 +1031,9 @@ private:
     // First frame of the startup library scan: its placeholder waits, so a quick scan shows none.
     std::chrono::steady_clock::time_point scanning_since_{};
     float elapsed_ = 0;
+    struct StatusFade { float alpha = 0; SessionState session = SessionState::none; float stamp = 0; };
+    mutable std::unordered_map<std::string, StatusFade> status_fades_;
+    mutable bool status_fading_ = false; // A fade ran this frame: another frame follows (animating()).
     float detail_ = 0;
     std::vector<Cover> covers_;
     std::vector<Cover> logos_;

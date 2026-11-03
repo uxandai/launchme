@@ -118,7 +118,11 @@ void Launcher::onLibrary(std::unique_ptr<LibraryMessage> library) {
         return;
     }
     closeCategoryMenu();
-    showCategory(0);
+    // The first load of the library (a few seconds after the start) must not pull the user off a screen opened meanwhile
+    // (Settings or Controllers from Guide over a game): only the shelves are rebuilt then.
+    const bool kept = (screen_ == ScreenMode::settings || screen_ == ScreenMode::devices) && (overlay_return_ || anyActiveSession());
+    if (!kept) showCategory(0);
+    else if (!categories_.empty()) category_ = 0;
     // The PC scan reads no Steam data: one already running (started by the GOG/Epic restore)
     // is kept rather than cancelled and repeated, which would delay the store games again.
     if (!pc_scanning_) refreshPcLibraries();

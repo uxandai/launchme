@@ -159,6 +159,7 @@ void Renderer::drawDesktopPoster(const Layout& layout, const View& view, size_t 
     const int tone = static_cast<int>(game.app_id % 4);
     fill(rgb(tones[tone][0] * 0.7f, tones[tone][1] * 0.7f, tones[tone][2] * 0.7f, alpha));
     const auto session = sessionOf(game);
+    const float status_fade = game.installation.active() ? 1.0f : statusFade(game);
     const bool frozen = session == SessionState::frozen;
     // Black and white: a suspended game, and (when chosen) one that is not on the disk.
     const bool colourless = frozen || (view.gray_uninstalled && !game.installed && !game.installation.active() && game.kind != GameKind::catalog);
@@ -181,7 +182,7 @@ void Renderer::drawDesktopPoster(const Layout& layout, const View& view, size_t 
     const bool installing = game.installation.active();
     if (!game.installed && !installing && game.kind != GameKind::catalog) fill(gray(0, 0.42f * (1 - 0.6f * hover) * alpha));
     if (frozen) fill(rgb(0.015f, 0.018f, 0.022f, 0.34f * alpha));
-    if (installing || session != SessionState::none) drawCardStatusShade(0, 0, local.right, local.bottom, alpha, shape);
+    if (installing || session != SessionState::none) drawCardStatusShade(0, 0, local.right, local.bottom, installing ? alpha : alpha * status_fade, shape);
     if (selected && view.launch > 0.01f) fill(gray(1, 0.18f * std::sin(smoothFade(view.launch) * std::numbers::pi_v<float>) * alpha));
     // Marked for a group action: a tint over the poster and its check (top left), not the
     // selection's ring, so marked, selected and keyboard focus stay three different things.
@@ -208,10 +209,11 @@ void Renderer::drawDesktopPoster(const Layout& layout, const View& view, size_t 
         const auto label = frozen ? std::wstring(tr(L"Wstrzymana")) : std::wstring(tr(L"W grze"));
         const float w = textAdvance(label, desktop_label_font_.Get()) + 28;
         const Rect pill{rect.left + 8, rect.top + 8, rect.left + 8 + w, rect.top + 30};
-        desktopFill(pill, 11, gray(0, 0.72f * alpha));
-        brush(frozen ? gray(0.8f, alpha) : rgb(0.36f, 0.86f, 0.52f, alpha));
+        const float shown = alpha * status_fade;
+        desktopFill(pill, 11, gray(0, 0.72f * shown));
+        brush(frozen ? gray(0.8f, shown) : rgb(0.36f, 0.86f, 0.52f, shown));
         target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(pill.left + 11, (pill.top + pill.bottom) * 0.5f), 3.5f, 3.5f), solid_.Get());
-        textLine(label, pill.left + 20, (pill.top + pill.bottom) * 0.5f, w - 22, desktop_label_font_.Get(), gray(0.96f, alpha));
+        textLine(label, pill.left + 20, (pill.top + pill.bottom) * 0.5f, w - 22, desktop_label_font_.Get(), gray(0.96f, shown));
     }
     if (installing) {
         const auto percent = game.installation.percent();

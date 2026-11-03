@@ -76,6 +76,7 @@ bool Renderer::createTarget() {
 // ---- Frames, device caches and video textures --------------------------------------------------
 
 void Renderer::beginFrame() {
+    status_fading_ = false;
 #ifdef _WIN32
     // Normally at once: the frame clock already paces frames. Not in the uncapped benchmark, which
     // measures how fast frames are drawn, not shown.

@@ -3,8 +3,8 @@
 
 using Microsoft::WRL::ComPtr;
 
-// The launched game's background over the whole screen, dimmed and slowly zooming in, its logo in
-// the middle (its title without one), "Uruchamianie…" beneath. Without a background: its poster or
+// The launched game's background over the whole screen, dimmed and still, its logo in the middle (its
+// title without one), a ring with a white dot bouncing off its edge beneath. Without a background: its poster or
 // cover blurred, else the screen's own background darkened.
 void Renderer::drawLaunchAnimation() {
     const float age = context_->launch_animation_seconds, alpha = launch_animation::opacity(age, context_->launch_animation_ending);
@@ -15,17 +15,10 @@ void Renderer::drawLaunchAnimation() {
     brush(D2D1::ColorF(0, 0, 0, alpha));
     target_->FillRectangle(D2D1::RectF(0, 0, width, height), solid_.Get());
 
-    ID2D1Bitmap* picture = nullptr;
-    float picture_opacity = 1.0f;
-    if (auto* hero = slot(heroes_)) picture = hero->bitmap.Get();
-    else if (auto* art = slot(posters_) ? slot(posters_) : slot(covers_)) { picture = blurredArt(*art); picture_opacity = 0.75f; }
-    if (picture) {
-        // Cover-fit, then the slow zoom about the centre.
-        const auto size = picture->GetSize();
-        const float fit = std::max(width / std::max(1.0f, size.width), height / std::max(1.0f, size.height)) * launch_animation::zoom(age);
-        const float w = size.width * fit, h = size.height * fit, x = (width - w) * 0.5f, y = (height - h) * 0.5f;
-        target_->DrawBitmap(picture, D2D1::RectF(x, y, x + w, y + h), alpha * picture_opacity, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
-    }
+    // Still, and framed exactly as the screen beneath frames it: the same wallpaper placement (the crop focus the
+    // owner set in Kadrowanie, the same cover-fit and zoom), so the picture does not jump when it fades in.
+    if (auto* hero = slot(heroes_)) drawWallpaper(hero->bitmap.Get(), alpha, 0, hero->focus);
+    else if (auto* art = slot(posters_) ? slot(posters_) : slot(covers_)) drawWallpaper(blurredArt(*art), alpha * 0.75f);
     // A touch dimmed, darker towards the bottom where the text sits.
     brush(D2D1::ColorF(0, 0, 0, launch_animation::dim * alpha));
     target_->FillRectangle(D2D1::RectF(0, 0, width, height), solid_.Get());
@@ -59,12 +52,17 @@ void Renderer::drawLaunchAnimation() {
                  D2D1::ColorF(0.97f, 0.97f, 0.97f, shown), DWRITE_TEXT_ALIGNMENT_CENTER);
         text_top = cy + typeMetrics(hero_font_.Get()).line * 0.5f + 30;
     }
-    // "Uruchamianie…", its dots breathing; under it, how to hide the picture early.
-    const float pulse = 0.55f + 0.25f * std::sin(age * 3.2f);
-    textLine(tr(L"Uruchamianie…"), 40, text_top + 14, width - 80, settings_body_font_.Get(),
-             D2D1::ColorF(0.92f, 0.92f, 0.92f, shown * pulse), DWRITE_TEXT_ALIGNMENT_CENTER);
-    if (age >= launch_animation::dismiss_after)
-        textLine(tr(L"Esc / B: ukryj"), 40, height - 48, width - 80, settings_body_font_.Get(),
-                 D2D1::ColorF(0.75f, 0.75f, 0.75f, 0.55f * alpha * launch_animation::ease((age - launch_animation::dismiss_after) / 0.4f)),
-                 DWRITE_TEXT_ALIGNMENT_CENTER);
+    // A thin ring and a white dot flying chord to chord inside it, a short trail behind: calm, no text.
+    const float radius = std::clamp(height * 0.026f, 20.0f, 34.0f), dot_radius = radius * 0.15f;
+    const float ring_y = text_top + 18 + radius;
+    const auto place = [&](float time) { const auto d = launch_animation::dot(time); return D2D1::Point2F(cx + d.x * (radius - dot_radius - 1), ring_y + d.y * (radius - dot_radius - 1)); };
+    brush(D2D1::ColorF(1, 1, 1, 0.30f * shown));
+    target_->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(cx, ring_y), radius, radius), solid_.Get(), 1.5f);
+    for (int i = 5; i >= 1; --i) {
+        const float fade = 1.0f - static_cast<float>(i) / 6.0f;
+        brush(D2D1::ColorF(1, 1, 1, 0.22f * fade * fade * shown));
+        target_->FillEllipse(D2D1::Ellipse(place(age - 0.045f * static_cast<float>(i)), dot_radius * (0.55f + 0.45f * fade), dot_radius * (0.55f + 0.45f * fade)), solid_.Get());
+    }
+    brush(D2D1::ColorF(1, 1, 1, 0.95f * shown));
+    target_->FillEllipse(D2D1::Ellipse(place(age), dot_radius, dot_radius), solid_.Get());
 }

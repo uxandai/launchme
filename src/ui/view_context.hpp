@@ -214,7 +214,6 @@ struct ViewContext {
     const glance_ui::State* glance = nullptr;
     const TourView* tour = nullptr;
     bool guide_overlay = false;
-    int guide_close_confirm = -1; // -1 closed, 0 close, 1 cancel.
     float guide_opacity = 1;
     bool fps_widget = false, fps_low = false, fps_graph = false;
     int hud_layout = 0;               // 0: a list, 1: a strip.

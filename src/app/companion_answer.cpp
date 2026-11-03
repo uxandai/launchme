@@ -306,6 +306,7 @@ void Launcher::onCompanion(std::unique_ptr<CompanionMessage> message) {
     else if (message->reply.status == 401 || message->reply.status == 403) companion_.status = provider + tr(L": klucz lub token odrzucony — sprawdź go w Ustawieniach");
     else if (message->reply.status == 404) companion_.status = model + tr(L": model niedostępny");
     else if (message->reply.status == 429) companion_.status = provider + tr(L": limit zapytań — spróbuj za chwilę");
+    else if (message->reply.status == 503) companion_.status = provider + tr(L": model przeciążony po stronie serwera (503) — spróbuj za chwilę");
     else if (message->reply.error == L"no model") companion_.status = provider + tr(L": brak modelu na serwerze");
     else if (message->reply.status && message->reply.status != 200) companion_.status = provider + L": HTTP " + std::to_wstring(message->reply.status);
     else if (message->reply.status == 200) companion_.status = provider + tr(L": pusta odpowiedź");

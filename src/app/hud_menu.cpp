@@ -42,7 +42,7 @@ std::vector<bool> Launcher::powerMenuGaps() const {
 }
 
 power_menu::Geometry Launcher::powerMenuGeometryFor(float width, float height) const {
-    return {width, height, powerMenuGaps(), hud_menu_ ? 150.0f : 0.0f};
+    return {width, height, powerMenuGaps(), hud_menu_ && hud_menu_kind_ == MenuKind::hud ? 150.0f : 0.0f};
 }
 
 // Keeps the chosen row in the window.
@@ -57,9 +57,18 @@ void Launcher::hudMenuFollow() {
 void Launcher::buildHudMenu() {
     hud_menu_rows_.clear();
     const auto target = overlay_snapshot_.target;
-    const auto add = [&](HudAction action, std::wstring label, wchar_t icon, bool gap, std::string key = {}, int toggle = -1, std::wstring value = {}) {
-        hud_menu_rows_.push_back({action, std::move(label), icon, gap, std::move(key), toggle, std::move(value)});
+    const auto add = [&](HudAction action, std::wstring label, wchar_t icon, bool gap, std::string key = {}, int toggle = -1, std::wstring value = {}, bool danger = false) {
+        hud_menu_rows_.push_back({action, std::move(label), icon, gap, std::move(key), toggle, std::move(value), danger});
     };
+    if (hud_menu_kind_ == MenuKind::game_close) {
+        // Wstrzymaj only where quick resume is on and the game runs (not already suspended).
+        const auto session = overlay_target_ ? game_sessions_.find(overlay_target_->key) : game_sessions_.end();
+        if (settings_.quick_resume && session != game_sessions_.end() && !session->second.frozen())
+            add(HudAction::suspend_game, tr(L"Wstrzymaj grę"), 0xE769, false);
+        add(HudAction::close_game, tr(L"Zamknij grę"), 0xE711, false, {}, -1, {}, true);
+        add(HudAction::close, tr(L"Anuluj"), 0xE72B, true);
+        return;
+    }
     add(HudAction::master, tr(L"Widget w grze"), 0xE7B3, false, {}, settings_.hud_enabled);
     if (settings_.hud_enabled) {
         for (const auto& pin : pins) {
@@ -85,8 +94,22 @@ void Launcher::buildHudMenu() {
     hud_menu_first_ = std::clamp(hud_menu_first_, 0, std::max(0, static_cast<int>(hud_menu_rows_.size()) - hud_menu_window));
 }
 
+void Launcher::openGameCloseMenu() {
+    if (power_menu_) return;
+    hud_menu_ = true;
+    hud_menu_kind_ = MenuKind::game_close;
+    hud_menu_first_ = 0;
+    power_items_.clear();
+    buildHudMenu();
+    power_menu_ = static_cast<int>(hud_menu_rows_.size()) - 1; // Anuluj is the initial choice, even for a held A button.
+    audio_.context();
+    invalidateGameOverlay();
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
 void Launcher::openHudMenu() {
     if (power_menu_) return;
+    hud_menu_kind_ = MenuKind::hud;
     hud_menu_ = true;
     hud_menu_first_ = 0;
     power_items_.clear();
@@ -104,6 +127,15 @@ void Launcher::hudMenuApply(int direction) {
     const int row = *power_menu_;
     const auto item = hud_menu_rows_[static_cast<size_t>(row)];
     const auto target = overlay_snapshot_.target;
+    if (hud_menu_kind_ == MenuKind::game_close) { // Like Zasilanie: Left / Right only move.
+        if (direction) { powerMenuMove(direction); return; }
+        const auto action = item.action;
+        closePowerMenu();
+        if (action == HudAction::suspend_game) suspendOverlayGame();
+        else if (action == HudAction::close_game) closeOverlayGame();
+        invalidateGameOverlay();
+        return;
+    }
     // A switch: Left off, Right on, Enter flips.
     const auto flip = [&](bool& flag) { const bool next = direction == 0 ? !flag : direction > 0; if (next == flag) return false; flag = next; return true; };
     bool changed = true;
@@ -141,6 +173,7 @@ void Launcher::hudMenuApply(int direction) {
         break;
     }
     case HudAction::close: closePowerMenu(); return;
+    case HudAction::suspend_game: case HudAction::close_game: return; // Only in the close menu, handled above.
     }
     if (!changed) { navigationBoundary(); return; }
     next_hud_at_ = 0;

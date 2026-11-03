@@ -122,6 +122,7 @@ void Renderer::drawCard(const GameCard& card, size_t index) {
     fillSquircle(solid_.Get());
     auto& cover = covers_[index];
     const auto session = sessionOf(card.game);
+    const float status_fade = card.game.installation.active() ? 1.0f : statusFade(card.game);
     if (cover.brush && cover.bitmap) {
         const float cover_opacity = card.cover_opacity * reveal(cover);
         const auto dimensions = cover.bitmap->GetPixelSize();
@@ -187,7 +188,7 @@ void Renderer::drawCard(const GameCard& card, size_t index) {
     }
     if (card.game.installation.active() || session != SessionState::none) {
         target_->SetTransform(base);
-        drawCardStatusShade(x, y, size, size, transparency);
+        drawCardStatusShade(x, y, size, size, transparency * status_fade);
         target_->SetTransform(D2D1::Matrix3x2F::Scale(size, size) * D2D1::Matrix3x2F::Translation(x, y) * base);
     }
     // The outline and the plain edge follow the tile's own edge again (not the inset picture).
@@ -251,8 +252,8 @@ void Renderer::drawCard(const GameCard& card, size_t index) {
     } else if (session != SessionState::none) {
         // Same language as a download: a corner badge and text over the bottom fade.
         const bool frozen = session == SessionState::frozen;
-        drawCardBadge(x, y, size, size, transparency, frozen);
-        drawCardStatus(x, y, size, size, transparency, frozen ? tr(L"Wstrzymana") : tr(L"W grze"));
+        drawCardBadge(x, y, size, size, transparency * status_fade, frozen);
+        drawCardStatus(x, y, size, size, transparency * status_fade, frozen ? tr(L"Wstrzymana") : tr(L"W grze"));
     } else if (selected && !card.game.installed && card.game.kind != GameKind::catalog && !context_->snitch)
         textLine(localFileGame(card.game.source) ? missingFileBadge(card.game) : tr(L"DO INSTALACJI"), x + 8, y + size - 21, size - 16,
                  toast_font_.Get(), color(0.95f, 0.95f, 0.95f, transparency), DWRITE_TEXT_ALIGNMENT_CENTER); // 17 px: readable from the sofa.
@@ -408,10 +409,40 @@ void Renderer::drawCoverOutline(ID2D1Geometry* shape, D2D1_COLOR_F tint, float t
     target_->DrawGeometry(shape, solid_.Get(), 3.2f);
 }
 
+namespace { constexpr float status_fade_seconds = 0.28f; }
+
 SessionState Renderer::sessionOf(const Game& game) const {
-    if (!context_->sessions || context_->sessions->empty() || !isGame(game)) return SessionState::none;
-    const auto state = sessionState(*context_->sessions, gameKey(game));
-    return context_->sessions_frozen_only && state != SessionState::frozen ? SessionState::none : state;
+    if (!isGame(game)) return SessionState::none;
+    const bool any = context_->sessions && !context_->sessions->empty();
+    if (!any && status_fades_.empty()) return SessionState::none;
+    const auto key = gameKey(game);
+    auto state = any ? sessionState(*context_->sessions, key) : SessionState::none;
+    if (context_->sessions_frozen_only && state != SessionState::frozen) state = SessionState::none;
+    const auto found = status_fades_.find(key);
+    if (found == status_fades_.end()) {
+        if (state != SessionState::none) status_fades_[key] = {1.0f, state, elapsed_}; // Already so when first seen: no fade.
+        return state;
+    }
+    auto& fade = found->second;
+    const float step = std::clamp(elapsed_ - fade.stamp, 0.0f, 0.1f) / status_fade_seconds;
+    fade.stamp = elapsed_;
+    if (state != SessionState::none) {
+        fade.session = state;
+        if (fade.alpha < 1.0f) { fade.alpha = std::min(1.0f, fade.alpha + step); status_fading_ = true; }
+        return state;
+    }
+    if (fade.alpha <= 0.0f) return SessionState::none;
+    fade.alpha = std::max(0.0f, fade.alpha - step);
+    status_fading_ = true;
+    return fade.alpha > 0.0f ? fade.session : SessionState::none; // Lingers while it fades out.
+}
+
+float Renderer::statusFade(const Game& game) const {
+    if (!isGame(game) || status_fades_.empty()) return 1.0f;
+    const auto found = status_fades_.find(gameKey(game));
+    if (found == status_fades_.end()) return 1.0f;
+    const float t = std::clamp(found->second.alpha, 0.0f, 1.0f);
+    return t * t * (3 - 2 * t);
 }
 
 // A plain black disc with a white state glyph: play while running, pause bars while suspended.

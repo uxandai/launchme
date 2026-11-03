@@ -373,11 +373,11 @@ void Launcher::fadeLaunchAnimation(std::chrono::steady_clock::time_point now) {
 }
 
 // Behind the game the picture is still: no frames until it is seen again (or fades out).
-bool Launcher::launchAnimationMoving(std::chrono::steady_clock::time_point now) const {
+bool Launcher::launchAnimationMoving(std::chrono::steady_clock::time_point) const {
     if (!launchAnimationActive()) return false;
     if (launch_animation_ending_) return true;
     if (overlay_backend_.foreground() == hwnd_) return true;
-    return !launch_animation_rested_ && !launch_animation::still(std::chrono::duration<float>(now - *launch_animation_started_).count());
+    return !launch_animation_rested_;
 }
 
 // Back (Esc, B, the mouse's back button) hides the picture early; the press that started the game

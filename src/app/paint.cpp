@@ -378,12 +378,19 @@ void Launcher::paint(bool overlay) {
                 context.power_labels.push_back(row.label); context.power_icons.push_back(row.icon);
                 context.power_switches.push_back(row.toggle); context.power_values.push_back(row.value);
             }
-            context.power_wide = true;
+            context.power_wide = hud_menu_kind_ == MenuKind::hud;
             context.power_more_above = hud_menu_first_ > 0;
             context.power_more_below = hud_menu_first_ + hud_menu_window < static_cast<int>(hud_menu_rows_.size());
-            context.power_title = tr(L"Widget na ekranie gry");
-            context.power_subtitle = tr(L"Co i jak pokazuje się w grze");
-            context.power_header_icon = 0xE7B3;
+            for (int i = 0; i < hudMenuVisible(); ++i) context.power_danger.push_back(hud_menu_rows_[static_cast<size_t>(hud_menu_first_ + i)].danger);
+            if (hud_menu_kind_ == MenuKind::game_close) {
+                context.power_title = tr(L"Zamknąć grę?");
+                context.power_subtitle = overlay_target_ ? libraryGameName(overlay_target_->key) : std::wstring{};
+                context.power_header_icon = 0xE7E8;
+            } else {
+                context.power_title = tr(L"Widget na ekranie gry");
+                context.power_subtitle = tr(L"Co i jak pokazuje się w grze");
+                context.power_header_icon = 0xE7B3;
+            }
         }
         for (const auto item : hud_menu_ ? std::vector<power_menu::Item>{} : power_items_) {
             context.power_labels.emplace_back(power_menu::label(item, desktop_mode_));
@@ -713,14 +720,11 @@ void Launcher::paint(bool overlay) {
     if (overlay && game_overlay_) {
         context.guide_overlay = true;
         context.quick_ring_time = overlay_ring_time_;
-        context.guide_close_confirm = overlay_close_confirm_.value_or(-1);
         context.quick_selected = overlay_selected_;
         context.quick_progress = overlay_motion_.bar;
         context.friends_progress = overlay_motion_.drawer;
         context.guide_opacity = overlay_motion_.opacity;
         context.quick_circle_x = overlay_motion_.circle.value;
-        context.drawer_glide.reset(); context.friends_scroll_glide.reset();
-        context.picker_glide.reset();
         game_overlay_->renderer().paintOverlay(context);
         return;
     }

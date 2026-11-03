@@ -43,6 +43,46 @@ void Launcher::focusBoundary() {
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
+// The motion shared with the Guide overlay (tickGameOverlay): the drawer's focus frame and scroll, and the
+// highlight of Zasilanie (and of the widget options' dialog and the close menu, which are its layer).
+void Launcher::animateMenuFocus(float dt, bool& needs_paint) {
+    const auto tuning = settings_.focus_spring ? spring::bounce : spring::glide;
+    if (!power_menu_) power_glide_.valid = false;
+    else {
+        const float value = static_cast<float>(*power_menu_);
+        if (!power_glide_.valid) { power_glide_.value.snap(value); power_glide_.valid = true; }
+        else power_glide_.value.step(value, dt, tuning.omega, tuning.zeta);
+        if (!power_glide_.value.settled(value, 0.004f)) needs_paint = true;
+    }
+    const auto glideBox = [&](BoxGlide& glide, bool open, int key, float l, float t, float r, float b) {
+        if (!open) { glide.valid = false; return; }
+        if (!glide.valid || glide.key != key) { glide.box.snap(l, t, r, b); glide.key = key; glide.valid = true; }
+        else glide.box.step(l, t, r, b, dt, tuning);
+        if (!glide.box.settled(l, t, r, b)) needs_paint = true;
+    };
+    // Drawer: a tile, or in the friends list a row (following its gliding scroll) or Back.
+    if (friends_open_ || friends_progress_ > 0.003f) {
+        using namespace friends_layout;
+        if (friends_list_) {
+            const float scroll = static_cast<float>(friends_scroll_);
+            if (!friends_scroll_valid_) { friends_scroll_glide_.snap(scroll); friends_scroll_valid_ = true; }
+            else friends_scroll_glide_.step(scroll, dt, spring::glide.omega, spring::glide.zeta);
+            if (!friends_scroll_glide_.settled(scroll)) needs_paint = true;
+        } else friends_scroll_valid_ = false;
+        if (plugin_drawer_active_) { drawer_glide_.valid = false; }
+        else if (!friends_list_) {
+            const auto tile = dashboardLayout().tile(dashboard_tile_, 0, dashboard_scroll_);
+            glideBox(drawer_glide_, true, 0, tile.left, tile.top, tile.right, tile.bottom);
+        } else if (friends_back_ || friends_.friends.empty() || friends_cursor_ >= friends_.friends.size()) {
+            const auto back = listBack(0);
+            glideBox(drawer_glide_, true, 1, back.left, back.top, back.right, back.bottom);
+        } else {
+            const float top = rowTop(friends_.friends, friends_cursor_) - friends_scroll_glide_.value;
+            glideBox(drawer_glide_, true, 1, 18, top + row_padding, drawer_width - 17, top + row_height - row_padding);
+        }
+    } else { drawer_glide_.valid = false; friends_scroll_valid_ = false; }
+}
+
 void Launcher::animateFocus(float dt, float target_x, float target_y, float target_w, float target_h, bool& needs_paint) {
     const auto tuning = settings_.focus_spring ? spring::bounce : spring::glide;
     const auto view = renderer_.viewport();
@@ -113,7 +153,6 @@ void Launcher::animateFocus(float dt, float target_x, float target_y, float targ
         if (!glide.value.settled(value, 0.004f)) needs_paint = true;
     };
     glideIndex(menu_glide_, menu_open_ || menu_progress_ > 0.003f, menu_selected_);
-    glideIndex(power_glide_, power_menu_.has_value(), power_menu_.value_or(0));
     glideIndex(exit_glide_, exit_prompt_.has_value(), exit_prompt_.value_or(0));
     glideIndex(settings_choice_glide_, settingsPicking(), settings_state_.choice);
     if (libraryTabsShown()) glideIndex(library_tab_glide_, true, libraryTabIndex(libraryTabs()));
@@ -220,27 +259,7 @@ void Launcher::animateFocus(float dt, float target_x, float target_y, float targ
         if (frame) glideBox(device_glide_, true, static_cast<int>(state.panel), frame->left, frame->top, frame->right, frame->bottom);
         else device_glide_.valid = false;
     }
-    // Drawer: a tile, or in the friends list a row (following its gliding scroll) or Back.
-    if (friends_open_ || friends_progress_ > 0.003f) {
-        using namespace friends_layout;
-        if (friends_list_) {
-            const float scroll = static_cast<float>(friends_scroll_);
-            if (!friends_scroll_valid_) { friends_scroll_glide_.snap(scroll); friends_scroll_valid_ = true; }
-            else friends_scroll_glide_.step(scroll, dt, spring::glide.omega, spring::glide.zeta);
-            if (!friends_scroll_glide_.settled(scroll)) needs_paint = true;
-        } else friends_scroll_valid_ = false;
-        if (plugin_drawer_active_) { drawer_glide_.valid = false; }
-        else if (!friends_list_) {
-            const auto tile = dashboardLayout().tile(dashboard_tile_, 0, dashboard_scroll_);
-            glideBox(drawer_glide_, true, 0, tile.left, tile.top, tile.right, tile.bottom);
-        } else if (friends_back_ || friends_.friends.empty() || friends_cursor_ >= friends_.friends.size()) {
-            const auto back = listBack(0);
-            glideBox(drawer_glide_, true, 1, back.left, back.top, back.right, back.bottom);
-        } else {
-            const float top = rowTop(friends_.friends, friends_cursor_) - friends_scroll_glide_.value;
-            glideBox(drawer_glide_, true, 1, 18, top + row_padding, drawer_width - 17, top + row_height - row_padding);
-        }
-    } else { drawer_glide_.valid = false; friends_scroll_valid_ = false; }
+    animateMenuFocus(dt, needs_paint); // The drawer and Zasilanie, which the Guide overlay animates as well.
 
     // Experimental spring outline: its centre and size spring toward the focused card's resting
     // rectangle, so it arrives before the easing cover and swings past it.

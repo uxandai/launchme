@@ -374,7 +374,7 @@ void Launcher::controllerInput(const PadReading& state) {
         const auto pressed = [&](WORD button) { return (buttons & button) && !(controller_buttons_ & button); };
         const auto guide = pad_guide_.update(buttons & pad_guide, now);
         if (guide == HoldGesture::Event::press) { overlayKey(VK_HOME); swallow(); return; }
-        if (guide == HoldGesture::Event::hold && !overlay_close_confirm_) { openPowerMenu(); invalidateGameOverlay(); }
+        if (guide == HoldGesture::Event::hold && !power_menu_) { openPowerMenu(); invalidateGameOverlay(); }
         pad_start_.swallow(buttons & XINPUT_GAMEPAD_START); // Options belongs to the game, even over Guide.
         const int direction = padArrow(state, buttons);
         if (direction && (direction != controller_direction_ || now >= controller_repeat_)) {

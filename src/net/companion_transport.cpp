@@ -361,6 +361,7 @@ Reply ask(const Connection& given, const std::wstring& system, const std::vector
     request.tools = tooled ? tools : nullptr;
     request.no_thinking = gemini && !thinking;
     std::vector<std::string> used;
+    std::vector<std::string> tried{connection.model}; // Models Google refused with 503 so far (overloaded): the next Flash is asked.
     int rounds = 0;
     bool retried = false, words = false, spoke = false;
     Reply reply;
@@ -378,6 +379,16 @@ Reply ask(const Connection& given, const std::wstring& system, const std::vector
                 response = send(connection, body, transport, trace);
             }
         } else response = send(connection, body, transport, trace);
+        // Google's "high demand" 503 stays on one model for a while and passes on another: try the other Flash models
+        // (never a Pro, which thinks) before giving up. Only a direct Google key; Foundry has its own proxy.
+        if (response.status == 503 && connection.provider == Provider::gemini && !spoke && !httpCancelled()) {
+            const ModelInfo* next = nullptr;
+            for (const auto& candidate : models) {
+                if (std::string_view(candidate.id).find("pro") != std::string_view::npos) continue;
+                if (std::find(tried.begin(), tried.end(), candidate.id) == tried.end()) { next = &candidate; break; }
+            }
+            if (next) { connection.model = next->id; tried.push_back(next->id); continue; }
+        }
         if (auto calls = tooled && !request.tools_off ? wire::calls(dialect, response) : std::nullopt) {
             // Her calls, verbatim (Gemini requires its thought signatures back), then their answers.
             std::vector<json::Value> results;

@@ -6,16 +6,19 @@
 
 namespace quick_menu {
 // Order: Szukaj, Wszystkie gry, the plugins' pages (Sklep), Pobierania, Kontrolery, Dźwięk,
-// Widgety, Ustawienia, Zasilanie; the Guide overlay puts its dashboard and "Zamknij grę" first.
+// Widgety, Ustawienia, Zasilanie. The Guide overlay (over a game) has its own, shorter bar: Start, "Zamknij grę",
+// Kontrolery, Dźwięk, Widgety, Ustawienia, Zasilanie (no search, library, store or downloads in front of a game).
 enum class Action { search, library, store, controllers, audio, settings, power, dashboard, close_game, downloads, widgets };
 inline int prefix(bool guide) { return guide ? 2 : 0; }
-inline int count(int plugins, bool guide = false) { return 8 + plugins + prefix(guide); }
-inline int pluginIndex(int index, bool guide = false) { return index - 2 - prefix(guide); }
+inline constexpr int guide_count = 7;
+inline int count(int plugins, bool guide = false) { return guide ? guide_count : 8 + plugins; }
+inline int pluginIndex(int index, bool guide = false) { return guide ? -1 : index - 2; }
 inline Action action(int index, int plugins, bool guide = false) {
     if (guide) {
         if (index == 0) return Action::dashboard;
         if (index == 1) return Action::close_game;
-        index -= prefix(guide);
+        constexpr std::array rest{Action::controllers, Action::audio, Action::widgets, Action::settings, Action::power};
+        return rest[static_cast<size_t>(std::clamp(index - prefix(guide), 0, 4))];
     }
     constexpr std::array base{Action::search, Action::library, Action::downloads, Action::controllers, Action::audio, Action::widgets, Action::settings, Action::power};
     if (index >= 2 && index < 2 + plugins) return Action::store; // Generic extension glyph; label comes from its manifest.
@@ -42,7 +45,7 @@ inline const wchar_t* caption(Action action) {
     case Action::store: return tr(L"Sklep");
     case Action::settings: return tr(L"Ustawienia");
     case Action::controllers: return tr(L"Kontrolery");
-    case Action::dashboard: return tr(L"Dashboard Launchme");
+    case Action::dashboard: return tr(L"Start");
     case Action::close_game: return tr(L"Zamknij grę");
     case Action::audio: return tr(L"Dźwięk");
     case Action::downloads: return tr(L"Pobierania");

@@ -180,7 +180,8 @@ void Launcher::tickGameOverlay(uint64_t now) {
     const float seconds = static_cast<float>(now - overlay_tick_at_) / 1000;
     overlay_tick_at_ = now;
     const float x = quick_menu::center(drawerViewport().width, overlay_selected_, static_cast<int>(plugin_menu_.size()), true);
-    const bool moved = overlay_motion_.step(seconds, overlay_closing_, friends_open_, x);
+    bool moved = overlay_motion_.step(seconds, overlay_closing_, friends_open_, x);
+    animateMenuFocus(std::min(seconds, 0.05f), moved); // The drawer's focus frame and the dialog's highlight glide here too.
     if (overlay_closing_ && overlay_motion_.hidden()) { closeGameOverlay(true); return; }
     dashboardPollHold(now);
     // The focus ring's light keeps circling while the bar is shown (wrapped: float precision).
@@ -192,7 +193,6 @@ void Launcher::tickGameOverlay(uint64_t now) {
 void Launcher::dismissGameOverlay() {
     if (!gameOverlayOpen() || overlay_closing_) return;
     overlay_closing_ = true;
-    overlay_close_confirm_.reset();
     closeFriends(); closePowerMenu();
     invalidateGameOverlay();
 }
@@ -224,7 +224,6 @@ bool Launcher::openGameOverlay(const GameWindow& target, bool widgets_first) {
         game_overlay_->appearance(settings_);
     }
     closeFriends(); friends_progress_ = 0;
-    overlay_close_confirm_.reset();
     overlay_selected_ = 0; overlay_target_ = target;
     overlay_closing_ = false;
     overlay_tick_at_ = GetTickCount64();
@@ -275,7 +274,6 @@ void Launcher::closeGameOverlay(bool return_to_game) {
     overlay_target_.reset(); // Hide may synchronously send WM_ACTIVATE.
     overlay_closing_ = false;
     overlay_motion_ = {};
-    overlay_close_confirm_.reset();
     closeFriends(); friends_progress_ = 0;
     closePowerMenu();
     // Transfer while our overlay still owns foreground permission. Hiding it
@@ -306,35 +304,35 @@ void Launcher::overlayDashboard() {
 
 void Launcher::overlayAccept() {
     if (!gameOverlayOpen()) return;
-    const auto action = quick_menu::action(overlay_selected_, static_cast<int>(plugin_menu_.size()), true);
-    const int plugin = quick_menu::pluginIndex(overlay_selected_, true);
+    const auto action = quick_menu::action(overlay_selected_, 0, true);
     if (action == quick_menu::Action::widgets) { openOverlayDrawer(); invalidateGameOverlay(); return; }
-    if (action == quick_menu::Action::close_game) {
-        overlay_close_confirm_ = 1; // Cancel is the initial action, even for a held A button.
-        audio_.context(); invalidateGameOverlay(); return;
-    }
+    if (action == quick_menu::Action::close_game) { openGameCloseMenu(); return; }
     if (action == quick_menu::Action::power) { openPowerMenu(); invalidateGameOverlay(); return; }
+    const auto target = overlay_target_;
     overlayDashboard();
     switch (action) {
-    case quick_menu::Action::search: openSearch(); break;
-    case quick_menu::Action::library: openLibrary(); break;
-    case quick_menu::Action::store:
-        if (plugin >= 0 && plugin < static_cast<int>(plugin_menu_.size())) pluginAction(plugin_menu_[plugin]);
-        break;
-    case quick_menu::Action::controllers: openDevices(devices::Panel::controllers); break;
-    case quick_menu::Action::audio: openDevices(devices::Panel::audio); break;
-    case quick_menu::Action::settings: openSettings(); break;
-    case quick_menu::Action::downloads: openDownloads(); break;
+    case quick_menu::Action::controllers: openDevices(devices::Panel::controllers); overlay_return_ = target; break;
+    case quick_menu::Action::audio: openDevices(devices::Panel::audio); overlay_return_ = target; break;
+    case quick_menu::Action::settings: openSettings(); overlay_return_ = target; break;
     default: break;
     }
 }
 
-void Launcher::confirmOverlayClose() {
-    if (!overlay_target_ || !overlay_close_confirm_) return;
-    const bool close = *overlay_close_confirm_ == 0;
-    overlay_close_confirm_.reset();
-    if (!close) { invalidateGameOverlay(); return; }
-    const auto target = *overlay_target_; // The game behind Guide, never the selected dashboard card.
+// Back out of the screen Guide opened (to the home screen): the game it came from gets the foreground again.
+void Launcher::pollOverlayReturn() {
+    if (!overlay_return_) return;
+    const auto target = *overlay_return_;
+    // Guide opened again, the game is gone or another one starts: nothing to return to.
+    if (gameOverlayOpen() || pending_launch_ || !game_sessions_.contains(target.key) || !overlay_backend_.valid(target)) { overlay_return_.reset(); return; }
+    if (screen_ != ScreenMode::shelves || settingsOpen() || devicesOpen()) return; // Still in it (or in a page it opened).
+    overlay_return_.reset();
+    overlay_backend_.focus(target.window);
+}
+
+// The game behind Guide, never the selected dashboard card: its processes end, and Guide returns to the launcher.
+void Launcher::closeOverlayGame() {
+    if (!overlay_target_) return;
+    const auto target = *overlay_target_;
     if (!overlay_backend_.valid(target)) { overlayDashboard(); return; }
     const auto game = trackedGame(target.key);
     if (gameKey(game) != target.key) {
@@ -346,17 +344,18 @@ void Launcher::confirmOverlayClose() {
     else invalidateGameOverlay(); // A denied close remains visible, including its notification.
 }
 
+// "Wstrzymaj": the game is suspended in RAM (quick resume) and Guide returns to the launcher; "Wróć" brings it back.
+void Launcher::suspendOverlayGame() {
+    if (!overlay_target_) return;
+    const auto key = overlay_target_->key;
+    if (freezeGame(key, true)) overlayDashboard();
+    else invalidateGameOverlay(); // Denied: its notification stays visible over the game.
+}
+
 void Launcher::overlayKey(WPARAM key, bool repeated) {
     if (!gameOverlayOpen() || overlay_closing_) return;
     // Plain Tab may be a Steam Input mapping of Options. Widgets open only from the bar.
     if (key == VK_TAB) return;
-    if (overlay_close_confirm_) {
-        if (key == VK_ESCAPE || key == VK_BACK || key == VK_HOME) overlay_close_confirm_.reset();
-        else if ((key == VK_RETURN || key == VK_SPACE) && !repeated) confirmOverlayClose();
-        else if (key == VK_LEFT || key == VK_UP) overlay_close_confirm_ = 0;
-        else if (key == VK_RIGHT || key == VK_DOWN) overlay_close_confirm_ = 1;
-        invalidateGameOverlay(); return;
-    }
     if (key == VK_HOME && !repeated) {
         dismissGameOverlay();
         return;
@@ -385,12 +384,7 @@ void Launcher::overlayClick(float x, float y) {
     if (!gameOverlayOpen() || overlay_closing_) return;
     const auto view = drawerViewport();
     x /= view.scale; y /= view.scale;
-    if (overlay_close_confirm_) {
-        const settings_ui::Layout layout{view.width, view.height};
-        const int row = layout.hitChoice(x, y, 2);
-        if (row >= 0) { overlay_close_confirm_ = row; confirmOverlayClose(); }
-        else if (!layout.picker(2).contains(x, y)) overlay_close_confirm_.reset();
-    } else if (power_menu_) {
+    if (power_menu_) {
         const auto layout = powerMenuGeometryFor(view.width, view.height);
         const int row = layout.hit(x, y);
         if (row >= 0) { power_menu_ = row + (hud_menu_ ? hud_menu_first_ : 0); powerMenuAccept(); } else closePowerMenu();
@@ -448,7 +442,7 @@ LRESULT Launcher::overlayMessage(HWND window, UINT message, WPARAM wparam, LPARA
         return 0;
     case WM_LBUTTONDOWN:
         dashboard_pointer_release_ = false;
-        if (dashboardEditing() && !power_menu_ && !overlay_close_confirm_) {
+        if (dashboardEditing() && !power_menu_) {
             const auto view = drawerViewport();
             const float x = static_cast<float>(GET_X_LPARAM(lparam)) / view.scale, y = static_cast<float>(GET_Y_LPARAM(lparam)) / view.scale;
             const int hit = dashboardLayout().hit(view.width - friends_layout::drawer_width, x, y, dashboard_scroll_, view.height);

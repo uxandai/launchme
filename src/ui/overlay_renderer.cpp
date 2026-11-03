@@ -17,8 +17,6 @@ bool Renderer::paintOverlay(const ViewContext& context) {
         drawQuickPanel();
         drawFriends();
         drawExitPrompt();
-        if (context.guide_close_confirm >= 0)
-            drawPicker(tr(L"Zamknąć grę?"), {tr(L"Zamknij grę"), tr(L"Anuluj")}, context.guide_close_confirm);
         drawNotification();
         const auto result = target_->EndDraw();
         context_ = nullptr;

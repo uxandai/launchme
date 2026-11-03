@@ -174,6 +174,7 @@ void Renderer::drawMetroTile(const GameCard& card, size_t index) {
     const auto& game = card.game;
     const auto role = info.role;
     const auto session = sessionOf(game);
+    const float status_fade = game.installation.active() ? 1.0f : statusFade(game);
     const bool frozen = session == SessionState::frozen;
     Cover* poster = index < posters_.size() && posters_[index].bitmap ? &posters_[index] : nullptr;
     Cover* cover = index < covers_.size() && covers_[index].bitmap ? &covers_[index] : nullptr;
@@ -254,7 +255,7 @@ void Renderer::drawMetroTile(const GameCard& card, size_t index) {
         }
     }
     const bool status = game.installation.active() || session != SessionState::none;
-    if (status) drawCardStatusShade(x, y, tile_w, tile_h, transparency, shape.Get());
+    if (status) drawCardStatusShade(x, y, tile_w, tile_h, transparency * status_fade, shape.Get());
     if (game.installation.active()) {
         const auto& install = game.installation;
         const float radius = std::clamp(std::min(tile_w, tile_h) * 0.064f, 11.0f, 22.0f);
@@ -265,8 +266,8 @@ void Renderer::drawMetroTile(const GameCard& card, size_t index) {
         if (role == Role::install || metro_layout::landscape(role))
             textLine(info.caption, x + 17, y + tile_h - 82, tile_w - 34, menu_font_.Get(), gray(0.98f, transparency));
     } else if (session != SessionState::none) {
-        drawCardBadge(x, y, tile_w, tile_h, transparency, frozen);
-        drawCardStatus(x, y, tile_w, tile_h, transparency, frozen ? tr(L"Wstrzymana") : tr(L"W grze"));
+        drawCardBadge(x, y, tile_w, tile_h, transparency * status_fade, frozen);
+        drawCardStatus(x, y, tile_w, tile_h, transparency * status_fade, frozen ? tr(L"Wstrzymana") : tr(L"W grze"));
     } else if (caption) {
         // Posters show their name only in focus; the other tiles always carry it.
         const float shown = role == Role::game ? emphasis : 1.0f;

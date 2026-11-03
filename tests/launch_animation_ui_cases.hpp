@@ -35,11 +35,19 @@ int LauncherUiTest::launchAnimation(HWND window) {
         launch_animation::opacity(seconds * 0.5f) != 1 || launch_animation::opacity(seconds) != 1 || launch_animation::opacity(600) != 1 ||
         launch_animation::opacity(seconds, fade_out) != 0 || launch_animation::opacity(seconds, fade_out * 0.5f) <= 0 ||
         launch_animation::opacity(seconds, fade_out * 0.5f) >= 1 || launch_animation::opacity(seconds, 0) != 1 ||
-        launch_animation::zoom(1) >= launch_animation::zoom(6) || launch_animation::zoom(0) != 1 ||
-        std::abs(launch_animation::zoom(launch_animation::zoom_seconds) - (1 + launch_animation::zoom_extra)) > 0.001f ||
-        launch_animation::zoom(600) != launch_animation::zoom(launch_animation::zoom_seconds) ||
-        launch_animation::still(seconds) || !launch_animation::still(launch_animation::zoom_seconds) || launch_animation::longest < 60 ||
+        launch_animation::longest < 60 ||
         launch_animation::logo(0) != 0 || launch_animation::logo(3) != 1) return 2519;
+    // The white dot flies at one speed from one touch of the ring to the next, never leaving it, and keeps going.
+    for (int i = 0; i <= 400; ++i) {
+        const float time = static_cast<float>(i) * 0.37f;
+        const auto d = launch_animation::dot(time), later = launch_animation::dot(time + 0.01f);
+        const float radius = std::hypot(d.x, d.y), step = std::hypot(later.x - d.x, later.y - d.y);
+        if (radius > 1.0001f || step > 0.06f) return 2538;
+    }
+    const auto touch = launch_animation::dot(launch_animation::bounce_seconds * 3);
+    if (std::abs(std::hypot(touch.x, touch.y) - 1) > 0.001f || std::hypot(launch_animation::dot(launch_animation::bounce_seconds * 3.5f).x,
+        launch_animation::dot(launch_animation::bounce_seconds * 3.5f).y) > 0.9f) return 2539;
+    if (launch_animation::dot(1).x == launch_animation::dot(30).x && launch_animation::dot(1).y == launch_animation::dot(30).y) return 2540;
 
     auto captures = userConfigDirectory() / L"launch-captures";
     wchar_t folder[4096]{};

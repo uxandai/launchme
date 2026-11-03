@@ -486,6 +486,7 @@ void Launcher::tick() {
     pollGameFocus();
     pollTray();
     pollReturnFocus();
+    pollOverlayReturn();
     startRatings();
     pollLibrarySave();
     pollPluginGameViews();

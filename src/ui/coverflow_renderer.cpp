@@ -535,7 +535,7 @@ void Renderer::drawCdCase(const GameCard& card, size_t index) {
     line(insert.left + 8, insert.top + 4, insert.right - 8, insert.top + 4, gray(1, 0.24f * alpha), 2);
     if (!card.game.installed) { brush(gray(0, 0.25f * alpha)); target_->FillRectangle(insert, solid_.Get()); }
     if (card.game.installation.active() || sessionOf(card.game) != SessionState::none)
-        drawCardStatus(r.left, r.top, w, h, alpha, card.game.installation.active() ? installationText(card.game.installation) :
+        drawCardStatus(r.left, r.top, w, h, alpha * (card.game.installation.active() ? 1.0f : statusFade(card.game)), card.game.installation.active() ? installationText(card.game.installation) :
             sessionOf(card.game) == SessionState::frozen ? tr(L"Wstrzymana") : tr(L"W grze"));
 }
 
@@ -573,8 +573,9 @@ void Renderer::drawCoverflowPoster(const GameCard& card, size_t index) {
     // Selection is the larger case and disc, never a neon outline around the print.
     brush(gray(1, 0.12f * alpha)); target_->DrawGeometry(shape.Get(), solid_.Get(), 0.8f);
     if (card.game.installation.active() || session != SessionState::none) {
-        drawCardStatusShade(rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top, alpha, shape.Get());
-        drawCardStatus(rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top, alpha,
+        const float status_fade = card.game.installation.active() ? 1.0f : statusFade(card.game);
+        drawCardStatusShade(rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top, alpha * status_fade, shape.Get());
+        drawCardStatus(rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top, alpha * status_fade,
             card.game.installation.active() ? installationText(card.game.installation) :
             session == SessionState::frozen ? tr(L"Wstrzymana") : tr(L"W grze"));
     }

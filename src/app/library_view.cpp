@@ -454,6 +454,8 @@ void Launcher::noteUserInput() {
     last_input_ = std::chrono::steady_clock::now();
 }
 void Launcher::restorePlace() {
+    // Settings, a device page or Guide's drawer opened before the scans finished: the saved place does not take it away.
+    if (((screen_ == ScreenMode::settings || screen_ == ScreenMode::devices) && (overlay_return_ || anyActiveSession())) || gameOverlayOpen()) { restore_pending_ = false; return; }
     if (desktop_mode_ || !restore_pending_ || !library_state_.bookmark) { restore_pending_ = false; return; }
     const auto saved = *library_state_.bookmark;
     if (saved.account != account_) { restore_pending_ = false; return; }
