@@ -112,10 +112,17 @@ ImpellerTexture Image::texture() {
         made = LaunchmeImpellerTextureNew(context(), format_ == 1 ? kLaunchmeImpellerBC1 : kLaunchmeImpellerBC3, width_, height_,
                                           blocks_.data(), blocks_.size());
     } else if (pixels_) {
-        made = LaunchmeImpellerTextureNew(context(), kLaunchmeImpellerBGRA, width_, height_, pixels_->data(), pixels_->size());
+        const bool native = bgraNative();
+        if (native) {
+            made = LaunchmeImpellerTextureNew(context(), kLaunchmeImpellerBGRA, width_, height_, pixels_->data(), pixels_->size());
+        } else {
+            std::vector<uint8_t> rgba(*pixels_);
+            for (size_t i = 0; i < rgba.size(); i += 4) std::swap(rgba[i], rgba[i + 2]);
+            made = LaunchmeImpellerTextureNew(context(), kLaunchmeImpellerRGBA, width_, height_, rgba.data(), rgba.size());
+        }
         // The memory copy goes once the GPU has the pixels (read back when someone needs them);
         // images that are drawn once and thrown away never pay for both.
-        if (made) { rgba_ = false; pixels_.reset(); }
+        if (made) { rgba_ = !native; pixels_.reset(); }
     }
     if (!made) return nullptr;
     texture_ = made;

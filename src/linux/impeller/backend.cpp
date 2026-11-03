@@ -110,6 +110,8 @@ bool tryOpenGl() {
     return true;
 }
 
+bool bgraNative() { return state().vulkan; }
+
 bool supportsCompression(unsigned format) {
     if (!active() || (format != 1 && format != 3)) return false;
     return LaunchmeImpellerSupportsFormat(context(), format == 1 ? kLaunchmeImpellerBC1 : kLaunchmeImpellerBC3);

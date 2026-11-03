@@ -1,5 +1,6 @@
 #include "visibility.hpp"
 
+#include <charconv>
 #include <fstream>
 #include <string>
 #include <string_view>
@@ -7,8 +8,11 @@
 namespace {
 constexpr uint64_t steam_id_offset = 76561197960265728ULL;
 
+// No exceptions: "users" and every other non-numeric key of loginusers.vdf passes through here.
 uint64_t number(const std::string& value) {
-    try { return std::stoull(value); } catch (...) { return 0; }
+    uint64_t result = 0;
+    const auto [end, error] = std::from_chars(value.data(), value.data() + value.size(), result);
+    return error == std::errc() ? result : 0;
 }
 
 uint64_t activeAccount(const std::filesystem::path& root) {

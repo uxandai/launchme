@@ -375,6 +375,9 @@ bool present(SDL_Window* window);
 void releaseWindow(SDL_Window* window);
 void shutdown();
 bool supportsCompression(unsigned format); // 1: BC1; 3: BC3.
+// Vulkan samples B8G8R8A8 textures as they are; Impeller's OpenGL ES backend takes the same bytes as RGBA, so there
+// pictures are uploaded as RGBA (Image::texture).
+bool bgraNative();
 
 // ---- Text (typography.cpp) ----------------------------------------------------------------
 

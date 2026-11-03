@@ -5,6 +5,7 @@
 #include "artwork/block_compression.hpp"
 #include <d2d1_2helper.h>
 #include <cstdlib>
+#include <cmath>
 #include <iostream>
 
 using Microsoft::WRL::ComPtr;
@@ -54,6 +55,18 @@ int main(int argc, char** argv) {
     target->PushAxisAlignedClip(D2D1::RectF(32, 0, 48, 16), D2D1_ANTIALIAS_MODE_ALIASED);
     target->FillRectangle(D2D1::RectF(32, 0, 64, 64), green.Get());
     target->PopAxisAlignedClip();
+    // Plain premultiplied BGRA with alpha, as the companion's pictures are: drawn directly, through the device
+    // context's cubic mode, and at partial alpha. Blue and red must keep their places.
+    const uint8_t solid_pixels[16]{30, 100, 200, 255, 30, 100, 200, 255, 30, 100, 200, 255, 30, 100, 200, 255};            // B G R A
+    const uint8_t soft_pixels[16]{15, 50, 100, 128, 15, 50, 100, 128, 15, 50, 100, 128, 15, 50, 100, 128};
+    ComPtr<ID2D1Bitmap> solid_bitmap, soft_bitmap;
+    const auto bgra = D2D1::BitmapProperties(D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED));
+    if (FAILED(target->CreateBitmap({2, 2}, solid_pixels, 8, bgra, solid_bitmap.GetAddressOf())) ||
+        FAILED(target->CreateBitmap({2, 2}, soft_pixels, 8, bgra, soft_bitmap.GetAddressOf()))) return 20;
+    target->DrawBitmap(solid_bitmap.Get(), D2D1::RectF(0, 32, 16, 48));
+    context->DrawBitmap(solid_bitmap.Get(), D2D1::RectF(16, 32, 32, 48), 1.0f, D2D1_INTERPOLATION_MODE_HIGH_QUALITY_CUBIC, nullptr, nullptr);
+    context->DrawBitmap(soft_bitmap.Get(), D2D1::RectF(32, 32, 48, 48), 1.0f, D2D1_INTERPOLATION_MODE_HIGH_QUALITY_CUBIC, nullptr, nullptr);
+    target->DrawBitmap(solid_bitmap.Get(), D2D1::RectF(48, 32, 64, 48), 0.5f, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
     if (FAILED(target->EndDraw())) return 9;
     ComPtr<ID2D1Bitmap> copy;
     if (FAILED(target->CreateBitmap({64, 64}, nullptr, 0,
@@ -66,6 +79,12 @@ int main(int argc, char** argv) {
     const auto pixel = [&](int x, int y, int channel) { return (*bytes)[(y * 64 + x) * 4 + channel]; };
     if (bc && (pixel(8, 8, 2) < 240 || pixel(24, 8, 2) < 110 || pixel(24, 8, 2) > 145)) return 12;
     if (pixel(40, 8, 1) < 240 || pixel(55, 8, 1) != 0 || pixel(40, 25, 1) != 0) return 13;
+    const auto near = [&](int x, int y, int channel, int expected) { return std::abs(int{pixel(x, y, channel)} - expected) <= 6; };
+    // Opaque 200,100,30 (R,G,B): plain, cubic; the half-alpha one is 100,50,15 over black; 0.5 opacity halves the solid one.
+    if (!near(8, 40, 2, 200) || !near(8, 40, 1, 100) || !near(8, 40, 0, 30)) return 21;
+    if (!near(24, 40, 2, 200) || !near(24, 40, 1, 100) || !near(24, 40, 0, 30)) return 22;
+    if (!near(40, 40, 2, 100) || !near(40, 40, 1, 50) || !near(40, 40, 0, 15)) return 23;
+    if (!near(56, 40, 2, 100) || !near(56, 40, 1, 50) || !near(56, 40, 0, 15)) return 24;
     DestroyWindow(window.handle); window.handle = nullptr;
     target->BeginDraw();
     if (target->EndDraw() != D2DERR_RECREATE_TARGET) return 14;

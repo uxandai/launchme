@@ -1,0 +1,10 @@
+/* Only the C API leaves libimpeller.so. The engine links LLVM's libunwind and libc++ statically; their
+   exported _Unwind_* would otherwise replace the system's unwinder for the whole process and break
+   C++ exceptions with a newer libstdc++ (Arch: every catch ended in std::terminate). */
+{
+  global:
+    Impeller*;
+    Launchme*;
+  local:
+    *;
+};
