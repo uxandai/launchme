@@ -1,0 +1,37 @@
+# Keeps the Impeller SDK and SDL3 builds in main's cache. A run started by a tag can read its own
+# caches and the default branch's, not those of other tags, so without this every release rebuilds
+# both. Runs when their build inputs change; weekly, because GitHub drops a cache unused for 7 days.
+
+name: Linux caches
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/actions/linux-dependencies/**
+      - .github/workflows/linux-caches.yml
+      - tools/linux/build-impeller.sh
+      - tools/linux/prepare-impeller.py
+      - tools/linux/impeller/**
+  schedule:
+    - cron: "0 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    name: Impeller and SDL3
+    runs-on: ubuntu-24.04
+    env:
+      CC: gcc-14
+      CXX: g++-14
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/linux-dependencies

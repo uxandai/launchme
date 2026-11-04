@@ -1,0 +1,83 @@
+# What the Linux build needs: the system packages, the Impeller SDK and SDL3, from the cache or built.
+# Shared by release.yml and linux-caches.yml so that the cached builds and the release agree on the
+# packages (SDL3 leaves out a back end whose headers are missing) and on the cache keys.
+# Run with CC and CXX set to gcc-14, after actions/checkout (the Impeller key hashes the checkout).
+
+name: Linux dependencies
+description: System packages, the Impeller SDK and SDL3 for the Linux build
+
+inputs:
+  sdl3-tag:
+    description: The SDL release to build
+    default: release-3.4.18
+
+runs:
+  using: composite
+  steps:
+    # docs/linux-port.md's packages, by their Ubuntu names; GTK 4 + WebKitGTK for the browser helper,
+    # the X11/Wayland/audio headers for SDL3, ImageMagick for the AppImage's icon.
+    - name: Install system dependencies
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends \
+          gcc-14 g++-14 clang cmake ninja-build pkg-config git python3 nasm file imagemagick \
+          libicu-dev libssl-dev libsecret-1-dev libcurl4-openssl-dev libpng-dev libwebp-dev libexpat1-dev \
+          libsqlite3-dev libglib2.0-dev libarchive-dev libsystemd-dev libpulse-dev \
+          libavformat-dev libavcodec-dev libavutil-dev libswresample-dev libswscale-dev \
+          libfontconfig-dev libfreetype-dev libharfbuzz-dev libgl-dev libegl-dev \
+          libgtk-4-dev libwebkitgtk-6.0-dev libsoup-3.0-dev libx11-dev \
+          libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxss-dev libxfixes-dev libxtst-dev libxkbcommon-dev \
+          libwayland-dev wayland-protocols libdecor-0-dev libdrm-dev libgbm-dev libgles-dev \
+          libasound2-dev libpipewire-0.3-dev libudev-dev libdbus-1-dev libusb-1.0-0-dev
+
+    # The Impeller SDK (a pinned Flutter engine revision plus our C ABI extension) takes the longest;
+    # it is rebuilt only when its build inputs change. ~/launchme-impeller/sdk is where
+    # build-impeller.sh puts it and where CMake (LAUNCHME_IMPELLER_DIR) looks by default. Restore and
+    # save are separate steps so a build is kept even when a later step fails.
+    - name: Restore Impeller
+      id: impeller
+      uses: actions/cache/restore@v6
+      with:
+        path: ~/launchme-impeller/sdk
+        key: impeller-${{ runner.os }}-${{ hashFiles('tools/linux/build-impeller.sh', 'tools/linux/prepare-impeller.py', 'tools/linux/impeller/**') }}
+
+    - name: Build Impeller
+      if: steps.impeller.outputs.cache-hit != 'true'
+      shell: bash
+      run: bash tools/linux/build-impeller.sh
+
+    - name: Save Impeller
+      if: steps.impeller.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v6
+      with:
+        path: ~/launchme-impeller/sdk
+        key: ${{ steps.impeller.outputs.cache-primary-key }}
+
+    # SDL3 is not packaged in Ubuntu 24.04: the version tools/linux/wsl-build-sdl3.sh builds, with
+    # the X11, Wayland and audio back ends of SDL's README-linux.
+    - name: Restore SDL3
+      id: sdl3
+      uses: actions/cache/restore@v6
+      with:
+        path: ~/sdl3
+        key: sdl3-${{ runner.os }}-${{ inputs.sdl3-tag }}
+
+    - name: Build SDL3
+      if: steps.sdl3.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        SDL3_TAG: ${{ inputs.sdl3-tag }}
+      run: |
+        git clone --depth 1 --branch "$SDL3_TAG" https://github.com/libsdl-org/SDL.git "$RUNNER_TEMP/SDL"
+        cmake -S "$RUNNER_TEMP/SDL" -B "$RUNNER_TEMP/SDL/build" -G Ninja -DCMAKE_BUILD_TYPE=Release \
+          "-DCMAKE_INSTALL_PREFIX=$HOME/sdl3" -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TESTS=OFF -DSDL_EXAMPLES=OFF
+        cmake --build "$RUNNER_TEMP/SDL/build"
+        cmake --install "$RUNNER_TEMP/SDL/build"
+
+    - name: Save SDL3
+      if: steps.sdl3.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v6
+      with:
+        path: ~/sdl3
+        key: ${{ steps.sdl3.outputs.cache-primary-key }}
