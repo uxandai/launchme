@@ -225,7 +225,7 @@ void Renderer::drawDesktop() {
     layout.tools = static_cast<int>(view.tools.size());
     layout.companion_card = view.companion_card;
     layout.narrow = view.sidebar_narrow; layout.pane_width = view.pane_width;
-    desktop_chips_.clear(); desktop_chip_add_ = {}; desktop_rating_ = {}; desktop_protondb_ = {}; desktop_achievements_ = {}; desktop_cloud_ = {}; desktop_studios_ = {};
+    desktop_chips_.clear(); desktop_chip_add_ = {}; desktop_rating_ = {}; desktop_protondb_ = {}; desktop_hardware_ = {}; desktop_achievements_ = {}; desktop_cloud_ = {}; desktop_studios_ = {};
     desktop_hotspots_.clear(); // Widżety record their controls here.
     companion_bubble_ = {};
     brush(app_bg);

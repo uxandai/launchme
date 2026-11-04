@@ -280,6 +280,45 @@ int LauncherUiTest::desktop(HWND window) {
     app.desktopPageActivate({SheetHit::Kind::close}, false);
     if (app.screen_ != ScreenMode::shelves) return 7628;
 
+    // Czy to u mnie zadziała: above Opis, grey without data, then a verdict that unfolds into a table.
+    {
+        app.desktopFocus(0); app.desktop_zone_ = 1;
+        desktop_ui::View view;
+        app.desktopView(view);
+        if (!view.pane.hardware.shown || view.pane.hardware.level != 0 || view.pane.hardware.summary != tr(L"Brak danych o wymaganiach")) return 8350;
+        Launcher::HardwareData data;
+        sysreq::Spec minimum, recommended;
+        minimum.cpu = L"Core i7-6700 or Ryzen 5 1600"; minimum.gpu = L"GeForce GTX 1060 6GB or Radeon RX 580 8GB"; minimum.ram = L"12 GB RAM"; minimum.ram_mb = 12288;
+        minimum.storage = L"70 GB available space"; minimum.storage_mb = 70 * 1024;
+        recommended.cpu = L"Core i5-8400 / Ryzen 5 2600"; recommended.gpu = L"GeForce GTX 1660 / Radeon RX 5500 XT"; recommended.ram = L"16 GB RAM"; recommended.ram_mb = 16384;
+        data.needs.minimum = minimum; data.needs.recommended = recommended;
+        data.machine.cpu = L"AMD Ryzen 5 3600 6-Core Processor"; data.machine.gpu = L"NVIDIA GeForce RTX 3070";
+        data.machine.ram_mb = 32768; data.machine.vram_mb = 8192; data.machine.free_mb = 400 * 1024;
+        app.hardwareArrived(gameKey(app.cards_[0].game), data);
+        app.desktopView(view);
+        const auto& check = view.pane.hardware;
+        // An installed game skips the disk row: processor, graphics card, RAM.
+        if (check.level != 1 || check.summary != tr(L"Powinna działać płynnie") || check.rows.size() != (app.cards_[0].game.installed ? 3u : 4u)) return 8351;
+        if (check.rows[1].yours.find(L"RTX 3070") == std::wstring::npos) return 8351;
+        app.paint();
+        const auto chip = app.renderer_.desktopHardware();
+        const float x = (chip.left + chip.right) * 0.5f, y = (chip.top + chip.bottom) * 0.5f;
+        const auto hit = app.desktopHit(x, y);
+        if (chip.right <= chip.left || hit.target != Target::pane_hardware || app.desktopCursor(x * app.desktopScale(), y * app.desktopScale()) != IDC_HAND) return 8352;
+        if (!capture(L"desktop-pane-hardware.png")) return 8353;
+        app.desktopActivate(hit);
+        if (!app.desktop_hardware_open_) return 8354;
+        app.paint();
+        if (!capture(L"desktop-pane-hardware-open.png")) return 8355;
+        // A weaker PC turns it red; unfolded or not, the verdict stays.
+        data.machine.ram_mb = 8192;
+        app.hardwareArrived(gameKey(app.cards_[0].game), data);
+        app.desktopView(view);
+        if (view.pane.hardware.level != 3 || !capture(L"desktop-pane-hardware-red.png")) return 8356;
+        app.desktopActivate(app.desktopHit(x, y));
+        if (app.desktop_hardware_open_) return 8357;
+    }
+
     // The pane's achievements number opens Szczegóły with its list; with none, nothing to click.
     {
         const float scale = app.desktopScale();

@@ -3109,6 +3109,16 @@ constexpr Entry entries[] = {
     {L"Żadna gra nie jest zainstalowana w kilku bibliotekach.", L"No game is installed in more than one library."},
     {L" gier w kilku bibliotekach: ", L" games in several libraries: "},
     {L" do odzyskania. Usuń zbędne kopie ręcznie po zamknięciu Steam.", L" to reclaim. Delete the extra copies by hand after closing Steam."},
+    {L"Wolne miejsce", L"Free space"},
+    {L"Minimum", L"Minimum"},
+    {L"Zalecane", L"Recommended"},
+    {L"Masz", L"You have"},
+    {L"Sprawdzam wymagania…", L"Checking the requirements…"},
+    {L"Brak danych o wymaganiach", L"No requirements data"},
+    {L"Powinna działać płynnie", L"Should run smoothly"},
+    {L"Powinna działać, ale poniżej zalecanych", L"Should run, but below the recommended"},
+    {L"Może nie działać na tym sprzęcie", L"May not run on this PC"},
+    {L"Za mało danych, by ocenić", L"Not enough data to tell"},
 };
 } // namespace
 

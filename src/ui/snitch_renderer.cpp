@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <numbers>
 
 using namespace render_detail;
 
@@ -22,9 +23,41 @@ void Renderer::drawSnitch() {
     // Profile shortcut: the same Widgets destination as the dock, available without downloaded art.
     const auto profile = snitch_layout::profile();
     const float cx = (profile.left + profile.right) * 0.5f, cy = (profile.top + profile.bottom) * 0.5f;
-    brush(gray(0.30f)); target_->FillEllipse(D2D1::Ellipse({cx, cy}, 32, 32), solid_.Get());
-    brush(gray(0.96f)); target_->DrawEllipse(D2D1::Ellipse({cx, cy - 7}, 8, 8), solid_.Get(), 2);
-    target_->DrawRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(cx - 15, cy + 6, cx + 15, cy + 19), 6, 6), solid_.Get(), 2);
+    // The Steam account's picture when the client has it; else the silhouette. Focused (Up from the row):
+    // a lift, a halo in the accent and a pulsing white ring, like the real console's user icon.
+    if (snitch_avatar_.pixels != context_->snitch_avatar) {
+        snitch_avatar_ = {};
+        snitch_avatar_.short_edge = 256;
+        snitch_avatar_.pixels = context_->snitch_avatar;
+    }
+    if (snitch_avatar_.loaded() && !snitch_avatar_.bitmap) createBitmap(snitch_avatar_);
+    // Eased like the dock's focus (quick_progress): the picture lifts and the dock's ring, with its
+    // light travelling clockwise, fades in around it.
+    const float focus = smoothFade(context_->snitch_profile_progress);
+    const float lift = 1.0f + 0.14f * focus, r = 32 * lift;
+    if (focus > 0.004f) {
+        const float ring_radius = r + 4.0f;
+        const auto ring = D2D1::Ellipse({cx, cy}, ring_radius, ring_radius);
+        if (quick_ring_) {
+            const float pi = std::numbers::pi_v<float>;
+            const float angle = std::fmod(std::max(0.0f, context_->quick_ring_time) / 4.0f, 1.0f) * 2 * pi - pi * 0.5f;
+            const float dx = std::cos(angle) * ring_radius, dy = std::sin(angle) * ring_radius;
+            quick_ring_->SetStartPoint(D2D1::Point2F(cx + dx, cy + dy));
+            quick_ring_->SetEndPoint(D2D1::Point2F(cx - dx, cy - dy));
+            quick_ring_->SetOpacity(focus);
+            target_->DrawEllipse(ring, quick_ring_.Get(), 2.5f);
+        } else {
+            brush(gray(0.93f, 0.85f * focus));
+            target_->DrawEllipse(ring, solid_.Get(), 2.5f);
+        }
+    }
+    brush(gray(0.30f)); target_->FillEllipse(D2D1::Ellipse({cx, cy}, r, r), solid_.Get());
+    if (snitch_avatar_.bitmap) {
+        fillImage(snitch_avatar_, D2D1::RectF(cx - r, cy - r, cx + r, cy + r), r, reveal(snitch_avatar_));
+    } else {
+        brush(gray(0.96f)); target_->DrawEllipse(D2D1::Ellipse({cx, cy - 7 * lift}, 8 * lift, 8 * lift), solid_.Get(), 2);
+        target_->DrawRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(cx - 15 * lift, cy + 6 * lift, cx + 15 * lift, cy + 19 * lift), 6 * lift, 6 * lift), solid_.Get(), 2);
+    }
 
     float right = width - 80;
     if (context_->snitch_battery >= 0) {

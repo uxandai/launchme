@@ -494,6 +494,8 @@ struct ViewContext {
     // Metro's light theme (Opcje układu → Jasny motyw).
     bool metro_light = false;
     bool snitch_colour_icons = false; // Snitch: a few dock discs in colour.
+    ImageBytes snitch_avatar;         // Snitch: the Steam account's picture in the profile shortcut (empty: the silhouette).
+    float snitch_profile_progress = 0; // 0..1, eased: the shortcut gains the focus (a lift and the dock's travelling ring).
     // The game menu as the large dialog with icons (Okna i podpowiedzi → Duże menu gry).
     bool menu_dialog = false;
     const Notification* notification = nullptr; // Borrowed for the duration of paint().

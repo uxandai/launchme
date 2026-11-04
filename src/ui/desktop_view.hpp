@@ -183,7 +183,8 @@ enum class Target {
     pane_more, pane_quick, pane_chip, pane_chip_add, pane_rating, pane_studio, bulk, menu_item, submenu_item, popover_row, popover_all,
     empty_primary, empty_secondary, grid, library_add, library_refresh, companion_more,
     sidebar_toggle, pane_resize, pane_achievements, pane_cloud,
-    pane_protondb // Linux: ProtonDB and Steam Deck ratings, opening ProtonDB's page.
+    pane_protondb, // Linux: ProtonDB and Steam Deck ratings, opening ProtonDB's page.
+    pane_hardware  // The hardware check above Opis: unfolds this PC against the game's requirements.
 };
 struct Hit {
     Target target = Target::none;
@@ -194,6 +195,14 @@ enum class Tool { glance, companion, store, friends, downloads, tv, settings, ta
 
 // ---- What the renderer draws -------------------------------------------------------------------
 
+// "Czy to u mnie zadziała": a PC game's requirements against this PC (src/app/hardware_check.cpp).
+struct Hardware {
+    bool shown = false, open = false, loading = false;
+    int level = 0; // 0 grey (unknown), 1 green, 2 yellow, 3 red.
+    std::wstring summary;
+    struct Row { int level = 0; std::wstring label, yours, minimum, recommended; };
+    std::vector<Row> rows;
+};
 struct Pane {
     bool game = false;
     std::wstring name, platform, status, primary;
@@ -202,6 +211,7 @@ struct Pane {
     bool favorite = false;
     float favorite_pulse = 0; // 1 → 0 after toggling favourite: the star pops.
     std::wstring playtime, last_played, achievements, rating;
+    Hardware hardware;
     std::wstring protondb; // Linux: "ProtonDB: Gold · Steam Deck: Verified"; empty: unknown or not asked.
     float achievements_share = -1;
     bool achievements_link = false; // The number opens Szczegóły → Osiągnięcia.

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(launchme VERSION 0.7.4 LANGUAGES C CXX)
+project(launchme VERSION 0.7.5 LANGUAGES C CXX)
 
 if(NOT WIN32)
     # Linux (highly experimental, docs/linux-port.md): the shared core, its tests and the launcher on SDL3 + Skia.
@@ -371,6 +371,8 @@ if(BUILD_TESTING)
     launchme_executable(protondb_tests TEST protondb_and_steam_deck_ratings
         SOURCES tests/protondb_tests.cpp src/net/protondb.cpp ${LAUNCHME_WEB_SOURCES}
         LIBS winhttp shell32 ole32)
+    launchme_executable(system_requirements_tests TEST system_requirements_and_hardware_ratings
+        SOURCES tests/system_requirements_tests.cpp src/library/system_requirements.cpp src/library/hardware_rating.cpp src/net/json.cpp)
     launchme_executable(library_state_tests TEST library_view_state_and_sorting
         SOURCES tests/library_state_tests.cpp src/platform/library_state.cpp src/library/view_options.cpp)
     launchme_executable(device_tests TEST device_input_and_audio_transactions

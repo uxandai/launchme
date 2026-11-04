@@ -95,12 +95,17 @@ std::wstring initialsOf(const std::wstring& name) {
 
 // ---- The background read ----------------------------------------------------------------------
 
+// The account's picture as the Steam client keeps it (no network); empty without one.
+std::vector<uint8_t> readSteamAvatar(const std::filesystem::path& steam_root, uint64_t steam_id) {
+    if (steam_root.empty() || steam_id <= steam_accounts::steam_id_offset) return {};
+    return readPicture(steam_root / L"config" / L"avatarcache" / (std::to_wstring(steam_id) + L".png"));
+}
+
 ProfileScanResult readProfile(const ProfileScanRequest& request, const std::function<bool()>& cancelled) {
     ProfileScanResult result;
     result.scanned = request.scanned;
     if (!request.steam_root.empty() && request.steam_id > steam_accounts::steam_id_offset) {
-        // The account's picture as the Steam client keeps it (no network).
-        result.avatar = readPicture(request.steam_root / L"config" / L"avatarcache" / (std::to_wstring(request.steam_id) + L".png"));
+        result.avatar = readSteamAvatar(request.steam_root, request.steam_id);
         // Unlocks: only games whose stats file changed since the last read.
         const auto account = std::to_wstring(request.steam_id - steam_accounts::steam_id_offset);
         const auto folder = request.steam_root / L"appcache" / L"stats";
@@ -553,7 +558,11 @@ void Launcher::profileScanned(uint32_t generation, bool steam, ProfileScanResult
     if (generation != profile_generation_) return;
     profile_.loading = false;
     bool changed = false;
-    if (!result.avatar.empty() && result.avatar != profile_avatar_) { profile_avatar_ = std::move(result.avatar); changed = true; }
+    if (!result.avatar.empty() && result.avatar != profile_avatar_) {
+        profile_avatar_ = std::move(result.avatar);
+        snitch_avatar_ = shareImage(profile_avatar_); // Snitch's home shows the same picture.
+        changed = true;
+    }
     if (steam) {
         const auto before = history_;
         for (auto& game : result.games) {

@@ -277,6 +277,10 @@ set(LAUNCHME_APP_SOURCES
     src/library/game_ratings.cpp
     src/library/rawg.cpp
     src/library/steam_stats.cpp
+    src/library/system_requirements.cpp
+    src/library/hardware_rating.cpp
+    src/platform/hardware_profile.cpp
+    src/app/hardware_check.cpp
     src/library/binary_kv.cpp
     src/library/steam_achievements.cpp
     src/library/steam_appinfo.cpp

@@ -103,7 +103,7 @@ void Renderer::drawCard(const GameCard& card, size_t index) {
     // (as the rectangular tiles do) instead of both snapping in one frame.
     const bool may_inset = !context_->psfive && context_->screen != ScreenMode::details && context_->screen != ScreenMode::crop &&
         !context_->category_rail_focus && (!context_->library_controls || context_->library_controls->focus < 0);
-    const float inner = may_inset ? focusInset(3.2f) * std::clamp(card.emphasis, 0.0f, 1.0f) * (1.0f - smoothFade(context_->quick_progress)) : 0.0f;
+    const float inner = may_inset ? focusInset(3.2f) * std::clamp(card.emphasis, 0.0f, 1.0f) * (1.0f - smoothFade(std::max(context_->quick_progress, context_->snitch_profile_progress))) : 0.0f;
     if (inner > 0.05f) {
         target_->SetTransform(D2D1::Matrix3x2F::Scale(size, size) * D2D1::Matrix3x2F::Translation(x, y) * base);
         brush(color(0.012f, 0.014f, 0.018f, 0.94f * transparency));
@@ -210,7 +210,7 @@ void Renderer::drawCard(const GameCard& card, size_t index) {
     // but its outline fades into the plain edge while the bar is open.
     // PSfive: the eased focus weight, which also lets the outline go while "Graj" / "…" have the focus.
     const float emphasis = context_->psfive ? (selected ? card.emphasis : 0.0f) :
-                           selected ? 1.0f - smoothFade(context_->quick_progress) : 0.0f;
+                           selected ? 1.0f - smoothFade(std::max(context_->quick_progress, context_->snitch_profile_progress)) : 0.0f;
     // Experimental spring focus: the card keeps a plain edge, the outline is drawn on its own rectangle.
     // PSfive frames the focused tile outside its edge instead (drawPsfiveFrame) and has no plain edge.
     const float edge = context_->focus_ring || context_->psfive ? 0.0f : emphasis;

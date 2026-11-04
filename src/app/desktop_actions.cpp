@@ -101,6 +101,7 @@ void Launcher::desktopActivate(const desktop_ui::Hit& hit) {
     }
     case Target::pane_rating: openRatingSource(); return;
     case Target::pane_protondb: if (!cards_.empty()) openProtonDb(cards_[selected_].game); return;
+    case Target::pane_hardware: desktop_hardware_open_ = !desktop_hardware_open_; InvalidateRect(hwnd_, nullptr, FALSE); return;
     case Target::pane_studio: { // Developer or Wydawca: that studio's games.
         if (cards_.empty()) return;
         bool loading = false;

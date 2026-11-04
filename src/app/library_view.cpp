@@ -258,6 +258,7 @@ void Launcher::closeLibraryPanel() {
 }
 void Launcher::focusCard(size_t index, bool reveal) {
     if (cards_.empty()) return;
+    snitch_profile_focus_ = false; // Snitch: a card takes the focus back from the profile picture.
     if (xmbActive()) { xmbFocusCard(std::min(index, cards_.size() - 1)); return; }
     if (flixActive()) { flixFocusCard(std::min(index, cards_.size() - 1)); return; }
     if (metroActive()) { metroFocus(std::min(index, cards_.size() - 1)); return; }

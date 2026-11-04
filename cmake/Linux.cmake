@@ -73,6 +73,9 @@ set(LAUNCHME_CORE_SOURCES
     src/library/steam_appinfo.cpp
     src/library/steam_owned.cpp
     src/library/steam_stats.cpp
+    src/library/system_requirements.cpp
+    src/library/hardware_rating.cpp
+    src/platform/hardware_profile.cpp
     src/library/steam_sync_state.cpp
     src/library/steam_tags_builtin.cpp
     src/library/store_adapter.cpp
@@ -318,6 +321,7 @@ if(BUILD_TESTING)
     launchme_executable(game_fps_tests TEST game_fps_history_and_overlay_bar SOURCES tests/game_fps_tests.cpp)
     launchme_executable(failure_cache_tests TEST persistent_artwork_failure_cache SOURCES tests/failure_cache_tests.cpp)
     launchme_executable(protondb_tests TEST protondb_and_steam_deck_ratings SOURCES tests/protondb_tests.cpp)
+    launchme_executable(system_requirements_tests TEST system_requirements_and_hardware_ratings SOURCES tests/system_requirements_tests.cpp)
     launchme_executable(ludusavi_tests TEST ludusavi_save_backups SOURCES tests/ludusavi_tests.cpp src/library/ludusavi.cpp src/platform/helper_process.cpp)
     launchme_executable(controller_models_tests TEST controller_picture_classification SOURCES tests/controller_models_tests.cpp)
     launchme_executable(profile_data_tests TEST play_journal_achievement_history_and_playtime SOURCES tests/profile_data_tests.cpp)

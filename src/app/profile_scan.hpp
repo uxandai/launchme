@@ -36,4 +36,5 @@ struct ProfileScanResult {
     std::map<std::wstring, std::vector<uint8_t>> icons; // URL → picture.
 };
 using ProfileReader = std::function<ProfileScanResult(const ProfileScanRequest&, const std::function<bool()>& cancelled)>;
+std::vector<uint8_t> readSteamAvatar(const std::filesystem::path& steam_root, uint64_t steam_id);
 ProfileScanResult readProfile(const ProfileScanRequest& request, const std::function<bool()>& cancelled);

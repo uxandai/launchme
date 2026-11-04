@@ -53,6 +53,7 @@ void Launcher::navigate(int amount, bool edge_menu) {
         return;
     }
     if (flixRailFocused()) { if (amount > 0) flixRailFocus(-1); else navigationBoundary(); return; } // Right: back to the tile.
+    if (snitchProfileFocused()) { if (amount > 0) snitchFocusProfile(false); else if (edge_menu) navigationBoundary(); return; } // Right: back to the row.
     if (quick_open_) { quickMove(amount); return; }
     if (searchBackFocused() && !friends_open_) { if (edge_menu) navigationBoundary(); return; } // Back stands alone in its row.
     if (categoryRailActive() && category_rail_focus_ && edge_menu && !pending_launch_) {
@@ -254,6 +255,7 @@ void Launcher::back() {
         return;
     }
     if (flixRailFocused()) { flixRailFocus(-1); return; }
+    if (snitchProfileFocused()) { snitchFocusProfile(false); return; }
     if (quick_open_) { closeQuick(); return; }
     if (category_menu_open_) { closeCategoryMenu(); return; }
     if (menu_open_) { dismissMenu(); return; }
@@ -509,13 +511,14 @@ void Launcher::changeCategory(int amount) {
     // PSfive opens it from the buttons (Down) and closes it either way; with its details under the
     // row (Opcje układu → Szczegóły pod rzędem) it opens from above the tabs, and Down closes it.
     if (flixRailFocused()) { flixRailMove(amount); return; }
+    if (snitchProfileFocused()) { if (amount > 0) snitchFocusProfile(false); return; } // Down: back to the row.
     if (quick_open_) {
         if (psfiveActive() && settings_.psfive_details) { if (amount > 0) closeQuick(); else navigationBoundary(); return; }
         if (psfiveActive() || ((metroActive() || snitchActive()) ? amount < 0 : amount > 0)) closeQuick();
         return;
     }
     if (snitchActive()) {
-        if (amount > 0) openQuick(); else navigationBoundary();
+        if (amount > 0) openQuick(); else snitchFocusProfile(true); // Up from the row: the profile picture.
         return;
     }
     if (xmbActive()) { dismissMenu(); xmbVertical(amount); return; }

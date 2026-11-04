@@ -46,7 +46,21 @@ void Renderer::drawDownloads() {
     target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F((back.left + back.right) * 0.5f, (back.top + back.bottom) * 0.5f), 3.5f, 3.5f), solid_.Get());
     textLine(tr(L"Pobierania"), back.right + 26, (back.top + back.bottom) * 0.5f, layout.right() - back.right - 26, settings_heading_font_.Get(), gray(0.96f));
     if (!count) {
-        textLine(tr(L"Nic się nie pobiera."), layout.left, layout.top + 30, layout.right() - layout.left, menu_font_.Get(), palette::muted());
+        // Nothing downloading: a sad little cloud and one line, centred in the space under the heading.
+        const float cx = viewport_.width * 0.5f, cy = (layout.top + layout.bottom()) * 0.5f - 24;
+        const float scale = 4.2f;
+        D2D1_MATRIX_3X2_F outer{};
+        target_->GetTransform(&outer);
+        target_->SetTransform(D2D1::Matrix3x2F::Scale(scale, scale, D2D1::Point2F(cx, cy)) * outer);
+        drawCloudGlyph(cx, cy, gray(0.34f), std::nullopt);
+        const auto face = gray(0.10f);
+        brush(face);
+        for (const float dx : {-4.0f, 3.0f}) target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(cx + dx, cy - 3.2f), 1.0f, 1.0f), solid_.Get());
+        const D2D1_POINT_2F frown[] = {{cx - 3.5f, cy + 3.4f}, {cx - 2.2f, cy + 2.1f}, {cx - 0.5f, cy + 1.7f}, {cx + 1.2f, cy + 2.1f}, {cx + 2.5f, cy + 3.4f}};
+        for (size_t i = 0; i + 1 < std::size(frown); ++i) line(frown[i].x, frown[i].y, frown[i + 1].x, frown[i + 1].y, face, 0.9f);
+        target_->SetTransform(outer);
+        const float text_width = std::min(layout.right() - layout.left, 720.0f);
+        textLine(tr(L"Nic się nie pobiera."), cx - text_width * 0.5f, cy + 78, text_width, category_font_.Get(), gray(0.72f), DWRITE_TEXT_ALIGNMENT_CENTER);
         return;
     }
     target_->PushAxisAlignedClip(D2D1::RectF(layout.left - 4, layout.top - 4, layout.right() + 4, layout.bottom()), D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);

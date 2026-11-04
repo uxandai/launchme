@@ -47,6 +47,14 @@ int LauncherUiTest::snitch(HWND window) {
     app.navigate(-1); settle();
     app.navigate(-1); app.openCategoryMenu(); app.changeCategory(-1);
     if (app.selected_ || app.category_menu_open_ || app.category_ || app.quick_open_) return 8204;
+    // Up from the row lands on the profile picture (top left): the row loses its focus, Back or Down returns.
+    if (!app.snitchProfileFocused()) return 8270;
+    settle();
+    if (app.snitch_profile_progress_ < 0.95f || app.cards_[0].emphasis > 0.01f || !capture(L"snitch-profile-focus.png")) return 8271;
+    app.back(); settle();
+    if (app.snitchProfileFocused() || app.snitch_profile_progress_ > 0.01f) return 8272;
+    app.changeCategory(-1); app.changeCategory(1); settle();
+    if (app.snitchProfileFocused() || app.quick_open_) return 8273;
     app.navigate(2); settle();
     const auto key = gameKey(app.cards_[app.selected_].game);
     if (app.selected_ != 2 || std::abs(app.cards_[2].x - snitch_layout::left) > 1 ||

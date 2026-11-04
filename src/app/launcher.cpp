@@ -472,7 +472,7 @@ void Launcher::snapCardsForTransition() {
         card.size = target_size;
         card.aspect = aspect;
         card.opacity = 1.0f;
-        card.emphasis = i == selected_ && !quick_open_ && !flixRailFocused() && !(metro && metro_tabs_) && !psfive_buttons && !searchBackFocused() &&
+        card.emphasis = i == selected_ && !quick_open_ && !snitchProfileFocused() && !flixRailFocused() && !(metro && metro_tabs_) && !psfive_buttons && !searchBackFocused() &&
             !(libraryControls() && (library_controls_.focus >= 0 || library_controls_.open() ||
                                     (libraryOverview() && library_controls_.action >= 0))) ? 1.0f : 0.0f;
         if (renderer_.hasCover(i) || renderer_.hasPoster(i)) card.cover_opacity = 1.0f;
@@ -544,6 +544,8 @@ void Launcher::tick() {
     keyboard_progress_ += ((keyboard_.open ? 1.0f : 0.0f) - keyboard_progress_) * ease(dt, 14.0f);
     if (keyboard_progress_ < 0.002f) keyboard_progress_ = 0;
     quick_progress_ += ((quick_open_ ? 1.0f : 0.0f) - quick_progress_) * ease(dt, 7.0f);
+    snitch_profile_progress_ += ((snitchProfileFocused() ? 1.0f : 0.0f) - snitch_profile_progress_) * ease(dt, 7.0f);
+    if (snitch_profile_progress_ < 0.002f) snitch_profile_progress_ = 0;
     friends_progress_ += ((friends_open_ ? 1.0f : 0.0f) - friends_progress_) * ease(dt, 7.0f);
     category_menu_progress_ += ((category_menu_open_ ? 1.0f : 0.0f) - category_menu_progress_) * ease(dt, psfiveActive() ? 14.0f : 7.0f);
     const bool library_panels = libraryControls();
@@ -597,6 +599,7 @@ void Launcher::tick() {
                        (menu_progress_ > 0.003f && menu_progress_ < 0.997f) ||
                        (keyboard_progress_ > 0.003f && keyboard_progress_ < 0.997f) ||
                        (quick_progress_ > 0.003f && quick_progress_ < 0.997f) ||
+                       (snitch_profile_progress_ > 0.003f && snitch_profile_progress_ < 0.997f) ||
                        (library_menu_progress_ > 0.003f && library_menu_progress_ < 0.997f) ||
                        (library_views_progress_ > 0.003f && library_views_progress_ < 0.997f) ||
                        (library_dropdown_progress_ > 0 && library_dropdown_progress_ < 1) ||
@@ -727,7 +730,7 @@ void Launcher::tick() {
         }
         card.aspect = aspect;
         if (i == selected_) { focus_x = target_x; focus_y = target_y; focus_w = target_size * aspect; focus_h = target_size; }
-        const float emphasis = i == selected_ && !quick_open_ && !flixRailFocused() && !(metro && metro_tabs_) && !psfive_buttons && !searchBackFocused() &&
+        const float emphasis = i == selected_ && !quick_open_ && !snitchProfileFocused() && !flixRailFocused() && !(metro && metro_tabs_) && !psfive_buttons && !searchBackFocused() &&
             !(libraryControls() && (library_controls_.focus >= 0 || library_controls_.open() ||
                                     (libraryOverview() && library_controls_.action >= 0))) ? 1.0f : 0.0f; // Przegląd: its panel's buttons.
         // PSfive at start-up: the row slides in from the right, small, tile after tile, then the first
@@ -858,7 +861,7 @@ void Launcher::tick() {
     // The desktop library repaints only for its own motion and visible activity (an install's bar).
     if ((ambient && !desktop && !cards_.empty() && (screen_ == ScreenMode::shelves || screen_ == ScreenMode::platform_games ||
         screen_ == ScreenMode::details || grid)) || (ambient && desktop && visible_activity) || (ambient && searching()) ||
-        (ambient && !desktop && (quick_open_ || quick_progress_ > 0.003f)) || // The quick bar's focus ring light travels.
+        (ambient && !desktop && (quick_open_ || quick_progress_ > 0.003f || snitch_profile_progress_ > 0.003f)) || // The quick bar's focus ring light travels.
         profiler_.overlay() || renderer_.animating())
         needs_paint = true;
     const auto input_started = std::chrono::steady_clock::now();

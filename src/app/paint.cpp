@@ -558,6 +558,9 @@ void Launcher::paint(bool overlay) {
     }
     if (snitchActive()) {
         context.snitch = true;
+        snitchLoadAvatar();
+        context.snitch_avatar = snitch_avatar_;
+        context.snitch_profile_progress = snitch_profile_progress_;
         const auto local = local_time_();
         context.snitch_clock = drawer_clock::time(local, i18n::localeName());
         clock_minute_ = drawer_clock::minute(local);

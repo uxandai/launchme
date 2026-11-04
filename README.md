@@ -104,6 +104,8 @@ Settings → System → Help → **Open folder** (the version row) opens it.
 - **Desktop window mode** with a sidebar, search and a details pane; switch between it and full screen from
   the power menu. The sidebar folds to its icons (the button by the logo) and the details pane is as wide as
   you drag its edge (double-click it for the default).
+  Above the description a bar tells whether this PC meets a Steam or GOG game's requirements (green, yellow, red,
+  or grey without data); click it to compare your processor, graphics card and RAM with the minimum and recommended.
 - **Library views**: grid (squares, posters or landscape tiles), list, cinematic, detailed, poster,
   coverflow, a shelf of game cases (their spines carry the name and the platform) and novelty
   cartridge/floppy views; sorting, filters, search, *Recently added* by the store's acquisition date and

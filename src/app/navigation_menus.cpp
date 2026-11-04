@@ -12,6 +12,7 @@
 void Launcher::openQuick() {
     if ((category_ != 0 && !metroActive() && !psfiveActive() && !flixActive()) || pending_launch_ || friends_open_ || category_menu_open_) return;
     dismissMenu();
+    snitch_profile_focus_ = false;
     metro_tabs_ = false;
     quick_selected_ = 0;
     quick_open_ = true;

@@ -808,6 +808,7 @@ void Launcher::desktopView(desktop_ui::View& view) {
     }
     pane.rating = ratingLabel();
     pane.protondb = protonDbLabel(game); // Linux only.
+    hardwareView(game, pane.hardware);
     for (const auto& c : settings_collections_) {
         if (favoriteCollection(c) || (srmCollectionsHidden() && srmCollection(c))) continue;
         if (desktopMember(game, c)) pane.collections.emplace_back(c.name, "collection:" + c.id);

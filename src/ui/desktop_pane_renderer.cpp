@@ -246,6 +246,45 @@ void Renderer::drawDesktopPane(const Layout& layout, const View& view) {
         desktop_protondb_ = {left, y - 2, left + widest, y + 20 + static_cast<float>(lines.size() - 1) * 22};
         y += 34 + static_cast<float>(lines.size() - 1) * 22;
     }
+    if (pane.hardware.shown) {
+        // Czy to u mnie zadziała: a line with the verdict's dot, unfolding into what each part of this PC has against the game's table.
+        const auto& hw = pane.hardware;
+        const auto ink = [](int level) { return level == 1 ? rgb(0.36f, 0.80f, 0.46f) : level == 2 ? rgb(0.96f, 0.76f, 0.25f) : level == 3 ? rgb(0.92f, 0.34f, 0.30f) : gray(0.52f); };
+        const bool hover = !hw.loading && view.hover.target == Target::pane_hardware;
+        const Rect chip{left - 6, y - 8, left + width + 6, y + 20};
+        const float mid = (chip.top + chip.bottom) * 0.5f;
+        desktopFill(chip, 9, gray(1, hover ? 0.085f : 0.045f));
+        desktopStroke(chip, 9, gray(1, 0.08f));
+        brush(ink(hw.level));
+        target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(chip.left + 17, mid), 5.0f, 5.0f), solid_.Get());
+        textLine(hw.summary, chip.left + 32, mid, chip.right - chip.left - 32 - 30, desktop_small_font_.Get(), hw.loading ? palette::muted() : gray(0.9f));
+        if (!hw.loading) {
+            const float arrow = chip.right - 17;
+            if (hw.open) { line(arrow - 5, mid + 2, arrow, mid - 3, gray(0.7f), 1.6f); line(arrow, mid - 3, arrow + 5, mid + 2, gray(0.7f), 1.6f); }
+            else desktopGlyph(glyph::chevron_down, arrow, mid, 9, gray(hover ? 0.95f : 0.65f));
+            desktop_hardware_ = chip;
+        }
+        y = chip.bottom + 14;
+        if (hw.open && !hw.loading) {
+            const float indent = 18, key_width = 66;
+            for (const auto& row : hw.rows) {
+                brush(ink(row.level));
+                target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(left + 5, y + 8), 3.5f, 3.5f), solid_.Get());
+                textLine(row.label, left + indent, y + 8, width - indent, desktop_small_font_.Get(), gray(0.95f));
+                y += 24;
+                const std::pair<const wchar_t*, const std::wstring*> cells[] = {{trKey(L"Masz"), &row.yours}, {trKey(L"Minimum"), &row.minimum}, {trKey(L"Zalecane"), &row.recommended}};
+                for (const auto& [label, value] : cells) {
+                    if (value->empty()) continue;
+                    textLine(tr(label), left + indent, y + 8, key_width, desktop_small_font_.Get(), palette::muted());
+                    const auto m = typeMetrics(desktop_small_font_.Get());
+                    const float h = paragraph(*value, left + indent + key_width, y + 8 - m.baseline + m.cap * 0.5f, width - indent - key_width, desktop_small_font_.Get(), gray(0.82f), 3);
+                    y += std::max(20.0f, h + 6);
+                }
+                y += 8;
+            }
+            y += 6;
+        }
+    }
     textLine(upper(tr(L"Opis")), left, y, width, desktop_label_font_.Get(), palette::muted());
     y += 14;
     const auto& details = pane.details;

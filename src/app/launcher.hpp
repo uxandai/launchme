@@ -79,6 +79,8 @@
 #include "companion_state.hpp"
 #include "library_preview.hpp"
 #include "profile_scan.hpp"
+#include "../library/system_requirements.hpp"
+#include "../platform/hardware_profile.hpp"
 #include "../ui/overlay_window.hpp"
 #include "../ui/browser_window.hpp"
 #include "../ui/guide_motion.hpp"
@@ -1004,6 +1006,19 @@ private:
     void aureliaCheckCloud(const Game& game, bool force = false);
     std::wstring aureliaCloudText(const Game& game) const;
     std::shared_ptr<std::atomic_bool> profile_cancel_ = std::make_shared<std::atomic_bool>(false);
+    // Czy to u mnie zadziała (src/app/hardware_check.cpp): the desktop pane's check of a PC game's
+    // requirements against this PC. Read on a worker once per game; UI tests answer it themselves.
+    struct HardwareData { sysreq::Requirements needs; HardwareProfile machine; };
+    struct HardwareAsk { std::string key; uint32_t app_id = 0; std::string gog_id; };
+    using HardwareReader = std::function<HardwareData(const HardwareAsk&)>;
+    struct HardwareEntry { sysreq::Requirements needs; sysreq::Verdict verdict; std::optional<bool> assessed_installed; };
+    HardwareReader hardware_reader_;
+    std::map<std::string, HardwareEntry> hardware_;
+    std::set<std::string> hardware_asked_;
+    sysreq::Machine hardware_machine_;
+    bool desktop_hardware_open_ = false;
+    void hardwareView(const Game& game, desktop_ui::Hardware& view);
+    void hardwareArrived(const std::string& key, HardwareData data);
     ProfileReader profile_reader_; // UI tests answer it; empty: readProfile on a worker (the running launcher only).
     play_journal::Journal journal_;
     bool journal_loaded_ = false, journal_dirty_ = false;
@@ -2098,6 +2113,14 @@ private:
     bool snitchActive() const;
     void snitchTarget(size_t index, float& x, float& y, float& size, float& aspect, float& delay) const;
     bool snitchClick(float x, float y, bool double_click);
+    // Snitch's profile picture (top left): Up from the row focuses it, Enter/A/click opens Profil.
+    bool snitchProfileFocused() const;
+    void snitchFocusProfile(bool focus);
+    void snitchLoadAvatar(); // The Steam account's picture from the client's cache, once per account.
+    bool snitch_profile_focus_ = false;
+    float snitch_profile_progress_ = 0; // Eased 0..1 like quick_progress_: the picture lifts and its ring fades in.
+    ImageBytes snitch_avatar_;
+    uint64_t snitch_avatar_account_ = ~0ULL;
     float psfiveScale() const; // psfive_layout::sizeScale of the tile size setting.
     // A game category other than Recent shown in the row: its first row_games games, then a
     // "Wszystkie" tile opening the category's library.

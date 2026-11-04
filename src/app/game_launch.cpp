@@ -30,6 +30,7 @@ void Launcher::enterDown(bool repeated) {
     if (devicesOpen()) { deviceAccept(); return; }
     if (artworkOpen()) { artworkAccept(); return; }
     if (flixRailFocused()) { flixRailAccept(flix_rail_focus_); return; }
+    if (snitchProfileFocused()) { openProfile(); return; }
     if (quick_open_) { quickAccept(); return; }
     if (screen_ == ScreenMode::settings) { settingsActivate(); return; }
     if (screen_ == ScreenMode::details) { if (menu_open_) menuAccept(); else launch(); return; }
@@ -69,7 +70,7 @@ void Launcher::cancelEnterHold() { enter_held_ = pad_enter_hold_ = false; dashbo
 bool Launcher::acceptHoldsForMenu() const {
     if (glanceOpen() || companionOpen()) return false;
     if (pending_launch_ || menu_open_ || identifyOpen() || screen_ == ScreenMode::plugin_page || screen_ == ScreenMode::details || downloadsOpen() ||
-        cropOpen() || devicesOpen() || artworkOpen() || (categoryRailActive() && category_rail_focus_) || metroTabsFocused() || psfiveActions() || psfiveTopFocused() || psfiveDetailsShown() || flixRailFocused() ||
+        cropOpen() || devicesOpen() || artworkOpen() || (categoryRailActive() && category_rail_focus_) || metroTabsFocused() || psfiveActions() || psfiveTopFocused() || psfiveDetailsShown() || flixRailFocused() || snitchProfileFocused() ||
         (libraryControls() && (library_controls_.focus >= 0 || library_controls_.open() || library_controls_.action >= 0)) ||
         searchBackFocused() || cards_.empty() || selected_ >= cards_.size()) return false;
     const auto& game = cards_[selected_].game;
@@ -81,6 +82,7 @@ void Launcher::accept() {
     if (desktopActive() && topDialog() == Modal::none && !friends_open_ && !quick_open_) { desktopAccept(); return; }
     if (searchBackFocused() && !friends_open_ && !menu_open_) { back(); return; }
     if (metroTabsFocused()) { launch(); return; } // Enter/A on the tabs: back to the page's tile.
+    if (snitchProfileFocused()) { openProfile(); return; }
     if (psfiveAccept()) return; // PSfive: a game goes down to "Graj" / "…", a button acts.
     // Only a plain pick of a game card; dialogs, panels, menus, tiles, the Store (always
     // details), the details screen and the Detailed view's buttons keep launch()'s handling.
@@ -112,6 +114,7 @@ void Launcher::launch() {
     if (artworkOpen()) { artworkAccept(); return; }
     if (categoryRailActive() && category_rail_focus_ && !friends_open_ && !quick_open_) { focusCategoryRail(false); return; }
     if (metroTabsFocused() && !friends_open_ && !quick_open_ && !pending_launch_) { metroFocusTabs(false); audio_.navigate(); return; }
+    if (snitchProfileFocused()) { openProfile(); return; }
     // No games: Accept presses the empty home's focused button (Dodaj grę, Platformy, Odśwież).
     if (emptyHomeActive()) { emptyHomeActivate(empty_focus_); return; }
     if (cards_.empty() || pending_launch_ || friends_open_ || category_menu_open_ || quick_open_) return;
