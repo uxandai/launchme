@@ -20,6 +20,7 @@ void Launcher::desktopActivate(const desktop_ui::Hit& hit) {
     case Target::maximize: toggleMaximized(); return;
     case Target::close: PostMessageW(hwnd_, WM_CLOSE, 0, 0); return;
     case Target::sidebar_toggle: desktopToggleSidebar(); return;
+    case Target::pane_close: desktop_pane_closed_ = true; desktopReflow(); return;
     case Target::tool:
         if (hit.index >= 0 && hit.index < static_cast<int>(tools.size())) desktopToolPick(tools[static_cast<size_t>(hit.index)]);
         return;
@@ -40,6 +41,7 @@ void Launcher::desktopActivate(const desktop_ui::Hit& hit) {
         return;
     }
     case Target::companion_card: case Target::companion_bubble: openCompanion(); return;
+    case Target::start_card: desktopOpenStartMenu(); return;
     case Target::companion_more: {
         const auto anchor = desktopLayout().companionMore();
         Menu menu; menu.kind = Menu::Kind::companion;
@@ -58,6 +60,7 @@ void Launcher::desktopActivate(const desktop_ui::Hit& hit) {
         return;
     case Target::card_check: desktopToggleMark(static_cast<size_t>(hit.index)); return;
     case Target::sort: desktopOpenSortMenu(); return;
+    case Target::view_mode: desktopOpenViewMenu(); return;
     case Target::installed:
         settings_.desktop_installed = !settings_.desktop_installed;
         settings_dirty_ = true; settings_edited_ = std::chrono::steady_clock::now();
@@ -197,6 +200,7 @@ void Launcher::desktopToolPick(desktop_ui::Tool tool) {
     case Tool::downloads: desktopToggleDownloads(); return;
     case Tool::tv: setDesktopMode(false); return;
     case Tool::settings: openSettings(); return;
+    case Tool::more: desktopOpenToolsMenu(); return;
     case Tool::update: updateAction(); return; // Downloads, installs and restarts (or says why not now).
     }
 }

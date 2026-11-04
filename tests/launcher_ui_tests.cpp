@@ -112,6 +112,8 @@ public:
     static int customGames(HWND window);
     static int emulationSettings(HWND window);
     static int manualGames(HWND window); // manual_games_ui_cases.hpp
+    static int metadataFind(HWND window); // metadata_find_ui_cases.hpp
+    static int ux076(HWND window); // ux_076_ui_cases.hpp
     static int fileBrowserAndColors(HWND window);
     static int dashboard(HWND window);
     static int screensaver(HWND window);
@@ -629,15 +631,19 @@ public:
             app.exitPromptMove(-2); app.exitPromptAccept();
             if (row() >= 0 || app.library_state_.collections.names.contains(key) || app.settings_.hidden_collections.contains(key)) return 254;
         }
-        // Interfejs → Widoki biblioteki w trybie TV, at the very bottom: the view a console's, a collection's or a
-        // publisher's library opens in until it has its own; each row's Zresetuj gives it to all of them again.
+        // Biblioteka → Widoki biblioteki w trybie TV: the view a console's, a collection's or a publisher's library opens
+        // in until it has its own; each row's Zresetuj gives it to all of them again. Not in Interfejs.
         {
             using settings_ui::Id;
             app.settings_state_.selectCategory(static_cast<int>(settings_ui::Category::appearance));
             app.buildSettingsRows();
+            for (const auto& row : app.settings_rows_) if (row.id == Id::default_view_console) return 7109;
+            app.settings_state_.selectCategory(static_cast<int>(settings_ui::Category::library));
+            app.buildSettingsRows();
             app.settings_state_.options = true;
             const auto& rows = app.settings_rows_;
-            const int last = static_cast<int>(rows.size()) - 1;
+            int last = 0;
+            for (int i = 0; i < static_cast<int>(rows.size()); ++i) if (rows[i].id == Id::default_view_studio) last = i;
             if (last < 3 || rows[last - 2].id != Id::default_view_console || rows[last - 1].id != Id::default_view_collection ||
                 rows[last].id != Id::default_view_studio || rows[last - 2].section != tr(L"Widoki biblioteki w trybie TV") ||
                 rows[last - 1].reset != "views:collection" || rows[last - 1].badge.empty()) return 7101;
@@ -2128,6 +2134,8 @@ int LauncherUiTest::language(HWND window) {
 #include "excluded_games_ui_cases.hpp"
 #include "uninstall_ui_cases.hpp"
 #include "manual_games_ui_cases.hpp"
+#include "metadata_find_ui_cases.hpp"
+#include "ux_076_ui_cases.hpp"
 #include "hltb_ui_cases.hpp"
 #include "plugin_achievements_ui_cases.hpp"
 #include "render_layering_ui_cases.hpp"
@@ -2152,6 +2160,15 @@ int main(int argc, char** argv) {
     const int width = profiling ? GetSystemMetrics(SM_CXSCREEN) : 1600, height = profiling ? GetSystemMetrics(SM_CYSCREEN) : 900;
     const auto window = CreateWindowW(type.lpszClassName, L"Test", WS_POPUP, 0, 0, width, height,
                                       nullptr, nullptr, type.hInstance, nullptr);
+    // GetKeyState() starts from the real keyboard (the thread's queue exists from its first window on): a Shift held while the process starts (typing a "+" in
+    // another window) would turn Tab into Shift+Tab. The tests press their own modifiers.
+    {
+        BYTE keys[256]{};
+        if (GetKeyboardState(keys)) {
+            for (const int key : {VK_SHIFT, VK_LSHIFT, VK_RSHIFT, VK_CONTROL, VK_LCONTROL, VK_RCONTROL, VK_MENU, VK_LMENU, VK_RMENU}) keys[key] = 0;
+            SetKeyboardState(keys);
+        }
+    }
     if (argc == 2 && (std::string_view(argv[1]) == "--glance" || std::string_view(argv[1]) == "--glance-live")) {
         std::filesystem::create_directories(root);
         const auto code = window ? LauncherUiTest::glanceHub(window, std::string_view(argv[1]) == "--glance-live") : 99;
@@ -2374,6 +2391,24 @@ int main(int argc, char** argv) {
         CoUninitialize();
         if (code) std::cerr << "Games added by hand regression: " << code << '\n';
         else std::cout << "Games added by hand: no file, poster, identify, remove from library passed\n";
+        return code;
+    }
+    if (argc == 2 && std::string_view(argv[1]) == "--ux-076") {
+        std::filesystem::create_directories(root);
+        const auto code = window ? LauncherUiTest::ux076(window) : 99;
+        if (window) DestroyWindow(window);
+        CoUninitialize();
+        if (code) std::cerr << "Desktop 0.7.6 regression: " << code << '\n';
+        else std::cout << "Desktop 0.7.6: game panel, cell view, tools menu, game menu groups, getting started, identify passed\n";
+        return code;
+    }
+    if (argc == 2 && std::string_view(argv[1]) == "--metadata-find") {
+        std::filesystem::create_directories(root);
+        const auto code = window ? LauncherUiTest::metadataFind(window) : 99;
+        if (window) DestroyWindow(window);
+        CoUninitialize();
+        if (code) std::cerr << "Find in Edit metadata regression: " << code << '\n';
+        else std::cout << "Find in Edit metadata: sources, pad, keyboard, mouse, Insert and Save passed\n";
         return code;
     }
     if (argc == 2 && std::string_view(argv[1]) == "--uninstall") {

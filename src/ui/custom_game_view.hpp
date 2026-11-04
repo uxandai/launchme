@@ -55,7 +55,10 @@ struct State {
     std::wstring dll_opened, wine_opened;
     bool editing() const { return !id.empty(); }
     bool launchOptions() const { return target != Target::custom; }
-    bool pills() const { return target == Target::custom && !editing(); } // "Wskaż plik" / "Wskaż folder".
+    // The desktop window: a new game has the file row's "Wybierz" like an edited one, and "Dodaj folder jako bibliotekę" at the bottom.
+    bool desktop = false;
+    bool pills() const { return target == Target::custom && !editing() && !desktop; } // Tryb TV: "Wskaż plik" / "Wskaż folder".
+    bool folderButton() const { return target == Target::custom && !editing() && desktop; }
     // The file row's "Wybierz…" (a game being edited; a new one has the pills).
     bool browses(int index) const { return index != file_field || !pills(); }
     bool posterShown() const { return target == Target::custom; }

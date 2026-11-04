@@ -187,8 +187,10 @@ std::optional<std::vector<uint32_t>> collectionMembers(const json::Value& value)
 FriendsResult friends(const json::Value& value) {
     FriendsResult result;
     if (value.type != Type::array) { result.error = tr(L"Nieprawidłowa odpowiedź Aurelii"); return result; }
+    bool known = false; // One name or status is enough: Steam is sending persona data.
     for (const auto& item : value.elements) {
         const auto id = integer(item.get("steam_id")); if (!id || !*id) continue;
+        if (integer(item.get("persona_state")) || !text(item, "persona_name").empty()) known = true;
         SteamFriend f; f.id = *id; f.name = wideLenient(text(item, "persona_name"));
         if (f.name.empty()) f.name = std::to_wstring(f.id);
         f.game = wideLenient(text(item, "game_name")); f.avatar_url = wideLenient(text(item, "avatar_url"));
@@ -199,6 +201,12 @@ FriendsResult friends(const json::Value& value) {
         const int x = !a.game.empty() ? 2 : a.status ? 1 : 0, y = !b.game.empty() ? 2 : b.status ? 1 : 0;
         return x != y ? x > y : a.name < b.name;
     });
+    // A roster of bare IDs would show everyone "offline": say what is wrong instead (the daemon's
+    // `persona_state` is null until Steam answers; a session that never declared a presence gets nothing).
+    if (!result.friends.empty() && !known) {
+        result.no_presence = true;
+        result.error = tr(L"Aurelia nie dostała od Steam statusów znajomych. Spróbuj ponownie lub połącz ponownie w Ustawieniach → Biblioteka → Steam.");
+    }
     return result;
 }
 GameDetails details(const json::Value& value) {

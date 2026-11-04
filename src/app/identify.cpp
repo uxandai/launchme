@@ -2,6 +2,7 @@
 #include "launcher_internal.hpp"
 #include "../artwork/esde_art.hpp"
 #include "../artwork/failure_cache.hpp"
+#include "../library/metadata_sources.hpp"
 #include "../library/screenscraper.hpp"
 #include <algorithm>
 
@@ -21,18 +22,54 @@ bool Launcher::unidentifiedGame(const Game& game) const {
 void Launcher::openIdentifyFor(const Game& game) {
     if (!isGame(game) || steamArtwork(game) || gameKey(game).empty()) return;
     identify_state_ = {}; identify_state_.open = true; identify_state_.game = game; identify_state_.query = game.name;
-    // Emulated games: ScreenScraper first when it is set up (its search knows the console).
+    identify_state_.query_focus = false; // The lookup view has no field yet.
     identify_state_.emulated = game.kind == GameKind::nonsteam && game.platform != L"PC";
-    if (identify_state_.emulated && screenscraper::load().ready()) identify_state_.source = identify_ui::State::Source::screenscraper;
+    // One click: every provider is asked in turn and the best match is taken; "Dopasuj ręcznie" is the way out.
     closeFriends(); dismissMenu(); identifySearch();
 }
-void Launcher::identifySwitchSource() {
+// "Dopasuj ręcznie": the title field, the provider choice and the list of matches.
+void Launcher::identifyManual() {
     auto& state = identify_state_;
-    if (!state.open || !state.emulated || state.applying) return;
-    state.source = state.source == identify_ui::State::Source::rawg ? identify_ui::State::Source::screenscraper : identify_ui::State::Source::rawg;
-    ++*identify_token_; state.busy = false; state.games.clear(); state.found.clear(); state.status.clear(); state.selected = 0;
+    if (!state.open || state.applying || state.manual) return;
+    state.manual = true; state.query_focus = true; state.select_all = true; state.back_focus = false;
+    audio_.context();
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+// The provider: Wszyscy dostawcy, RAWG, ScreenScraper, Nintendo eShop, Steam, GOG, Microsoft Store, TitleDB.
+void Launcher::identifySetSource(identify_ui::State::Source source) {
+    auto& state = identify_state_;
+    if (!state.open || state.applying) return;
+    state.menu = false;
+    state.source = source;
+    ++*identify_token_; state.busy = false; state.games.clear(); state.found.clear(); state.offers.clear(); state.status.clear(); state.selected = 0;
     audio_.context();
     identifySearch();
+}
+// ←/→ and F2: the next provider of the dropdown.
+void Launcher::identifySwitchSource() {
+    auto& state = identify_state_;
+    if (!state.open || state.applying) return;
+    const auto list = identify_ui::providers(state.emulated);
+    size_t at = 0;
+    for (size_t i = 0; i < list.size(); ++i) if (list[i] == state.source) at = i;
+    identifySetSource(list[(at + 1) % list.size()]);
+}
+void Launcher::identifyToggleMenu() {
+    auto& state = identify_state_;
+    if (!state.open || state.applying || !state.manual) return;
+    state.menu = !state.menu;
+    if (state.menu) {
+        const auto list = identify_ui::providers(state.emulated);
+        state.menu_hover = 0;
+        for (size_t i = 0; i < list.size(); ++i) if (list[i] == state.source) state.menu_hover = static_cast<int>(i);
+    }
+    audio_.context();
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+void Launcher::identifyPickProvider(int index) {
+    const auto list = identify_ui::providers(identify_state_.emulated);
+    if (index < 0 || index >= static_cast<int>(list.size())) { identify_state_.menu = false; InvalidateRect(hwnd_, nullptr, FALSE); return; }
+    identifySetSource(list[static_cast<size_t>(index)]);
 }
 void Launcher::closeIdentify() {
     if (identify_state_.applying) return;
@@ -40,17 +77,19 @@ void Launcher::closeIdentify() {
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 void Launcher::identifySearch() {
+    using Source = identify_ui::State::Source;
     auto& state = identify_state_;
     if (!state.open || state.busy || state.query.empty()) return;
-    state.busy = true; state.status = tr(L"Szukanie gry…"); state.games.clear(); state.selected = 0;
+    state.busy = true; state.status = tr(L"Szukanie gry…"); state.games.clear(); state.found.clear(); state.offers.clear(); state.selected = 0;
     const auto token = identify_token_; const auto generation = ++*token;
     const auto alive = alive_; const auto hwnd = hwnd_; const auto query = state.query;
-    const bool screenscraper = state.source == identify_ui::State::Source::screenscraper;
+    const auto mode = state.source; const bool emulated = state.emulated;
+    const bool automatic = !state.manual; // Nobody chooses: the stores' text details are the last resort.
     const auto game = state.game;
-    if (runtime_started_) work_.start([token, generation, alive, hwnd, query, screenscraper, game] {
+    if (runtime_started_) work_.start([token, generation, alive, hwnd, query, mode, emulated, automatic, game] {
         auto message = std::make_unique<IdentifyMessage>(); message->generation = generation;
-        if (screenscraper) {
-            namespace ss = screenscraper;
+        namespace ss = screenscraper;
+        const auto searchScreenscraper = [&] {
             const auto config = ss::load();
             const auto metadata = userConfigDirectory() / L"metadata";
             if (!config.ready()) message->search.error = tr(L"Dodaj dane ScreenScraper w Ustawieniach → Media i dane.");
@@ -79,7 +118,43 @@ void Launcher::identifySearch() {
                 default: message->search.error = tr(L"ScreenScraper jest chwilowo niedostępny. Spróbuję później.");
                 }
             }
-        } else message->search = rawg::search(query, userSecret(L"RAWG_API_KEY", L"rawg_api_key.txt"));
+        };
+        // Wszyscy dostawcy: ScreenScraper first for an emulated game (its search knows the console) when it is set up.
+        const bool store_only = identify_ui::storeSource(mode); // One store: its text details only.
+        if (!store_only && (mode == Source::screenscraper || (mode == Source::all && emulated && ss::load().ready()))) {
+            searchScreenscraper();
+            message->screenscraper = !message->search.games.empty();
+        }
+        if (!store_only && !message->screenscraper && mode != Source::screenscraper) {
+            message->search = rawg::search(query, userSecret(L"RAWG_API_KEY", L"rawg_api_key.txt"));
+            message->found.clear();
+        }
+        // Wszyscy dostawcy: also the stores' descriptions (Nintendo eShop, Steam, GOG, Microsoft Store, TitleDB), below the
+        // databases' games; on its own (nobody chooses) only when no database knows the game.
+        if (store_only || (mode == Source::all && (!automatic || message->search.games.empty()))) {
+            metadata_sources::Query lookup;
+            lookup.title = query; lookup.polish = i18n::language() == i18n::Language::pl;
+            const bool own_title = query == game.name; // The game's own ids only for its own title.
+            if (own_title && !game.rom.empty()) {
+                lookup.switch_id = metadata_sources::titleId(game.rom.filename().wstring());
+                if (lookup.switch_id.empty()) lookup.switch_id = metadata_sources::titleId(game.rom.parent_path().filename().wstring());
+            }
+            if (lookup.switch_id.empty()) lookup.switch_id = metadata_sources::titleId(query);
+            if (own_title) {
+                lookup.steam_app = game.app_id;
+                if (game.source == GameSource::gog) lookup.gog_id = game.source_id;
+                lookup.xbox_product = game.xbox_product;
+            }
+            for (const auto source : metadata_sources::all) {
+                if (!alive->load() || token->load() != generation) break;
+                if (store_only && source != identify_ui::storeOf(mode)) continue;
+                if (!metadata_sources::applicable(source, lookup)) continue;
+                for (auto& offer : metadata_sources::find(source, lookup).offers)
+                    if (offer.score > 0 && !offer.details.description.empty()) message->texts.push_back(std::move(offer));
+            }
+            std::stable_sort(message->texts.begin(), message->texts.end(), [](const auto& a, const auto& b) { return a.score > b.score; });
+            if (message->texts.size() > 8) message->texts.resize(8);
+        }
         if (alive->load() && token->load() == generation && PostMessageW(hwnd, identify_message, 0, reinterpret_cast<LPARAM>(message.get()))) message.release();
     });
     InvalidateRect(hwnd_, nullptr, FALSE);
@@ -88,12 +163,17 @@ void Launcher::identifyAccept() {
     auto& state = identify_state_;
     if (state.open && state.back_focus && !state.applying) { closeIdentify(); return; }
     if (!state.open || state.busy) return;
+    if (!state.manual && state.games.empty()) { identifyManual(); return; } // Enter on the lookup: choose by hand.
     if (state.query_focus || state.games.empty()) { identifySearch(); return; }
+    if (static_cast<size_t>(state.selected) < state.offers.size() && state.offers[static_cast<size_t>(state.selected)]) {
+        identifyApplyText(*state.offers[static_cast<size_t>(state.selected)]); // A store's description: nothing to download.
+        return;
+    }
     const auto candidate = state.games[state.selected]; const auto game = state.game;
     state.busy = state.applying = true; state.status = tr(L"Pobieranie metadanych i brakujących grafik…");
     const auto token = identify_token_; const auto generation = ++*token;
     const auto alive = alive_; const auto hwnd = hwnd_;
-    if (state.source == identify_ui::State::Source::screenscraper && static_cast<size_t>(state.selected) < state.found.size()) {
+    if (state.resolved == identify_ui::State::Source::screenscraper && static_cast<size_t>(state.selected) < state.found.size()) {
         // ScreenScraper: the chosen game becomes this ROM's identification (it wins over ES-DE's match),
         // replacing a RAWG one; automatic artwork found by the old title goes.
         const auto picked = state.found[static_cast<size_t>(state.selected)];
@@ -154,8 +234,23 @@ void Launcher::onIdentify(std::unique_ptr<IdentifyMessage> message) {
     if (!message->identified) {
         state.games = std::move(message->search.games); state.status = std::move(message->search.error); state.selected = 0;
         state.found = std::move(message->found);
+        state.offers.assign(state.games.size(), std::nullopt);
+        for (auto& offer : message->texts) {
+            std::wstring subtitle = metadata_sources::name(offer.source);
+            if (!offer.note.empty()) subtitle += L" · " + offer.note;
+            state.games.push_back({0, offer.title, offer.details.release_date, std::move(subtitle)});
+            state.offers.push_back(std::move(offer));
+        }
+        state.resolved = message->screenscraper ? identify_ui::State::Source::screenscraper : identify_ui::State::Source::rawg;
+        state.provider = message->screenscraper ? L"ScreenScraper" : L"RAWG";
+        if (!state.manual && !state.games.empty()) { // The best match, taken: no click.
+            state.query_focus = false;
+            identifyAccept();
+            return;
+        }
         if (state.status.empty() && state.games.empty()) state.status = tr(L"Brak dopasowań. Zmień tytuł i wyszukaj ponownie.");
         state.query_focus = state.games.empty();
+        if (state.games.empty()) { state.manual = true; state.select_all = true; } // Nothing found by itself: the player types.
     } else if (message->picked) {
         // ScreenScraper identification (emulated games): details, name and every artwork slot again.
         const auto game = state.game; const auto key = gameKey(game);
@@ -180,7 +275,7 @@ void Launcher::onIdentify(std::unique_ptr<IdentifyMessage> message) {
         closeIdentify(); audio_.context();
         applyEmulationNames(); // The new name everywhere: tiles, the game's menu, details.
         requestVisibleArt();
-    } else if (!message->metadata) state.status = std::move(message->error);
+    } else if (!message->metadata) { state.status = std::move(message->error); state.manual = true; state.query_focus = false; }
     else {
         const auto game = state.game; const auto key = gameKey(game);
         rawg_metadata_[key] = std::move(*message->metadata);
@@ -225,6 +320,23 @@ void Launcher::onIdentify(std::unique_ptr<IdentifyMessage> message) {
     }
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
+// No database knew the game: the best store's description, developer, publisher, date and genres become its own
+// details (the same place as Edytuj metadane; what the player typed there stays).
+void Launcher::identifyApplyText(const metadata_sources::Offer& offer) {
+    const auto game = identify_state_.game; const auto key = gameKey(game);
+    metadataOverride(game); // Loads the file.
+    metadata::Override value;
+    if (const auto* existing = metadata_overrides_.find(key)) value = *existing;
+    const auto fill = [](std::wstring& field, const std::wstring& text) { if (field.empty()) field = text; };
+    fill(value.description, offer.details.description); fill(value.developer, offer.details.developer);
+    fill(value.publisher, offer.details.publisher); fill(value.release_date, offer.details.release_date); fill(value.genres, offer.details.genres);
+    metadata_overrides_.set(key, std::move(value));
+    const bool saved = metadata_overrides_.save(userConfigDirectory() / L"metadata_overrides.json");
+    closeIdentify(); audio_.context();
+    if (!saved) { showNotification(NotificationKind::error, tr(L"Nie udało się zapisać metadanych"), tr(L"Sprawdź dostęp do katalogu konfiguracji.")); return; }
+    desktopMetadataChanged();
+    showNotification(NotificationKind::launch, tr(L"Metadane zapisane"), std::wstring(metadata_sources::name(offer.source)) + L": " + offer.title);
+}
 void Launcher::identifyMove(int amount) {
     auto& state = identify_state_;
     if (!state.open || state.applying || !amount) return;
@@ -251,6 +363,7 @@ void Launcher::identifyMove(int amount) {
 void Launcher::identifyEdit(wchar_t character) {
     auto& state = identify_state_;
     if (!state.open || state.applying || character < L' ' || character == 127) return;
+    if (!state.manual) identifyManual(); // Typing means choosing by hand; the first letter replaces the title.
     if (state.select_all) { state.query.clear(); state.select_all = false; }
     if (state.query.size() < 160) state.query += character;
     ++*identify_token_; state.busy = false; state.query_focus = true; state.back_focus = false; state.games.clear(); state.status.clear();
@@ -258,10 +371,28 @@ void Launcher::identifyEdit(wchar_t character) {
 }
 void Launcher::identifyKey(WPARAM key, bool repeated) {
     auto& state = identify_state_;
-    if (key == VK_ESCAPE) { closeIdentify(); return; }
+    if (key == VK_ESCAPE) {
+        if (state.menu) { state.menu = false; InvalidateRect(hwnd_, nullptr, FALSE); return; } // The dropdown first.
+        closeIdentify();
+        return;
+    }
     if (state.applying) return;
+    if (state.menu) { // The provider dropdown: Up and Down choose, Enter takes.
+        const int count = static_cast<int>(identify_ui::providers(state.emulated).size());
+        if (key == VK_UP) state.menu_hover = std::max(0, state.menu_hover - 1);
+        else if (key == VK_DOWN) state.menu_hover = std::min(count - 1, state.menu_hover + 1);
+        else if (key == VK_RETURN && !repeated) { identifyPickProvider(state.menu_hover); return; }
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        return;
+    }
+    if (!state.manual) { // Looking the game up on its own: Enter chooses by hand, the rest waits.
+        if (key == VK_RETURN && !repeated) identifyManual();
+        else if (key == VK_UP || key == VK_DOWN || key == VK_TAB) identifyManual();
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        return;
+    }
     if (key == VK_F2 && !repeated) { identifySwitchSource(); return; }
-    if ((key == VK_LEFT || key == VK_RIGHT) && !state.query_focus && !state.back_focus && state.emulated) { identifySwitchSource(); return; }
+    if ((key == VK_LEFT || key == VK_RIGHT) && !state.query_focus && !state.back_focus) { identifySwitchSource(); return; }
     if (key == VK_RETURN && !repeated) identifyAccept();
     else if (key == VK_UP || key == VK_DOWN) identifyMove(key == VK_UP ? -1 : 1);
     else if (key == VK_TAB && !repeated) { state.query_focus = !state.query_focus || state.games.empty(); state.select_all = state.query_focus; state.back_focus = false; }
@@ -286,11 +417,18 @@ void Launcher::identifyClick(float x, float y) {
     const auto view = renderer_.viewport(); const identify_ui::Layout layout{view.width, view.height};
     if (layout.back().contains(x, y) || !layout.panel().contains(x, y)) { closeIdentify(); return; }
     if (identify_state_.applying) return;
-    if (layout.source().contains(x, y)) {
-        if (identify_state_.emulated) identifySwitchSource();
-        else execute_(hwnd_, GameAction{L"https://rawg.io", {}, {}, ActionKind::open_client});
+    if (!identify_state_.manual) {
+        if (layout.manualButton().contains(x, y)) identifyManual();
+        InvalidateRect(hwnd_, nullptr, FALSE);
         return;
     }
+    if (identify_state_.menu) { // Over the list: a provider; anywhere else closes it.
+        const int row = layout.menuHit(x, y, static_cast<int>(identify_ui::providers(identify_state_.emulated).size()));
+        if (row >= 0) identifyPickProvider(row); else identify_state_.menu = false;
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        return;
+    }
+    if (layout.source().contains(x, y)) { identifyToggleMenu(); return; }
     if (layout.submit().contains(x, y)) identifySearch();
     else if (layout.search().contains(x, y)) { identify_state_.query_focus = true; identify_state_.select_all = true; identify_state_.back_focus = false; }
     else if (const int row = layout.hit(x, y, identify_state_); row >= 0 && !identify_state_.busy) {

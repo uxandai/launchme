@@ -191,8 +191,8 @@ int LauncherUiTest::profilePage(HWND window) {
     app.desktop_mode_ = true; app.audio_.setDesktop(true);
     app.buildShelves(); app.showCategory(0);
     for (int i = 0; i < 20; ++i) { app.last_frame_ -= std::chrono::milliseconds(50); app.tick(); }
-    const auto tools = app.desktopTools();
-    if (tools.empty() || tools.front() != desktop_ui::Tool::friends) return 9733;
+    const auto tools = app.desktopMoreTools(); // Behind the title bar's "…".
+    if (tools.empty() || tools.front() != desktop_ui::Tool::friends || app.desktopTools().back() != desktop_ui::Tool::more) return 9733;
     app.desktopToolPick(desktop_ui::Tool::friends);
     if (!app.friendsOpen()) return 9734;
     app.friends_progress_ = 1;

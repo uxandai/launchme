@@ -23,14 +23,23 @@ void Renderer::drawTvMeta(const desktop_ui::MetaView& meta) {
     const auto p = layout.panel();
     brush(gray(0.055f)); target_->FillRoundedRectangle(D2D1::RoundedRect(box(p), 18, 18), solid_.Get());
     if (panel_borders_) { brush(gray(1, 0.18f)); target_->DrawRoundedRectangle(D2D1::RoundedRect(box(p), 18, 18), solid_.Get()); }
-    textLine(std::wstring(tr(L"Edytuj metadane")) + L" \u00b7 " + meta.game, p.left + 24, p.top + 30, p.right - p.left - 90, category_font_.Get(), gray(0.96f));
-    textLine(tr(L"Puste pole: wartość automatyczna. A wpisuje w pole, B zamyka."), p.left + 24, p.top + 58, p.right - p.left - 48,
-             toast_sub_font_.Get(), gray(0.55f));
+    const bool finding = meta.find.open;
+    textLine(std::wstring(finding ? tr(L"Znajdź metadane") : tr(L"Edytuj metadane")) + L" \u00b7 " + meta.game, p.left + 24, p.top + 30,
+             p.right - p.left - (finding ? 90 : 220), category_font_.Get(), gray(0.96f));
+    textLine(finding ? tr(L"Wybierz grę i pola. Wstaw kopiuje je do dialogu, zapisuje dopiero Zapisz. B wraca.") : tr(L"Puste pole: wartość automatyczna. A wpisuje w pole, B zamyka."),
+             p.left + 24, p.top + 58, p.right - p.left - 48, toast_sub_font_.Get(), gray(0.55f));
     // Close: a glass circle with a dot, as Back in the TV's dialogs.
     const auto close = layout.close();
     brush(drawButton(box(close), meta.focus == static_cast<int>(MetaItem::close) ? 1.0f : 0.0f, 1, false,
                      meta.hover == static_cast<int>(MetaItem::close)));
     target_->FillEllipse(D2D1::Ellipse({(close.left + close.right) * 0.5f, (close.top + close.bottom) * 0.5f}, 3, 3), solid_.Get());
+    if (finding) { drawMetaFind(meta, true); return; }
+    {
+        const auto find = box(layout.findButton()); // The stores' and databases' details, to pick from.
+        const int id = static_cast<int>(MetaItem::find);
+        const auto ink = drawButton(find, meta.focus == id ? 1.0f : 0.0f, 1, false, meta.hover == id);
+        textLine(tr(L"Znajdź…"), find.left + 8, (find.top + find.bottom) * 0.5f, find.right - find.left - 16, toast_font_.Get(), ink, DWRITE_TEXT_ALIGNMENT_CENTER);
+    }
     static const wchar_t* const labels[meta_fields] = {L"Tytuł", L"Opis", L"Producent", L"Wydawca", L"Data premiery", L"Gatunki", L"Czas przejścia (h)",
                                                         L"Czas gry"};
     static const wchar_t* const hints[meta_fields] = {L"Nazwa w bibliotece", L"Kilka zdań o grze", L"Studio", L"Firma wydająca",

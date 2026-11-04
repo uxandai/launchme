@@ -456,6 +456,7 @@ void Launcher::settingsActivate() {
         startTour();
         return;
     }
+    if (row.id == Id::start_reset) { startReset(); return; }
     if (row.id == Id::fps_access) {
         if (etw_access::state() != etw_access::State::missing) return;
         if (etw_access::grant()) {

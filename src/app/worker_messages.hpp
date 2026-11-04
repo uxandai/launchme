@@ -6,6 +6,7 @@
 #include "../friends/steam_friends.hpp"
 #include "../library/collections.hpp"
 #include "../library/drm_free.hpp"
+#include "../library/metadata_sources.hpp"
 #include "../library/rawg.hpp"
 #include "../library/screenscraper.hpp"
 #include "../library/shortcuts.hpp"
@@ -198,6 +199,8 @@ struct IdentifyMessage {
     bool identified = false;
     rawg::Search search;
     std::vector<screenscraper::GameInfo> found;    // ScreenScraper search: the game of each row.
+    bool screenscraper = false;                    // The search was answered by ScreenScraper (else RAWG).
+    std::vector<metadata_sources::Offer> texts;    // The stores' text details of the game, best first.
     std::optional<screenscraper::GameInfo> picked; // ScreenScraper identification, saved.
     std::optional<rawg::Metadata> metadata;
     IdentifiedArtworkResult artwork;

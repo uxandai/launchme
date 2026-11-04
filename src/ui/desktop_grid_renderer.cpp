@@ -40,6 +40,17 @@ void Renderer::drawDesktopHeader(const Layout& layout, const View& view) {
     desktopGlyph(glyph::sort, sort.left + 16, sy, 13, gray(0.72f));
     textLine(view.sort_label, sort.left + 32, sy, sort.right - sort.left - 56, desktop_font_.Get(), gray(0.9f));
     desktopGlyph(glyph::chevron_down, sort.right - 15, sy + 1, 9, gray(0.65f));
+    {
+        // The cells' shape: posters, squares or landscape (a menu).
+        const auto shape = layout.viewButton();
+        const float vh = view.hover.target == Target::view_mode || (view.menu && view.menu->kind == Menu::Kind::view) ? 1.0f : 0.0f;
+        desktopFill(shape, 8, gray(1, 0.04f + 0.04f * vh));
+        desktopStroke(shape, 8, gray(1, 0.085f + 0.06f * vh));
+        const float vy = (shape.top + shape.bottom) * 0.5f, vx = shape.left + 16;
+        const float w = view.cell_view == 2 ? 14.0f : view.cell_view == 1 ? 11.0f : 9.0f, h = view.cell_view == 2 ? 8.0f : view.cell_view == 1 ? 11.0f : 13.0f;
+        desktopStroke({vx - w * 0.5f, vy - h * 0.5f, vx + w * 0.5f, vy + h * 0.5f}, 2, gray(0.78f), 1.6f); // The cell itself, drawn to its proportions.
+        desktopGlyph(glyph::chevron_down, shape.right - 15, vy + 1, 9, gray(0.65f));
+    }
     const auto chip = layout.installedChip();
     const bool chip_hover = view.hover.target == Target::installed;
     if (view.installed_only) { desktopFill(chip, 8, uiAccent(0.16f)); desktopStroke(chip, 8, uiAccent(0.75f)); }

@@ -301,6 +301,13 @@ AppSettings parseAppSettings(std::string_view text) {
         auto value = trim(line.substr(equal + 1));
         if (parseLookSetting(settings, key, value)) continue; // Kept apart: MSVC caps one if/else chain's depth.
         if (parseExtraSetting(settings, key, value)) continue;
+        if (key == "desktop_view") { if (value == "0" || value == "1" || value == "2") settings.desktop_view = value[0] - '0'; continue; }
+        if (key == "start_hidden") { if (value == "0" || value == "1") settings.start_hidden = value == "1"; continue; }
+        if (key == "start_done") {
+            if (!value.empty() && value.size() <= 3 && value.find_first_not_of("0123456789") == std::string_view::npos)
+                settings.start_done = static_cast<uint32_t>(std::stoul(std::string(value))) & 0xFFu;
+            continue;
+        }
         if (key == "guide_open_widgets") { if (value == "0" || value == "1") settings.guide_open_widgets = value == "1"; continue; }
         if (key == "hud_pins") { // Widgets kept on the game's screen, at most the three that exist.
             while (!value.empty() && settings.hud_pins.size() < 5) {
@@ -729,6 +736,7 @@ AppSettings loadAppSettings(const std::filesystem::path& file) {
     if (!std::filesystem::exists(file, missing) && !missing) {
         AppSettings first_start; // No settings yet: the walkthrough runs once.
         first_start.tour_done = false;
+        first_start.start_hidden = false;
         first_start.first_start = true;
         return first_start;
     }
@@ -769,6 +777,7 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
          << "desktop_gray_uninstalled=" << settings.desktop_gray_uninstalled << '\n'
            << "desktop_maximized=" << settings.desktop_maximized << '\n'
            << "desktop_poster=" << std::clamp(settings.desktop_poster, 112, 240) << '\n'
+           << "desktop_view=" << std::clamp(settings.desktop_view, 0, 2) << '\n'
            << "desktop_sort=" << std::clamp(settings.desktop_sort, 1, 4) << '\n'
            << "desktop_installed=" << settings.desktop_installed << '\n'
            << "desktop_narrow=" << settings.desktop_narrow << '\n'
@@ -806,6 +815,8 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
            << "screensaver=" << settings.screensaver << '\n'
            << "drmfree_background=" << settings.drm_background << '\n'
            << "tour_done=" << settings.tour_done << '\n'
+           << "start_hidden=" << settings.start_hidden << '\n'
+           << "start_done=" << settings.start_done << '\n'
            << "update_check=" << settings.update_check << '\n'
            << "update_skipped=" << text_encoding::utf8Lenient(settings.update_skipped) << '\n'
            << "screensaver_style=" << (settings.screensaver_style == AppSettings::ScreensaverStyle::boxes ? "boxes" :

@@ -1,6 +1,9 @@
 #include "renderer.hpp"
 #include "renderer_internal.hpp"
 
+#include <chrono>
+#include <cmath>
+
 namespace {
 using render_detail::box;
 using palette::gray;
@@ -30,18 +33,32 @@ void Renderer::drawIdentify() {
         const float path_width = layout.source().left - panel.left - 40;
         textLine(elideStart(path, path_width, toast_sub_font_.Get()), panel.left + 28, panel.top + 66, path_width, toast_sub_font_.Get(), gray(0.55f));
     }
-    const auto source = layout.source();
-    // Emulated games: a switch between RAWG and ScreenScraper (click, ←/→, F2); others link to RAWG.
-    const std::wstring source_label = !state.emulated ? L"RAWG ↗" :
-        state.source == identify_ui::State::Source::screenscraper ? L"ScreenScraper ⇄" : L"RAWG ⇄";
-    // The switch is a glass pill (on the opaque panel, no frosting); its caption keeps clear of the round ends.
-    const auto source_ink = state.emulated ? drawButton(box(source), 0, 1, false) : uiAccent();
-    const float source_inset = state.emulated ? (source.bottom - source.top) * 0.5f - 6 : 10.0f;
-    textLine(source_label, source.left + source_inset, (source.top + source.bottom) * 0.5f, source.right - source.left - 2 * source_inset, settings_body_font_.Get(), source_ink);
+    if (state.manual) {
+        // The provider: a glass pill that cycles Wszyscy dostawcy → RAWG → ScreenScraper (click, ←/→, F2).
+        const auto source = layout.source();
+        using Source = identify_ui::State::Source;
+        const auto* provider = identify_ui::sourceName(state.source);
+        const std::wstring source_label = (provider ? std::wstring(provider) : std::wstring(tr(L"Wszyscy dostawcy"))) + L" ⇄";
+        const auto source_ink = drawButton(box(source), 0, 1, false);
+        const float source_inset = (source.bottom - source.top) * 0.5f - 6;
+        textLine(source_label, source.left + source_inset, (source.top + source.bottom) * 0.5f, source.right - source.left - 2 * source_inset, settings_body_font_.Get(), source_ink);
+    }
     // Back: a glass circle with a dot, white while it has the focus (Up from the search field).
     const auto back = layout.back();
     brush(drawButton(box(back), state.back_focus ? 1.0f : 0.0f, 1, false));
     target_->FillEllipse(D2D1::Ellipse({(back.left + back.right) * 0.5f, (back.top + back.bottom) * 0.5f}, 3, 3), solid_.Get());
+    if (!state.manual) {
+        // The lookup: a spinner, what is happening, and the way to choose by hand.
+        const float cx = (panel.left + panel.right) * 0.5f, cy = (panel.top + panel.bottom) * 0.5f - 30;
+        drawSpinner(cx, cy, 26, uiAccent());
+        if (!state.status.empty()) textLine(state.status, panel.left + 28, cy + 64, panel.right - panel.left - 56, menu_font_.Get(), gray(0.8f), DWRITE_TEXT_ALIGNMENT_CENTER);
+        if (!state.applying) {
+            const auto manual = layout.manualButton();
+            const auto ink = drawButton(box(manual), 1.0f, 1.0f, false);
+            textLine(tr(L"Dopasuj ręcznie"), manual.left + 12, (manual.top + manual.bottom) * 0.5f, manual.right - manual.left - 24, menu_font_.Get(), ink, DWRITE_TEXT_ALIGNMENT_CENTER);
+        }
+        return;
+    }
     // A pill field; the accent outline only while it takes typing.
     const auto search = layout.search();
     brush(gray(1, state.query_focus && state.select_all ? 0.13f : 0.05f)); target_->FillRoundedRectangle(pill(box(search)), solid_.Get());
@@ -59,4 +76,35 @@ void Renderer::drawIdentify() {
                   menu_font_.Get(), gray(0.95f), settings_body_font_.Get(), gray(0.57f), 1);
     }
     if (!state.status.empty()) textLine(state.status, panel.left + 28, panel.bottom - 42, panel.right - panel.left - 56, settings_body_font_.Get(), gray(0.68f));
+    if (state.menu) {
+        // The provider dropdown, over everything: the current one marked, the highlighted one filled.
+        const auto list = identify_ui::providers(state.emulated);
+        const auto box_rect = layout.menuPanel(static_cast<int>(list.size()));
+        brush(gray(0.1f)); target_->FillRoundedRectangle(D2D1::RoundedRect(box(box_rect), 14, 14), solid_.Get());
+        brush(gray(1, 0.18f)); target_->DrawRoundedRectangle(D2D1::RoundedRect(box(box_rect), 14, 14), solid_.Get());
+        for (int i = 0; i < static_cast<int>(list.size()); ++i) {
+            const auto row = layout.menuRow(i);
+            if (state.menu_hover == i) { brush(gray(1, 0.12f)); target_->FillRoundedRectangle(D2D1::RoundedRect(box(row), 10, 10), solid_.Get()); }
+            const auto* name = identify_ui::sourceName(list[static_cast<size_t>(i)]);
+            textLine(name ? std::wstring(name) : std::wstring(tr(L"Wszyscy dostawcy")), row.left + 16, (row.top + row.bottom) * 0.5f, row.right - row.left - 48,
+                     settings_body_font_.Get(), gray(0.95f));
+            if (list[static_cast<size_t>(i)] == state.source) textLine(L"✓", row.right - 30, (row.top + row.bottom) * 0.5f, 20, settings_body_font_.Get(), uiAccent());
+        }
+    }
+}
+
+void Renderer::drawSpinner(float cx, float cy, float radius, D2D1_COLOR_F color) {
+    using clock = std::chrono::steady_clock;
+    skeleton_at_ = clock::now(); // animating() stays true while this is drawn: the next frame is asked for.
+    const float turn = static_cast<float>(std::chrono::duration_cast<std::chrono::milliseconds>(clock::now().time_since_epoch()).count() % 1000) / 1000.0f;
+    constexpr int dots = 10;
+    constexpr float two_pi = 6.2831853f;
+    for (int i = 0; i < dots; ++i) {
+        const float angle = static_cast<float>(i) / dots * two_pi - two_pi * 0.25f;
+        float behind = turn - static_cast<float>(i) / dots; // 0 at the head, up to 1 at its tail.
+        if (behind < 0) behind += 1;
+        const float fade = 1.0f - behind;
+        brush(D2D1::ColorF(color.r, color.g, color.b, color.a * (0.12f + 0.88f * fade * fade)));
+        target_->FillEllipse(D2D1::Ellipse({cx + std::cos(angle) * radius, cy + std::sin(angle) * radius}, radius * 0.15f + radius * 0.07f * fade, radius * 0.15f + radius * 0.07f * fade), solid_.Get());
+    }
 }

@@ -97,6 +97,7 @@ void Renderer::drawDesktopTitlebar(const Layout& layout, const View& view) {
         }
         case Tool::tv: desktopGlyph(glyph::tv, x, y, 17, ink); break;
         case Tool::settings: desktopGlyph(glyph::settings, x, y, 16, ink); break;
+        case Tool::more: desktopGlyph(glyph::more, x, y, 16, ink); break;
         case Tool::update: {
             // A newer Launchme: an accent arrow with a dot; downloading, its ring fills.
             desktopGlyph(glyph::download, x, y, 15, uiAccent(ink_alpha));
@@ -258,7 +259,29 @@ void Renderer::drawDesktopSidebar(const Layout& layout, const View& view) {
     };
     if (view.sidebar_scroll > 1) fade(desktop_fade_top_, top, top + 18);
     if (view.sidebar_scroll < max_scroll - 1) fade(desktop_fade_bottom_, bottom, bottom - 18);
+    drawDesktopStart(layout, view);
     drawDesktopCompanion(layout, view);
+}
+
+// "Jak zacząć": the first steps (platforms, keys, ROMs, a game, Tryb TV) with their progress, above her card.
+void Renderer::drawDesktopStart(const Layout& layout, const View& view) {
+    if (!view.start_card || !view.start_total) return;
+    const auto card = layout.startCard();
+    const bool hover = view.hover.target == Target::start_card;
+    desktopFill(card, 12, card_bg);
+    if (hover) desktopFill(card, 12, gray(1, 0.04f));
+    desktopStroke(card, 12, gray(1, hover ? 0.14f : 0.06f));
+    const float left = card.left + 14, right = card.right - 14;
+    const auto count = std::to_wstring(view.start_done) + L"/" + std::to_wstring(view.start_total);
+    const float count_w = textAdvance(count, desktop_small_font_.Get()) + 4;
+    textLine(tr(L"Jak zacząć"), left, card.top + 17, right - left - count_w - 8, desktop_strong_font_.Get(), palette::text());
+    textLine(count, right - count_w, card.top + 17, count_w, desktop_small_font_.Get(), palette::muted(), DWRITE_TEXT_ALIGNMENT_TRAILING);
+    const Rect bar{left, card.top + 32, right, card.top + 38};
+    desktopFill(bar, 3, gray(1, 0.1f));
+    const float share = static_cast<float>(view.start_done) / static_cast<float>(view.start_total);
+    if (share > 0) desktopFill({bar.left, bar.top, bar.left + std::max(6.0f, (bar.right - bar.left) * share), bar.bottom}, 3, uiAccent());
+    textLine(view.start_next.empty() ? std::wstring(tr(L"Wszystko gotowe")) : std::wstring(tr(L"Dalej: ")) + view.start_next, left, card.top + 56, right - left,
+             desktop_small_font_.Get(), palette::muted());
 }
 
 // Her card at the bottom of the sidebar: her face, name and character; her remarks pop out of it.

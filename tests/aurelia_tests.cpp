@@ -151,6 +151,13 @@ int main(int argc, char** argv) {
     CHECK(!aurelia::library(parsed("[]"), 0));
     const auto friend_list = aurelia::friends(parsed(R"([{"steam_id":76561198000000001,"persona_name":"Friend","persona_state":1,"game_name":"Fixture"}])"));
     CHECK(friend_list.friends.size() == 1 && friend_list.friends[0].id == 76561198000000001ULL && friend_list.friends[0].status == 1);
+    CHECK(!friend_list.no_presence && friend_list.error.empty());
+    // Bare IDs (the daemon's persona_state is null until Steam answers) are not a roster of offline friends.
+    const auto bare = aurelia::friends(parsed(R"([{"steam_id":76561198000000001,"persona_name":null,"persona_state":null},{"steam_id":76561198000000002}])"));
+    CHECK(bare.no_presence && !bare.error.empty() && bare.friends.size() == 2);
+    CHECK(!aurelia::friends(parsed(R"([{"steam_id":76561198000000001,"persona_name":"Luna","persona_state":null},{"steam_id":76561198000000002}])")).no_presence); // One name is enough.
+    CHECK(!aurelia::friends(parsed(R"([{"steam_id":76561198000000001,"persona_state":0}])")).no_presence); // A known "offline".
+    CHECK(!aurelia::friends(parsed("[]")).no_presence);
     auto cloud = aurelia::cloud({true, false, parsed(R"({"files":[{"filename":"save.dat"}]})")}, false);
     CHECK(cloud.state == aurelia::CloudState::files); // A remote file listing never claims synchronization.
     cloud = aurelia::cloud({true, false, parsed(R"({"status":"ok","failed":[{"filename":"save.dat"}]})")}, true);

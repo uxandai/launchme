@@ -103,7 +103,14 @@ Settings → System → Help → **Open folder** (the version row) opens it.
   window shows, then fades away behind it.
 - **Desktop window mode** with a sidebar, search and a details pane; switch between it and full screen from
   the power menu. The sidebar folds to its icons (the button by the logo) and the details pane is as wide as
-  you drag its edge (double-click it for the default).
+  you drag its edge (double-click it for the default); the ✕ (or a click on an empty place in the grid) closes the
+  panel until you choose a game. A dropdown next to the sort button shows posters, squares or landscape cells, and
+  the title bar keeps downloads, TV mode, settings and "…" (Widgets, Glance, Tarot, Store). A **Getting started**
+  card above the companion lists the first steps (platforms and accounts, service keys, the ROM folder, a first
+  game, TV mode) with a progress bar; Settings → System → *Getting started* brings it back.
+  **Identify game** (the game's menu → *Data and artwork*) starts at once: ScreenScraper for emulated games, RAWG,
+  then the stores' descriptions, the best match is taken; *Match by hand* offers the title and a provider dropdown
+  (every database and store).
   Above the description a bar tells whether this PC meets a Steam or GOG game's requirements (green, yellow, red,
   or grey without data); click it to compare your processor, graphics card and RAM with the minimum and recommended.
 - **Library views**: grid (squares, posters or landscape tiles), list, cinematic, detailed, poster,
@@ -148,7 +155,7 @@ Settings → System → Help → **Open folder** (the version row) opens it.
   PS Vita (Vita3K) and ScummVM are among them; PS5 and Switch 2 start with a program you choose. Each system can
   also have its own ROM folder in place of its subfolder of the main one, and **Look for games again** reads it anew
   (new games, updates, removed ones). Switch 2 dumps kept unpacked are one game per folder, started from the newest
-  update's `exefs\main`. A game can also have an emulator of its own (its details' "…" → *Emulator*): another
+  update's `exefs\main`; `.nup` packages are games too (loose, or inside a game's folder). A game can also have an emulator of its own (its details' "…" → *Emulator*): another
   emulator of the system, or any program.
 - **Games added by hand** (Settings → Library → *DRM-free folders* → **Add game** → **Choose file** or **Choose
   folder**, the "+" tile, or a file or folder dropped on the desktop window): a program, shortcut or script is a PC
@@ -190,7 +197,9 @@ Settings → System → Help → **Open folder** (the version row) opens it.
   posters first. To fetch it now: Settings → Media & data → *Download missing covers*, or in the desktop
   window select several games and pick *Download artwork again* or *Download missing covers…*.
 - **Details**: Steam metadata, playtime (also for non-Steam games, Epic's and Prism's counts, or your own value from
-  *Edit metadata*, in both modes), achievements, Steam and RAWG ratings,
+  *Edit metadata*, in both modes; its *Find…* button looks the game up in the Nintendo eShop (Switch and Switch 2, by the
+  title ID in the file name), Steam, GOG, the Microsoft Store and TitleDB, and copies the description, developer,
+  publisher, release date and genres you tick into the dialog), achievements, Steam and RAWG ratings,
   versions of the same game across stores, uninstall from the game menu (Steam's own dialog, GOG games
   silently after Launchme asks, other stores through the uninstaller they registered). Achievements of games outside
   Steam come from the Achievements plugin: GOG and Epic (with their accounts connected),

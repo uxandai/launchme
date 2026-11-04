@@ -251,8 +251,12 @@ void Launcher::contextClick(float mouse_x, float mouse_y) {
     }
     if (libraryDialogOpen()) return;
     if (gogInstallOpen()) return;
-    if (pending_launch_ || friends_open_ || category_menu_open_ || quick_open_ || exit_prompt_ || power_menu_ || tour_.open ||
-        (screen_ != ScreenMode::shelves && screen_ != ScreenMode::platform_games && !gridScreen(screen_))) return;
+    if (pending_launch_ || friends_open_ || category_menu_open_ || quick_open_ || exit_prompt_ || power_menu_ || tour_.open) return;
+    if (screen_ != ScreenMode::shelves && screen_ != ScreenMode::platform_games && !gridScreen(screen_)) {
+        // Details, Settings, a store...: with only a mouse the right button is Back, as B on the pad.
+        if (topModal() == Modal::none && !menu_open_ && !launchAnimationActive()) back();
+        return;
+    }
     const auto view = renderer_.viewport(); const float x = mouse_x / view.scale, y = mouse_y / view.scale;
     for (size_t i = 0; i < cards_.size(); ++i) {
         if ((!isGame(cards_[i].game) && !studioMenuTile(cards_[i].game)) || !cardHit(i, x, y)) continue;

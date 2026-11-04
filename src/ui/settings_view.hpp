@@ -25,7 +25,7 @@ enum class Id { font, home_layout, ui_accent, accent, uninstalled, emulation, co
                 screensaver, screensaver_style, screensaver_minutes, screensaver_start, steam_key, sgdb_key, epic_callback, epic_refresh, epic_logout, tile_shape, rawg_key, show_categories, xmb_posters, xmb_size,
                 ea_callback, ea_refresh, ea_remove, battlenet_import, battlenet_callback, battlenet_remove, steam_controller, focus_spring, flix_size,
                 plugin_install, plugin_enabled, plugin_setting, plugin_remove, pc_connect, pc_client, pc_refresh, pc_excluded, steam_sync,
-                 drm_scan, drm_background, drm_add_root, drm_root, drm_game, show_private, drm_games, tour, panel_borders,
+                 drm_scan, drm_background, drm_add_root, drm_root, drm_game, show_private, drm_games, tour, start_reset, panel_borders,
                  flix_category_all, accept_action, console_colors, metro_3d, shelves_posters, shelves_steam, shelves_category_all, sound_folder, collection_manage, windowed,
                  glow_level, glow_pulse, glow_trace, screenscraper, screenscraper_open, game_videos, video_folder, video_folder_reset, screenscraper_test, screenscraper_clear, video_delay, video_volume, steam_trailers, emulation_names, emulation_rom_art, trailer_space, background_grid, background_grid_style, psfive_size, psfive_clock, custom_games,
                  // Settings 2.0.

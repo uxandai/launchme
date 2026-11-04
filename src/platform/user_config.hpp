@@ -32,6 +32,7 @@ struct AppSettings {
     // The desktop library: poster width (DIPs), order (library_view::persistedOrder), installed games
     // only, the section shown, its selected game (library_view::selectionKey) and collapsed groups.
     int desktop_poster = 156;
+    int desktop_view = 0; // The grid's cells: 0 posters (2:3), 1 squares (covers), 2 landscape (capsules).
     // The desktop window's panes: the right one's width (dragged by its edge; 0 a quarter of the
     // window) and the left one narrow, its icons only (the toggle by the logo).
     int desktop_pane = 0;
@@ -341,6 +342,11 @@ struct AppSettings {
     // First-run walkthrough (src/app/tour.cpp) finished or skipped. Only a missing settings.ini
     // (the first start) loads false; files written before the walkthrough existed count as done.
     bool tour_done = true;
+    // "Jak zacząć" (the desktop sidebar's card above the companion, src/app/getting_started.cpp): the steps the
+    // player has taken (bit per step) and whether the card is hidden. Only a first start shows it; a settings
+    // file from before the card hides it, Ustawienia → System brings it back.
+    uint32_t start_done = 0;
+    bool start_hidden = true;
     // Launchme's own updates (src/app/updates.cpp): look for a newer release on GitHub; a version
     // the user chose to skip gets no notification (Ustawienia → System still offers it).
     bool update_check = true;

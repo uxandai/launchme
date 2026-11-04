@@ -139,6 +139,25 @@ void Launcher::buildSettingsRows() {
         row.key = std::to_string(static_cast<int>(target));
         add(std::move(row));
     };
+    const auto viewRows = [&] {
+        // A console's, a collection's and a publisher's library without a view of its own; its badge
+        // (↺ Zresetuj, Delete, X) gives every one of the kind this view again (their own view, order and filter go).
+        const auto viewRow = [&](Id id, const wchar_t* title, const wchar_t* description, int saved, const char* kind) {
+            Row row{id, Control::choice, title, description};
+            for (const auto view : library_view::drawer_order) row.choices.push_back({library_view::label(view)});
+            row.choice = library_view::drawerRow(library_view::viewFromPersisted(std::clamp(saved, 0, library_view::persisted_view_count - 1)));
+            row.value = row.choices[row.choice].label;
+            if (const int own = libraryViewOverrides(kind)) row.description += L" · " + (tr(L"Z własnym widokiem: ") + std::to_wstring(own));
+            row.badge = tr(L"Zresetuj"); row.reset = std::string("views:") + kind;
+            add(std::move(row));
+        };
+        viewRow(Id::default_view_console, tr(L"Domyślny widok emulatorów"),
+                tr(L"Biblioteki konsol bez własnego widoku. Zresetuj: wszystkie wracają do niego."), settings_.default_view_console, "console");
+        viewRow(Id::default_view_collection, tr(L"Domyślny widok kolekcji"),
+                tr(L"Kolekcje Steam i własne bez własnego widoku. Zresetuj: wszystkie wracają do niego."), settings_.default_view_collection, "collection");
+        viewRow(Id::default_view_studio, tr(L"Domyślny widok wydawców"),
+                tr(L"Wydawcy i developerzy bez własnego widoku. Zresetuj: wszystkie wracają do niego."), settings_.default_view_studio, "studio");
+    };
     if (settings_state_.at(Page::settings_search)) settingsSearchRows(add);
     else switch (static_cast<settings_ui::Category>(settings_state_.category)) {
     case settings_ui::Category::appearance: {
@@ -282,25 +301,6 @@ void Launcher::buildSettingsRows() {
                 (settings_.drawer.fade_fraction - 0.06f) / 0.69f});
             break;
         }
-        const auto viewRows = [&] {
-            // A console's, a collection's and a publisher's library without a view of its own; its badge
-            // (↺ Zresetuj, Delete, X) gives every one of the kind this view again (their own view, order and filter go).
-            const auto viewRow = [&](Id id, const wchar_t* title, const wchar_t* description, int saved, const char* kind) {
-                Row row{id, Control::choice, title, description};
-                for (const auto view : library_view::drawer_order) row.choices.push_back({library_view::label(view)});
-                row.choice = library_view::drawerRow(library_view::viewFromPersisted(std::clamp(saved, 0, library_view::persisted_view_count - 1)));
-                row.value = row.choices[row.choice].label;
-                if (const int own = libraryViewOverrides(kind)) row.description += L" · " + (tr(L"Z własnym widokiem: ") + std::to_wstring(own));
-                row.badge = tr(L"Zresetuj"); row.reset = std::string("views:") + kind;
-                add(std::move(row));
-            };
-            viewRow(Id::default_view_console, tr(L"Domyślny widok emulatorów"),
-                    tr(L"Biblioteki konsol bez własnego widoku. Zresetuj: wszystkie wracają do niego."), settings_.default_view_console, "console");
-            viewRow(Id::default_view_collection, tr(L"Domyślny widok kolekcji"),
-                    tr(L"Kolekcje Steam i własne bez własnego widoku. Zresetuj: wszystkie wracają do niego."), settings_.default_view_collection, "collection");
-            viewRow(Id::default_view_studio, tr(L"Domyślny widok wydawców"),
-                    tr(L"Wydawcy i developerzy bez własnego widoku. Zresetuj: wszystkie wracają do niego."), settings_.default_view_studio, "studio");
-        };
         if (!settings_state_.at(Page::appearance_all)) {
             // The short list: the live layout preview, the studio, a few switches; the rest is in Dostosuj wygląd.
             if (desktop_mode_) {
@@ -311,18 +311,23 @@ void Launcher::buildSettingsRows() {
                     tr(L"Okładki gier, których nie ma na dysku, bez kolorów - zainstalowane od razu się wyróżniają."), {}, settings_.desktop_gray_uninstalled});
             }
             section(tr(L"Tryb TV"));
-            Row layout{Id::home_layout, Control::layout, tr(L"Układ trybu TV"), tr(L"Półki, XMB, Flix, Metro, PSfive lub snitch z rzędem okładek i białymi ikonami.")};
-            layout.choice = std::clamp(static_cast<int>(settings_.home_layout), 0, static_cast<int>(home_layouts.size()) - 1);
-            layout.value = tr(home_layouts[layout.choice]);
-            add(std::move(layout));
-            add({Id::theme_studio, Control::action, tr(L"Dostosuj wygląd"),
-                tr(L"Układ, tapeta, kafelki, kolory i czcionki z podglądem na żywo. Wyglądy można zapisać, wczytać i usunąć."), tr(L"Otwórz")});
+            if (desktop_mode_) {
+                // Dostosuj wygląd (live preview, wallpaper, tiles, colours, fonts) works on Tryb TV's screens only.
+                add({Id::theme_studio, Control::action, tr(L"Wygląd trybu TV"),
+                    tr(L"Układ, tapetę, kafelki, kolory i czcionki ustawisz z podglądem na żywo po przejściu do trybu TV: Ustawienia → Interfejs → Dostosuj wygląd."),
+                    tr(L"Przejdź do trybu TV")});
+            } else {
+                Row layout{Id::home_layout, Control::layout, tr(L"Układ trybu TV"), tr(L"Półki, XMB, Flix, Metro, PSfive lub snitch z rzędem okładek i białymi ikonami.")};
+                layout.choice = std::clamp(static_cast<int>(settings_.home_layout), 0, static_cast<int>(home_layouts.size()) - 1);
+                layout.value = tr(home_layouts[layout.choice]);
+                add(std::move(layout));
+                // The rest of Tryb TV's look (tiles, colours, fonts, wallpaper) is in Dostosuj wygląd with a live preview, not in this list.
+                add({Id::theme_studio, Control::action, tr(L"Dostosuj wygląd"),
+                    tr(L"Układ, tapeta, kafelki, kolory i czcionki z podglądem na żywo. Wyglądy można zapisać, wczytać i usunąć."), tr(L"Otwórz")});
+            }
             add({Id::launch_tv_mode, Control::toggle, tr(L"Uruchamiaj w trybie TV"),
                 tr(L"Po starcie pełny ekran z układem powyżej zamiast okna desktopowego. Przełączysz też ikoną telewizora lub w menu zasilania."),
                 {}, settings_.launch_tv_mode});
-            pageRow(Page::appearance_all, tr(L"Wszystkie opcje wyglądu"), tr(L"Klasyczna lista każdego ustawienia wyglądu."), {});
-            section(tr(L"Widoki biblioteki w trybie TV"));
-            viewRows();
             break;
         }
         // In the desktop window its own options come first; the console layouts (Tryb TV) follow.
@@ -537,14 +542,15 @@ void Launcher::buildSettingsRows() {
             add({Id::excluded_games, Control::count, tr(L"Wykluczone gry"),
                  tr(L"Wykluczone z menu gry (prawy przycisk: Wyklucz grę). Nie ma ich w bibliotece, kolekcjach ani wyszukiwaniu; tu je przywrócisz."),
                  std::to_wstring(library_state_.excluded_games.size())});
-        section(tr(L"Uruchamianie"));
+        section(tr(L"Widoki biblioteki w trybie TV"));
+        viewRows();
+        section(tr(L"Uruchamianie i zapisy"));
         choiceRow(Id::accept_action, tr(L"Domyślna akcja gry"),
                   tr(L"Wybranie gry w każdym widoku. Menu gry i ekran szczegółów zawsze uruchamiają."),
                   accept_actions, static_cast<int>(settings_.accept_action));
         add({Id::hide_while_playing, Control::toggle, tr(L"Chowaj do zasobnika podczas gry"),
             tr(L"Gdy gra działa, launcher znika z paska zadań i Alt+Tab, a jego ikona czeka w zasobniku. Wraca po zamknięciu gry."),
             {}, settings_.hide_while_playing});
-        section(tr(L"Kopie zapisów"));
         {
             const auto program = ludusaviProgram();
             add({Id::save_backups, Control::toggle, tr(L"Kopia zapisów po każdej grze"),
@@ -565,7 +571,6 @@ void Launcher::buildSettingsRows() {
             };
             const bool menu = shortcutAvailableAnywhere(ShortcutPlace::menu) && available(false);
             const bool steam = shortcutAvailableAnywhere(ShortcutPlace::steam) && available(true);
-            if (menu || steam) section(tr(L"Skróty gier"));
             if (menu)
                 add({Id::shortcuts_all_menu, Control::action, shortcutPlaceName(ShortcutPlace::menu),
                      tr(L"Dodaj tam wszystkie zainstalowane gry, które jeszcze nie mają skrótu. Każda startuje przez Launchme."), tr(L"Dodaj wszystkie")});
@@ -1015,6 +1020,9 @@ void Launcher::buildSettingsRows() {
         // The version, and the folder with launchme.log and crash reports a user can send.
         add({Id::about, Control::action, L"Launchme " + diagnostics::version(),
             tr(L"Dane, dziennik (launchme.log) i raporty awarii (crashes): ") + userConfigDirectory().wstring(), tr(L"Otwórz folder")});
+        add({Id::start_reset, Control::action, tr(L"Jak zacząć"),
+            tr(L"Panel z pierwszymi krokami (platformy, klucze, ROM-y, pierwsza gra) nad Towarzyszką w oknie desktopowym. Zacznij od nowa: wraca i zeruje postęp."),
+            tr(L"Zacznij od nowa")});
         if (!desktop_mode_) { // The walkthrough is Tryb TV's (its panels, menus and layouts).
             // Resets the first-run state and shows the walkthrough again (src/app/tour.cpp).
             add({Id::tour, Control::action, tr(L"Przewodnik"),

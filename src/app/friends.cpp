@@ -15,6 +15,11 @@ void Launcher::onFriends(std::unique_ptr<FriendsMessage> message) {
     if (!friends_open_ || message->generation != friends_generation_) return;
     friends_ = std::move(message->result);
     friends_loading_ = false;
+    // Steam may still be answering (a fresh session): ask again soon, the third time after a reconnect.
+    if (friends_.no_presence && friends_retries_ < 3) {
+        static constexpr int seconds[] = {6, 20, 20};
+        friends_retry_at_ = std::chrono::steady_clock::now() + std::chrono::seconds(seconds[friends_retries_]);
+    } else friends_retry_at_ = {};
     friends_scroll_ = 0;
     friends_cursor_ = 0;
     invalidateGameOverlay();
@@ -29,7 +34,9 @@ void Launcher::onAvatar(std::unique_ptr<AvatarMessage> message) {
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
-void Launcher::loadFriends() {
+void Launcher::loadFriends(bool retry) {
+    if (!retry) friends_retries_ = 0;
+    friends_retry_at_ = {};
     friends_ = {};
     friends_loading_ = true;
     friends_scroll_ = 0;
@@ -157,6 +164,7 @@ void Launcher::closeFriends() {
     dashboardEdit(false);
     if (plugin_command_pending_) { ++plugin_command_generation_; plugin_command_pending_ = false; }
     friends_open_ = false;
+    friends_retry_at_ = {};
     friends_token_->store(++friends_generation_);
     if (!hud_polling_) stopDashboardPoll(); // Pinned temperatures keep their reader.
     InvalidateRect(hwnd_, nullptr, FALSE);

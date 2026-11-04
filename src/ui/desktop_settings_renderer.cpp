@@ -84,7 +84,7 @@ void Renderer::drawDesktopSheetFrame(const Sheet& sheet, const SheetView& view, 
     // The library just left, barely dimmed, as behind a desktop app's dialog; before there is one (or
     // after a resize) the last game's picture, frosted. The window's bar either way.
     target_->Clear(rgb(0.043f, 0.047f, 0.055f));
-    if (drawDesktopBackdrop(0.12f)) drawDesktopWindowBar(view, false);
+    if (drawDesktopBackdrop(0.36f)) drawDesktopWindowBar(view, false);
     else {
         drawBackground();
         const bool style = std::exchange(desktop_style_, false); // The picture stays frosted behind the sheet.

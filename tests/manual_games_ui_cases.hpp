@@ -90,6 +90,7 @@ int LauncherUiTest::manualGames(HWND window) {
     app.customEditorKey(VK_RETURN, false);
     if (!app.identifyOpen() || !app.customEditorOpen() || app.topModal() != Launcher::Modal::identify || app.identify_state_.query != L"FL_2025" ||
         gameKey(app.identify_state_.game) != key) return 9517;
+    app.identifyManual();
     auto search = std::make_unique<IdentifyMessage>(); search->generation = app.identify_token_->load();
     search->search.games = {{9501, L"Football League 2025", L"2025-03-01", L"PC"}, {9502, L"FL 2025 Manager", L"2025-06-01", L"PC"}};
     app.onIdentify(std::move(search));
@@ -117,6 +118,7 @@ int LauncherUiTest::manualGames(HWND window) {
     for (const wchar_t ch : std::wstring(L"Ghost game")) app.onCharacter(ch);
     app.customEditorFocus(Item::identify); app.customEditorAccept();
     if (!app.identifyOpen()) return 9523;
+    app.identifyManual();
     search = std::make_unique<IdentifyMessage>(); search->generation = app.identify_token_->load();
     search->search.games = {{9503, L"Ghost Game", L"2024-01-01", L"PC"}};
     app.onIdentify(std::move(search));
@@ -232,6 +234,13 @@ int LauncherUiTest::manualGames(HWND window) {
         const auto item = [&](desktop_ui::Action action) -> const desktop_ui::MenuItem* {
             if (!desk.desktop_menu_) return nullptr;
             for (const auto& each : desk.desktop_menu_->items) if (each.action == action) return &each;
+            // The game's groups are submenus: look inside them too.
+            static desktop_ui::MenuItem found;
+            for (size_t i = 0; i < desk.desktop_menu_->items.size(); ++i) {
+                if (desk.desktop_menu_->items[i].action != desktop_ui::Action::group) continue;
+                for (const auto& each : desk.desktopGroupItems(desk.desktopGamesOf(desk.desktop_menu_->games).front(), desk.desktop_menu_->items[i].value))
+                    if (each.action == action) { found = each; return &found; }
+            }
             return nullptr;
         };
         const auto* remove = item(desktop_ui::Action::remove_game);

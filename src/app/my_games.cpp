@@ -152,8 +152,9 @@ void Launcher::openCustomEditor(const std::string& id, std::optional<Item> focus
         compatEditorFill(ui, custom_games::makeGame(*found, true)); // Linux, a Windows game: its Wine/Proton fields.
     } else ui.pending_id = custom_games::newId(custom_games_); // Zidentyfikuj grę keys a new game by it before it is saved.
     ui.open = true;
-    // A new game starts at "Wskaż plik": one press picks the file, the next one saves it.
-    ui.focus = focus ? *focus : id.empty() ? Item::pick_file : Item::name;
+    ui.desktop = desktop_mode_;
+    // A new game starts at "Wskaż plik" (the file row's "Wybierz" in the desktop window): one press picks the file, the next one saves it.
+    ui.focus = focus ? *focus : id.empty() ? (ui.desktop ? Item::file_browse : Item::pick_file) : Item::name;
     if (ui.focus == Item::file_browse && !ui.browses(custom_game_ui::file_field)) ui.focus = Item::pick_file;
     const int index = custom_game_ui::field(ui.focus);
     ui.caret = ui.fields[index >= 0 ? index : custom_game_ui::name_field].size();
@@ -337,7 +338,7 @@ void Launcher::closeCustomEditor() {
 void Launcher::customEditorFocus(Item item) {
     auto& ui = custom_editor_;
     if (!ui.open || ui.focus == item || (item == Item::remove && !ui.editing()) || (item == Item::identify && !ui.posterShown())) return;
-    if ((item == Item::pick_file || item == Item::pick_folder) && !ui.pills()) return;
+    if ((item == Item::pick_file && !ui.pills()) || (item == Item::pick_folder && !ui.pills() && !ui.folderButton())) return;
     if (item == Item::file_browse && !ui.browses(custom_game_ui::file_field)) return;
     if (item == Item::identify) ui.identify_from = ui.focus;
     if (const int row = custom_game_ui::row(item); row < custom_game_ui::field_count && !ui.shows(row)) return;
@@ -466,6 +467,7 @@ void Launcher::customEditorKey(WPARAM key, bool repeated) {
                                 Item::dll, Item::wine, Item::wine_page, Item::platform})
             if (ui.shows(custom_game_ui::row(item)) && (item != Item::file_browse || ui.browses(custom_game_ui::file_field))) order.push_back(item);
         if (ui.posterShown()) order.push_back(Item::identify);
+        if (ui.folderButton()) order.push_back(Item::pick_folder);
         if (ui.editing()) order.push_back(Item::remove);
         order.push_back(Item::cancel); order.push_back(Item::save);
         const auto position = static_cast<int>(std::find(order.begin(), order.end(), ui.focus) - order.begin());
@@ -576,7 +578,7 @@ void Launcher::customEditorBrowse(bool folder) {
         // Programs and shortcuts (PC games), disc images and ROMs (emulated ones), or a game's folder.
         request.extensions = {L".exe", L".lnk", L".bat", L".cmd", L".url"};
         for (auto& extension : emulation_scan::romExtensions()) request.extensions.push_back(std::move(extension));
-        request.folder_option = !ui.pills(); // A new game has "Wskaż folder" of its own.
+        request.folder_option = ui.editing() || ui.launchOptions(); // A new game has "Wskaż folder" / "Dodaj folder jako bibliotekę" of its own.
         request.filter_label = tr(L"Programy, skróty, obrazy płyt i ROM-y");
         request.all_files_option = true;
     }

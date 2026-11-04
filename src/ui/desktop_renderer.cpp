@@ -224,7 +224,10 @@ void Renderer::drawDesktop() {
     layout.poster_width = view.poster;
     layout.tools = static_cast<int>(view.tools.size());
     layout.companion_card = view.companion_card;
+    layout.start_card = view.start_card;
     layout.narrow = view.sidebar_narrow; layout.pane_width = view.pane_width;
+    layout.pane_open = view.pane_open;
+    layout.cell_aspect = view.cell_view == 1 ? 1.0f : view.cell_view == 2 ? 0.5625f : 1.5f;
     desktop_chips_.clear(); desktop_chip_add_ = {}; desktop_rating_ = {}; desktop_protondb_ = {}; desktop_hardware_ = {}; desktop_achievements_ = {}; desktop_cloud_ = {}; desktop_studios_ = {};
     desktop_hotspots_.clear(); // Widżety record their controls here.
     companion_bubble_ = {};
@@ -242,7 +245,16 @@ void Renderer::drawDesktop() {
     // No screen transition here: back from a dialog or page, the library is simply there again (the
     // TV mode's zoom and bow would distort the whole window).
     drawDesktopGrid(layout, view);
-    drawDesktopPane(layout, view);
+    if (layout.pane_open) {
+        drawDesktopPane(layout, view);
+        // ✕: closes the column until another game is chosen.
+        const auto close = layout.paneClose();
+        const bool over = view.hover == Hit{Target::pane_close, 0};
+        const float cx = (close.left + close.right) * 0.5f, cy = (close.top + close.bottom) * 0.5f;
+        brush(gray(0, over ? 0.7f : 0.45f));
+        target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), 15, 15), solid_.Get());
+        desktopGlyph(glyph::close, cx, cy, 14, gray(over ? 1.0f : 0.8f));
+    }
     drawDesktopSidebar(layout, view);
     drawDesktopTitlebar(layout, view);
     if (view.downloads_open) drawDesktopDownloads(layout, view);

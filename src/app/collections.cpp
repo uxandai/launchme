@@ -58,13 +58,20 @@ std::vector<Game> Launcher::hideableCopies(const Game& game) const {
     for (const auto& copy : copies) {
         if (!isGame(copy) || copy.kind == GameKind::catalog || copy.kind == GameKind::nonsteam || gameKey(copy).empty() ||
             (copy.source == GameSource::steam && excluded_ids_.contains(copy.app_id) && !hiddenInSteam(copy)) ||
-            (copy.visibility != GameVisibility::public_game && !locallyHidden(copy) && !hiddenInSteam(copy))) return {};
+            (copy.visibility != GameVisibility::public_game && !locallyHidden(copy) && !hiddenInSteam(copy) && !hiddenByFlag(copy))) return {};
     }
     return copies;
 }
+// A Steam game marked hidden in Steam (the flag read from its files), also while the connection to Steam is not there to say so:
+// it can be unhidden (private ones stay private), unless an unhide is already waiting for Steam.
+bool Launcher::hiddenByFlag(const Game& game) const {
+    if (game.source != GameSource::steam || game.visibility != GameVisibility::hidden) return false;
+    const auto pending = library_state_.steam_hidden_pending.find(hiddenKey(game));
+    return pending == library_state_.steam_hidden_pending.end() || pending->second;
+}
 bool Launcher::hiddenInLauncher(const Game& game) const {
     const auto copies = hideableCopies(game);
-    return !copies.empty() && std::all_of(copies.begin(), copies.end(), [&](const Game& copy) { return locallyHidden(copy) || hiddenInSteam(copy); });
+    return !copies.empty() && std::all_of(copies.begin(), copies.end(), [&](const Game& copy) { return locallyHidden(copy) || hiddenInSteam(copy) || hiddenByFlag(copy); });
 }
 void Launcher::toggleHidden(const Game& original) {
     const Game game = original; // Often a card: rebuilding the shelves below replaces it.

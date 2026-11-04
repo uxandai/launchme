@@ -97,10 +97,12 @@ bool Launcher::desktopModalClick(float mouse_x, float mouse_y, bool double_click
         auto& state = identify_state_;
         if (hit.kind == K::none || hit.kind == K::close) { closeIdentify(); return true; } // Beside it or ✕: as Back.
         if (state.applying) return true;
-        if (hit.kind == K::toggle) {
-            if (state.emulated) identifySwitchSource();
-            else execute_(hwnd_, GameAction{L"https://rawg.io", {}, {}, ActionKind::open_client});
-        } else if (hit.kind == K::action) identifySearch();
+        if (!state.manual) { if (hit.kind == K::action) identifyManual(); } // Only "Dopasuj ręcznie" in the lookup view.
+        else if (state.menu) { // The provider dropdown: a row picks, anywhere else closes it.
+            if (hit.kind == K::dropdown_item) identifyPickProvider(hit.index); else state.menu = false;
+        }
+        else if (hit.kind == K::toggle) identifyToggleMenu();
+        else if (hit.kind == K::action) identifySearch();
         else if (hit.kind == K::field) { state.query_focus = true; state.select_all = true; state.back_focus = false; }
         else if (hit.kind == K::row && !state.busy) {
             state.selected = hit.index; state.query_focus = state.back_focus = false;

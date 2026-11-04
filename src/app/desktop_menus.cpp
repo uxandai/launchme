@@ -55,41 +55,20 @@ void Launcher::desktopOpenGameMenu(float x, float y, bool keyboard) {
         if (const auto* group = versions_.find(game); group && group->size() > 1) items.push_back({Action::versions, tr(L"Wybierz wersję…"), {}, glyph::sync});
         separator();
         items.push_back({Action::details, tr(L"Szczegóły"), enter_details ? std::wstring(tr(L"Enter")) : std::wstring{}, glyph::info});
-        items.push_back({Action::artwork, tr(L"Zmień grafikę…"), {}, glyph::picture});
-        items.push_back({Action::retry_art, tr(L"Pobierz grafiki ponownie"), {}, glyph::refresh});
-        if (!gameKey(game).empty()) items.push_back({Action::metadata, tr(L"Edytuj metadane…"), {}, glyph::edit}); // Own title and details.
-        if (!steamArtwork(game) && !gameKey(game).empty()) items.push_back({Action::identify, tr(L"Zidentyfikuj grę…"), {}, glyph::search}); // Under it, as in Tryb TV.
-        if (aurelia_active_ && aurelia::validGame(game)) items.push_back({Action::aurelia, tr(L"Zarządzaj · Aurelia"), {}, glyph::edit});
-        // The file, options and folder it starts with (Steam: its launch options).
-        if (steamAccountChoices(game).size() > 1) items.push_back({Action::steam_account, tr(L"Konto Steam: ") + steamAccountLabel(game), {}, glyph::people});
-        if (gameEmulatorEditable(game)) items.push_back({Action::emulator, gameEmulatorLabel(game), {}, glyph::game}); // Emulator per gra: the next choice.
-        if (launchEditable(game)) // A game added by hand: the file, name and options are its own editor.
-            items.push_back({Action::launch_options, game.source == GameSource::custom ? tr(L"Edytuj grę…") : tr(L"Opcje uruchamiania…"), {}, glyph::settings});
-        if (compatGame(game) && !gameKey(game).empty()) items.push_back({Action::compat_options, L"Proton / Wine…", {}, glyph::settings});
-        // Skróty ▸ Pulpit, Menu Start (menu aplikacji), Steam: the game started through Launchme from outside it.
-        if (shortcutAvailable(game, ShortcutPlace::desktop) || shortcutAvailable(game, ShortcutPlace::menu) || shortcutAvailable(game, ShortcutPlace::steam)) {
-            MenuItem shortcuts{Action::shortcuts, tr(L"Skróty"), {}, glyph::open};
-            shortcuts.submenu = true;
-            items.push_back(std::move(shortcuts));
-        }
-        // Zapisy ▸ kopia, przywrócenie (Ludusavi).
-        if (!gameKey(game).empty()) {
-            MenuItem saves{Action::saves, tr(L"Zapisy"), {}, glyph::copy};
-            saves.submenu = true;
-            items.push_back(std::move(saves));
-        }
-        if (!gameFolder(game).empty()) items.push_back({Action::folder, tr(L"Otwórz folder gry"), {}, glyph::folder_open});
-        const auto plugins = pluginContext(game);
-        if (!plugins.empty()) separator();
-        for (size_t i = 0; i < plugins.size(); ++i) {
-            MenuItem item{Action::plugin, plugins[i].item.title.localized(), {}, glyph::open};
-            item.value = static_cast<int>(i);
+        // The rest in three groups, each a submenu: the game's data and art, how it starts, and the extras.
+        const wchar_t* group_names[] = {trKey(L"Dane i grafika"), trKey(L"Opcje gry"), trKey(L"Więcej")};
+        const wchar_t group_icons[] = {glyph::picture, glyph::settings, glyph::more};
+        for (int group = 0; group < 3; ++group) {
+            if (desktopGroupItems(game, group).empty()) continue;
+            MenuItem item{Action::group, tr(group_names[group]), {}, group_icons[group]};
+            item.submenu = true;
+            item.value = group;
             items.push_back(std::move(item));
         }
-        if (!hideableCopies(game).empty() || canExclude(game)) separator();
+        separator();
         if (!hideableCopies(game).empty()) {
             const bool hidden = hiddenInLauncher(game);
-            items.push_back({Action::hide, hidden ? tr(L"Pokaż w bibliotece") : tr(L"Ukryj"), {}, hidden ? glyph::view : glyph::hide});
+            items.push_back({Action::hide, hidden ? tr(L"Usuń z ukrytych") : tr(L"Ukryj"), {}, hidden ? glyph::view : glyph::hide});
         }
         if (canExclude(game)) { MenuItem exclude{Action::exclude, tr(L"Wyklucz z biblioteki"), {}, glyph::remove}; exclude.danger = true; items.push_back(std::move(exclude)); }
         if (canUninstall(game) && session == SessionState::none) { // Never while it runs or is suspended.
@@ -121,17 +100,72 @@ void Launcher::desktopOpenGameMenu(float x, float y, bool keyboard) {
         separator();
         items.push_back({Action::clear_marks, tr(L"Wyczyść zaznaczenie"), tr(L"Esc"), glyph::close});
     }
+    while (!items.empty() && items.back().separator) items.pop_back();
     if (keyboard) menu.hover = stepItem(items, -1, 1);
     desktop_menu_ = std::move(menu);
     desktop_tooltip_ = 0;
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
+// The single-game menu's groups (submenus): 0 Dane i grafika, 1 Opcje gry, 2 Więcej.
+std::vector<MenuItem> Launcher::desktopGroupItems(const Game& game, int group) {
+    std::vector<MenuItem> items;
+    if (group == 0) {
+        items.push_back({Action::artwork, tr(L"Zmień grafikę…"), {}, glyph::picture});
+        items.push_back({Action::retry_art, tr(L"Pobierz grafiki ponownie"), {}, glyph::refresh});
+        if (!gameKey(game).empty()) items.push_back({Action::metadata, tr(L"Edytuj metadane…"), {}, glyph::edit}); // Own title and details.
+    } else if (group == 1) {
+        if (aurelia_active_ && aurelia::validGame(game)) items.push_back({Action::aurelia, tr(L"Zarządzaj · Aurelia"), {}, glyph::edit});
+        // The file, options and folder it starts with (Steam: its launch options).
+        if (steamAccountChoices(game).size() > 1) items.push_back({Action::steam_account, tr(L"Konto Steam: ") + steamAccountLabel(game), {}, glyph::people});
+        if (gameEmulatorEditable(game)) items.push_back({Action::emulator, gameEmulatorLabel(game), {}, glyph::game}); // Emulator per gra: the next choice.
+        if (launchEditable(game)) // A game added by hand: the file, name and options are its own editor.
+            items.push_back({Action::launch_options, game.source == GameSource::custom ? tr(L"Edytuj grę…") : tr(L"Opcje uruchamiania…"), {}, glyph::settings});
+        if (compatGame(game) && !gameKey(game).empty()) items.push_back({Action::compat_options, L"Proton / Wine…", {}, glyph::settings});
+    } else {
+        const auto line = [&] { if (!items.empty() && !items.back().separator) { MenuItem separator; separator.separator = true; items.push_back(separator); } };
+        // Not for a Steam game: Steam knows what it is.
+        if (!steamArtwork(game) && !gameKey(game).empty()) items.push_back({Action::identify, tr(L"Zidentyfikuj grę…"), {}, glyph::search});
+        if (!gameFolder(game).empty()) items.push_back({Action::folder, tr(L"Otwórz folder gry"), {}, glyph::folder_open});
+        // Skróty: the game started through Launchme from outside it (Pulpit, Menu Start, Steam), each a toggle.
+        for (const auto place : {ShortcutPlace::desktop, ShortcutPlace::menu, ShortcutPlace::steam}) {
+            if (!shortcutAvailable(game, place)) continue;
+            MenuItem item{Action::shortcut_toggle, std::wstring(tr(L"Skrót: ")) + shortcutPlaceName(place), {},
+                          place == ShortcutPlace::desktop ? glyph::tv : place == ShortcutPlace::menu ? glyph::library : glyph::game};
+            item.value = static_cast<int>(place);
+            item.checked = hasShortcut(game, place);
+            if (items.empty() || items.back().action != Action::shortcut_toggle) line();
+            items.push_back(std::move(item));
+        }
+        // Zapisy: Ludusavi's backup and restore.
+        if (!gameKey(game).empty()) {
+            const bool ready = !ludusaviProgram().empty();
+            line();
+            items.push_back({Action::save_backup, tr(L"Zrób kopię zapisów"), {}, glyph::copy});
+            items.push_back({Action::save_restore, tr(L"Przywróć ostatnią kopię…"), {}, glyph::refresh});
+            items.push_back({Action::save_ludusavi, ready ? tr(L"Otwórz Ludusavi") : tr(L"Pobierz Ludusavi"), {}, ready ? glyph::open : glyph::download});
+        }
+        const auto plugins = pluginContext(game);
+        if (!plugins.empty()) line();
+        for (size_t i = 0; i < plugins.size(); ++i) {
+            MenuItem item{Action::plugin, plugins[i].item.title.localized(), {}, glyph::open};
+            item.value = static_cast<int>(i);
+            items.push_back(std::move(item));
+        }
+        while (!items.empty() && items.front().separator) items.erase(items.begin());
+    }
+    return items;
+}
+
 void Launcher::desktopOpenSubmenu(int index) {
     if (!desktop_menu_ || index < 0 || index >= static_cast<int>(desktop_menu_->items.size())) return;
     auto& menu = *desktop_menu_;
     menu.sub_parent = index;
-    if (menu.items[static_cast<size_t>(index)].action == Action::shortcuts) {
+    if (menu.items[static_cast<size_t>(index)].action == Action::group) {
+        menu.sub.clear();
+        const auto games = desktopGamesOf(menu.games);
+        if (!games.empty()) menu.sub = desktopGroupItems(games.front(), menu.items[static_cast<size_t>(index)].value);
+    } else if (menu.items[static_cast<size_t>(index)].action == Action::shortcuts) {
         menu.sub.clear();
         const auto games = desktopGamesOf(menu.games);
         if (!games.empty())
@@ -220,6 +254,59 @@ void Launcher::desktopOpenSortMenu() {
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
+// The title bar's "…": the tools that do not have an icon of their own.
+void Launcher::desktopOpenToolsMenu() {
+    const auto tools = desktopTools();
+    const auto at = std::find(tools.begin(), tools.end(), Tool::more);
+    if (at == tools.end()) return;
+    const auto r = desktopLayout().tool(static_cast<int>(at - tools.begin()));
+    Menu menu;
+    menu.kind = Menu::Kind::tools;
+    menu.align_right = true;
+    menu.x = r.right; menu.y = r.bottom + 6;
+    for (const auto tool : desktopMoreTools()) {
+        MenuItem item{Action::tool, {}, {}, 0};
+        item.value = static_cast<int>(tool);
+        switch (tool) {
+        case Tool::friends: item.label = tr(L"Widżety"); item.icon = glyph::people; break;
+        case Tool::glance: item.label = L"Glance"; item.icon = glyph::info; break;
+        case Tool::tarot: item.label = L"Tarot"; item.icon = glyph::star; break;
+        default: item.label = tr(L"Sklep"); item.icon = glyph::shop; break;
+        }
+        menu.items.push_back(std::move(item));
+    }
+    desktop_menu_ = std::move(menu);
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+// The grid's cells: posters (2:3), squares (covers) or landscape (capsules).
+void Launcher::desktopOpenViewMenu() {
+    const auto r = desktopLayout().viewButton();
+    Menu menu;
+    menu.kind = Menu::Kind::view;
+    menu.x = r.left; menu.y = r.bottom + 6;
+    const wchar_t* names[] = {trKey(L"Plakaty"), trKey(L"Kwadraty"), trKey(L"Poziome")};
+    for (int i = 0; i < 3; ++i) {
+        MenuItem item{Action::view_mode, tr(names[i]), {}, 0};
+        item.value = i;
+        item.checked = settings_.desktop_view == i;
+        menu.items.push_back(std::move(item));
+    }
+    desktop_menu_ = std::move(menu);
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+void Launcher::desktopSetView(int view) {
+    view = std::clamp(view, 0, 2);
+    if (view == settings_.desktop_view) return;
+    settings_.desktop_view = view;
+    settings_dirty_ = true; settings_edited_ = std::chrono::steady_clock::now();
+    desktop_poster_missing_.clear();
+    rebuildCards(true); // The cells take their new art from scratch.
+    desktopReflow();
+    prefetchPosters();
+}
+
 void Launcher::desktopOpenCollectionsMenu(float x, float y) {
     const auto games = desktopTargets();
     if (games.empty()) return;
@@ -281,6 +368,14 @@ void Launcher::desktopMenuPick(const desktop_ui::MenuItem& item, bool /*from_sub
     desktopCloseMenu();
     const Game* game = games.empty() ? nullptr : &games.front();
     switch (item.action) {
+    case Action::tool: desktopToolPick(static_cast<Tool>(item.value)); return;
+    case Action::start_step: desktopStartPick(item.value); return;
+    case Action::start_hide:
+        settings_.start_hidden = true;
+        settings_dirty_ = true; settings_edited_ = std::chrono::steady_clock::now();
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        return;
+    case Action::view_mode: desktopSetView(item.value); return;
     case Action::companion_change: companionPicker(true); return;
     case Action::companion_mind:
         openCompanion();
@@ -325,7 +420,7 @@ void Launcher::desktopMenuPick(const desktop_ui::MenuItem& item, bool /*from_sub
     case Action::emulator: if (game) cycleGameEmulator(*game); return;
     case Action::launch_options: if (game) openLaunchEditor(*game); return;
     case Action::compat_options: if (game) openGameCompatSettings(*game); return;
-    case Action::shortcuts: case Action::saves: return; // Their submenus.
+    case Action::shortcuts: case Action::saves: case Action::group: return; // Their submenus.
     case Action::save_backup: if (game) gameSaves(*game, false, false); return;
     case Action::save_restore: if (game) askRestoreSaves(*game); return;
     case Action::save_ludusavi: openLudusavi(); return;

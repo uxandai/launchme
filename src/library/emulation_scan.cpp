@@ -220,7 +220,7 @@ bool skippedFolder(const std::wstring& name) {
 }
 // Loose files at the top of the ROM folder: extensions only one system uses.
 const std::pair<std::wstring_view, std::wstring_view> extension_systems[] = {
-    {L".nsp", L"switch"}, {L".nsz", L"switch"}, {L".xci", L"switch"}, {L".xcz", L"switch"},
+    {L".nsp", L"switch"}, {L".nsz", L"switch"}, {L".xci", L"switch"}, {L".xcz", L"switch"}, {L".nup", L"switch2"},
     {L".wux", L"wiiu"}, {L".wud", L"wiiu"}, {L".wua", L"wiiu"}, {L".rpx", L"wiiu"},
     {L".rvz", L"wii"}, {L".wbfs", L"wii"}, {L".wia", L"wii"}, {L".gcm", L"gc"}, {L".ciso", L"gc"},
     {L".3ds", L"n3ds"}, {L".cci", L"n3ds"}, {L".cia", L"n3ds"}, {L".nds", L"nds"},
@@ -243,20 +243,30 @@ const std::wstring_view shared_images[] = {L".iso", L".bin", L".cue", L".chd", L
 struct Listing {
     std::vector<std::filesystem::path> files;
 };
+// Level by level: the files of a folder before anything deeper, so a ROM beside unpacked dumps (hundreds of
+// thousands of files in their romfs) is listed before the limit ends the walk.
 Listing listFolder(const std::filesystem::path& folder, const Cancelled& cancelled) {
     Listing result;
-    std::error_code error;
-    std::filesystem::recursive_directory_iterator it(folder, std::filesystem::directory_options::skip_permission_denied, error), end;
-    for (; !error && it != end; it.increment(error)) {
-        if (cancelled && cancelled()) break;
-        std::error_code kind;
-        if (it->is_directory(kind)) {
-            if (static_cast<size_t>(it.depth()) >= most_depth || skippedFolder(it->path().filename().wstring())) it.disable_recursion_pending();
-            continue;
+    std::vector<std::filesystem::path> level{folder}, next;
+    for (size_t depth = 0; !level.empty() && depth <= most_depth; ++depth) {
+        next.clear();
+        for (const auto& directory : level) {
+            std::error_code error;
+            std::vector<std::filesystem::path> folders;
+            for (std::filesystem::directory_iterator it(directory, std::filesystem::directory_options::skip_permission_denied, error), end; !error && it != end; it.increment(error)) {
+                if (cancelled && cancelled()) return result;
+                std::error_code kind;
+                if (it->is_directory(kind)) {
+                    if (depth < most_depth && !skippedFolder(it->path().filename().wstring())) folders.push_back(it->path());
+                    continue;
+                }
+                if (!it->is_regular_file(kind)) continue;
+                result.files.push_back(it->path());
+                if (result.files.size() >= most_files) return result;
+            }
+            next.insert(next.end(), std::make_move_iterator(folders.begin()), std::make_move_iterator(folders.end()));
         }
-        if (!it->is_regular_file(kind)) continue;
-        result.files.push_back(it->path());
-        if (result.files.size() >= most_files) break;
+        level.swap(next);
     }
     return result;
 }
@@ -364,7 +374,7 @@ const Builtin builtin[] = {
     {L"wiiu", {}, {}, L"${title}/**/*.rpx", {L"cemu"}},
     {L"wiiu", L".wux|.wud|.wua|.wad|.iso|.7z|.zip", {}, L"${title}@(.wux|.wud|.wua|.wad|.iso|.7z|.zip)", {L"cemu"}},
     {L"switch", L".kip|.nca|.nro|.nso|.nsp|.xci", {}, {}, {L"eden", L"citron", L"ryujinx", L"yuzu"}},
-    {L"switch2", L".kip|.nca|.nro|.nso|.nsp|.xci", {}, {}, {L"switch2"}},
+    {L"switch2", L".kip|.nca|.nro|.nso|.nsp|.nup|.xci", {}, {}, {L"switch2"}},
     {L"n3ds", L".3ds|.3dsx|.app|.axf|.cii|.cxi|.elf|.cci|.zcci|.z3dsx|.zcxi", {}, {}, {L"azahar"}},
     {L"nds", L".nds|.app", L"melondsds_libretro", {}, {L"melonds", L"retroarch"}},
     {L"xbox", L".iso", {}, {}, {L"xemu"}},
@@ -768,10 +778,10 @@ Result scan(const Setup& setup, bool show_hidden, const Cancelled& cancelled) {
     std::set<std::wstring> systems;
     // A Switch game kept as an unpacked folder (Switch 2 dumps: <game>\...\EffectScript.nso and
     // dozens more parts): one game named after its folder, not one per part named after the file.
-    // Its own image (.xci, .nsp) goes first, then a homebrew .nro, an .nso, an .nca, a .kip.
+    // Its own image (.xci, .nsp) goes first, then a Switch 2 package (.nup), a homebrew .nro, an .nso, an .nca, a .kip.
     const auto part_rank = [](const std::filesystem::path& file) {
         const auto extension = lower(file.extension().wstring());
-        constexpr std::array<std::wstring_view, 6> order{L".xci", L".nsp", L".nro", L".nso", L".nca", L".kip"};
+        constexpr std::array<std::wstring_view, 7> order{L".xci", L".nsp", L".nup", L".nro", L".nso", L".nca", L".kip"};
         for (size_t i = 0; i < order.size(); ++i) if (extension == order[i]) return static_cast<int>(i);
         return static_cast<int>(order.size());
     };

@@ -60,10 +60,12 @@ desktop_ui::Hit Launcher::desktopHit(float x, float y) const {
     }
     if (settings_.companion && renderer_.companionBubble().contains(x, y)) return {Target::companion_bubble, 0};
     // The pane's left edge: dragged, it resizes the pane (and the grid's columns).
+    if (L.paneClose().contains(x, y) && !desktop_downloads_open_) return {Target::pane_close, 0};
     if (L.paneEdge().contains(x, y) && !desktop_downloads_open_) return {Target::pane_resize, 0};
     if (x < L.sidebarRight()) {
         if (L.companion_card && L.companionMore().contains(x, y)) return {Target::companion_more, 0};
         if (L.companion_card && L.companionCard().contains(x, y)) return {Target::companion_card, 0};
+        if (L.start_card && L.startCard().contains(x, y)) return {Target::start_card, 0};
         const auto rows = desktopRows();
         const int row = L.hitRow(rows, desktop_sidebar_scroll_, x, y);
         if (row >= 0 && rows[static_cast<size_t>(row)].heading && rows[static_cast<size_t>(row)].group == Group::collections &&
@@ -101,6 +103,7 @@ desktop_ui::Hit Launcher::desktopHit(float x, float y) const {
         return {};
     }
     if (L.sortButton().contains(x, y)) return {Target::sort, 0};
+    if (L.viewButton().contains(x, y)) return {Target::view_mode, 0};
     if (L.installedChip().contains(x, y)) return {Target::installed, 0};
     if (L.sizeSlider().contains(x, y)) return {Target::size_slider, 0};
     if (cards_.empty()) {
@@ -164,6 +167,7 @@ void Launcher::desktopClick(float mouse_x, float mouse_y, bool double_click) {
             desktopPickSelected();
             return;
         }
+        if (desktop_pane_closed_) { desktop_pane_closed_ = false; desktopReflow(); } // A game clicked: its pane again.
         if (keyDown(VK_CONTROL)) desktopToggleMark(index);
         else if (keyDown(VK_SHIFT)) desktopMarkRange(desktop_anchor_, index);
         else {
@@ -223,6 +227,7 @@ void Launcher::desktopClick(float mouse_x, float mouse_y, bool double_click) {
     }
     case Target::grid:
         if (!keyDown(VK_CONTROL) && !desktop_marked_.empty()) { desktop_marked_.clear(); InvalidateRect(hwnd_, nullptr, FALSE); }
+        else if (!keyDown(VK_CONTROL) && !keyDown(VK_SHIFT) && !double_click) { desktop_pane_closed_ = true; desktopReflow(); } // A click beside the games: none selected.
         desktop_pressed_ = {};
         return;
     case Target::none: case Target::caption:
@@ -417,6 +422,10 @@ LPCWSTR Launcher::desktopCursor(float mouse_x, float mouse_y) const {
     if (const auto shape = desktopModalCursor(mouse_x, mouse_y)) return shape;
     if (desktop_meta_.open && desktopActive()) { // Edytuj metadane: its fields take text, its buttons a click.
         const auto view = renderer_.desktopViewport();
+        if (desktop_meta_.find.open) {
+            const int found = meta_find::Layout{view.width, view.height}.hit(mouse_x / desktopScale(), mouse_y / desktopScale(), desktop_meta_.find);
+            return found < 0 ? IDC_ARROW : found == meta_find::item::query ? IDC_IBEAM : IDC_HAND;
+        }
         const int hit = desktop_ui::MetaLayout{view.width, view.height}.hit(mouse_x / desktopScale(), mouse_y / desktopScale(), desktop_meta_.identify);
         return hit < 0 ? IDC_ARROW : hit < desktop_ui::meta_fields ? IDC_IBEAM : IDC_HAND;
     }
@@ -459,6 +468,7 @@ std::wstring Launcher::desktopTooltip(const desktop_ui::Hit& hit) const {
     case Target::close: return tr(L"Zamknij");
     case Target::sidebar_toggle: return settings_.desktop_narrow ? tr(L"Rozwiń panel boczny") : tr(L"Zwiń panel boczny");
     case Target::pane_resize: return tr(L"Przeciągnij, aby zmienić szerokość; dwuklik: domyślna");
+    case Target::pane_close: return tr(L"Zamknij panel gry");
     case Target::sidebar_row: { // Narrow, the icons alone: their names on hover.
         if (!settings_.desktop_narrow) return {};
         const auto rows = desktopRows();
@@ -479,6 +489,7 @@ std::wstring Launcher::desktopTooltip(const desktop_ui::Hit& hit) const {
         }
         case Tool::tv: return tr(L"Tryb TV");
         case Tool::settings: return tr(L"Ustawienia");
+        case Tool::more: return tr(L"Więcej · Widżety, Glance, Tarot, Sklep");
         case Tool::update: return std::get<0>(updateRow()) + L" · " + std::get<2>(updateRow());
         }
         return {};
@@ -488,6 +499,7 @@ std::wstring Launcher::desktopTooltip(const desktop_ui::Hit& hit) const {
     case Target::library_refresh: return tr(L"Odśwież biblioteki (F5)");
     case Target::companion_card: return std::wstring(tr(L"Porozmawiaj: ")) + companion::name(companionLook());
     case Target::companion_more: return tr(L"Więcej opcji");
+    case Target::start_card: return tr(L"Pierwsze kroki: platformy, klucze, ROM-y, pierwsza gra");
     case Target::card:
         if (hit.index >= 0 && hit.index < static_cast<int>(cards_.size())) return cards_[static_cast<size_t>(hit.index)].game.name;
         return {};
@@ -496,6 +508,7 @@ std::wstring Launcher::desktopTooltip(const desktop_ui::Hit& hit) const {
         return {};
     case Target::card_check: return tr(L"Zaznacz (Ctrl+klik)");
     case Target::sort: return tr(L"Sortowanie");
+    case Target::view_mode: return tr(L"Widok: plakaty, kwadraty, poziome");
     case Target::installed: return tr(L"Tylko zainstalowane gry");
     case Target::size_slider: return tr(L"Rozmiar plakatów (Ctrl+kółko)");
     case Target::pane_favorite:
@@ -536,6 +549,7 @@ desktop_ui::Rect Launcher::desktopTooltipAnchor(const desktop_ui::Hit& hit) cons
         return hit.target == Target::library_add ? L.headingAdd(row, desktop_sidebar_scroll_) : L.headingRefresh(row, desktop_sidebar_scroll_);
     }
     case Target::companion_card: return L.companionCard();
+    case Target::start_card: return L.startCard();
     case Target::companion_more: return L.companionMore();
     case Target::card: case Target::card_play: case Target::card_check: {
         const auto poster = L.poster(static_cast<size_t>(std::max(hit.index, 0)), desktop_scroll_);
@@ -544,6 +558,7 @@ desktop_ui::Rect Launcher::desktopTooltipAnchor(const desktop_ui::Hit& hit) cons
         return {poster.left, poster.top, poster.right, poster.bottom + caption_h};
     }
     case Target::sort: return L.sortButton();
+    case Target::view_mode: return L.viewButton();
     case Target::installed: return L.installedChip();
     case Target::size_slider: return L.sizeSlider();
     case Target::pane_favorite: return L.paneFavorite(desktop_pane_scroll_);

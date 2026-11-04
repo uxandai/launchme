@@ -8,7 +8,10 @@ int LauncherUiTest::rawgFlow(HWND window) {
     app.openDetails(game);
     if (app.identifyDetailAction() != 2) return 1501;
     app.detail_action_ = app.identifyDetailAction(); app.enterDown(false); app.enterUp();
-    if (!app.identifyOpen() || !app.identify_state_.busy || !dispatched.empty()) return 1502;
+    if (!app.identifyOpen() || !app.identify_state_.busy || !dispatched.empty() || app.identify_state_.manual) return 1502;
+    // The lookup runs by itself; "Dopasuj ręcznie" (Enter) shows the field and the list instead.
+    app.identifyKey(VK_RETURN, false);
+    if (!app.identify_state_.manual || !app.identify_state_.query_focus) return 1502;
     const auto capture = [&](const wchar_t* name) {
         wchar_t folder[4096]{};
         if (!GetEnvironmentVariableW(L"LAUNCHME_UI_CAPTURE_DIR", folder, 4096)) return true;
@@ -24,7 +27,9 @@ int LauncherUiTest::rawgFlow(HWND window) {
     app.onIdentify(std::move(stale));
     if (app.identifyOpen() || app.screen_ != ScreenMode::details) return 1504;
     app.openIdentify();
-    app.onCharacter(L'H'); app.onCharacter(L'a');
+    if (app.identify_state_.manual) return 1504;
+    app.onCharacter(L'H'); app.onCharacter(L'a'); // Typing is choosing by hand.
+    if (!app.identify_state_.manual) return 1504;
     if (app.identify_state_.query != L"Ha" || app.identify_state_.busy || !app.identify_state_.query_focus) return 1505;
     app.identifyKey(VK_BACK, false);
     if (app.identify_state_.query != L"H") return 1506;

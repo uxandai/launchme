@@ -893,6 +893,16 @@ void Launcher::tick() {
         if (std::any_of(downloads_state_.rows.begin(), downloads_state_.rows.end(), [](const auto& row) { return row.moving && !row.fraction; }))
             needs_paint = true;
     }
+    // Aurelia's roster came without statuses: ask again (the third time after reconnecting the daemon).
+    if (friends_retry_at_ != std::chrono::steady_clock::time_point{} && std::chrono::steady_clock::now() >= friends_retry_at_) {
+        friends_retry_at_ = {};
+        if (friends_open_ && aurelia_active_ && !friends_loading_) {
+            const bool reconnect = ++friends_retries_ == 3;
+            if (reconnect) aureliaRequest({aurelia::Command::reconnect}, [](Launcher& app, aurelia::Reply) { if (app.friends_open_) app.loadFriends(true); });
+            else loadFriends(true);
+            needs_paint = true;
+        }
+    }
     // Drawer clock (and PSfive's in its top bar): one repaint when the displayed minute changes,
     // also while idle. The local time is read at most once a second (and right at the minute boundary).
     if ((friends_open_ && !friends_list_) || (psfive && settings_.psfive_clock) || snitchActive()) {

@@ -421,14 +421,15 @@ int LauncherUiTest::drmFree(HWND window) {
         emulated.name = L"Paper Mario"; emulated.platform = L"Switch";
         app.openIdentifyFor(emulated);
         const auto before = app.identify_state_.source;
-        if (!app.identify_state_.emulated) return 2169;
+        if (!app.identify_state_.emulated || before != identify_ui::State::Source::all) return 2169;
+        app.identifyManual();
         app.identifySwitchSource();
         if (app.identify_state_.source == before) return 2170;
         if (app.identify_state_.source != identify_ui::State::Source::screenscraper) app.identifySwitchSource();
         if (!capture(L"identify-screenscraper.png")) return 2171;
         app.closeIdentify();
         app.openIdentifyFor(celeste_game);
-        if (app.identify_state_.emulated || app.identify_state_.source != identify_ui::State::Source::rawg) return 2172;
+        if (app.identify_state_.emulated || app.identify_state_.source != identify_ui::State::Source::all || app.identify_state_.manual) return 2172;
         app.closeIdentify();
     }
     // Biblioteka → Folder filmów: downloaded videos in the old folder → asked whether they move along.

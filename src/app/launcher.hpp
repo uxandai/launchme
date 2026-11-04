@@ -24,6 +24,7 @@
 #include "../library/custom_games.hpp"
 #include "../library/emulation_scan.hpp"
 #include "../library/metadata_overrides.hpp"
+#include "../library/metadata_sources.hpp"
 #include "../library/drm_free.hpp"
 #include "../library/steam_achievements.hpp"
 #include "../library/steam.hpp"
@@ -770,7 +771,12 @@ public:
     void onScreenScraperTest(std::unique_ptr<ScreenScraperTestMessage> message);
     void onVideoMove(std::unique_ptr<VideoMoveMessage> message);
     void onCacheCompacted(std::unique_ptr<CacheCompactedMessage> message);
-    void identifySwitchSource(); // "Zidentyfikuj grę" on an emulated game: RAWG ⇄ ScreenScraper.
+    void identifySwitchSource(); // The provider: Wszyscy dostawcy → RAWG → ScreenScraper (emulated games).
+    void identifyManual();       // "Dopasuj ręcznie": the title, provider and list.
+    void identifySetSource(identify_ui::State::Source source);
+    void identifyToggleMenu();   // The provider dropdown.
+    void identifyPickProvider(int index);
+    void identifyApplyText(const metadata_sources::Offer& offer);
     void testScreenScraper();  // Settings → ScreenScraper → "Sprawdź połączenie" (ssuserInfos.php).
     void clearScreenScraper(); // "Wyczyść dane ScreenScraper": identifications and pauses.
     void applyEmulationNames(); // emulation_names: ES-DE/ScreenScraper titles on emulated shortcuts.
@@ -1204,6 +1210,7 @@ private:
     std::string steam_sync_error_;
     bool steam_sync_cloud_pending_ = false;
     std::vector<Game> hideableCopies(const Game& game) const;
+    bool hiddenByFlag(const Game& game) const;
     bool hiddenInLauncher(const Game& game) const;
     void toggleHidden(const Game& game);
     // Wyklucz grę (any store, a scanned DRM-free or ROM copy; not a game added by hand, which is removed
@@ -1558,7 +1565,7 @@ public:
     // Back while it plays (main.cpp: Esc/Backspace, the pad: B); false while too young to dismiss.
     bool dismissLaunchAnimation(std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now());
 private:
-    void loadFriends();
+    void loadFriends(bool retry = false); // retry: the same open drawer asking again after a roster without statuses.
     void loadFriendAvatars(std::vector<SteamFriend> people, uint32_t generation); // On a worker, one message per avatar.
     void startDashboardPoll();
     void stopDashboardPoll();
@@ -2805,6 +2812,8 @@ private:
     size_t friends_cursor_ = 0;
     uint32_t friends_generation_ = 0;
     FriendsResult friends_;
+    int friends_retries_ = 0; // Asked again after a roster without statuses (Aurelia): twice plainly, then after a reconnect.
+    std::chrono::steady_clock::time_point friends_retry_at_{};
     // Drawer dashboard: tiles by default, the Steam friends list after activating its tile.
     bool friends_list_ = false;
     int dashboard_tile_ = 0;
@@ -2987,6 +2996,27 @@ private:
     bool desktop_details_preview_ = false;
     desktop_ui::Layout desktopLayout() const;
     std::vector<desktop_ui::Tool> desktopTools() const;
+    std::vector<desktop_ui::Tool> desktopMoreTools() const; // Behind "…".
+    // The right pane shows the selected game: none (an empty section) or its ✕ / a click beside the games hides it.
+    bool desktop_pane_closed_ = false;
+    // The grid's cells (the view menu): posters, squares or landscape; the art kind each one binds.
+    CoverMessage::Kind desktopCellKind() const {
+        return settings_.desktop_view == 1 ? CoverMessage::Kind::cover : settings_.desktop_view == 2 ? CoverMessage::Kind::landscape : CoverMessage::Kind::poster;
+    }
+    void desktopOpenViewMenu();
+    void desktopSetView(int view);
+    bool desktopPaneOpen() const { return !cards_.empty() && !desktop_pane_closed_; }
+    void desktopOpenToolsMenu();
+    // "Jak zacząć" (src/app/getting_started.cpp).
+    static int desktopStartCount();
+    int desktopStartDone() const;
+    bool desktopStartStepDone(int step) const;
+    bool desktopStartShown() const;
+    std::wstring desktopStartTitle(int step) const;
+    void desktopOpenStartMenu();
+    void desktopStartPick(int step);
+    void startReset();
+    std::vector<desktop_ui::MenuItem> desktopGroupItems(const Game& game, int group);
     float desktopScale() const; // Client pixels per desktop DIP.
     void buildDesktopSidebar();
     std::vector<desktop_ui::Row> desktopRows() const;
@@ -3097,6 +3127,21 @@ private:
     void desktopMetaInsert(std::wstring_view text);
     void desktopMetaChar(wchar_t character);
     bool desktopMetaKey(WPARAM key);
+    // Znajdź in Edytuj metadane (metadata_find.cpp): the stores' details to take over.
+    ArtworkHttp metadata_find_get_ = httpGet; // The sources' transport; UI tests answer it themselves.
+    uint32_t metadata_find_generation_ = 0;
+    bool metaTextFocused() const { return desktop_meta_.find.open ? desktop_meta_.find.focus == meta_find::item::query : desktop_meta_.focus < desktop_ui::meta_fields; }
+    void metaFindOpen();
+    void metaFindClose();
+    void metaFindSearch();
+    void metaFindOffers(uint32_t generation, metadata_sources::Found found);
+    void metaFindChoose(int index);
+    void metaFindInsert();
+    void metaFindActivate(int item);
+    void metaFindText(std::wstring_view text);
+    void metaFindChar(wchar_t character);
+    bool metaFindKey(WPARAM key, bool repeated = false);
+    bool metaFindPointer(float x, float y, bool press, bool double_click = false, float scale = 0);
     bool desktopMetaPointer(float mouse_x, float mouse_y, bool press, bool double_click = false);
     // Ctrl+K (desktop_quick.cpp): the quick search over the library window.
     desktop_ui::QuickView desktop_quick_;

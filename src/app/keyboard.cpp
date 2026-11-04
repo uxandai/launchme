@@ -11,7 +11,7 @@ bool Launcher::textFieldActive() const {
     return (libraryDialogOpen() && library_dialog_.textField() && library_dialog_.focus == -2) ||
            (identifyOpen() && identify_state_.query_focus) ||
            (customEditorOpen() && custom_game_ui::field(custom_editor_.focus) >= 0) ||
-           (metadataOpen() && desktop_meta_.focus < desktop_ui::meta_fields) ||
+           (metadataOpen() && metaTextFocused()) ||
            editingArtworkSearch() || editingSecret() || searching();
 }
 
@@ -25,8 +25,9 @@ void Launcher::openKeyboard() {
         if (libraryDialogOpen()) {
             if (!library_dialog_.textField()) return;
             library_dialog_.focus = -2;
-        } else if (identifyOpen()) { identify_state_.query_focus = true; identify_state_.back_focus = false; }
+        } else if (identifyOpen()) { identifyManual(); identify_state_.query_focus = true; identify_state_.back_focus = false; }
         else if (customEditorOpen()) customEditorFocus(custom_game_ui::Item::name);
+        else if (metadataOpen() && desktop_meta_.find.open) { desktop_meta_.find.focus = meta_find::item::query; desktop_meta_.find.caret = desktop_meta_.find.query.size(); } // Znajdź: the title.
         else if (metadataOpen()) { desktop_meta_.focus = 0; desktop_meta_.caret = desktop_meta_.fields[0].size(); } // Tytuł.
         else if (artworkOpen()) {
             if (artwork_state_.applying) return;
@@ -99,7 +100,7 @@ void Launcher::keyboardDone() {
     closeKeyboard();
     if (aureliaTyping()) { aureliaSubmit(); return; }
     if (friendChatTyping()) { friendChatSend(); return; }
-    if (metadataOpen()) return; // The field keeps its text; Zapisz saves them all.
+    if (metadataOpen()) { if (desktop_meta_.find.open) metaFindSearch(); return; } // Znajdź searches; a field keeps its text (Zapisz saves them all).
     if ((screen_ == ScreenMode::search || screen_ == ScreenMode::store) && !libraryDialogOpen() && !identifyOpen() && !customEditorOpen()) return;
     enterDown(false);
     enterUp();
@@ -115,7 +116,11 @@ void Launcher::keyboardCaret(int amount) {
         audio_.navigate();
     };
     if (customEditorOpen() && custom_game_ui::field(custom_editor_.focus) >= 0) customEditorKey(amount < 0 ? VK_LEFT : VK_RIGHT, false);
-    else if (metadataOpen() && desktop_meta_.focus < desktop_ui::meta_fields) desktopMetaKey(amount < 0 ? VK_LEFT : VK_RIGHT);
+    else if (metadataOpen() && desktop_meta_.find.open) { // Znajdź's title: the caret, not the pad's move between items.
+        auto& find = desktop_meta_.find;
+        if (find.focus == meta_find::item::query) { if (amount < 0 && find.caret) --find.caret; else if (amount > 0 && find.caret < find.query.size()) ++find.caret; }
+    }
+    else if (metadataOpen() && metaTextFocused()) desktopMetaKey(amount < 0 ? VK_LEFT : VK_RIGHT);
     else if (pluginPageTyping() || companionTyping()) navigationBoundary(); // Append-only.
     else if (libraryTyping()) step(library_controls_.after, library_controls_.query.size());
     else if (searching()) step(search_after_, search_query_.size());
@@ -126,7 +131,7 @@ size_t Launcher::keyboardPreviewCaret() const {
     if (aureliaTyping()) return aurelia_ui_.input.size();
     if (friendChatTyping()) return friend_chat_.input.size();
     if (customEditorOpen() && custom_game_ui::field(custom_editor_.focus) >= 0) return custom_editor_.caret;
-    if (metadataOpen() && desktop_meta_.focus < desktop_ui::meta_fields) return desktop_meta_.caret;
+    if (metadataOpen() && metaTextFocused()) return desktop_meta_.find.open ? desktop_meta_.find.caret : desktop_meta_.caret;
     if (!libraryDialogOpen() && !identifyOpen() && !customEditorOpen() && !metadataOpen() && !artworkOpen() && !editingSecret() && !pluginPageTyping() && !companionTyping()) {
         if (libraryTyping()) return library_controls_.caret();
         return searchCaret();
@@ -159,6 +164,7 @@ std::wstring Launcher::keyboardPreview() const {
         const int field = custom_game_ui::field(custom_editor_.focus);
         return field >= 0 ? custom_editor_.fields[static_cast<size_t>(field)] : std::wstring{};
     }
+    if (metadataOpen() && desktop_meta_.find.open) return desktop_meta_.find.query;
     if (metadataOpen()) return desktop_meta_.focus < desktop_ui::meta_fields ? desktop_meta_.fields[static_cast<size_t>(desktop_meta_.focus)] : std::wstring{};
     if (artworkOpen()) return artwork_state_.query;
     if (editingSecret()) {

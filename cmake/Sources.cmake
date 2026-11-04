@@ -115,6 +115,8 @@ set(LAUNCHME_APP_SOURCES
     src/app/save_backups.cpp
     src/app/desktop_quick.cpp
     src/app/desktop_metadata.cpp
+    src/app/getting_started.cpp
+    src/app/metadata_find.cpp
     src/app/desktop_text.cpp
     src/app/desktop_settings.cpp
     src/app/desktop_dialogs.cpp
@@ -268,6 +270,7 @@ set(LAUNCHME_APP_SOURCES
     src/ui/psfive_renderer.cpp
     src/ui/snitch_renderer.cpp
     src/ui/tv_metadata_renderer.cpp
+    src/ui/meta_find_renderer.cpp
     src/ui/flix_rail_renderer.cpp
     src/ui/glass_renderer.cpp
     src/ui/achievements_renderer.cpp
@@ -278,6 +281,7 @@ set(LAUNCHME_APP_SOURCES
     src/library/rawg.cpp
     src/library/steam_stats.cpp
     src/library/system_requirements.cpp
+    src/library/metadata_sources.cpp
     src/library/hardware_rating.cpp
     src/platform/hardware_profile.cpp
     src/app/hardware_check.cpp

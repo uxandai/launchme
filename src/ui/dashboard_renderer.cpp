@@ -130,7 +130,8 @@ void Renderer::drawDashboardTile(int index, float drawer_left, bool focus_frame)
         title = tr(L"Znajomi Steam");
         if (context_->friends_loading) value = tr(L"Pobieranie ze Steam…");
         else if (!context_->friends || !context_->friends->error.empty()) {
-            value = context_->friends ? context_->friends->error : std::wstring(tr(L"Brak danych Steam"));
+            value = !context_->friends ? std::wstring(tr(L"Brak danych Steam")) :
+                    context_->friends->no_presence ? std::wstring(tr(L"Brak statusów od Aurelii")) : context_->friends->error;
         } else {
             const auto& people = context_->friends->friends;
             const auto count = std::count_if(people.begin(), people.end(), online);

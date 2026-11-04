@@ -202,11 +202,20 @@ int main(int argc, char** argv) {
             write(dumps / L"Fire Emblem Fortunes Weave" / L"131072" / L"romfs" / L"data.bin", "data");
             write(dumps / L"Loose" / L"exefs" / L"main", "nso");
             write(dumps / L"Not a game" / L"readme.txt", "text");
+            // Packages: a .nup beside the dumps is a game; one inside a folder makes the folder a game (a dump's
+            // exefs\main still starts it when there is one).
+            write(dumps / L"Standalone [0400E88025B1A000].nup", "nup");
+            write(dumps / L"Packaged" / L"updates" / L"Packaged 1.0.1.nup", "nup");
+            write(dumps / L"Loose" / L"updates" / L"Loose 1.0.1.nup", "nup");
             choices = {};
             choices.roms = {{"switch2", dumps}};
             choices.overrides["switch2"] = {pcsx2, L"%ROM%"};
             result = scan(load(standalone, {}, choices));
-            if (result.system_counts[L"switch2"] != 3) return 82;
+            if (result.system_counts[L"switch2"] != 5) return 82;
+            const auto packaged = std::find_if(result.games.begin(), result.games.end(), [&](const Game& item) { return item.install_directory == dumps / L"Packaged"; });
+            const auto standalone_nup = std::find_if(result.games.begin(), result.games.end(), [&](const Game& item) { return item.rom == dumps / L"Standalone [0400E88025B1A000].nup"; });
+            if (packaged == result.games.end() || packaged->name != L"Packaged" || packaged->rom != dumps / L"Packaged" / L"updates" / L"Packaged 1.0.1.nup" ||
+                standalone_nup == result.games.end() || standalone_nup->name != L"Standalone" || standalone_nup->platform != L"Switch 2") return 87;
             const std::pair<const wchar_t*, std::filesystem::path> expected[] = {
                 {L"KirbyAirRiders", dumps / L"KirbyAirRiders" / L"updates" / L"131072" / L"exefs" / L"main"},
                 {L"Fire Emblem Fortunes Weave", dumps / L"Fire Emblem Fortunes Weave" / L"131072" / L"exefs" / L"main"},
@@ -226,6 +235,19 @@ int main(int argc, char** argv) {
             const auto picked = folderGame(dumps / L"KirbyAirRiders" / L"base" / L"exefs");
             if (!picked || picked->platform != L"Switch 2" || picked->rom != expected[0].second || picked->title != L"KirbyAirRiders") return 85;
             if (folderGame(dumps / L"Not a game")) return 86;
+            // A ROM beside dumps with more files than one scan reads is still found: the walk goes level by level.
+            {
+                const auto big = root / L"Switch 2 big";
+                std::filesystem::create_directories(big / L"Aaa dump" / L"romfs");
+                for (int i = 0; i < 30500; ++i) std::ofstream(big / L"Aaa dump" / L"romfs" / (L"f" + std::to_wstring(i) + L".dat"), std::ios::binary);
+                write(big / L"Zzz [0100000000000000].nup", "nup");
+                choices = {};
+                choices.roms = {{"switch2", big}};
+                choices.overrides["switch2"] = {pcsx2, L"%ROM%"};
+                result = scan(load(standalone, {}, choices));
+                if (result.system_counts[L"switch2"] != 1 || result.games.empty() || result.games.front().rom != big / L"Zzz [0100000000000000].nup" ||
+                    result.games.front().name != L"Zzz") return 88;
+            }
         }
         std::filesystem::remove_all(root, error);
     }

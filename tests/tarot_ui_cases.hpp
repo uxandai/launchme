@@ -42,7 +42,7 @@ int LauncherUiTest::tarotReading(HWND window) {
     if (!app.settings_.tarot || !loadAppSettings().tarot) return 8404;
     app.back(); app.showCategory(0);
     if (!app.tarotAvailable()) return 8405;
-    const auto tools = app.desktopTools();
+    const auto tools = app.desktopMoreTools();
     if (std::find(tools.begin(), tools.end(), desktop_ui::Tool::tarot) == tools.end()) return 8406;
 
     // T opens it (main.cpp); here the same call. A modal layer: the home's widgets and hints step aside.

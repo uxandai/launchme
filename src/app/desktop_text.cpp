@@ -27,10 +27,12 @@ Launcher::DesktopText Launcher::desktopText() {
     DesktopText target;
     if (!desktop_mode_) return target;
     if (desktop_meta_.open) {
-        if (desktop_meta_.focus >= 0 && desktop_meta_.focus < desktop_ui::meta_fields) {
-            static constexpr size_t limits[desktop_ui::meta_fields] = {120, 4000, 160, 160, 40, 200, 16, 20};
+        if (desktop_meta_.find.open) { // Znajdź: its title field.
+            auto& find = desktop_meta_.find;
+            if (find.focus == meta_find::item::query) target = {&find.query, &find.caret, &find.selected, 120, false, 5};
+        } else if (desktop_meta_.focus >= 0 && desktop_meta_.focus < desktop_ui::meta_fields) {
             const auto index = static_cast<size_t>(desktop_meta_.focus);
-            target = {&desktop_meta_.fields[index], &desktop_meta_.caret, &desktop_meta_.selected, limits[index], index == 1, 1};
+            target = {&desktop_meta_.fields[index], &desktop_meta_.caret, &desktop_meta_.selected, desktop_ui::meta_limits[index], index == 1, 1};
         }
     } else if (desktop_quick_.open) target = {&desktop_quick_.query, &desktop_quick_.caret, nullptr, 80, false, 2};
     else if (topModal() == Modal::custom_editor) {
@@ -52,7 +54,8 @@ std::pair<size_t, size_t> Launcher::desktopTextSelection() const {
     // The caret of the field the selection belongs to (desktopText keeps them paired).
     size_t caret = 0;
     bool all = false;
-    if (desktop_meta_.open) { caret = desktop_meta_.caret; all = desktop_meta_.selected; }
+    if (desktop_meta_.open && desktop_meta_.find.open) { caret = desktop_meta_.find.caret; all = desktop_meta_.find.selected; }
+    else if (desktop_meta_.open) { caret = desktop_meta_.caret; all = desktop_meta_.selected; }
     else if (desktop_quick_.open) caret = desktop_quick_.caret;
     else if (desktop_text_field_ == &desktop_query_) caret = desktop_caret_;
     else { caret = custom_editor_.caret; all = custom_editor_.selected; }

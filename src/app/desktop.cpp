@@ -63,22 +63,31 @@ desktop_ui::Layout Launcher::desktopLayout() const {
     layout.poster_width = static_cast<float>(settings_.desktop_poster);
     layout.tools = static_cast<int>(desktopTools().size());
     layout.companion_card = settings_.companion && !settings_.desktop_narrow; // Narrow: icons only, no card.
+    layout.start_card = desktopStartShown();
     layout.narrow = desktop_narrow_anim_;
     layout.pane_width = static_cast<float>(settings_.desktop_pane);
     layout.favorite = favoritesShown();
+    layout.pane_open = desktopPaneOpen();
+    layout.cell_aspect = settings_.desktop_view == 1 ? 1.0f : settings_.desktop_view == 2 ? 0.5625f : 1.5f;
     return layout;
 }
 
 std::vector<desktop_ui::Tool> Launcher::desktopTools() const {
     std::vector<Tool> tools;
     if (updateAvailable()) tools.push_back(Tool::update); // A newer Launchme: first, in the accent colour.
-    tools.push_back(Tool::friends); // Widżety (the drawer: the profile, friends, sensors, plugins), first.
-    if (settings_.glance) tools.push_back(Tool::glance);
-    if (settings_.tarot) tools.push_back(Tool::tarot);
-    tools.push_back(Tool::store); // Always there: with no store plugin it says so.
     tools.push_back(Tool::downloads);
     tools.push_back(Tool::tv);
     tools.push_back(Tool::settings);
+    tools.push_back(Tool::more); // The rest is in its menu (desktopMoreTools).
+    return tools;
+}
+
+// What the "…" menu lists: Widżety (the drawer: the profile, friends, sensors, plugins), Glance, Tarot, Sklep.
+std::vector<desktop_ui::Tool> Launcher::desktopMoreTools() const {
+    std::vector<Tool> tools{Tool::friends};
+    if (settings_.glance) tools.push_back(Tool::glance);
+    if (settings_.tarot) tools.push_back(Tool::tarot);
+    tools.push_back(Tool::store); // Always there: with no store plugin it says so.
     return tools;
 }
 
@@ -104,7 +113,7 @@ void Launcher::buildDesktopSidebar() {
     add(EntryKind::all, Group::library, "all", tr(L"Wszystkie gry"), all, glyph::library);
     add(EntryKind::recent, Group::library, "recent", tr(L"Ostatnio grane"), recent, glyph::history);
     if (favoritesShown()) add(EntryKind::favorites, Group::library, "favorites", tr(L"Ulubione"), favorites, glyph::star).droppable = true;
-    if (private_shelf_ && !private_category_.games.empty())
+    if (private_shelf_ && !private_category_.games.empty()) // Ctrl+H shows the hidden games; their menu: "Usuń z ukrytych".
         add(EntryKind::hidden, Group::library, "hidden", tr(L"Ukryte"), private_category_.games.size(), glyph::hide);
     // Every store with games, in the TV mode's order; each copy under its own store.
     std::map<GameSource, size_t> per_source;
@@ -337,6 +346,7 @@ void Launcher::desktopFocus(size_t index, bool reveal) {
     if (cards_.empty()) return;
     index = std::min(index, cards_.size() - 1);
     const bool changed = index != selected_;
+    if (changed) desktop_pane_closed_ = false; // Another game: its pane again.
     selected_ = index;
     desktop_focus_key_ = index < desktop_keys_.size() ? desktop_keys_[index] : std::string{};
     if (reveal) desktop_scroll_target_ = desktopLayout().reveal(index, cards_.size(), desktop_scroll_target_);
@@ -352,7 +362,8 @@ void Launcher::desktopFocus(size_t index, bool reveal) {
 uint32_t Launcher::desktopArtEdge() const {
     // A cell's width in device pixels (posters are 2:3, so their shorter side), rounded up to 64 px
     // so a window resized by a few pixels keeps its decodes; never above the default 1024.
-    const float pixels = desktopLayout().cellWidth() * desktopScale();
+    const auto layout = desktopLayout();
+    const float pixels = std::min(layout.cellWidth(), layout.posterHeight()) * desktopScale();
     return std::clamp(static_cast<uint32_t>(std::ceil(pixels / 64.0f)) * 64u, 128u, 1024u);
 }
 
@@ -411,12 +422,14 @@ void Launcher::desktopRequestArt() {
         const auto& game = cards_[i].game;
         const auto key = gameKey(game);
         const auto* art = art_.find(key);
-        const bool poster = art && art->poster;
-        if (poster) renderer_.setPoster(i, art->poster, edge);
-        else if (!renderer_.hasPoster(i)) requestArt(game, CoverMessage::Kind::poster); // Shown: its bytes may be let go (low memory).
-        ranks.emplace(artRequestKey(game, CoverMessage::Kind::poster), static_cast<int>(place * 2));
-        // The square cover in the poster's frame: only while the poster is missing.
-        if (!poster && (!isGame(game) || desktop_poster_missing_.contains(key) || artBlocked(game, CoverMessage::Kind::poster))) {
+        const auto kind = desktopCellKind(); // Poster, cover (squares) or landscape: what the cell shows.
+        const auto& picture = art ? (kind == CoverMessage::Kind::cover ? art->cover : kind == CoverMessage::Kind::landscape ? art->landscape : art->poster) : ImageBytes{};
+        const bool poster = static_cast<bool>(picture);
+        if (poster) renderer_.setPoster(i, picture, edge);
+        else if (!renderer_.hasPoster(i)) requestArt(game, kind); // Shown: its bytes may be let go (low memory).
+        ranks.emplace(artRequestKey(game, kind), static_cast<int>(place * 2));
+        // The square cover in the cell's frame: only while its own art is missing (not in squares: that is the art).
+        if (!poster && kind != CoverMessage::Kind::cover && (!isGame(game) || desktop_poster_missing_.contains(key) || artBlocked(game, kind))) {
             if (art && art->cover) {
                 if (!renderer_.hasCover(i)) { cards_[i].cover_opacity = 0; renderer_.setCover(i, art->cover, art->focus, edge); }
                 else renderer_.setCover(i, art->cover, art->focus, edge);
@@ -727,8 +740,15 @@ void Launcher::desktopView(desktop_ui::View& view) {
         } else view.drag_label = tr(L"Upuść na kolekcję lub Ulubione");
     }
     view.companion_card = settings_.companion && !settings_.desktop_narrow;
+    view.start_card = desktopStartShown();
+    if (view.start_card) {
+        view.start_total = desktopStartCount(); view.start_done = desktopStartDone();
+        for (int i = 0; i < view.start_total; ++i) if (!desktopStartStepDone(i)) { view.start_next = desktopStartTitle(i); break; }
+    }
     view.sidebar_narrow = desktop_narrow_anim_;
     view.pane_width = static_cast<float>(settings_.desktop_pane);
+    view.pane_open = desktopPaneOpen();
+    view.cell_view = settings_.desktop_view;
     view.companion_bubble = settings_.companion && companion_.bubble.alpha > 0.003f && (companion_.bubble.waiting || !companion_.bubble.text.empty());
     // Empty grid: why, and what helps.
     if (cards_.empty() && !view.scanning) {

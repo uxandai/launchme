@@ -16,6 +16,7 @@ struct SteamFriend {
 struct FriendsResult {
     std::vector<SteamFriend> friends;
     std::wstring error;
+    bool no_presence = false; // Aurelia listed friends, but Steam has sent neither names nor statuses yet.
 };
 
 FriendsResult fetchSteamFriends(uint64_t steam_id);

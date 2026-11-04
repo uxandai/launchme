@@ -111,7 +111,13 @@ bool Launcher::settingsExtraActivate(const Row& row) {
         else buildSettingsRows();
         return true;
     }
-    if (row.id == Id::theme_studio) { themeStudio(true); return true; } // Interfejs → Dostosuj wygląd.
+    if (row.id == Id::theme_studio) { // Interfejs → Dostosuj wygląd; in the desktop window: on to Tryb TV, where it has its preview.
+        if (desktop_mode_) {
+            setDesktopMode(false);
+            showNotification(NotificationKind::launch, tr(L"Wygląd trybu TV"), tr(L"Ustawienia → Interfejs → Dostosuj wygląd."));
+        } else themeStudio(true);
+        return true;
+    }
     if (row.id == Id::wallpaper_pick) { openWallpaperBrowser(); return true; }
     if (row.id == Id::wallpaper_clear) {
         settings_.wallpaper = AppSettings::WallpaperKind::none;

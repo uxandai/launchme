@@ -311,20 +311,31 @@ void Renderer::drawDesktopQuick(const View& view) {
 
 void Renderer::drawDesktopMeta(const MetaView& meta) {
     if (!meta.open) return;
-    brush(rgb(0.01f, 0.012f, 0.016f, 0.12f)); // Barely dimmed, as the window's dialogs.
+    brush(rgb(0.01f, 0.012f, 0.016f, 0.36f)); // Dimmed as every dialog of the window (desktopDialogFrame).
     target_->FillRectangle(D2D1::RectF(0, 0, viewport_.width, viewport_.height), solid_.Get());
     const MetaLayout layout{viewport_.width, viewport_.height};
     const auto p = layout.panel();
     desktopShadow(p, 14, 1.6f);
     desktopFill(p, 14, panel_bg);
     desktopStroke(p, 14, gray(1, 0.12f));
-    textLine(std::wstring(tr(L"Edytuj metadane")) + L" \u00b7 " + meta.game, p.left + 24, p.top + 30, p.right - p.left - 90, desktop_title_font_.Get(), palette::text());
-    textLine(meta.pad ? tr(L"Puste pole: wartość automatyczna. A wpisuje w pole, B zamyka.") : tr(L"Puste pole: wartość automatyczna. Ctrl+Enter zapisuje, Esc anuluje."),
+    const bool finding = meta.find.open;
+    textLine(std::wstring(finding ? tr(L"Znajdź metadane") : tr(L"Edytuj metadane")) + L" \u00b7 " + meta.game, p.left + 24, p.top + 30,
+             p.right - p.left - (finding ? 90 : 220), desktop_title_font_.Get(), palette::text());
+    textLine(finding ? (meta.pad ? tr(L"Wybierz grę i pola. Wstaw kopiuje je do dialogu, zapisuje dopiero Zapisz. B wraca.")
+                                 : tr(L"Wybierz grę i pola. Wstaw kopiuje je do dialogu, zapisuje dopiero Zapisz. Esc wraca."))
+                     : meta.pad ? tr(L"Puste pole: wartość automatyczna. A wpisuje w pole, B zamyka.") : tr(L"Puste pole: wartość automatyczna. Ctrl+Enter zapisuje, Esc anuluje."),
              p.left + 24, p.top + 56, p.right - p.left - 48,
              desktop_small_font_.Get(), palette::muted());
     const auto close = layout.close();
     if (meta.hover == static_cast<int>(MetaItem::close)) desktopFill(close, 8, gray(1, 0.08f));
     desktopGlyph(glyph::close, (close.left + close.right) * 0.5f, (close.top + close.bottom) * 0.5f, 12, palette::muted());
+    if (finding) { drawMetaFind(meta, false); return; }
+    {
+        const auto find = layout.findButton(); // The stores' and databases' details, to pick from.
+        const int id = static_cast<int>(MetaItem::find);
+        desktopButton(find, 1, meta.hover == id ? 1.0f : 0.0f, false, true, 0, tr(L"Znajdź…"));
+        if (meta.focus == id) desktopFocusRing(find, 8);
+    }
     static const wchar_t* const labels[meta_fields] = {L"Tytuł", L"Opis", L"Producent", L"Wydawca", L"Data premiery", L"Gatunki", L"Czas przejścia (h)",
                                                         L"Czas gry"};
     static const wchar_t* const hints[meta_fields] = {L"Nazwa w bibliotece", L"Kilka zdań o grze", L"Studio", L"Firma wydająca",

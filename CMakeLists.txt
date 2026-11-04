@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(launchme VERSION 0.7.5 LANGUAGES C CXX)
+project(launchme VERSION 0.7.6 LANGUAGES C CXX)
 
 if(NOT WIN32)
     # Linux (highly experimental, docs/linux-port.md): the shared core, its tests and the launcher on SDL3 + Skia.
@@ -371,6 +371,7 @@ if(BUILD_TESTING)
     launchme_executable(protondb_tests TEST protondb_and_steam_deck_ratings
         SOURCES tests/protondb_tests.cpp src/net/protondb.cpp ${LAUNCHME_WEB_SOURCES}
         LIBS winhttp shell32 ole32)
+    launchme_executable(metadata_sources_tests TEST metadata_sources SOURCES tests/metadata_sources_tests.cpp)
     launchme_executable(system_requirements_tests TEST system_requirements_and_hardware_ratings
         SOURCES tests/system_requirements_tests.cpp src/library/system_requirements.cpp src/library/hardware_rating.cpp src/net/json.cpp)
     launchme_executable(library_state_tests TEST library_view_state_and_sorting
@@ -432,6 +433,8 @@ if(BUILD_TESTING)
     add_test(NAME plugin_library_supplement_merge COMMAND launcher_ui_tests --plugin-library)
 add_test(NAME uninstall_from_game_menus COMMAND launcher_ui_tests --uninstall)
 add_test(NAME games_added_by_hand_without_file COMMAND launcher_ui_tests --manual-games)
+add_test(NAME metadata_find_in_edit_metadata COMMAND launcher_ui_tests --metadata-find)
+add_test(NAME desktop_076 COMMAND launcher_ui_tests --ux-076)
 add_test(NAME low_memory_mode COMMAND launcher_ui_tests --low-memory)
     add_test(NAME hltb_details_and_active_game_widget COMMAND launcher_ui_tests --hltb-details)
     add_test(NAME plugin_achievements_for_other_stores COMMAND launcher_ui_tests --plugin-achievements)

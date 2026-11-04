@@ -315,6 +315,10 @@ void Renderer::drawDesktopCustomEditor() {
         if (ui.focus == item) desktopFocusRing(r, 8);
         desktopModalHot({Kind::action, static_cast<int>(item)}, r);
     };
+    if (ui.folderButton()) { // A folder of games or a ROM folder instead of one file.
+        const auto label = std::wstring(tr(L"Dodaj folder jako bibliotekę"));
+        button(Item::pick_folder, {p.left + 22, by, p.left + 22 + std::max(110.0f, textAdvance(label, desktop_button_font_.Get()) + 52), by + 36}, 1, glyph::folder_open, label);
+    }
     button(Item::save, {p.right - 22 - 120, by, p.right - 22, by + 36}, 2, 0, tr(L"Zapisz"));
     button(Item::cancel, {p.right - 22 - 120 - 10 - 110, by, p.right - 22 - 130, by + 36}, 1, 0, tr(L"Anuluj"));
     if (ui.editing()) { // Only the entry goes; the game's file stays.
@@ -337,9 +341,11 @@ void Renderer::drawDesktopIdentify() {
     target_->GetTransform(&saved);
     target_->SetTransform(D2D1::Matrix3x2F::Scale(view.scale, view.scale));
     const auto p = desktopDialogFrame(view, 660, std::min(640.0f, view.height - 80), tr(L"Zidentyfikuj grę"), false);
-    // RAWG, or for emulated games the switch between RAWG and ScreenScraper.
-    {
-        const std::wstring label = !state.emulated ? L"RAWG ↗" : state.source == identify_ui::State::Source::screenscraper ? L"ScreenScraper ⇄" : L"RAWG ⇄";
+    // The provider, in the manual view: Wszyscy dostawcy → RAWG → ScreenScraper (emulated games).
+    if (state.manual) {
+        using Source = identify_ui::State::Source;
+        const auto* provider = identify_ui::sourceName(state.source);
+        const std::wstring label = (provider ? std::wstring(provider) : std::wstring(tr(L"Wszyscy dostawcy"))) + L" ⇄";
         const float w = textAdvance(label, desktop_button_font_.Get()) + 28;
         const Rect r{p.right - 56 - w, p.top + 12, p.right - 56, p.top + 44};
         desktopButton(r, 1, hover.kind == Kind::toggle ? 1.0f : 0.0f, false, true, 0, label);
@@ -353,6 +359,20 @@ void Renderer::drawDesktopIdentify() {
     if (const auto path = identify_ui::gamePath(state.game); !path.empty()) { // What it is on disk: its ROM, program or folder.
         textLine(elideStart(path, p.right - p.left - 44, desktop_small_font_.Get()), p.left + 22, y + 8, p.right - p.left - 44, desktop_small_font_.Get(), gray(0.5f));
         y += 22;
+    }
+    if (!state.manual) {
+        // The lookup: a spinner, what is happening, and the way to choose by hand.
+        const float cx = (p.left + p.right) * 0.5f, cy = (y + p.bottom) * 0.5f - 24;
+        drawSpinner(cx, cy, 24, uiAccent());
+        if (!state.status.empty()) textLine(state.status, p.left + 22, cy + 52, p.right - p.left - 44, desktop_font_.Get(), palette::muted(), DWRITE_TEXT_ALIGNMENT_CENTER);
+        if (!state.applying) {
+            const Rect manual{cx - 100, p.bottom - 64, cx + 100, p.bottom - 24};
+            desktopButton(manual, 2, hover.kind == Kind::action ? 1.0f : 0.0f, false, true, glyph::edit, tr(L"Dopasuj ręcznie"));
+            desktopModalHot({Kind::action}, manual);
+        }
+        desktop_modal_ = DialogKind::identify;
+        target_->SetTransform(saved);
+        return;
     }
     const Rect search{p.left + 20, y, p.right - 20 - 104, y + 40};
     desktopTextField(search, state.query, tr(L"Szukaj"), state.query.size(), state.query_focus, state.select_all, hover.kind == Kind::field ? 1.0f : 0.0f);
@@ -379,6 +399,27 @@ void Renderer::drawDesktopIdentify() {
         y += item_h;
     }
     if (!state.status.empty()) textLine(state.status, p.left + 22, p.bottom - 22, p.right - p.left - 44, desktop_small_font_.Get(), palette::muted());
+    if (state.menu) {
+        // The provider dropdown under its button, over the list: the current one ticked.
+        const auto list = identify_ui::providers(state.emulated);
+        const auto* current = identify_ui::sourceName(state.source);
+        const std::wstring label = (current ? std::wstring(current) : std::wstring(tr(L"Wszyscy dostawcy"))) + L" ⇄";
+        const float button_w = std::max(textAdvance(label, desktop_button_font_.Get()) + 28, 220.0f);
+        const Rect menu_box{p.right - 56 - button_w, p.top + 48, p.right - 56, p.top + 48 + 8 + 32.0f * static_cast<float>(list.size())};
+        desktopShadow(menu_box, 10, 1.0f);
+        desktopFill(menu_box, 10, dialog_bg);
+        desktopStroke(menu_box, 10, gray(1, 0.12f));
+        desktopModalHot({Kind::dialog}, menu_box); // Eats clicks that fall between rows.
+        for (int i = 0; i < static_cast<int>(list.size()); ++i) {
+            const Rect row{menu_box.left + 4, menu_box.top + 4 + 32.0f * static_cast<float>(i), menu_box.right - 4, menu_box.top + 4 + 32.0f * static_cast<float>(i + 1)};
+            const SheetHit item{Kind::dropdown_item, i};
+            if (hover == item || state.menu_hover == i) desktopFill(row, 7, gray(1, 0.08f));
+            const auto* name = identify_ui::sourceName(list[static_cast<size_t>(i)]);
+            textLine(name ? std::wstring(name) : std::wstring(tr(L"Wszyscy dostawcy")), row.left + 12, (row.top + row.bottom) * 0.5f, row.right - row.left - 40, desktop_font_.Get(), palette::text());
+            if (list[static_cast<size_t>(i)] == state.source) desktopGlyph(glyph::check, row.right - 20, (row.top + row.bottom) * 0.5f, 13, uiAccent());
+            desktopModalHot(item, row);
+        }
+    }
     desktop_modal_ = DialogKind::identify;
     target_->SetTransform(saved);
 }

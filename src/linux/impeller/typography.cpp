@@ -74,7 +74,7 @@ TextParagraph::TextParagraph(const ParagraphSpec& spec) {
                                                        : spec.align == TextAlign::justify ? kImpellerTextAlignmentJustify
                                                                                           : kImpellerTextAlignmentLeft);
     if (spec.max_lines) ImpellerParagraphStyleSetMaxLines(root.get(), spec.max_lines);
-    if (spec.ellipsis) ImpellerParagraphStyleSetEllipsis(root.get(), "â¦");
+    if (spec.ellipsis) ImpellerParagraphStyleSetEllipsis(root.get(), "…");
     ParagraphBuilderHandle builder(ImpellerParagraphBuilderNew(typography()));
     if (!builder) return;
     ImpellerParagraphBuilderPushStyle(builder.get(), root.get());

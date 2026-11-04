@@ -7,6 +7,7 @@
 // Flix, Metro, PSfive) are "Tryb TV". Geometry here is shared by drawing and hit tests.
 #include "settings_view.hpp"
 #include "downloads_view.hpp"
+#include "meta_find_view.hpp"
 #include "../model/game.hpp"
 #include "../model/game_details.hpp"
 
@@ -60,7 +61,7 @@ struct Row {
     int entry = -1;
     float top = 0, height = 0;
 };
-inline constexpr float heading_h = 30, row_h = 32, heading_gap = 12, companion_h = 74;
+inline constexpr float heading_h = 30, row_h = 32, heading_gap = 12, companion_h = 74, start_h = 76;
 
 // Headings and entries in order; a collapsed group keeps only its heading. Collections always keep
 // their heading (its "+" makes a new one), the others only when they have entries. The narrow
@@ -101,7 +102,12 @@ enum class Action {
     shortcuts,      // Skróty ▸: the game's shortcuts outside Launchme (Launcher::setGameShortcut).
     shortcut_toggle, // One of them (value: ShortcutPlace), checked when it exists.
     saves,          // Zapisy ▸: Ludusavi's backup and restore of the game's saves.
-    save_backup, save_restore, save_ludusavi
+    save_backup, save_restore, save_ludusavi,
+    group,          // The game menu's groups (submenus; value: 0 Dane i grafika, 1 Opcje gry, 2 Więcej).
+    tool,           // A title bar tool from the "…" menu (value: Tool).
+    view_mode,      // The grid's cells (value: 0 posters, 1 squares, 2 landscape).
+    start_step,     // "Jak zacząć": one of its steps (value: the step).
+    start_hide      // "Jak zacząć": hide the card.
 };
 struct MenuItem {
     Action action = Action::none;
@@ -112,7 +118,7 @@ struct MenuItem {
     int value = 0;
 };
 struct Menu {
-    enum class Kind { game, section, sort, collections, store, companion } kind = Kind::game;
+    enum class Kind { game, section, sort, collections, store, companion, tools, view, start } kind = Kind::game;
     std::vector<MenuItem> items;
     float x = 0, y = 0;      // Top-left wanted (right edge with align_right).
     bool align_right = false;
@@ -178,11 +184,11 @@ inline int stepItem(const std::vector<MenuItem>& items, int from, int direction)
 // ---- Hit targets and the top bar's shortcuts ---------------------------------------------------
 
 enum class Target {
-    none, caption, minimize, maximize, close, search, search_clear, tool, sidebar_row, sidebar_add, companion_card,
+    none, caption, minimize, maximize, close, search, search_clear, tool, sidebar_row, sidebar_add, companion_card, start_card,
     companion_bubble, card, card_play, card_check, popover_clear, popover_action, scrollbar, sort, installed, size_slider, pane_primary, pane_favorite,
     pane_more, pane_quick, pane_chip, pane_chip_add, pane_rating, pane_studio, bulk, menu_item, submenu_item, popover_row, popover_all,
     empty_primary, empty_secondary, grid, library_add, library_refresh, companion_more,
-    sidebar_toggle, pane_resize, pane_achievements, pane_cloud,
+    sidebar_toggle, pane_resize, pane_close, view_mode, pane_achievements, pane_cloud,
     pane_protondb, // Linux: ProtonDB and Steam Deck ratings, opening ProtonDB's page.
     pane_hardware  // The hardware check above Opis: unfolds this PC against the game's requirements.
 };
@@ -191,7 +197,8 @@ struct Hit {
     int index = -1;
     bool operator==(const Hit&) const = default;
 };
-enum class Tool { glance, companion, store, friends, downloads, tv, settings, tarot, update }; // update: a newer Launchme waits.
+// more: "…", the menu of the rest (Widżety, Glance, Tarot, Sklep).
+enum class Tool { glance, companion, store, friends, downloads, tv, settings, tarot, update, more }; // update: a newer Launchme waits.
 
 // ---- What the renderer draws -------------------------------------------------------------------
 
@@ -267,8 +274,10 @@ struct QuickLayout {
 // ---- Edytuj metadane: the player's own title and details (src/app/desktop_metadata.cpp) -----
 
 inline constexpr int meta_fields = 8; // Tytuł, Opis, Producent, Wydawca, Data premiery, Gatunki, Czas przejścia, Czas gry.
+inline constexpr size_t meta_limits[meta_fields] = {120, 4000, 160, 160, 40, 200, 16, 20}; // Characters each takes.
 // identify: Zidentyfikuj, the game's match in RAWG (and its artwork) over the dialog.
-enum class MetaItem { title, description, developer, publisher, release_date, genres, hours, playtime, save, restore, cancel, close, identify };
+// find: Znajdź, the stores' and databases' details to take over (src/app/metadata_find.cpp).
+enum class MetaItem { title, description, developer, publisher, release_date, genres, hours, playtime, save, restore, cancel, close, identify, find };
 struct MetaView {
     bool open = false;
     std::wstring game;                           // Its name when the dialog opened.
@@ -282,6 +291,7 @@ struct MetaView {
     bool overridden = false;                     // Przywróć automatyczne has something to undo.
     bool identify = false;                       // Zidentyfikuj is offered (not for Steam's own games).
     bool pad = false;                            // Tryb TV: the pad's hint under the heading.
+    meta_find::State find;                       // Znajdź: its pane, over the fields while open.
 };
 struct MetaLayout {
     float width = 0, height = 0;
@@ -317,8 +327,10 @@ struct MetaLayout {
         if (item == MetaItem::cancel) return {p.right - 24 - 116, y, p.right - 24, y + button_h};
         return {p.right - 24 - 116 - 12 - 132, y, p.right - 24 - 116 - 12, y + button_h}; // Zapisz.
     }
+    Rect findButton() const { const auto c = close(); return {c.left - 12 - 112, c.top, c.left - 12, c.bottom}; } // In the heading.
     int hit(float x, float y, bool identify = false) const {
         if (close().contains(x, y)) return static_cast<int>(MetaItem::close);
+        if (findButton().contains(x, y)) return static_cast<int>(MetaItem::find);
         for (int i = 0; i < meta_fields; ++i) if (field(i).contains(x, y)) return i;
         for (const auto item : {MetaItem::save, MetaItem::restore, MetaItem::cancel}) if (button(item).contains(x, y)) return static_cast<int>(item);
         if (identify && button(MetaItem::identify).contains(x, y)) return static_cast<int>(MetaItem::identify);
@@ -387,11 +399,16 @@ struct View {
     size_t drag_count = 0;
     std::wstring drag_label;
     bool scanning = false;
+    bool pane_open = true;
     bool library_empty = false; // No games at all: the pane says so instead of "Wybierz grę".
     EmptyState empty;
     float launch = 0;
     bool companion_card = false;   // Her card at the sidebar's foot (Layout::companion_card).
+    bool start_card = false;       // "Jak zacząć" above hers: the steps done of the total, the next one.
+    int start_done = 0, start_total = 0;
+    std::wstring start_next;
     float sidebar_narrow = 0;      // 0 wide … 1 narrow (icons only): the toggle's animation (Layout::narrow).
+    int cell_view = 0;             // AppSettings::desktop_view.
     float pane_width = 0;          // The pane's width the user dragged it to; 0 automatic (Layout::pane_width).
     bool companion_bubble = false; // Her line pops out of her card.
 };
@@ -424,20 +441,25 @@ struct Layout {
     float poster_width = poster_default; // The narrowest a poster may be; each row stretches its posters.
     int tools = 0;
     bool companion_card = false;
+    bool start_card = false;
     float narrow = 0;     // 0 wide … 1 narrow sidebar, animated between them.
     float pane_width = 0; // Dragged by its left edge; 0: a quarter of the window.
     bool favorite = true; // The pane's star beside Graj (none while Ulubione is switched off).
+    float cell_aspect = 1.5f; // A cell's height over its width: 1.5 posters, 1 squares, 0.5625 landscape.
+    bool pane_open = true; // No game selected (or its ✕ pressed): no pane, the grid takes its room.
 
     float sidebarWide() const { return std::clamp(std::round(width * 0.17f), 228.0f, 272.0f); }
     float sidebarRight() const { return std::round(sidebarWide() + (sidebar_narrow - sidebarWide()) * std::clamp(narrow, 0.0f, 1.0f)); }
     float paneWidth() const {
+        if (!pane_open) return 0;
         const float automatic = std::clamp(std::round(width * 0.25f), 340.0f, 420.0f);
         if (pane_width <= 0) return automatic;
         return std::clamp(std::round(pane_width), pane_min, std::max(pane_min, width - sidebarRight() - main_min));
     }
     float paneLeft() const { return width - paneWidth(); }
     // The grab zone of the pane's left edge (the pointer turns into ↔).
-    Rect paneEdge() const { return {paneLeft() - 4, title_h, paneLeft() + 4, height}; }
+    Rect paneEdge() const { return pane_open ? Rect{paneLeft() - 4, title_h, paneLeft() + 4, height} : Rect{}; }
+    Rect paneClose() const { return pane_open ? Rect{width - 46, title_h + 10, width - 14, title_h + 42} : Rect{}; } // ✕ over the picture.
     // The sidebar's toggle, then the logo: whole while it is wide, its mark alone when narrow.
     Rect sidebarToggle() const { const float top = (title_h - toggle_size) * 0.5f; return {12, top, 12 + toggle_size, top + toggle_size}; }
     float logoLeft() const { return sidebarToggle().right + 12; }
@@ -478,7 +500,8 @@ struct Layout {
     Rect sizeSlider() const { const float r = main().right - grid_pad, y = controlsY(); return {r - 104, y - 14, r, y + 14}; }
     Rect installedChip() const { const auto s = sizeSlider(); return {s.left - 18 - 136, s.top - 2, s.left - 18, s.bottom + 2}; }
     Rect sortButton() const { const auto c = installedChip(); return {c.left - 8 - 176, c.top, c.left - 8, c.bottom}; }
-    float titleRight() const { return compactHeader() ? main().right - grid_pad : sortButton().left - 16; }
+    Rect viewButton() const { const auto s = sortButton(); return {s.left - 8 - 52, s.top, s.left - 8, s.bottom}; } // The cells' shape: a glyph and its chevron.
+    float titleRight() const { return compactHeader() ? main().right - grid_pad : viewButton().left - 16; }
 
     // The poster grid: columns around `poster` wide (down to 88% of it), stretched to the row; a
     // strict minimum left narrow windows with a few oversized posters.
@@ -490,7 +513,7 @@ struct Layout {
         return std::max(1, static_cast<int>(std::floor((w + gap_x) / (poster_width * 0.88f + gap_x))));
     }
     float cellWidth() const { const int c = columns(); return (gridRight() - gridLeft() - gap_x * (c - 1)) / c; }
-    float posterHeight() const { return std::round(cellWidth() * 1.5f); }
+    float posterHeight() const { return std::round(cellWidth() * cell_aspect); }
     float rowStep() const { return posterHeight() + caption_h + gap_y; }
     Rect poster(size_t index, float scroll) const {
         const auto c = static_cast<size_t>(columns());
@@ -553,7 +576,7 @@ struct Layout {
 
     // Sidebar: its rows scroll above her card.
     float sidebarTop() const { return title_h + 8; }
-    float sidebarBottom() const { return height - (companion_card ? companion_h + 20 : 8); }
+    float sidebarBottom() const { return height - (companion_card ? companion_h + 20 : 8) - (start_card ? start_h + 8 : 0); }
     Rect sidebarRow(const Row& row, float scroll) const {
         const float y = sidebarTop() + row.top - scroll;
         return {10, y, sidebarRight() - 10, y + row.height};
@@ -573,6 +596,8 @@ struct Layout {
         for (int i = 0; i < static_cast<int>(rows.size()); ++i) if (sidebarRow(rows[i], scroll).contains(x, y)) return i;
         return -1;
     }
+    // "Jak zacząć": above her card (at the foot when she is off).
+    Rect startCard() const { const float bottom = companion_card ? height - companion_h - 20 : height - 12; return {12, bottom - start_h, sidebarRight() - 12, bottom}; }
     Rect companionCard() const { return {12, height - companion_h - 12, sidebarRight() - 12, height - 12}; }
     Rect companionMore() const { const auto r = companionCard(); const float y = (r.top + r.bottom) * 0.5f; return {r.right - 38, y - 16, r.right - 6, y + 16}; }
 

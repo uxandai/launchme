@@ -31,7 +31,7 @@ int LauncherUiTest::aureliaIntegration(HWND window) {
     };
     struct Fake {
         std::mutex mutex; std::vector<aurelia::Request> calls;
-        std::atomic_bool send_failure{false}, download{false}, stop_download{false}, helper_failure{false}, stop_failure{false};
+        std::atomic_bool bare_friends{false}, send_failure{false}, download{false}, stop_download{false}, helper_failure{false}, stop_failure{false};
         std::atomic_int helper_calls{0};
         std::atomic_bool logged_in{true}, bad_health{false}, qr_approve{false};
         std::atomic_uint64_t account{76561198000000001ULL};
@@ -82,7 +82,9 @@ int LauncherUiTest::aureliaIntegration(HWND window) {
         case C::libraries: return ok(R"({"libraries":[{"path":"\\\\?\\D:\\SteamLibrary","free_bytes":900000000000}]})");
         case C::stop: return fake->stop_failure ? aurelia::Reply{false, false, {}, L"Fixture refused"} : ok(R"({"app_id":902,"status":"stopped","forced":true})");
         case C::workshop_browse: return ok(R"({"items":[{"id":12345678901234567,"title":"Moonlit paths"}]})");
-        case C::friends: return ok(R"([{"steam_id":76561198000000002,"persona_name":"Luna","persona_state":1,"game_name":"The Moonlit Archive"}])");
+        case C::friends:
+            if (fake->bare_friends) return ok(R"([{"steam_id":76561198000000002,"persona_name":null,"persona_state":null},{"steam_id":76561198000000004,"persona_name":null,"persona_state":null}])");
+            return ok(R"([{"steam_id":76561198000000002,"persona_name":"Luna","persona_state":1,"game_name":"The Moonlit Archive"}])");
         case C::chat_history: return ok(R"([{"timestamp":100,"from_self":false,"message":"Got time for a new adventure?"},{"timestamp":101,"from_self":true,"message":"Yes! Just checking my cloud saves."}])");
         case C::chat_live:
             if (event) { event(*json::parse(R"({"event":"ready"})")); event(*json::parse(R"({"event":"message","timestamp":102,"text":"Great. See you in a minute!"})")); }
@@ -296,6 +298,26 @@ int LauncherUiTest::aureliaIntegration(HWND window) {
     app.uninstallGame(game);
     if (!app.aurelia_ui_.open || !app.aurelia_ui_.confirmation || !app.aurelia_ui_.confirm_only) return 10380;
     app.modalKey(VK_ESCAPE, false); if (app.aurelia_ui_.open || fake->count(C::uninstall)) return 10381;
+    // Steam has sent no names or statuses yet: a note instead of "everyone offline", asked again twice, then after a reconnect.
+    {
+        fake->bare_friends = true;
+        app.toggleFriendsDrawer(); app.friends_list_ = true;
+        const std::chrono::steady_clock::time_point none{};
+        if (!wait([&] { return !app.friends_loading_ && app.friends_.no_presence; }) || app.friends_.error.empty() || app.friends_retry_at_ == none) return 10440;
+        const auto asked = fake->count(C::friends), reconnects = fake->count(C::reconnect);
+        for (int attempt = 1; attempt <= 2; ++attempt) {
+            app.friends_retry_at_ = std::chrono::steady_clock::now() - std::chrono::seconds(1);
+            app.tick();
+            if (!wait([&] { return fake->count(C::friends) == asked + attempt && !app.friends_loading_ && app.friends_.no_presence; }) || app.friends_retry_at_ == none) return 10441;
+        }
+        fake->bare_friends = false; // Steam answers after the reconnect.
+        app.friends_retry_at_ = std::chrono::steady_clock::now() - std::chrono::seconds(1);
+        app.tick();
+        if (!wait([&] { return fake->count(C::reconnect) == reconnects + 1 && !app.friends_loading_ && app.friends_.friends.size() == 1; }) ||
+            app.friends_.no_presence || !app.friends_.error.empty() || app.friends_retry_at_ != none) return 10442;
+        app.toggleFriendsDrawer();
+        if (app.friends_open_) return 10443;
+    }
     // Widżety → Znajomi Steam → a friend: the conversation in the drawer, never the Steam client.
     app.toggleFriendsDrawer(); app.friends_list_ = true;
     if (!wait([&] { return !app.friends_loading_ && !app.friends_.friends.empty(); })) return 10332;

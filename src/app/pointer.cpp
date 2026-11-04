@@ -310,10 +310,14 @@ bool Launcher::hoverButton(float mouse_x, float mouse_y) const {
         const auto hit = custom_game_ui::Layout::of(custom_editor_, view.width, view.height).hit(x, y, custom_editor_.editing());
         return hit && custom_game_ui::field(*hit) < 0;
     }
-    case Modal::metadata: return desktop_ui::MetaLayout{view.width, view.height}.hit(x, y, desktop_meta_.identify) >= desktop_ui::meta_fields;
+    case Modal::metadata:
+        if (desktop_meta_.find.open) return meta_find::Layout{view.width, view.height}.hit(x, y, desktop_meta_.find) >= 0;
+        return desktop_ui::MetaLayout{view.width, view.height}.hit(x, y, desktop_meta_.identify) >= desktop_ui::meta_fields;
     case Modal::bulk_covers: return bulk_covers_ui::Layout{view.width, view.height, bulk_ui_.buttons()}.hit(x, y) >= 0;
     case Modal::identify: {
         const identify_ui::Layout layout{view.width, view.height};
+        if (!identify_state_.manual) return layout.back().contains(x, y) || (!identify_state_.applying && layout.manualButton().contains(x, y));
+        if (identify_state_.menu) return layout.menuHit(x, y, static_cast<int>(identify_ui::providers(identify_state_.emulated).size())) >= 0;
         return layout.back().contains(x, y) || layout.source().contains(x, y) || layout.search().contains(x, y) || layout.hit(x, y, identify_state_) >= 0;
     }
     case Modal::gog_install: return gog_install_ui::Layout{view.width, view.height, gog_install_ui::helperInstall(gog_install_ui_.game.source) || gog_install_ui_.steam}.hit(x, y) >= 0;

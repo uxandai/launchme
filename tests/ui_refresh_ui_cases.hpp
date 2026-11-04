@@ -228,7 +228,7 @@ int LauncherUiTest::uiRefresh(HWND window) {
         stores.hwnd_ = window; stores.execute_ = fakeExecute;
         if (!stores.renderer_.initialize(window)) return 99301;
         if (quick_menu::count(quick_menu::store_slots) != 9 || quick_menu::action(2, quick_menu::store_slots) != quick_menu::Action::store) return 99302;
-        const auto tools = stores.desktopTools();
+        const auto tools = stores.desktopMoreTools();
         if (std::find(tools.begin(), tools.end(), desktop_ui::Tool::store) == tools.end()) return 99303; // Shown with no plugin at all.
         stores.openStores();
         if (stores.screen_ != ScreenMode::plugin_page || stores.plugin_page_.title != tr(L"Sklepy") || stores.storeTabsShown()) return 99304;

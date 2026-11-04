@@ -16,7 +16,7 @@
 using namespace desktop_ui;
 
 namespace {
-constexpr size_t limits[meta_fields] = {120, 4000, 160, 160, 40, 200, 16, 20};
+constexpr const auto& limits = meta_limits;
 constexpr int text_fields = 7; // Kept as typed; Czas gry (the last field) is kept in minutes.
 constexpr size_t playtime_field = 7;
 std::wstring metadata::Override::* const members[text_fields] = {
@@ -296,6 +296,7 @@ void Launcher::desktopMetaActivate(int item) {
         return;
     }
     case MetaItem::cancel: case MetaItem::close: desktopMetaClose(); return;
+    case MetaItem::find: metaFindOpen(); return;
     case MetaItem::identify: {
         // The game's match in RAWG (its details and artwork), in place of this dialog: what was typed here is not kept.
         if (!desktop_meta_.identify) return;
@@ -310,6 +311,7 @@ void Launcher::desktopMetaActivate(int item) {
 
 void Launcher::desktopMetaInsert(std::wstring_view text) {
     auto& meta = desktop_meta_;
+    if (meta.find.open) { metaFindText(text); return; }
     if (meta.focus < 0 || meta.focus >= meta_fields) return;
     const auto index = static_cast<size_t>(meta.focus);
     auto& field = meta.fields[index];
@@ -330,20 +332,22 @@ void Launcher::desktopMetaInsert(std::wstring_view text) {
 }
 
 void Launcher::desktopMetaChar(wchar_t character) {
+    if (desktop_meta_.find.open) { metaFindChar(character); return; }
     if (character < L' ' || character == 127) return; // Enter, Tab and Backspace are keys (desktopMetaKey).
     desktopMetaInsert(std::wstring_view(&character, 1));
 }
 
 bool Launcher::desktopMetaKey(WPARAM key) {
     auto& meta = desktop_meta_;
+    if (meta.find.open) return metaFindKey(key);
     const bool control = GetKeyState(VK_CONTROL) < 0, shift = GetKeyState(VK_SHIFT) < 0;
     const int field = meta.focus >= 0 && meta.focus < meta_fields ? meta.focus : -1;
     auto* text = field >= 0 ? &meta.fields[static_cast<size_t>(field)] : nullptr;
     if (text) meta.caret = std::min(meta.caret, text->size());
     switch (key) {
     case VK_ESCAPE: desktopMetaClose(); return true;
-    case VK_TAB: { // The fields, then Zapisz, Przywróć automatyczne, Anuluj and Zidentyfikuj.
-        std::vector<int> order;
+    case VK_TAB: { // Znajdź, the fields, then Zapisz, Przywróć automatyczne, Anuluj and Zidentyfikuj.
+        std::vector<int> order{static_cast<int>(MetaItem::find)};
         for (int i = 0; i < meta_fields; ++i) order.push_back(i);
         for (const auto item : {MetaItem::save, MetaItem::restore, MetaItem::cancel}) order.push_back(static_cast<int>(item));
         if (meta.identify) order.push_back(static_cast<int>(MetaItem::identify));
@@ -400,6 +404,7 @@ bool Launcher::desktopMetaPointer(float mouse_x, float mouse_y, bool press, bool
     if (!meta.open) return false;
     const auto view = renderer_.desktopViewport();
     const float scale = desktopScale();
+    if (meta.find.open) return metaFindPointer(mouse_x / scale, mouse_y / scale, press, double_click, scale);
     const MetaLayout layout{view.width, view.height};
     const int hit = layout.hit(mouse_x / scale, mouse_y / scale, meta.identify);
     if (!press) {
@@ -435,10 +440,10 @@ void Launcher::openMetadata(const Game& game) {
 }
 
 namespace {
-// Rows of the dialog as drawn: Tytuł; Opis; Producent | Wydawca; Data premiery | Czas przejścia | Gatunki;
+// Rows of the dialog as drawn: Znajdź (in the heading); Tytuł; Opis; Producent | Wydawca; Data premiery | Czas przejścia | Gatunki;
 // Czas gry; Przywróć | Zidentyfikuj | Zapisz | Anuluj.
 std::vector<std::vector<int>> metaRows(bool identify) {
-    std::vector<std::vector<int>> rows{{0}, {1}, {2, 3}, {4, 6, 5}, {7}, {static_cast<int>(MetaItem::restore)}};
+    std::vector<std::vector<int>> rows{{static_cast<int>(MetaItem::find)}, {0}, {1}, {2, 3}, {4, 6, 5}, {7}, {static_cast<int>(MetaItem::restore)}};
     if (identify) rows.back().push_back(static_cast<int>(MetaItem::identify));
     rows.back().push_back(static_cast<int>(MetaItem::save));
     rows.back().push_back(static_cast<int>(MetaItem::cancel));
@@ -449,6 +454,7 @@ std::vector<std::vector<int>> metaRows(bool identify) {
 void Launcher::metadataKey(WPARAM key, bool repeated) {
     auto& meta = desktop_meta_;
     if (!metadataOpen()) return;
+    if (meta.find.open) { metaFindKey(key, repeated); return; }
     const bool field = meta.focus >= 0 && meta.focus < meta_fields;
     const auto rows = metaRows(meta.identify);
     int row = 0, column = 0;
@@ -492,6 +498,7 @@ void Launcher::metadataKey(WPARAM key, bool repeated) {
 
 void Launcher::metadataClick(float x, float y) {
     if (!metadataOpen()) return;
+    if (desktop_meta_.find.open) { metaFindPointer(x, y, true); return; }
     const auto view = renderer_.viewport();
     const int hit = MetaLayout{view.width, view.height}.hit(x, y, desktop_meta_.identify); // Logical coordinates.
     if (hit < 0) return; // Outside: it stays.
@@ -507,6 +514,7 @@ void Launcher::metadataClick(float x, float y) {
 
 void Launcher::metadataPointer(float x, float y) {
     if (!metadataOpen()) return;
+    if (desktop_meta_.find.open) { metaFindPointer(x, y, false); return; }
     const auto view = renderer_.viewport();
     const int hit = MetaLayout{view.width, view.height}.hit(x, y, desktop_meta_.identify); // Logical coordinates.
     if (hit != desktop_meta_.hover) { desktop_meta_.hover = hit; InvalidateRect(hwnd_, nullptr, FALSE); }

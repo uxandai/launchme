@@ -742,6 +742,7 @@ private:
     void drawDetails();
     void drawLibraryManager();
     void drawIdentify();
+    void drawSpinner(float cx, float cy, float radius, D2D1_COLOR_F color); // Ten dots chasing each other; keeps frames coming.
     void drawBulkCovers();
     float drawRating(float x, float y, float width, float alpha = 1);
     void drawAchievements(); // src/ui/achievements_renderer.cpp
@@ -883,6 +884,7 @@ private:
     void drawDesktop();
     void drawDesktopTitlebar(const desktop_ui::Layout& layout, const desktop_ui::View& view);
     void drawDesktopSidebar(const desktop_ui::Layout& layout, const desktop_ui::View& view);
+    void drawDesktopStart(const desktop_ui::Layout& layout, const desktop_ui::View& view);
     void drawDesktopCompanion(const desktop_ui::Layout& layout, const desktop_ui::View& view);
     void drawDesktopGrid(const desktop_ui::Layout& layout, const desktop_ui::View& view);
     void drawDesktopHeader(const desktop_ui::Layout& layout, const desktop_ui::View& view);
@@ -939,6 +941,7 @@ private:
     void fillBrandGeometry(const std::string& key, ID2D1Geometry* geometry, const D2D1_MATRIX_3X2_F& transform, D2D1_COLOR_F ink);
     void drawDesktopQuick(const desktop_ui::View& view);
     void drawDesktopMeta(const desktop_ui::MetaView& meta);
+    void drawMetaFind(const desktop_ui::MetaView& meta, bool tv); // Znajdź, the pane over its fields (src/ui/meta_find_renderer.cpp).
     void drawTvMeta(const desktop_ui::MetaView& meta); // Tryb TV's, from the game's menu (src/ui/tv_metadata_renderer.cpp).
     void desktopSelection(const std::wstring& value, float left, float cy, float width, IDWriteTextFormat* format); // Its highlight, if any.
     void desktopFill(settings_ui::Rect r, float radius, D2D1_COLOR_F ink);
