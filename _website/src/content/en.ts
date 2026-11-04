@@ -13,6 +13,7 @@ export const en = {
     changelog: "Changelog",
     download: "Download",
     github: "GitHub",
+    discord: "Discord",
     menu: "Menu",
   },
   hero: {

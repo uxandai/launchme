@@ -470,6 +470,12 @@ void Launcher::settingsActivate() {
             showNotification(NotificationKind::error, tr(L"Nie można otworzyć folderu"), userConfigDirectory().wstring());
         return;
     }
+    if (row.id == Id::discord) { // The community server, in the browser.
+        constexpr wchar_t invite[] = L"https://discord.gg/jhdrzy522";
+        if (execute_(hwnd_, GameAction{invite, {}, {}, ActionKind::open_client}) <= 32)
+            showNotification(NotificationKind::error, tr(L"Nie można otworzyć strony"), invite);
+        return;
+    }
     if (row.id == Id::autostart) {
         settings_.autostart = !settings_.autostart;
         if (!applyAutostart(settings_.autostart)) {

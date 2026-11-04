@@ -101,11 +101,12 @@ int LauncherUiTest::tour(HWND window) {
     if (app.tour_.alpha != 0) return 2433;
     // Settings → Wygląd: the last row resets the state and starts the walkthrough over the home screen.
     app.openSettings();
-    app.settings_state_.selectCategory(static_cast<int>(settings_ui::Category::system)); // "Pomoc": the last row.
+    app.settings_state_.selectCategory(static_cast<int>(settings_ui::Category::system)); // "Pomoc": the walkthrough, then Discord, last.
     app.buildSettingsRows();
-    if (app.settings_rows_.back().id != settings_ui::Id::tour || app.settings_rows_.back().control != settings_ui::Control::action) return 2434;
+    const size_t tour_row = app.settings_rows_.size() - 2;
+    if (app.settings_rows_[tour_row].id != settings_ui::Id::tour || app.settings_rows_[tour_row].control != settings_ui::Control::action) return 2434;
     app.settings_state_.enter(static_cast<int>(app.settings_rows_.size()));
-    app.settings_state_.selected[app.settings_state_.category] = static_cast<int>(app.settings_rows_.size()) - 1;
+    app.settings_state_.selected[app.settings_state_.category] = static_cast<int>(tour_row);
     app.settingsActivate();
     if (!app.tourOpen() || app.settingsOpen() || app.screen_ != ScreenMode::shelves || app.tour_.step != 0 ||
         app.settings_.tour_done || loadAppSettings().tour_done) return 2435;

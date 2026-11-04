@@ -15,6 +15,7 @@ export const pl: Dict = {
     changelog: "Zmiany",
     download: "Pobierz",
     github: "GitHub",
+    discord: "Discord",
     menu: "Menu",
   },
   hero: {

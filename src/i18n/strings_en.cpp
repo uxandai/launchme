@@ -975,6 +975,7 @@ constexpr Entry entries[] = {
     // Notifications
     {L"Teraz podłączone", L"Now connected"},
     {L"Nie można otworzyć folderu", L"Can't open the folder"},
+    {L"Pytania, pomysły i nowości: serwer społeczności Launchme.", L"Questions, ideas and news: the Launchme community server."},
     {L"Brak akcji dla tej gry", L"No action for this game"},
     {L"Sprawdź konfigurację ", L"Check settings for "},
     {L"Nie udało się otworzyć klienta", L"Couldn't open the client"},

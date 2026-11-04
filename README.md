@@ -1,7 +1,7 @@
 ![launchme](docs/branding/readme-banner.svg)
 
 **[Website](https://uxandai.github.io/launchme/)** · **[Changelog](changelog/)** · **[Download](../../releases/latest)** ·
-**[Discord](https://discord.gg/y2wk3kr9wW)** · **[Architecture](docs/ARCHITECTURE.md)**
+**[Discord](https://discord.gg/jhdrzy522)** · **[Architecture](docs/ARCHITECTURE.md)**
 
 A full-screen, console-style game launcher for Windows 10/11, built for a gamepad.
 It merges Steam (collections and non-Steam shortcuts), GOG, Battle.net, EA app, Ubisoft Connect,
@@ -48,7 +48,7 @@ Building the installer: `tools\build-installer.ps1` (Inno Setup 6.6 or newer; `-
 Linux (highly experimental): `launchme-<version>-x86_64.AppImage` from the same release; make it executable and
 run it.
 
-Questions, ideas and news: the [Discord server](https://discord.gg/y2wk3kr9wW).
+Questions, ideas and news: the [Discord server](https://discord.gg/jhdrzy522).
 
 ## Where settings and cache are stored
 

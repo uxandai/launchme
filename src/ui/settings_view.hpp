@@ -47,7 +47,7 @@ enum class Id { font, home_layout, ui_accent, accent, uninstalled, emulation, co
                    // Towarzyszka: her chat and Launchfeed in a phone's browser (companion_remote.cpp).
                    companion_remote, companion_remote_address,
                    // System: start with Windows; the version and the data folder (logs, crash reports).
-                   autostart, about,
+                   autostart, about, discord,
                    // A tile grouping related settings on a page of their own (Control::page, Row::page).
                    page,
                    // Interfejs → Zaznaczona okładka: the glow's animation (still, pulsing or a travelling outline).

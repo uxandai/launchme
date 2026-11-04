@@ -1020,6 +1020,8 @@ void Launcher::buildSettingsRows() {
             add({Id::tour, Control::action, tr(L"Przewodnik"),
                 tr(L"Wprowadzenie z pierwszego uruchomienia: panele, menu gry i wybór układu."), tr(L"Pokaż")});
         }
+        add({Id::discord, Control::action, L"Discord",
+            tr(L"Pytania, pomysły i nowości: serwer społeczności Launchme."), tr(L"Otwórz")});
         break;
     }
     }

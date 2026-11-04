@@ -2,10 +2,10 @@ import { AnimatePresence, motion, useMotionValueEvent, useScroll, useSpring } fr
 import { Download, Menu, Star, X } from "lucide-react";
 import { useState } from "react";
 import { LogoFull } from "../components/Logo";
-import { GitHubIcon } from "../components/ui";
+import { DiscordIcon, GitHubIcon } from "../components/ui";
 import { cn } from "../lib/cn";
 import { usePage, type Lang } from "../lib/page";
-import { CHANGELOG_URL, GITHUB_URL, LATEST_URL } from "../lib/release";
+import { CHANGELOG_URL, DISCORD_URL, GITHUB_URL, LATEST_URL } from "../lib/release";
 
 function LangSwitch({ className }: { className?: string }) {
   const { lang, layout, href } = usePage();
@@ -81,6 +81,16 @@ export function Nav() {
         <div className="ml-auto flex items-center gap-2">
           <LangSwitch className="hidden sm:flex" />
           <a
+            href={DISCORD_URL}
+            target="_blank"
+            rel="noreferrer"
+            aria-label={t.nav.discord}
+            title={t.nav.discord}
+            className="hidden size-10 items-center justify-center rounded-full border border-line-strong bg-white/5 text-white/90 transition-colors hover:bg-white/10 sm:inline-flex"
+          >
+            <DiscordIcon className="size-[18px]" />
+          </a>
+          <a
             href={GITHUB_URL}
             target="_blank"
             rel="noreferrer"
@@ -131,6 +141,9 @@ export function Nav() {
             <div className="flex items-center justify-between px-4 py-3">
               <a href={GITHUB_URL} className="flex items-center gap-2 text-[16px] text-white/85">
                 <GitHubIcon className="size-4" /> GitHub
+              </a>
+              <a href={DISCORD_URL} className="flex items-center gap-2 text-[16px] text-white/85">
+                <DiscordIcon className="size-4" /> Discord
               </a>
               <LangSwitch />
             </div>

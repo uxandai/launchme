@@ -9,7 +9,7 @@ export const ISSUES_URL = `${GITHUB_URL}/issues`;
 export const SDK_URL = `${GITHUB_URL}/blob/main/docs/plugins/README.md`;
 export const LINUX_DOC_URL = `${GITHUB_URL}/blob/main/docs/LINUX_WINE.md`;
 export const LICENSE_URL = `${GITHUB_URL}/blob/main/LICENSE`;
-export const DISCORD_URL = "https://discord.gg/y2wk3kr9wW";
+export const DISCORD_URL = "https://discord.gg/jhdrzy522";
 
 export type Asset = { name: string; size: number; url: string };
 export type Release = {
@@ -24,21 +24,21 @@ export type Release = {
 
 // Snapshot used when neither the build nor the browser can reach the GitHub API.
 export const FALLBACK_RELEASE: Release = {
-  tag: "v0.5.9",
-  version: "0.5.9",
-  date: "2026-11-02T11:38:51Z",
-  url: `${GITHUB_URL}/releases/tag/v0.5.9`,
+  tag: "v0.7.4",
+  version: "0.7.4",
+  date: "2026-11-04T00:09:32Z",
+  url: `${GITHUB_URL}/releases/tag/v0.7.4`,
   windows: {
-    name: "launchme-0.5.9-win64.zip",
-    size: 214851085,
-    url: `${GITHUB_URL}/releases/download/v0.5.9/launchme-0.5.9-win64.zip`,
+    name: "launchme-0.7.4-win64.zip",
+    size: 215300607,
+    url: `${GITHUB_URL}/releases/download/v0.7.4/launchme-0.7.4-win64.zip`,
   },
   linux: {
-    name: "launchme-0.5.9-x86_64.AppImage",
-    size: 284203512,
-    url: `${GITHUB_URL}/releases/download/v0.5.9/launchme-0.5.9-x86_64.AppImage`,
+    name: "launchme-0.7.4-x86_64.AppImage",
+    size: 285084152,
+    url: `${GITHUB_URL}/releases/download/v0.7.4/launchme-0.7.4-x86_64.AppImage`,
   },
-  stars: 48,
+  stars: 49,
 };
 
 type GhAsset = { name: string; size: number; browser_download_url: string };

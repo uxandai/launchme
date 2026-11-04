@@ -1993,7 +1993,9 @@ int LauncherUiTest::language(HWND window) {
         app.settings_rows_[0].id != settings_ui::Id::update || app.settings_rows_[0].section != L"Updates" || app.settings_rows_[0].value != L"Check now" ||
         !english_row(settings_ui::Id::windowed) || english_row(settings_ui::Id::windowed)->title != L"TV mode in a window" ||
         english_row(settings_ui::Id::windowed)->section != L"Window and language" ||
-        app.settings_rows_.back().title != L"Walkthrough" || app.settings_rows_.back().value != L"Show" ||
+        app.settings_rows_.size() < 2 || app.settings_rows_[app.settings_rows_.size() - 2].title != L"Walkthrough" ||
+        app.settings_rows_[app.settings_rows_.size() - 2].value != L"Show" ||
+        app.settings_rows_.back().id != settings_ui::Id::discord || app.settings_rows_.back().title != L"Discord" || app.settings_rows_.back().value != L"Open" ||
         !english_row(settings_ui::Id::about) || english_row(settings_ui::Id::about)->value != L"Open folder" ||
         std::wstring(tr(settings_ui::categories[0].title)) != L"Interface" ||
         std::wstring(tr(settings_ui::categories[static_cast<int>(settings_ui::Category::media)].title)) != L"Media & data" ||
