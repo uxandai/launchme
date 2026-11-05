@@ -166,7 +166,7 @@ void Launcher::identifyAccept() {
     if (!state.manual && state.games.empty()) { identifyManual(); return; } // Enter on the lookup: choose by hand.
     if (state.query_focus || state.games.empty()) { identifySearch(); return; }
     if (static_cast<size_t>(state.selected) < state.offers.size() && state.offers[static_cast<size_t>(state.selected)]) {
-        identifyApplyText(*state.offers[static_cast<size_t>(state.selected)]); // A store's description: nothing to download.
+        identifyApplyText(*state.offers[static_cast<size_t>(state.selected)]); // A store's description: nothing to download (copied: the call closes the dialog).
         return;
     }
     const auto candidate = state.games[state.selected]; const auto game = state.game;
@@ -322,7 +322,7 @@ void Launcher::onIdentify(std::unique_ptr<IdentifyMessage> message) {
 }
 // No database knew the game: the best store's description, developer, publisher, date and genres become its own
 // details (the same place as Edytuj metadane; what the player typed there stays).
-void Launcher::identifyApplyText(const metadata_sources::Offer& offer) {
+void Launcher::identifyApplyText(metadata_sources::Offer offer) {
     const auto game = identify_state_.game; const auto key = gameKey(game);
     metadataOverride(game); // Loads the file.
     metadata::Override value;

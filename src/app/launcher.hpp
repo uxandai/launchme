@@ -776,7 +776,7 @@ public:
     void identifySetSource(identify_ui::State::Source source);
     void identifyToggleMenu();   // The provider dropdown.
     void identifyPickProvider(int index);
-    void identifyApplyText(const metadata_sources::Offer& offer);
+    void identifyApplyText(metadata_sources::Offer offer); // By value: it closes the dialog, whose state may hold the offer.
     void testScreenScraper();  // Settings → ScreenScraper → "Sprawdź połączenie" (ssuserInfos.php).
     void clearScreenScraper(); // "Wyczyść dane ScreenScraper": identifications and pauses.
     void applyEmulationNames(); // emulation_names: ES-DE/ScreenScraper titles on emulated shortcuts.
