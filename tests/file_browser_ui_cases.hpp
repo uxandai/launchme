@@ -33,6 +33,18 @@ int LauncherUiTest::fileBrowserAndColors(HWND window) {
     const auto selectRow = [&](Category category, Id id) {
         app.settings_state_.selectCategory(static_cast<int>(category));
         app.buildSettingsRows();
+        // Interfejs's options are on the classic list and its pages (no tile since 0.7.6: Dostosuj wygląd has them).
+        if (category == Category::appearance) {
+            const auto here = [&] {
+                return std::any_of(app.settings_rows_.begin(), app.settings_rows_.end(), [&](const auto& row) { return row.id == id; });
+            };
+            app.openSettingsPage(settings_ui::Page::appearance_all);
+            for (const auto page : {settings_ui::Page::cover_focus, settings_ui::Page::backdrop}) {
+                if (here()) break;
+                app.openSettingsPage(page);
+                if (!here()) app.closeSettingsPage();
+            }
+        }
         return app.revealSetting(id); // On the category's list or one of its pages.
     };
     auto library = std::make_unique<LibraryMessage>(); library->account = 1;

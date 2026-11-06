@@ -233,7 +233,7 @@ int LauncherUiTest::metro(HWND window) {
     // Default layout, "Pionowe plakaty": game shelves become 2:3 posters side by side (the large
     // focused one too); the store shelf keeps its square logo tiles.
     app.openSettings(); app.settings_state_.selectCategory(0); app.buildSettingsRows();
-    app.revealSetting(settings_ui::Id::shelves_posters); // Interfejs → "Opcje układu".
+    revealClassicSetting(app, settings_ui::Id::shelves_posters); // Wszystkie opcje wyglądu → "Opcje układu".
     const auto posters_row = std::find_if(app.settings_rows_.begin(), app.settings_rows_.end(),
         [](const auto& row) { return row.id == settings_ui::Id::shelves_posters; });
     if (posters_row == app.settings_rows_.end() || posters_row->checked) return 2760;
@@ -277,7 +277,7 @@ int LauncherUiTest::metro(HWND window) {
     // "Kafelek „Wszystkie” w rzędach" on the default layout: first on game shelves (not Recent or
     // stores), a 2x2 preview of the covers (posters: a game's background); it opens the library.
     app.openSettings(); app.settings_state_.selectCategory(0); app.buildSettingsRows();
-    app.revealSetting(settings_ui::Id::shelves_category_all);
+    revealClassicSetting(app, settings_ui::Id::shelves_category_all);
     const auto all_row = std::find_if(app.settings_rows_.begin(), app.settings_rows_.end(),
         [](const auto& row) { return row.id == settings_ui::Id::shelves_category_all; });
     if (all_row == app.settings_rows_.end() || all_row->checked) return 2767;

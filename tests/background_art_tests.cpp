@@ -4,12 +4,14 @@
 #include "../src/artwork/cover_cache.hpp"
 #include "../src/artwork/image_compact.hpp"
 #include "../src/artwork/text_crop.hpp"
+#include "../src/net/http.hpp"
 #include "../src/platform/atomic_file.hpp"
 #include "../src/store/steam_app_match.hpp"
 #include "image_fixture.hpp"
 
 #include <Windows.h>
 
+#include <atomic>
 #include <cmath>
 #include <filesystem>
 #include <iostream>
@@ -108,6 +110,32 @@ int main() {
     if (steamAppForTitle(L"Hades", metadata, "epic%3Ahades", answer) != 1145360 || calls != 2) return 26;
     if (steamAppForTitle(L"Hades III", metadata, "epic%3Ahades3", answer) || calls != 3) return 27;
     if (steamAppForTitle(L"Hades III", metadata, "epic%3Ahades3", answer) || calls != 3) return 28; // The miss is remembered.
+
+    // A Steam game's art comes from Steam's own library cache before SteamGridDB (no request at all:
+    // HTTP is cancelled). Steam keeps it in hash-named subfolders; the portrait capsule wins the cover.
+    {
+        const std::atomic_bool offline{true};
+        HttpCancellation no_network(offline);
+        constexpr uint32_t app = 4290000001u;
+        const auto steam_root = root / L"Steam";
+        const auto library = steam_root / L"appcache" / L"librarycache" / std::to_wstring(app);
+        const auto put = [&](const wchar_t* folder, const wchar_t* name, const std::vector<uint8_t>& bytes) {
+            std::filesystem::create_directories(library / folder);
+            return atomic_file::write(library / folder / name, std::span<const uint8_t>(bytes));
+        };
+        const auto capsule = jpegFixture(300, 450, 1), old_capsule = jpegFixture(300, 450, 2), header = jpegFixture(460, 215, 3),
+                   hero = jpegFixture(1920, 620, 4), logo = pngFixture(90, 640, 150, true);
+        if (capsule.empty() || logo.empty() || !put(L"aa", L"library_600x900.jpg", capsule) || !put(L"bb", L"library_capsule.jpg", old_capsule) ||
+            !put(L"cc", L"header.jpg", header) || !put(L"dd", L"library_hero.jpg", hero) || !put(L"ee", L"logo.png", logo)) return 29;
+        const auto covers = root / L"steam-covers";
+        std::filesystem::create_directories(covers);
+        if (coverForSteamApp(app, L"Local Art", covers, steam_root) != capsule) return 30;
+        if (posterForSteamApp(app, L"Local Art", covers, steam_root) != capsule) return 31;
+        if (landscapeForSteamApp(app, L"Local Art", covers, steam_root) != header) return 32;
+        if (heroForSteamApp(app, L"Local Art", covers, steam_root) != hero) return 33;
+        if (logoForSteamApp(app, L"Local Art", covers, steam_root) != logo) return 34;
+        if (!std::filesystem::exists(covers / (std::to_wstring(app) + L".v2.img"))) return 35; // Cached like a download.
+    }
 
     std::filesystem::remove_all(root, ec);
     CoUninitialize();

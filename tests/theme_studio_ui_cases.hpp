@@ -154,18 +154,19 @@ int LauncherUiTest::themeStudio(HWND window) {
     app.openSettings();
     app.openSettingsSearch();
     if (!app.settings_state_.at(Page::settings_search) || !app.settings_state_.editing || app.settings_hits_.size() < 40) return 8150;
-    const auto glass_hit = std::find_if(app.settings_hits_.begin(), app.settings_hits_.end(), [](const auto& hit) { return hit.id == Id::glass; });
-    if (glass_hit == app.settings_hits_.end() || glass_hit->path.empty()) return 8151;
-    const auto glass_title = glass_hit->title;
-    for (const wchar_t ch : glass_title.substr(0, glass_title.find(L' '))) app.onCharacter(ch);
-    const auto result = std::find_if(app.settings_rows_.begin(), app.settings_rows_.end(), [&](const Row& row) { return row.id == Id::settings_hit && row.title == glass_title; });
+    // A row behind a tile (Wygaszacz ekranu → Po czasie); Interfejs's look is in Dostosuj wygląd since 0.7.6.
+    const auto page_hit = std::find_if(app.settings_hits_.begin(), app.settings_hits_.end(), [](const auto& hit) { return hit.id == Id::screensaver_minutes; });
+    if (page_hit == app.settings_hits_.end() || page_hit->path.empty()) return 8151;
+    const auto page_title = page_hit->title;
+    for (const wchar_t ch : page_title.substr(0, page_title.find(L' '))) app.onCharacter(ch);
+    const auto result = std::find_if(app.settings_rows_.begin(), app.settings_rows_.end(), [&](const Row& row) { return row.id == Id::settings_hit && row.title == page_title; });
     if (app.settings_rows_.empty() || app.settings_rows_[0].id != Id::settings_search || result == app.settings_rows_.end()) return 8152;
     app.settingsActivate(); // Enter in the field: down to the first result.
     if (app.settings_state_.editing || app.settings_state_.row() != 1 || app.settings_rows_[1].id != Id::settings_hit) return 8153;
     app.settings_state_.selected[app.settings_state_.category] = static_cast<int>(result - app.settings_rows_.begin());
     app.settingsActivate(); // The result: its page, its row.
     if (app.settings_state_.at(Page::settings_search) || app.settings_state_.pages.empty() ||
-        app.settings_rows_[app.settings_state_.row()].id != Id::glass || !app.settings_state_.options) return 8154;
+        app.settings_rows_[app.settings_state_.row()].id != Id::screensaver_minutes || !app.settings_state_.options) return 8154;
     app.openSettingsSearch();
     for (const wchar_t ch : std::wstring(L"qqzzxx")) app.onCharacter(ch);
     if (app.settings_rows_.size() != 2 || !app.settings_rows_[1].locked) return 8155;

@@ -47,24 +47,28 @@ std::vector<uint8_t> artworkForGame(const Game& game, ArtworkKind kind,
 bool consumeArtworkRetryableError();
 uint32_t artworkRateLimitSeconds();
 std::vector<uint8_t> storeScreenshotForSteamApp(uint32_t app_id);
+// Steam artwork: Steam's own library cache on disk first (librarycache/<AppID>), then SteamGridDB
+// (AppID, then the game matched by title), then Steam's CDN / store.
 std::vector<uint8_t> coverForSteamApp(uint32_t app_id, const std::wstring& title,
                                       const std::filesystem::path& cache,
                                       const std::filesystem::path& steam_root);
 std::vector<uint8_t> logoForSteamApp(uint32_t app_id, const std::wstring& title,
-                                     const std::filesystem::path& cache);
+                                     const std::filesystem::path& cache,
+                                     const std::filesystem::path& steam_root);
 std::vector<uint8_t> heroForSteamApp(uint32_t app_id, const std::wstring& title,
-                                     const std::filesystem::path& cache);
+                                     const std::filesystem::path& cache,
+                                     const std::filesystem::path& steam_root);
 // The background to download from a SteamGridDB heroes list (best rated first): the best rated one at
 // least 3000 px wide (its 3840×1240 heroes), else the best rated one. A 1920×620 hero covering a 16:9
 // screen is enlarged ~1.75× and looks soft. Empty when the list has no usable URL.
 std::wstring preferredHeroUrl(std::string_view body);
-// SteamGridDB 600x900 grid (Steam AppID, then the SGDB game matched by title), then
-// Steam's own library_600x900 capsule (local library cache, then CDN).
+// Steam's local library_600x900 capsule, then the SteamGridDB 600x900 grid (Steam AppID, then the
+// SGDB game matched by title), then library_600x900 from Steam's CDN.
 std::vector<uint8_t> posterForSteamApp(uint32_t app_id, const std::wstring& title,
                                        const std::filesystem::path& cache,
                                        const std::filesystem::path& steam_root);
-// SteamGridDB 920x430 / 460x215 grid (AppID, then title), then Steam's header capsule
-// (local library cache, then CDN header / capsule_616x353).
+// Steam's local header capsule, then the SteamGridDB 920x430 / 460x215 grid (AppID, then title),
+// then CDN header / capsule_616x353.
 std::vector<uint8_t> landscapeForSteamApp(uint32_t app_id, const std::wstring& title,
                                           const std::filesystem::path& cache,
                                           const std::filesystem::path& steam_root);

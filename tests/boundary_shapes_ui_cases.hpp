@@ -98,7 +98,7 @@ int LauncherUiTest::boundaryAndShapes(HWND window) {
     const int borders_index = static_cast<int>(borders_row - app.settings_rows_.begin());
     {
         // Efekt szkła (Interfejs → "Tło i szkło", first on its page): a 5% step from 70%, saved; 0% keeps solid panels.
-        if (!app.revealSetting(settings_ui::Id::glass) || !app.settings_state_.at(settings_ui::Page::backdrop) ||
+        if (!revealClassicSetting(app, settings_ui::Id::glass) || !app.settings_state_.at(settings_ui::Page::backdrop) ||
             app.settings_rows_[app.settings_state_.row()].id != settings_ui::Id::glass) return 1426;
         const int glass_index = app.settings_state_.row(); // After the wallpaper's rows in Tryb TV.
         app.settingsActivate(); app.settingsAdjust(-1); app.settingsActivate();

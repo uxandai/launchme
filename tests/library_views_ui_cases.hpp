@@ -1279,7 +1279,7 @@ int LauncherUiTest::categoryRail(HWND window) {
         return found == app.settings_rows_.end() ? -1 : static_cast<int>(found - app.settings_rows_.begin());
     };
     // The default layout's options page (Interfejs → "Opcje układu") starts with it.
-    if (!app.revealSetting(settings_ui::Id::show_categories) || !app.settings_state_.at(settings_ui::Page::layout_options)) return 1601;
+    if (!revealClassicSetting(app, settings_ui::Id::show_categories) || !app.settings_state_.at(settings_ui::Page::layout_options)) return 1601;
     const int option = rowIndex(settings_ui::Id::show_categories);
     if (app.settings_.show_categories || option != 0) return 1601;
     app.settings_state_.enter(static_cast<int>(app.settings_rows_.size()));
@@ -1294,7 +1294,7 @@ int LauncherUiTest::categoryRail(HWND window) {
         app.openSettings();
     }
     app.setHomeLayout(0);
-    if (!app.revealSetting(settings_ui::Id::show_categories) || rowIndex(settings_ui::Id::show_categories) != option) return 1605;
+    if (!revealClassicSetting(app, settings_ui::Id::show_categories) || rowIndex(settings_ui::Id::show_categories) != option) return 1605;
     app.settings_state_.closeAll(); app.settings_state_.options = false; app.back(); settle();
     const auto view = app.renderer_.viewport();
     const auto rail = [&] { return category_rail::Layout{view.width, view.height, app.categories_.size(), app.category_}; };
@@ -1365,7 +1365,7 @@ int LauncherUiTest::categoryRail(HWND window) {
     if (app.private_shelf_ || app.categories_.back().id == "private" || app.category_ != 0) return 1628;
     // Disabling restores the original left drawer.
     app.openSettings(); app.settings_state_.selectCategory(0); app.buildSettingsRows();
-    app.revealSetting(settings_ui::Id::show_categories); app.settingsActivate();
+    revealClassicSetting(app, settings_ui::Id::show_categories); app.settingsActivate();
     app.settings_state_.closeAll(); app.settings_state_.options = false; app.back(); app.focusCard(0); app.navigate(-1);
     if (app.categoryRailActive() || !app.category_menu_open_ || loadAppSettings().show_categories) return 1627;
     return 0;

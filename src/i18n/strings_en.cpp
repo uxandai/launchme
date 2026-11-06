@@ -3144,7 +3144,6 @@ constexpr Entry entries[] = {
     {L"Jak zacząć", L"Getting started"},
     {L"Wygląd trybu TV", L"TV mode look"},
     {L"Układ, tapetę, kafelki, kolory i czcionki ustawisz z podglądem na żywo po przejściu do trybu TV: Ustawienia → Interfejs → Dostosuj wygląd.", L"Set the layout, wallpaper, tiles, colours and fonts with a live preview once you switch to TV mode: Settings → Interface → Customize look."},
-    {L"Przejdź do trybu TV", L"Go to TV mode"},
     {L"Ustawienia → Interfejs → Dostosuj wygląd.", L"Settings → Interface → Customize look."},
     {L"Usuń z ukrytych", L"Remove from hidden"},
     {L"Klasyczna lista każdego ustawienia wyglądu, także domyślne widoki bibliotek w trybie TV.", L"The classic list of every look setting, including the default library views in TV mode."},

@@ -66,7 +66,9 @@ int LauncherUiTest::screenTransitions(HWND window) {
     // Toggle through the actual Settings action and restore from disk. Turning it
     // off also finishes an in-flight animation; turning on takes effect next entry.
     app.openSettings(); app.paint();
-    app.revealSetting(settings_ui::Id::screen_transitions); // Interfejs → Wszystkie opcje wyglądu.
+    app.settings_state_.selectCategory(static_cast<int>(settings_ui::Category::appearance)); app.buildSettingsRows();
+    app.openSettingsPage(settings_ui::Page::appearance_all); // The classic list (no tile since 0.7.6).
+    app.revealSetting(settings_ui::Id::screen_transitions);
     const auto row = std::find_if(app.settings_rows_.begin(), app.settings_rows_.end(),
         [](const auto& r) { return r.id == settings_ui::Id::screen_transitions; });
     if (row == app.settings_rows_.end() || row->control != settings_ui::Control::toggle || !row->checked) return 5209;

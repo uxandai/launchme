@@ -179,6 +179,29 @@ std::vector<uint8_t> firstStoreScreenshot(uint32_t app_id) {
     return {};
 }
 
+// Steam's own copy of the app's library art (librarycache/<AppID>/<hash>/<name>), the first of `names`
+// found, in their order. Read before SteamGridDB: it is already on disk for owned games, while each
+// SGDB lookup waits for the shared 1.1 s spacing. Never downloads.
+std::vector<uint8_t> localSteamFile(uint32_t app_id, const std::filesystem::path& steam_root,
+                                    std::initializer_list<std::wstring_view> names) {
+    if (steam_root.empty()) return {};
+    std::vector<std::pair<size_t, std::filesystem::path>> found;
+    std::error_code ec;
+    std::filesystem::recursive_directory_iterator folder(steam_root / L"appcache" / L"librarycache" / std::to_wstring(app_id), ec);
+    for (; !ec && folder != std::filesystem::recursive_directory_iterator{}; folder.increment(ec)) {
+        if (folder.depth() > 2) { folder.disable_recursion_pending(); continue; }
+        const auto name = folder->path().filename().wstring();
+        const auto at = std::find(names.begin(), names.end(), std::wstring_view(name));
+        if (at != names.end()) found.emplace_back(static_cast<size_t>(at - names.begin()), folder->path());
+    }
+    std::sort(found.begin(), found.end());
+    for (const auto& [rank, path] : found) {
+        (void)rank;
+        if (auto image = readImage(path, 8 * 1024 * 1024); !image.empty()) return image;
+    }
+    return {};
+}
+
 std::vector<uint8_t> localSteamCover(uint32_t app_id, const std::filesystem::path& steam_root) {
     const auto folder = steam_root / L"appcache" / L"librarycache" / std::to_wstring(app_id);
     std::error_code ec;
@@ -293,8 +316,8 @@ std::vector<uint8_t> artworkForGame(const Game& game, ArtworkKind kind,
     if (steamArtwork(game)) {
         switch (kind) {
         case ArtworkKind::cover: return coverForSteamApp(game.app_id, game.name, cache, steam_root);
-        case ArtworkKind::logo: return logoForSteamApp(game.app_id, game.name, cache);
-        case ArtworkKind::hero: return heroForSteamApp(game.app_id, game.name, cache);
+        case ArtworkKind::logo: return logoForSteamApp(game.app_id, game.name, cache, steam_root);
+        case ArtworkKind::hero: return heroForSteamApp(game.app_id, game.name, cache, steam_root);
         case ArtworkKind::poster: return posterForSteamApp(game.app_id, game.name, cache, steam_root);
         case ArtworkKind::landscape: return landscapeForSteamApp(game.app_id, game.name, cache, steam_root);
         case ArtworkKind::disc: break; // Discs have no Steam variant: the game's own folder below.
@@ -388,11 +411,13 @@ std::vector<uint8_t> coverForSteamApp(uint32_t app_id, const std::wstring& title
     const auto file = cache / (std::to_wstring(app_id) + L".v2.img");
     if (auto bytes = readImage(file); !bytes.empty()) return bytes;
     const auto id = std::to_wstring(app_id);
-    std::vector<uint8_t> image;
-    for (const auto* dimensions : {L"512x512", L"600x900"}) {
-        image = grid(app_id, L"steam", dimensions);
-        if (isImage(image)) break;
-    }
+    // Steam's portrait capsule first; its wide header (460×215) is a poorer cover than SGDB's grids.
+    auto image = localSteamFile(app_id, steam_root, {L"library_600x900.jpg", L"library_capsule.jpg"});
+    if (!isImage(image))
+        for (const auto* dimensions : {L"512x512", L"600x900"}) {
+            image = grid(app_id, L"steam", dimensions);
+            if (isImage(image)) break;
+        }
     if (!isImage(image)) {
         // SteamGridDB game IDs are separate from Steam AppIDs; new entries may
         // have artwork but no Steam mapping yet. Match the actual manifest name.
@@ -412,18 +437,20 @@ std::vector<uint8_t> coverForSteamApp(uint32_t app_id, const std::wstring& title
     if (!isImage(image))
         image = get(L"https://cdn.cloudflare.steamstatic.com/steam/apps/" + id + L"/header.jpg",
                     false, 4 * 1024 * 1024);
-    if (!isImage(image)) image = heroForSteamApp(app_id, title, cache);
+    if (!isImage(image)) image = heroForSteamApp(app_id, title, cache, steam_root);
     if (!isImage(image)) return {};
     if (!atomicBytes(file, image.data(), image.size())) { retryable_artwork_error = true; return {}; }
     return image;
 }
 
 std::vector<uint8_t> logoForSteamApp(uint32_t app_id, const std::wstring& title,
-                                     const std::filesystem::path& cache) {
+                                     const std::filesystem::path& cache,
+                                     const std::filesystem::path& steam_root) {
     const auto logos = cache.parent_path() / L"logos";
     const auto file = logos / (std::to_wstring(app_id) + L".v2.img");
     if (auto bytes = readImage(file); !bytes.empty()) return bytes;
-    auto image = asset(app_id, L"steam", L"logos");
+    auto image = localSteamFile(app_id, steam_root, {L"logo.png"});
+    if (!isImage(image)) image = asset(app_id, L"steam", L"logos");
     if (!isImage(image)) {
         const auto game_id = gameIdForTitle(app_id, title, cache);
         if (game_id) image = asset(game_id, L"game", L"logos");
@@ -434,12 +461,15 @@ std::vector<uint8_t> logoForSteamApp(uint32_t app_id, const std::wstring& title,
 }
 
 std::vector<uint8_t> heroForSteamApp(uint32_t app_id, const std::wstring& title,
-                                     const std::filesystem::path& cache) {
+                                     const std::filesystem::path& cache,
+                                     const std::filesystem::path& steam_root) {
     const auto heroes = cache.parent_path() / L"heroes";
     const auto file = heroes / (std::to_wstring(app_id) + L".v2.hd.img");
     if (auto bytes = readImage(file); !bytes.empty()) return bytes;
-    // Full resolution (preferably 3840 px): the decoder keeps what covers the screen.
-    auto image = heroAsset(app_id, L"steam");
+    // Steam's library hero (1920×620) is already on disk; otherwise SGDB at full resolution
+    // (preferably 3840 px): the decoder keeps what covers the screen.
+    auto image = localSteamFile(app_id, steam_root, {L"library_hero.jpg"});
+    if (!isImage(image)) image = heroAsset(app_id, L"steam");
     if (!isImage(image)) {
         const auto game_id = gameIdForTitle(app_id, title, cache);
         if (game_id) image = heroAsset(game_id, L"game");
@@ -455,21 +485,12 @@ std::vector<uint8_t> posterForSteamApp(uint32_t app_id, const std::wstring& titl
                                        const std::filesystem::path& steam_root) {
     const auto file = cache.parent_path() / L"posters" / (std::to_wstring(app_id) + L".v2.img");
     if (auto bytes = readImage(file); !bytes.empty()) return bytes;
-    auto image = grid(app_id, L"steam", L"600x900");
+    // Steam keeps the official vertical capsule of most owned games locally.
+    auto image = localSteamFile(app_id, steam_root, {L"library_600x900.jpg", L"library_capsule.jpg"});
+    if (!isImage(image)) image = grid(app_id, L"steam", L"600x900");
     if (!isImage(image)) {
         const auto game_id = gameIdForTitle(app_id, title, cache);
         if (game_id) image = grid(game_id, L"game", L"600x900");
-    }
-    if (!isImage(image) && !steam_root.empty()) {
-        // Steam keeps the official vertical capsule of most owned games locally.
-        std::error_code ec;
-        std::filesystem::recursive_directory_iterator folder(steam_root / L"appcache" / L"librarycache" / std::to_wstring(app_id), ec);
-        for (; !ec && folder != std::filesystem::recursive_directory_iterator{}; folder.increment(ec)) {
-            if (folder.depth() > 2) { folder.disable_recursion_pending(); continue; }
-            if (folder->path().filename() != L"library_600x900.jpg") continue;
-            image = readImage(folder->path(), 8 * 1024 * 1024);
-            if (!image.empty()) break;
-        }
     }
     if (!isImage(image))
         image = get(L"https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/" + std::to_wstring(app_id) +
@@ -484,28 +505,18 @@ std::vector<uint8_t> landscapeForSteamApp(uint32_t app_id, const std::wstring& t
                                           const std::filesystem::path& steam_root) {
     const auto file = cache.parent_path() / L"landscapes" / (std::to_wstring(app_id) + L".v2.img");
     if (auto bytes = readImage(file); !bytes.empty()) return bytes;
-    std::vector<uint8_t> image;
-    for (const auto* dimensions : {L"920x430", L"460x215"}) {
-        image = grid(app_id, L"steam", dimensions);
-        if (isImage(image)) break;
-    }
+    // Steam keeps the store header capsule of owned games in its library cache.
+    auto image = localSteamFile(app_id, steam_root, {L"header.jpg", L"library_header.jpg"});
+    if (!isImage(image))
+        for (const auto* dimensions : {L"920x430", L"460x215"}) {
+            image = grid(app_id, L"steam", dimensions);
+            if (isImage(image)) break;
+        }
     if (!isImage(image)) {
         const auto game_id = gameIdForTitle(app_id, title, cache);
         if (game_id) for (const auto* dimensions : {L"920x430", L"460x215"}) {
             image = grid(game_id, L"game", dimensions);
             if (isImage(image)) break;
-        }
-    }
-    if (!isImage(image) && !steam_root.empty()) {
-        // Steam keeps the store header capsule of owned games in its library cache.
-        std::error_code ec;
-        std::filesystem::recursive_directory_iterator folder(steam_root / L"appcache" / L"librarycache" / std::to_wstring(app_id), ec);
-        for (; !ec && folder != std::filesystem::recursive_directory_iterator{}; folder.increment(ec)) {
-            if (folder.depth() > 2) { folder.disable_recursion_pending(); continue; }
-            const auto name = folder->path().filename().wstring();
-            if (name != L"header.jpg" && name != L"library_header.jpg") continue;
-            image = readImage(folder->path(), 8 * 1024 * 1024);
-            if (!image.empty()) break;
         }
     }
     if (!isImage(image))

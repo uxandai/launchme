@@ -70,6 +70,27 @@ std::vector<uint8_t> pixel() {
 
 class LauncherUiTest {
 public:
+    // Interfejs's classic list ("Wszystkie opcje wyglądu") has had no tile since 0.7.6 (Dostosuj wygląd has its
+    // options), so revealSetting cannot reach it: open it, then the page behind one of its tiles, and focus the row.
+    static bool revealClassicSetting(Launcher& app, settings_ui::Id id) {
+        const auto here = [&] {
+            return std::any_of(app.settings_rows_.begin(), app.settings_rows_.end(), [&](const auto& row) { return row.id == id; });
+        };
+        app.settings_state_.selectCategory(static_cast<int>(settings_ui::Category::appearance));
+        app.settings_state_.closeAll(); app.buildSettingsRows();
+        app.openSettingsPage(settings_ui::Page::appearance_all);
+        if (here()) return app.revealSetting(id);
+        std::vector<std::pair<int, settings_ui::Page>> tiles;
+        for (int i = 0; i < static_cast<int>(app.settings_rows_.size()); ++i)
+            if (app.settings_rows_[static_cast<size_t>(i)].control == settings_ui::Control::page) tiles.push_back({i, app.settings_rows_[static_cast<size_t>(i)].page});
+        for (const auto& [index, page] : tiles) {
+            app.settings_state_.selected[app.settings_state_.category] = index;
+            app.openSettingsPage(page);
+            if (here()) return app.revealSetting(id);
+            app.closeSettingsPage();
+        }
+        return false;
+    }
     static bool waitPlugins(Launcher& app) {
         const auto end = GetTickCount64() + 5000;
         do {
@@ -504,7 +525,9 @@ public:
         app.openSettings();
         if (!capture(L"settings-native-appearance.png")) return 90;
         app.settingsActivate(); // Enter right pane, not change a value.
-        app.revealSetting(settings_ui::Id::font); // Interfejs → Wszystkie opcje wyglądu.
+        // The classic list has no tile on Interfejs since 0.7.6 (Dostosuj wygląd has these options).
+        app.openSettingsPage(settings_ui::Page::appearance_all);
+        app.revealSetting(settings_ui::Id::font);
         // Czcionka belongs to the "Wygląd" section of Interfejs, opened by the interface accent.
         const auto font_row = std::find_if(app.settings_rows_.begin(), app.settings_rows_.end(),
                                            [](const auto& row) { return row.id == settings_ui::Id::font; });
@@ -1555,9 +1578,19 @@ int LauncherUiTest::xmb(HWND window) {
         const auto found = std::find_if(app.settings_rows_.begin(), app.settings_rows_.end(), [&](const auto& row) { return row.id == id; });
         return found == app.settings_rows_.end() ? -1 : static_cast<int>(found - app.settings_rows_.begin());
     };
-    // XMB's own options: the layout's tile opens their page.
-    if (rowIndex(settings_ui::Id::xmb_posters) >= 0 || !app.revealSetting(settings_ui::Id::xmb_posters) ||
-        !app.settings_state_.at(settings_ui::Page::layout_options)) return 219;
+    // XMB's own options: the layout's tile on the classic list (no tile on Interfejs since 0.7.6) opens their page.
+    if (rowIndex(settings_ui::Id::xmb_posters) >= 0) return 219;
+    app.openSettingsPage(settings_ui::Page::appearance_all);
+    {
+        const auto tile = std::find_if(app.settings_rows_.begin(), app.settings_rows_.end(), [](const auto& row) {
+            return row.control == settings_ui::Control::page && row.page == settings_ui::Page::layout_options;
+        });
+        if (rowIndex(settings_ui::Id::xmb_posters) >= 0 || tile == app.settings_rows_.end()) return 219;
+        app.settings_state_.options = true;
+        app.settings_state_.selected[app.settings_state_.category] = static_cast<int>(tile - app.settings_rows_.begin());
+        app.settingsActivate();
+        if (!app.settings_state_.at(settings_ui::Page::layout_options)) return 219;
+    }
     const int posters_row = rowIndex(settings_ui::Id::xmb_posters), size_row = rowIndex(settings_ui::Id::xmb_size);
     if (posters_row != 0 || size_row != posters_row + 1 ||
         app.settings_.xmb_posters || app.settings_.xmb_size != AppSettings::XmbSize::normal) return 219;
@@ -1627,7 +1660,12 @@ int LauncherUiTest::xmb(HWND window) {
     }
     // Flix: its own size row with two stops (default, large), for keys and the mouse alike.
     {
-        if (!app.revealSetting(settings_ui::Id::flix_size)) return 235;
+        const int tile = rowIndex(settings_ui::Id::page); // Opcje układu, under the layout on the classic list.
+        if (tile < 0) return 235;
+        app.settings_state_.options = true;
+        app.settings_state_.selected[app.settings_state_.category] = tile;
+        app.settingsActivate();
+        if (!app.settings_state_.at(settings_ui::Page::layout_options) || !app.revealSetting(settings_ui::Id::flix_size)) return 235;
         const int flix_row = rowIndex(settings_ui::Id::flix_size);
         if (flix_row != 0 || app.settings_.flix_size != AppSettings::FlixSize::normal ||
             app.settings_rows_[flix_row].level != 0) return 235;
@@ -2013,7 +2051,8 @@ int LauncherUiTest::language(HWND window) {
     app.back();
     app.settings_state_.selectCategory(static_cast<int>(settings_ui::Category::appearance));
     app.buildSettingsRows();
-    app.revealSetting(settings_ui::Id::font); // Interfejs → Wszystkie opcje wyglądu.
+    app.openSettingsPage(settings_ui::Page::appearance_all); // The classic list (no tile since 0.7.6).
+    app.revealSetting(settings_ui::Id::font);
     {
         const auto* font_row = english_row(settings_ui::Id::font);
         if (!font_row || font_row->title != L"Font" || app.settings_rows_[0].section != L"TV mode") return 504;

@@ -136,7 +136,7 @@ int LauncherUiTest::screensaver(HWND window) {
     app.openSettings();
     app.settings_state_.selectCategory(static_cast<int>(settings_ui::Category::appearance));
     app.buildSettingsRows();
-    if (!app.revealSetting(settings_ui::Id::opacity) || !app.settings_state_.at(settings_ui::Page::backdrop)) return 805; // Interfejs → "Tło i szkło".
+    if (!revealClassicSetting(app, settings_ui::Id::opacity) || !app.settings_state_.at(settings_ui::Page::backdrop)) return 805; // Wszystkie opcje wyglądu → "Tło i szkło".
     const auto slider = std::find_if(app.settings_rows_.begin(), app.settings_rows_.end(), [](const auto& row) { return row.id == settings_ui::Id::opacity; });
     if (slider == app.settings_rows_.end() || std::none_of(app.settings_rows_.begin(), app.settings_rows_.end(),
             [](const auto& row) { return row.id == settings_ui::Id::fade; }) || app.settings_rows_.size() < 2 ||
