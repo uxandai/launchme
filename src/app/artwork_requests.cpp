@@ -67,7 +67,7 @@ void Launcher::onCover(std::unique_ptr<CoverMessage> cover) {
     }
     if (cover->kind == CoverMessage::Kind::disc) {
         auto& asset = art_.at(cover->key); asset.disc = shareImage(std::move(cover->bytes)); art_.resize(cover->key);
-        if (libraryCoverflow()) for (size_t i = selected_; i < std::min(cards_.size(), selected_ + 2); ++i)
+        if (discArt()) for (size_t i = selected_; i < std::min(cards_.size(), selected_ + 2); ++i)
             if (gameKey(cards_[i].game) == cover->key) renderer_.setDisc(i, asset.disc);
         trimArt(); InvalidateRect(hwnd_, nullptr, FALSE); return;
     }
@@ -303,7 +303,7 @@ void Launcher::retryGameArtwork(const Game& game, bool notify) {
         std::find(kinds.begin(), kinds.end(), CoverMessage::Kind::landscape) == kinds.end()) kinds.push_back(CoverMessage::Kind::landscape);
     if ((libraryLandscape() || libraryGridLandscape()) && std::find(kinds.begin(), kinds.end(), CoverMessage::Kind::landscape) == kinds.end()) kinds.push_back(CoverMessage::Kind::landscape);
     if (library_view::posterArt(libraryPresentation()) && std::find(kinds.begin(), kinds.end(), CoverMessage::Kind::poster) == kinds.end()) kinds.push_back(CoverMessage::Kind::poster);
-    if (libraryCoverflow()) kinds.push_back(CoverMessage::Kind::disc);
+    if (discArt()) kinds.push_back(CoverMessage::Kind::disc);
     for (const auto kind : kinds) if (!artwork_failure::retry(failures, artRequestKey(game, kind), time)) {
         showNotification(NotificationKind::error, tr(L"Nie można wyczyścić stanu pobierania"), L""); return;
     }
@@ -431,10 +431,10 @@ void Launcher::requestVisibleArt() {
         std::lock_guard lock(jobs_->mutex);
         jobs_->focus = gameKey(cards_[selected_].game);
         // A look-ahead is bounded to the current game and +1; rapid navigation discards stale queued work.
-        const auto next = libraryCoverflow() && selected_ + 1 < cards_.size() ? gameKey(cards_[selected_ + 1].game) : std::string{};
+        const auto next = discArt() && selected_ + 1 < cards_.size() ? gameKey(cards_[selected_ + 1].game) : std::string{};
         for (auto* queue : {&jobs_->jobs, &jobs_->secondary, &jobs_->prefetch})
             std::erase_if(*queue, [&](const Job& job) {
-                if (job.kind != CoverMessage::Kind::disc || (libraryCoverflow() && (gameKey(job.game) == jobs_->focus || gameKey(job.game) == next))) return false;
+                if (job.kind != CoverMessage::Kind::disc || (discArt() && (gameKey(job.game) == jobs_->focus || gameKey(job.game) == next))) return false;
                 jobs_->requested.erase(job.key); return true;
             });
         if (libraryLandscape()) {
@@ -533,7 +533,7 @@ void Launcher::requestVisibleArt() {
     cover(selected_); // Promote current focus after enqueueing surrounding cards.
     if (settings_.low_memory) releaseFarHeroes();
     for (size_t i = 0; i < cards_.size(); ++i)
-        if (!libraryCoverflow() || ((i < selected_ || i > selected_ + 1) && cards_[i].disc < 0.003f)) renderer_.releaseDisc(i);
+        if (!discArt() || ((i < selected_ || i > selected_ + 1) && cards_[i].disc < 0.003f)) renderer_.releaseDisc(i);
     if (libraryCoverflow()) for (size_t i = selected_; i < std::min(cards_.size(), selected_ + 2); ++i) {
         if (const auto* art = art_.find(gameKey(cards_[i].game)); art && art->disc) renderer_.setDisc(i, art->disc);
         else requestArt(cards_[i].game, CoverMessage::Kind::disc, false,

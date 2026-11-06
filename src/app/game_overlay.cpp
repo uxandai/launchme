@@ -11,6 +11,18 @@ bool windowMatches(const GameWindow& target) {
     return IsWindow(target.window) && GetWindowThreadProcessId(target.window, &pid) && pid == target.process.pid &&
         process_freeze::alive({target.process});
 }
+// The keyboard shortcut of the in-game overlay (Settings → Kontrolery): modifiers and key, or none.
+bool overlayChord(AppSettings::OverlayKey key, UINT& modifiers, UINT& vk) {
+    using Key = AppSettings::OverlayKey;
+    switch (key) {
+    case Key::shift_tab: modifiers = MOD_SHIFT; vk = VK_TAB; return true;
+    case Key::ctrl_tab: modifiers = MOD_CONTROL; vk = VK_TAB; return true;
+    case Key::shift_f1: modifiers = MOD_SHIFT; vk = VK_F1; return true;
+    case Key::ctrl_shift_o: modifiers = MOD_CONTROL | MOD_SHIFT; vk = 'O'; return true;
+    case Key::none: break;
+    }
+    return false;
+}
 RECT monitorRect(HWND window) {
     MONITORINFO monitor{sizeof(monitor)};
     GetMonitorInfoW(MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST), &monitor);
@@ -42,6 +54,8 @@ void Launcher::configureGameOverlay() {
     if (game_overlay_) game_overlay_->appearance(settings_);
     dashboard_tile_ = std::min(dashboard_tile_, dashboardTileCount() - 1);
     next_overlay_poll_ = 0;
+    // A changed shortcut registers again from scratch.
+    if (guide_hotkey_active_) { UnregisterHotKey(hwnd_, guide_hotkey); guide_hotkey_active_ = false; }
     next_guide_hotkey_retry_ = 0;
     updateGuideHotkey();
 }
@@ -55,14 +69,15 @@ bool Launcher::guideHotkeyWanted() const {
 }
 
 void Launcher::updateGuideHotkey() {
-    // Shift+Tab is ordinary backwards navigation outside a game. Do not reserve
-    // it on the desktop, in other applications, or in Launchme's own settings.
-    const bool wanted = runtime_started_ && guideHotkeyWanted();
+    // The shortcut (Shift+Tab by default) is ordinary input outside a game. Do not
+    // reserve it on the desktop, in other applications, or in Launchme's own settings.
+    UINT modifiers = 0, vk = 0;
+    const bool wanted = runtime_started_ && overlayChord(settings_.overlay_key, modifiers, vk) && guideHotkeyWanted();
     if (!wanted) {
         if (guide_hotkey_active_) UnregisterHotKey(hwnd_, guide_hotkey);
         guide_hotkey_active_ = false; next_guide_hotkey_retry_ = 0;
     } else if (!guide_hotkey_active_ && GetTickCount64() >= next_guide_hotkey_retry_) {
-        guide_hotkey_active_ = RegisterHotKey(hwnd_, guide_hotkey, MOD_SHIFT | MOD_NOREPEAT, VK_TAB) != FALSE;
+        guide_hotkey_active_ = RegisterHotKey(hwnd_, guide_hotkey, modifiers | MOD_NOREPEAT, vk) != FALSE;
         next_guide_hotkey_retry_ = GetTickCount64() + 1000;
     }
 }
@@ -73,8 +88,16 @@ void Launcher::guideKeyboardHotkey() {
     else toggleGameOverlay();
 }
 
-void Launcher::overlayKeyboard(WPARAM key, bool repeated, bool shift_tab) {
-    if (key == VK_TAB && shift_tab) {
+bool Launcher::overlayChordModifiers() const {
+    UINT modifiers = 0, vk = 0;
+    if (!overlayChord(settings_.overlay_key, modifiers, vk)) return false;
+    const auto held = [](int key) { return (GetKeyState(key) & 0x8000) != 0; };
+    return held(VK_SHIFT) == ((modifiers & MOD_SHIFT) != 0) && held(VK_CONTROL) == ((modifiers & MOD_CONTROL) != 0) && !held(VK_MENU);
+}
+
+void Launcher::overlayKeyboard(WPARAM key, bool repeated, bool chord) {
+    UINT modifiers = 0, vk = 0;
+    if (chord && overlayChord(settings_.overlay_key, modifiers, vk) && key == vk) {
         // Registered chords are handled once by WM_HOTKEY on the main HWND.
         // If registration was unavailable, the focused overlay can still close.
         if (!repeated && !guide_hotkey_active_) guideKeyboardHotkey();
@@ -428,8 +451,7 @@ LRESULT Launcher::overlayMessage(HWND window, UINT message, WPARAM wparam, LPARA
             if (!(lparam & (1LL << 30))) dashboardPress(1, true, GetTickCount64());
             return 0;
         }
-        overlayKeyboard(wparam, (lparam & (1LL << 30)) != 0,
-            (GetKeyState(VK_SHIFT) & 0x8000) && !(GetKeyState(VK_CONTROL) & 0x8000) && !(GetKeyState(VK_MENU) & 0x8000));
+        overlayKeyboard(wparam, (lparam & (1LL << 30)) != 0, overlayChordModifiers());
         return 0;
     case WM_CHAR:
         if (friendChatOpen()) friendChatCharacter(static_cast<wchar_t>(wparam));

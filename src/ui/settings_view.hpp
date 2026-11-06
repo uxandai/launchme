@@ -21,7 +21,7 @@ enum class Category { appearance, library, media, audio, controllers, plugins, c
 // Linux: Zgodność (compat) after Biblioteka: Proton and Wine, their prefixes and Windows games' options.
 enum class Category { appearance, library, compat, media, audio, controllers, plugins, companion, system };
 #endif
-enum class Id { font, home_layout, ui_accent, accent, uninstalled, emulation, collection, music, music_theme, ui_sound, toast_sound, boot_sound, opacity, fade, pc_platform, gog_callback, gog_refresh, gog_logout, quick_resume, guide_menu, guide_overlay, game_fps, game_fps_low, language, custom_add, custom_game,
+enum class Id { font, home_layout, ui_accent, accent, uninstalled, emulation, collection, music, music_theme, ui_sound, toast_sound, boot_sound, opacity, fade, pc_platform, gog_callback, gog_refresh, gog_logout, quick_resume, guide_menu, guide_overlay, overlay_key, overlay_pad, game_fps, game_fps_low, language, custom_add, custom_game,
                 screensaver, screensaver_style, screensaver_minutes, screensaver_start, steam_key, sgdb_key, epic_callback, epic_refresh, epic_logout, tile_shape, rawg_key, show_categories, xmb_posters, xmb_size,
                 ea_callback, ea_refresh, ea_remove, battlenet_import, battlenet_callback, battlenet_remove, steam_controller, focus_spring, flix_size,
                 plugin_install, plugin_enabled, plugin_setting, plugin_remove, pc_connect, pc_client, pc_refresh, pc_excluded, steam_sync,
@@ -249,6 +249,9 @@ inline constexpr std::array<const wchar_t*, 3> tile_entrances{trKey(L"Powiększa
 inline constexpr std::array<const wchar_t*, 3> focus_gaps{trKey(L"Brak"), trKey(L"Obrys odsunięty na zewnątrz"), trKey(L"Grafika odsunięta do środka")};
 // Indexed like AppSettings::SearchArt.
 inline constexpr std::array<const wchar_t*, 3> search_arts{trKey(L"Kwadratowe okładki"), trKey(L"Pionowe plakaty"), trKey(L"Poziome kafle")};
+// Indexed like AppSettings::OverlayKey and AppSettings::OverlayPad.
+inline constexpr std::array<const wchar_t*, 5> overlay_keys{L"Shift+Tab", L"Ctrl+Tab", L"Shift+F1", L"Ctrl+Shift+O", trKey(L"Wyłączony")};
+inline constexpr std::array<const wchar_t*, 3> overlay_pads{L"Guide / PS", L"View + Menu", L"L3 + R3"};
 // Indexed like AppSettings::HomeTiles.
 inline constexpr std::array<const wchar_t*, 3> home_tile_places{trKey(L"Jak w układzie"), trKey(L"Na początku rzędu"), trKey(L"Na końcu rzędu")};
 struct Choice { std::wstring label; uint32_t color = 0; bool custom = false; std::wstring key; };

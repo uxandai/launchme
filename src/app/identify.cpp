@@ -17,7 +17,10 @@ void Launcher::openIdentify() {
 bool Launcher::unidentifiedGame(const Game& game) const {
     if (!isGame(game) || steamArtwork(game) || game.kind == GameKind::catalog) return false;
     const auto key = gameKey(game);
-    return !key.empty() && !rawg_metadata_.contains(key) && !emulation_metadata_.contains(key);
+    if (key.empty() || rawg_metadata_.contains(key) || emulation_metadata_.contains(key)) return false;
+    // A store's description taken by "Zidentyfikuj" (the eShop for a Nintendo game) is its identification too.
+    const auto* own = metadataOverride(game);
+    return !own || own->description.empty();
 }
 void Launcher::openIdentifyFor(const Game& game) {
     if (!isGame(game) || steamArtwork(game) || gameKey(game).empty()) return;
@@ -119,19 +122,7 @@ void Launcher::identifySearch() {
                 }
             }
         };
-        // Wszyscy dostawcy: ScreenScraper first for an emulated game (its search knows the console) when it is set up.
-        const bool store_only = identify_ui::storeSource(mode); // One store: its text details only.
-        if (!store_only && (mode == Source::screenscraper || (mode == Source::all && emulated && ss::load().ready()))) {
-            searchScreenscraper();
-            message->screenscraper = !message->search.games.empty();
-        }
-        if (!store_only && !message->screenscraper && mode != Source::screenscraper) {
-            message->search = rawg::search(query, userSecret(L"RAWG_API_KEY", L"rawg_api_key.txt"));
-            message->found.clear();
-        }
-        // Wszyscy dostawcy: also the stores' descriptions (Nintendo eShop, Steam, GOG, Microsoft Store, TitleDB), below the
-        // databases' games; on its own (nobody chooses) only when no database knows the game.
-        if (store_only || (mode == Source::all && (!automatic || message->search.games.empty()))) {
+        const auto lookupOf = [&] {
             metadata_sources::Query lookup;
             lookup.title = query; lookup.polish = i18n::language() == i18n::Language::pl;
             const bool own_title = query == game.name; // The game's own ids only for its own title.
@@ -145,9 +136,42 @@ void Launcher::identifySearch() {
                 if (game.source == GameSource::gog) lookup.gog_id = game.source_id;
                 lookup.xbox_product = game.xbox_product;
             }
+            return lookup;
+        };
+        // Wszyscy dostawcy, a Nintendo console's game: Nintendo's own eShop first; a sure match (its title ID,
+        // or the very title) is the answer at once, without waiting for the databases.
+        const bool nintendo = game.platform == L"Switch" || game.platform == L"Switch 2" || game.platform == L"Wii U" || game.platform == L"3DS" ||
+                              game.platform == L"Nintendo 3DS";
+        if (mode == Source::all && nintendo) {
+            auto shop = metadata_sources::find(metadata_sources::Source::nintendo, lookupOf());
+            for (auto& offer : shop.offers)
+                if (offer.score > 0 && !offer.details.description.empty()) message->texts.push_back(std::move(offer));
+            message->texts_first = !message->texts.empty();
+            if (automatic && !message->texts.empty() && message->texts.front().score >= 930) {
+                message->texts.resize(1);
+                if (alive->load() && token->load() == generation && PostMessageW(hwnd, identify_message, 0, reinterpret_cast<LPARAM>(message.get()))) message.release();
+                return;
+            }
+        }
+        if (!alive->load() || token->load() != generation) return;
+        // Wszyscy dostawcy: ScreenScraper first for an emulated game (its search knows the console) when it is set up.
+        const bool store_only = identify_ui::storeSource(mode); // One store: its text details only.
+        if (!store_only && (mode == Source::screenscraper || (mode == Source::all && emulated && ss::load().ready()))) {
+            searchScreenscraper();
+            message->screenscraper = !message->search.games.empty();
+        }
+        if (!store_only && !message->screenscraper && mode != Source::screenscraper) {
+            message->search = rawg::search(query, userSecret(L"RAWG_API_KEY", L"rawg_api_key.txt"));
+            message->found.clear();
+        }
+        // Wszyscy dostawcy: also the stores' descriptions (Nintendo eShop, Steam, GOG, Microsoft Store, TitleDB), below the
+        // databases' games; on its own (nobody chooses) only when no database knows the game.
+        if (store_only || (mode == Source::all && (!automatic || message->search.games.empty() || message->texts_first))) {
+            const auto lookup = lookupOf();
             for (const auto source : metadata_sources::all) {
                 if (!alive->load() || token->load() != generation) break;
                 if (store_only && source != identify_ui::storeOf(mode)) continue;
+                if (source == metadata_sources::Source::nintendo && mode == Source::all && nintendo) continue; // Asked first, above.
                 if (!metadata_sources::applicable(source, lookup)) continue;
                 for (auto& offer : metadata_sources::find(source, lookup).offers)
                     if (offer.score > 0 && !offer.details.description.empty()) message->texts.push_back(std::move(offer));
@@ -173,10 +197,11 @@ void Launcher::identifyAccept() {
     state.busy = state.applying = true; state.status = tr(L"Pobieranie metadanych i brakujących grafik…");
     const auto token = identify_token_; const auto generation = ++*token;
     const auto alive = alive_; const auto hwnd = hwnd_;
-    if (state.resolved == identify_ui::State::Source::screenscraper && static_cast<size_t>(state.selected) < state.found.size()) {
+    const auto row = static_cast<size_t>(state.selected);
+    if (state.resolved == identify_ui::State::Source::screenscraper && row >= state.found_offset && row - state.found_offset < state.found.size()) {
         // ScreenScraper: the chosen game becomes this ROM's identification (it wins over ES-DE's match),
         // replacing a RAWG one; automatic artwork found by the old title goes.
-        const auto picked = state.found[static_cast<size_t>(state.selected)];
+        const auto picked = state.found[row - state.found_offset];
         if (runtime_started_) work_.start([token, generation, alive, hwnd, game, picked] {
             namespace ss = screenscraper;
             auto message = std::make_unique<IdentifyMessage>(); message->generation = generation; message->identified = true;
@@ -232,15 +257,23 @@ void Launcher::onIdentify(std::unique_ptr<IdentifyMessage> message) {
     if (!state.open || message->generation != identify_token_->load()) return;
     state.busy = state.applying = false;
     if (!message->identified) {
-        state.games = std::move(message->search.games); state.status = std::move(message->search.error); state.selected = 0;
+        state.status = std::move(message->search.error); state.selected = 0;
         state.found = std::move(message->found);
-        state.offers.assign(state.games.size(), std::nullopt);
-        for (auto& offer : message->texts) {
-            std::wstring subtitle = metadata_sources::name(offer.source);
-            if (!offer.note.empty()) subtitle += L" · " + offer.note;
-            state.games.push_back({0, offer.title, offer.details.release_date, std::move(subtitle)});
-            state.offers.push_back(std::move(offer));
-        }
+        state.games.clear(); state.offers.clear();
+        const auto addTexts = [&] {
+            for (auto& offer : message->texts) {
+                std::wstring subtitle = metadata_sources::name(offer.source);
+                if (!offer.note.empty()) subtitle += L" · " + offer.note;
+                state.games.push_back({0, offer.title, offer.details.release_date, std::move(subtitle)});
+                state.offers.push_back(std::move(offer));
+            }
+        };
+        // A Nintendo game: the eShop's rows lead (the automatic lookup takes the first row).
+        if (message->texts_first) addTexts();
+        const size_t database_row = state.games.size();
+        for (auto& row : message->search.games) { state.games.push_back(std::move(row)); state.offers.push_back(std::nullopt); }
+        if (!message->texts_first) addTexts();
+        state.found_offset = database_row;
         state.resolved = message->screenscraper ? identify_ui::State::Source::screenscraper : identify_ui::State::Source::rawg;
         state.provider = message->screenscraper ? L"ScreenScraper" : L"RAWG";
         if (!state.manual && !state.games.empty()) { // The best match, taken: no click.

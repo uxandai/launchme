@@ -78,6 +78,7 @@ set(LAUNCHME_APP_SOURCES
     src/app/downloads.cpp
     src/app/glance.cpp
     src/app/tarot.cpp
+    src/app/game_case.cpp
     src/app/profile.cpp
     src/app/studio_libraries.cpp
     src/app/companion.cpp
@@ -264,6 +265,9 @@ set(LAUNCHME_APP_SOURCES
     src/ui/library_renderer.cpp
     src/ui/coverflow_renderer.cpp
     src/ui/shelf_renderer.cpp
+    src/ui/game_case_renderer.cpp
+    src/ui/game_media_renderer.cpp
+    src/ui/package_renderer.cpp
     src/ui/xmb_renderer.cpp
     src/ui/flix_renderer.cpp
     src/ui/metro_renderer.cpp

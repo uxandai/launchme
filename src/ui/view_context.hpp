@@ -33,6 +33,7 @@
 #include "downloads_view.hpp"
 #include "glance_view.hpp"
 #include "tarot_view.hpp"
+#include "game_case_view.hpp"
 #include "profile_view.hpp"
 #include "update_view.hpp"
 #include "aurelia_view.hpp"
@@ -305,6 +306,11 @@ struct ViewContext {
     float scroll_letter_alpha = 0;
     const gog_install_ui::State* gog_install = nullptr;
     const tarot_ui::State* tarot = nullptr; // Tarot's reading, while open or fading out.
+    // Półka's open case (game_case_view.hpp), while open or closing: the focused card's game.
+    const game_case_ui::State* game_case = nullptr;
+    game_case::Kind game_case_kind;
+    std::wstring game_case_action; // Graj / Zainstaluj / …
+    bool game_case_action_enabled = true;
     const profile_ui::State* profile = nullptr; // Profil, while open or fading out.
     aurelia_ui::State* aurelia = nullptr; // The renderer records its measured note and visible rows.
     bool theme_scene = false; // The home screen is drawn into the studio's preview (not the desktop window).

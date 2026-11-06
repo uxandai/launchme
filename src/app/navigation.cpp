@@ -211,6 +211,7 @@ void Launcher::back() {
     case Modal::gog_install: gogInstallKey(VK_ESCAPE, false); return;
     case Modal::tarot: closeTarot(); return;
     case Modal::profile: closeProfile(); return;
+    case Modal::game_case: closeGameCase(); return;
     case Modal::whats_new: closeWhatsNew(); return;
     default: break;
     }
@@ -346,7 +347,7 @@ void Launcher::onCharacter(wchar_t character) {
     case Modal::metadata: desktopMetaChar(character); return;
     case Modal::identify: identifyEdit(character); return;
     case Modal::theme_studio: themeStudioChar(character); return;
-    case Modal::gog_install: case Modal::companion_picker: case Modal::tarot: case Modal::whats_new: case Modal::profile: return;
+    case Modal::gog_install: case Modal::companion_picker: case Modal::tarot: case Modal::whats_new: case Modal::profile: case Modal::game_case: return;
     default: break; // No dialog, or one without a text field (Pobierz brakujące okładki).
     }
     if (friendChatOpen() && topDialog() == Modal::none) { friendChatCharacter(character); return; } // The drawer's conversation.

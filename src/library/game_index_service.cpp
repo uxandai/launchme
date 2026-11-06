@@ -2,6 +2,8 @@
 #include "../platform/file_io.hpp"
 #include "../platform/unix_time.hpp"
 #include "steam_tags_builtin.hpp"
+#include "metadata_sources.hpp"
+#include "../artwork/steamgriddb_search.hpp"
 #include "../net/json.hpp"
 #include "../net/url_encoding.hpp"
 #include "../platform/atomic_file.hpp"
@@ -25,6 +27,10 @@ uint64_t modifiedSeconds(const std::filesystem::path& file) {
 }
 uint64_t systemNow() {
     return unix_time::now();
+}
+// Consoles whose games the Nintendo eShop (Europe) knows: asked before RAWG.
+bool nintendoShop(std::wstring_view platform) {
+    return platform == L"Switch" || platform == L"Switch 2" || platform == L"Wii U" || platform == L"3DS" || platform == L"Nintendo 3DS";
 }
 }
 
@@ -229,7 +235,7 @@ bool Service::fillStep() {
         }
     }
     // The next game with a gap: installed and recently played first.
-    enum class Kind { steam_store, gog, rawg };
+    enum class Kind { steam_store, gog, nintendo, rawg };
     struct Candidate { std::string key; Kind kind; bool installed; uint64_t played; };
     std::vector<Candidate> candidates;
     {
@@ -243,7 +249,11 @@ bool Service::fillStep() {
                 if (!index_.patch(key, Source::steam_store) && !missed(item.cache_key, "steam", 30)) kind = Kind::steam_store;
             } else if (!item.gog_id.empty() && !index_.patch(key, Source::gog) && !missed(item.cache_key, "gog", 30)) kind = Kind::gog;
             const bool gaps = !record->release.known() || record->genres.empty() || record->description.empty();
-            if (!kind && !item.app_id && gaps && !config_.rawg_key.empty() && !index_.patch(key, Source::rawg) && !missed(item.cache_key, "rawg", 30))
+            // Nintendo's own shop first for its consoles' games: it answers fast and knows Switch 2 games.
+            if (!kind && !item.app_id && gaps && nintendoShop(item.platform) && !attempted_.contains(key + "#eshop") && !index_.patch(key, Source::nintendo) &&
+                !missed(item.cache_key, "nintendo", 7))
+                kind = Kind::nintendo;
+            if (!kind && !item.app_id && gaps && !config_.rawg_key.empty() && !index_.patch(key, Source::rawg) && !missed(item.cache_key, "rawg", 7)) // RAWG learns new games: a miss is retried weekly.
                 kind = Kind::rawg;
             if (kind) candidates.push_back({key, *kind, record->installed, record->last_played});
         }
@@ -255,12 +265,14 @@ bool Service::fillStep() {
         return a.key < b.key;
     });
     const auto pick = *best;
-    attempted_.insert(pick.key);
+    // The eShop is its own attempt: a miss there still leaves RAWG for this start.
+    const auto attempt = pick.kind == Kind::nintendo ? pick.key + "#eshop" : pick.key;
+    attempted_.insert(attempt);
     const auto item = *game(pick.key);
     const auto throttled = [&](uint32_t status) {
         if (status != 429 && status != 403 && status != 0) return false;
         backoff_until_ = std::chrono::steady_clock::now() + std::chrono::minutes(status ? 15 : 2);
-        attempted_.erase(pick.key); // Again after the pause.
+        attempted_.erase(attempt); // Again after the pause.
         return true;
     };
     switch (pick.kind) {
@@ -284,6 +296,32 @@ bool Service::fillStep() {
             atomic_file::write(knowledge() / L"gog" / (text_encoding::wideLenient(item.gog_id) + L".json"), body);
             readOffline({pick.key});
         } else if (response.status == 200 || response.status == 404) markMissed(item.cache_key, "gog"); // Not a passing server error.
+        return true;
+    }
+    case Kind::nintendo: {
+        // The best title match, only when it is the very title (or its core without edition words).
+        const auto response = fetch(L"https://searching.nintendo-europe.com/en/select?fq=type:GAME&rows=12&wt=json&q=" + url_encoding::component(item.title),
+                                    1024 * 1024, false);
+        if (throttled(response.status)) return true;
+        metadata_sources::Query query;
+        query.title = item.title;
+        auto offers = response.status == 200 ? metadata_sources::parseNintendo(text(response), query) : std::vector<metadata_sources::Offer>{};
+        const metadata_sources::Offer* match = nullptr;
+        int best_score = 0, second = 0;
+        for (const auto& offer : offers) {
+            const int score = gridTitleScore(item.title, offer.title);
+            if (score > best_score) { second = best_score; best_score = score; match = &offer; }
+            else second = std::max(second, score);
+        }
+        if (!match || best_score < 930 || (second >= best_score && fold(match->title) != fold(item.title)) || match->details.description.empty()) {
+            if (response.status == 200) markMissed(item.cache_key, "nintendo");
+            return true;
+        }
+        const auto field = [](const std::wstring& value) { return json::quote(text_encoding::utf8Lenient(value)); };
+        const std::string body = "{\"title\":" + field(match->title) + ",\"description\":" + field(match->details.description) + ",\"publisher\":" +
+                                 field(match->details.publisher) + ",\"release\":" + field(match->details.release_date) + ",\"genres\":" + field(match->details.genres) + "}";
+        atomic_file::write(knowledge() / L"nintendo" / (text_encoding::wideLenient(item.cache_key) + L".json"), body);
+        readOffline({pick.key});
         return true;
     }
     case Kind::rawg: {

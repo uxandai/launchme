@@ -1,6 +1,5 @@
 #include "renderer.hpp"
 #include "coverflow_layout.hpp"
-#include "media_layout.hpp"
 #include "occlusion_mask.hpp"
 #include "steelbook_material.hpp"
 #include "../library/steam_stats.hpp"
@@ -16,20 +15,6 @@ using palette::gray;
 constexpr float metal_roughness = 0.40f;
 constexpr float metal_reflection = 1.30f;
 constexpr UINT streak_width = 256, streak_height = 64; // Shared smooth brushed-streak tile.
-// Dyskietka's procedural tiles: a hash, and smooth value noise that wraps every `period` texels.
-float hash(uint32_t x, uint32_t y, uint32_t salt) {
-    uint32_t seed = x * 374761393u + y * 668265263u + salt * 2246822519u;
-    seed = (seed ^ (seed >> 13)) * 1274126177u;
-    return static_cast<float>((seed ^ (seed >> 16)) & 0xffffu) / 65535.0f;
-}
-float valueNoise(float x, float y, uint32_t period_x, uint32_t period_y, uint32_t salt) {
-    const auto x0 = static_cast<uint32_t>(std::floor(x)), y0 = static_cast<uint32_t>(std::floor(y));
-    const float fx = x - std::floor(x), fy = y - std::floor(y);
-    const float sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
-    const auto at = [&](uint32_t i, uint32_t j) { return hash(i % period_x, j % period_y, salt); };
-    const float top = std::lerp(at(x0, y0), at(x0 + 1, y0), sx), bottom = std::lerp(at(x0, y0 + 1), at(x0 + 1, y0 + 1), sx);
-    return std::lerp(top, bottom, sy);
-}
 bool visible(const GameCard& card, float width) {
     return card.size > 1 && card.opacity > 0.005f && card.x < width + 20 && card.x + card.width() * 1.3f > -20;
 }
@@ -45,11 +30,10 @@ void Renderer::drawLibraryCoverflow() {
     if (context_->library_mode == library_view::View::bookshelf) { drawLibraryShelf(); return; } // Its own perspective pass.
     const coverflow_layout::Layout layout{viewport_.width, viewport_.height, context_->library_mode, context_->library_options.coverflow_cd};
     const bool cd = context_->library_mode == library_view::View::coverflow && context_->library_options.coverflow_cd;
-    const bool media = library_view::media(context_->library_mode);
     target_->PushAxisAlignedClip(D2D1::RectF(0, 180, viewport_.width, viewport_.height), D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
     // Discs are their own background pass: even a retracting disc cannot cover a neighbour.
     // All posters follow, and the selected poster is always on top throughout a reversal.
-    if (!media && std::any_of(cards_->begin(), cards_->end(), [&](const auto& card) {
+    if (std::any_of(cards_->begin(), cards_->end(), [&](const auto& card) {
             return card.disc >= 0.003f && visible(card, viewport_.width);
         })) {
         // Cut the cases out of the disc pass, including during the initial card fade and
@@ -73,11 +57,8 @@ void Renderer::drawLibraryCoverflow() {
             target_->PopLayer();
         }
     }
-    const bool floppy = context_->library_mode == library_view::View::floppy;
     const auto draw = [&](size_t i) {
-        if (floppy) drawFloppy((*cards_)[i], i);
-        else if (media) drawMediaCard((*cards_)[i], i);
-        else if (cd) drawCdCase((*cards_)[i], i);
+        if (cd) drawCdCase((*cards_)[i], i);
         else drawCoverflowPoster((*cards_)[i], i);
     };
     for (size_t i = cards_->size(); i-- > 0;) if (i != selected_) draw(i);
@@ -118,308 +99,6 @@ void Renderer::drawLibraryCoverflow() {
         textLine(facts, facts_left, facts_y, right - facts_left, settings_body_font_.Get(), gray(0.78f, fade));
 }
 
-void Renderer::createMediaMaterials() {
-    const auto gradient = [&](Microsoft::WRL::ComPtr<ID2D1LinearGradientBrush>& brush, const D2D1_GRADIENT_STOP* stops, UINT count) {
-        if (brush) return;
-        Microsoft::WRL::ComPtr<ID2D1GradientStopCollection> colors;
-        if (SUCCEEDED(target_->CreateGradientStopCollection(stops, count, colors.GetAddressOf())))
-            target_->CreateLinearGradientBrush(D2D1::LinearGradientBrushProperties(D2D1::Point2F(0, 0), D2D1::Point2F(1, 1)), colors.Get(), brush.GetAddressOf());
-    };
-    const D2D1_GRADIENT_STOP plastic[] = {{0, gray(0.12f)}, {0.24f, gray(0.075f)}, {0.72f, gray(0.038f)}, {1, gray(0.070f)}};
-    const D2D1_GRADIENT_STOP edge[] = {{0, gray(1, 0.22f)}, {0.45f, gray(1, 0.055f)}, {0.55f, gray(0, 0.25f)}, {1, gray(0, 0.48f)}};
-    gradient(media_plastic_, plastic, 4); gradient(media_edge_, edge, 4);
-    if (!media_grain_) {
-        // One tiny repeatable neutral grain tile for the target, not new noise every frame.
-        constexpr UINT size = 128;
-        std::array<uint8_t, size * size * 4> pixels{};
-        for (uint32_t i = 0; i < size * size; ++i) {
-            uint32_t seed = (i + 1) * 747796405u + 2891336453u;
-            seed = ((seed >> ((seed >> 28) + 4)) ^ seed) * 277803737u;
-            const auto alpha = static_cast<uint8_t>(3 + (seed & 7));
-            pixels[i * 4] = pixels[i * 4 + 1] = pixels[i * 4 + 2] = seed & 256 ? alpha : 0;
-            pixels[i * 4 + 3] = alpha;
-        }
-        Microsoft::WRL::ComPtr<ID2D1Bitmap> bitmap;
-        if (SUCCEEDED(target_->CreateBitmap(D2D1::SizeU(size, size), pixels.data(), size * 4,
-            D2D1::BitmapProperties(D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED)), bitmap.GetAddressOf())))
-            target_->CreateBitmapBrush(bitmap.Get(), D2D1::BitmapBrushProperties(D2D1_EXTEND_MODE_WRAP, D2D1_EXTEND_MODE_WRAP), media_grain_.GetAddressOf());
-    }
-}
-
-namespace {
-Microsoft::WRL::ComPtr<ID2D1PathGeometry> mediaOutline(ID2D1Factory* factory, library_view::View mode, settings_ui::Rect r) {
-    const auto points = media_layout::outline(mode, r);
-    Microsoft::WRL::ComPtr<ID2D1PathGeometry> body;
-    Microsoft::WRL::ComPtr<ID2D1GeometrySink> sink;
-    if (FAILED(factory->CreatePathGeometry(body.GetAddressOf())) || FAILED(body->Open(sink.GetAddressOf()))) return {};
-    sink->BeginFigure(D2D1::Point2F(points.points[0].x, points.points[0].y), D2D1_FIGURE_BEGIN_FILLED);
-    for (size_t i = 1; i < points.count; ++i) sink->AddLine(D2D1::Point2F(points.points[i].x, points.points[i].y));
-    sink->EndFigure(D2D1_FIGURE_END_CLOSED);
-    return SUCCEEDED(sink->Close()) ? body : Microsoft::WRL::ComPtr<ID2D1PathGeometry>{};
-}
-}
-
-void Renderer::createFloppyMaterials() {
-    const auto tile = [&](Microsoft::WRL::ComPtr<ID2D1BitmapBrush>& brush, UINT width, UINT height, const std::vector<uint8_t>& pixels) {
-        Microsoft::WRL::ComPtr<ID2D1Bitmap> bitmap;
-        if (SUCCEEDED(target_->CreateBitmap(D2D1::SizeU(width, height), pixels.data(), width * 4,
-                D2D1::BitmapProperties(D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED)), bitmap.GetAddressOf())))
-            target_->CreateBitmapBrush(bitmap.Get(), D2D1::BitmapBrushProperties(D2D1_EXTEND_MODE_WRAP, D2D1_EXTEND_MODE_WRAP,
-                D2D1_BITMAP_INTERPOLATION_MODE_LINEAR), brush.GetAddressOf());
-    };
-    // Light or dark specks over whatever is beneath: premultiplied white or black.
-    const auto speck = [](uint8_t* p, float value) {
-        const auto a = static_cast<uint8_t>(std::lround(std::clamp(std::abs(value), 0.0f, 1.0f) * 255));
-        p[0] = p[1] = p[2] = value > 0 ? a : 0; p[3] = a;
-    };
-    if (!floppy_plastic_) {
-        // Moulded, sand-blasted plastic: a fine stipple over a soft mottle, tileable (256 texels).
-        constexpr UINT size = 256;
-        std::vector<uint8_t> pixels(size * size * 4);
-        for (UINT y = 0; y < size; ++y) for (UINT x = 0; x < size; ++x) {
-            const float fine = hash(x, y, 11) - 0.5f;
-            const float grain = valueNoise(x / 4.0f, y / 4.0f, size / 4, size / 4, 12) - 0.5f;
-            const float mottle = valueNoise(x / 32.0f, y / 32.0f, size / 32, size / 32, 13) - 0.5f;
-            speck(pixels.data() + (y * size + x) * 4, 0.075f * fine + 0.065f * grain + 0.05f * mottle);
-        }
-        tile(floppy_plastic_, size, size, pixels);
-    }
-    if (!floppy_metal_) {
-        // Brushed steel: horizontal brush lines (each row its own brightness, drifting slowly
-        // along it), long streaks and a little fine noise. Opaque; 512 x 128 texels.
-        constexpr UINT width = 512, height = 128;
-        std::vector<uint8_t> pixels(width * height * 4);
-        for (UINT y = 0; y < height; ++y) {
-            const float row = hash(0, y, 21) - 0.5f;
-            for (UINT x = 0; x < width; ++x) {
-                const float drift = valueNoise(x / 64.0f, static_cast<float>(y), width / 64, height, 22) - 0.5f;
-                const float streak = valueNoise(x / 128.0f, y / 2.0f, width / 128, height / 2, 23) - 0.5f;
-                const float tone = 0.64f + 0.13f * row + 0.08f * drift + 0.07f * streak + 0.03f * (hash(x, y, 24) - 0.5f);
-                auto* p = pixels.data() + (y * width + x) * 4;
-                p[0] = p[1] = p[2] = static_cast<uint8_t>(std::lround(std::clamp(tone, 0.0f, 1.0f) * 255)); p[3] = 255;
-                p[0] = static_cast<uint8_t>(std::min(255, p[0] + 4)); // A faint cool tint.
-            }
-        }
-        tile(floppy_metal_, width, height, pixels);
-    }
-    if (!floppy_paper_) {
-        // The label's paper: faint fibres, darker specks only.
-        constexpr UINT size = 128;
-        std::vector<uint8_t> pixels(size * size * 4);
-        for (UINT y = 0; y < size; ++y) for (UINT x = 0; x < size; ++x) {
-            const float fibre = valueNoise(x / 8.0f, y / 2.0f, size / 8, size / 2, 31);
-            speck(pixels.data() + (y * size + x) * 4, -(0.05f * fibre + 0.035f * hash(x, y, 32)));
-        }
-        tile(floppy_paper_, size, size, pixels);
-    }
-    const auto linear = [&](Microsoft::WRL::ComPtr<ID2D1LinearGradientBrush>& brush, std::initializer_list<D2D1_GRADIENT_STOP> stops) {
-        if (brush) return;
-        Microsoft::WRL::ComPtr<ID2D1GradientStopCollection> colors;
-        if (SUCCEEDED(target_->CreateGradientStopCollection(stops.begin(), static_cast<UINT32>(stops.size()), colors.GetAddressOf())))
-            target_->CreateLinearGradientBrush(D2D1::LinearGradientBrushProperties({0, 0}, {1, 1}), colors.Get(), brush.GetAddressOf());
-    };
-    // A specular band (narrow core, soft shoulders), and a moulded edge lit from the top left.
-    linear(floppy_sheen_, {{0, gray(1, 0)}, {0.30f, gray(1, 0.10f)}, {0.47f, gray(1, 0.62f)}, {0.53f, gray(1, 0.70f)},
-                           {0.68f, gray(1, 0.08f)}, {1, gray(1, 0)}});
-    linear(floppy_bevel_, {{0, gray(1, 0.42f)}, {0.42f, gray(1, 0.10f)}, {0.58f, gray(0, 0.15f)}, {1, gray(0, 0.60f)}});
-    linear(floppy_media_, {{0, D2D1::ColorF(0.11f, 0.12f, 0.14f)}, {0.5f, D2D1::ColorF(0.025f, 0.028f, 0.034f)}, {1, D2D1::ColorF(0.07f, 0.075f, 0.09f)}});
-    if (!floppy_glint_) {
-        const D2D1_GRADIENT_STOP stops[] = {{0, gray(1, 0.95f)}, {0.18f, gray(1, 0.45f)}, {0.55f, gray(1, 0.08f)}, {1, gray(1, 0)}};
-        Microsoft::WRL::ComPtr<ID2D1GradientStopCollection> colors;
-        if (SUCCEEDED(target_->CreateGradientStopCollection(stops, 4, colors.GetAddressOf())))
-            target_->CreateRadialGradientBrush(D2D1::RadialGradientBrushProperties({0, 0}, {0, 0}, 1, 1), colors.Get(), floppy_glint_.GetAddressOf());
-    }
-}
-
-// A 3.5" diskette: textured black plastic with moulded edges and recesses, a brushed steel shutter
-// that catches the lamp as the disk glides (and slowly with the ambient clock), and a paper label
-// with the square cover.
-void Renderer::drawFloppy(const GameCard& card, size_t index) {
-    if (!visible(card, viewport_.width)) return;
-    const auto r = coverflow_layout::poster(card);
-    const float w = card.width(), h = card.size, alpha = card.opacity;
-    const auto body = mediaOutline(factory_.Get(), library_view::View::floppy, r);
-    if (!body || w < 4) return;
-    createMediaMaterials();
-    createFloppyMaterials();
-    const auto box = [&](float l, float t, float rr, float b) { return D2D1::RectF(r.left + w * l, r.top + h * t, r.left + w * rr, r.top + h * b); };
-    const float texel = 1 / std::max(1.0f, viewport_.scale); // Tiles at about one texel per device pixel.
-    const auto at = [&](ID2D1BitmapBrush* tile, float stretch_x, float stretch_y) {
-        tile->SetTransform(D2D1::Matrix3x2F::Scale(texel * stretch_x, texel * stretch_y) * D2D1::Matrix3x2F::Translation(r.left, r.top));
-    };
-    // The lamp: its reflection slides over the disk the other way while it glides, and drifts slowly.
-    const coverflow_layout::Layout layout{viewport_.width, viewport_.height, library_view::View::floppy};
-    const float light = 0.5f + 0.16f * std::sin(elapsed_ * 0.30f + static_cast<float>(index) * 0.7f) + 0.10f * card.emphasis -
-        0.55f * layout.lightSweep(card, index, selected_);
-    // A soft shadow under the disk.
-    for (int layer = 3; layer >= 1; --layer) {
-        const float spread = layer * 3.5f;
-        brush(gray(0, 0.075f * alpha));
-        target_->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(r.left - spread * 0.6f, r.top + 6 - spread * 0.4f,
-            r.right + spread * 0.6f, r.bottom + 8 + spread), 8 + spread, 8 + spread), solid_.Get());
-    }
-    // Body: charcoal plastic, the stipple over it and a broad, dull sheen.
-    if (media_plastic_) {
-        media_plastic_->SetStartPoint({r.left, r.top}); media_plastic_->SetEndPoint({r.right, r.bottom}); media_plastic_->SetOpacity(alpha);
-        target_->FillGeometry(body.Get(), media_plastic_.Get());
-    } else { brush(gray(0.065f, alpha)); target_->FillGeometry(body.Get(), solid_.Get()); }
-    if (floppy_plastic_) { at(floppy_plastic_.Get(), 1, 1); floppy_plastic_->SetOpacity(alpha); target_->FillGeometry(body.Get(), floppy_plastic_.Get()); }
-    if (floppy_sheen_) {
-        floppy_sheen_->SetStartPoint({r.left + w * (light - 0.75f), r.top - h * 0.1f});
-        floppy_sheen_->SetEndPoint({r.left + w * (light + 0.35f), r.bottom});
-        floppy_sheen_->SetOpacity(0.07f * alpha); target_->FillGeometry(body.Get(), floppy_sheen_.Get());
-    }
-    // Recesses: light catches their lower edge, their upper edge is in shade.
-    const auto recess = [&](D2D1_ROUNDED_RECT shape, float depth) {
-        brush(gray(0, depth * alpha)); target_->FillRoundedRectangle(shape, solid_.Get());
-        const auto& b = shape.rect;
-        line(b.left + shape.radiusX, b.top + 0.8f, b.right - shape.radiusX, b.top + 0.8f, gray(0, 0.55f * alpha), 1.6f);
-        line(b.left + 0.8f, b.top + shape.radiusY, b.left + 0.8f, b.bottom - shape.radiusY, gray(0, 0.35f * alpha), 1.2f);
-        line(b.left + shape.radiusX, b.bottom - 0.6f, b.right - shape.radiusX, b.bottom - 0.6f, gray(1, 0.13f * alpha), 1);
-        line(b.right - 0.6f, b.top + shape.radiusY, b.right - 0.6f, b.bottom - shape.radiusY, gray(1, 0.07f * alpha), 1);
-    };
-    recess(D2D1::RoundedRect(box(0.205f, -0.01f, 0.815f, 0.335f), 3, 3), 0.20f); // The shutter's track.
-    recess(D2D1::RoundedRect(box(0.165f, 0.338f, 0.835f, 1.01f), 4, 4), 0.16f);   // Under the label.
-    // The insertion arrow, pressed into the top left; write-protect and density holes at the bottom.
-    {
-        const D2D1_POINT_2F arrow[] = {{r.left + w * 0.105f, r.top + h * 0.045f}, {r.left + w * 0.135f, r.top + h * 0.095f},
-                                       {r.left + w * 0.075f, r.top + h * 0.095f}};
-        for (int edge = 0; edge < 3; ++edge)
-            line(arrow[edge].x, arrow[edge].y, arrow[(edge + 1) % 3].x, arrow[(edge + 1) % 3].y,
-                 edge == 1 ? gray(1, 0.16f * alpha) : gray(0, 0.6f * alpha), 1.4f);
-    }
-    for (const float x : {0.055f, 0.913f}) {
-        const auto hole = box(x, 0.895f, x + 0.032f, 0.958f);
-        brush(gray(0.006f, alpha)); target_->FillRectangle(hole, solid_.Get());
-        line(hole.left, hole.bottom, hole.right, hole.bottom, gray(1, 0.14f * alpha), 1);
-        line(hole.left, hole.top + 0.5f, hole.right, hole.top + 0.5f, gray(0, 0.7f * alpha), 1.2f);
-    }
-    // The moulded rim: lit at the top left, in shade at the bottom right; a second, inner lip.
-    if (floppy_bevel_) {
-        floppy_bevel_->SetStartPoint({r.left, r.top}); floppy_bevel_->SetEndPoint({r.right, r.bottom});
-        floppy_bevel_->SetOpacity(alpha); target_->DrawGeometry(body.Get(), floppy_bevel_.Get(), 2.2f);
-        D2D1_MATRIX_3X2_F base; target_->GetTransform(&base);
-        target_->SetTransform(D2D1::Matrix3x2F::Scale(0.986f, 0.986f, D2D1::Point2F(r.left + w * 0.5f, r.top + h * 0.5f)) * base);
-        floppy_bevel_->SetOpacity(alpha * 0.45f); target_->DrawGeometry(body.Get(), floppy_bevel_.Get(), 1);
-        target_->SetTransform(base);
-    }
-    // The shutter: brushed steel bent over the top edge, its window showing the plastic beneath.
-    const auto plate = box(0.235f, 0, 0.775f, 0.318f);
-    const float pw = plate.right - plate.left, ph = plate.bottom - plate.top;
-    Microsoft::WRL::ComPtr<ID2D1RoundedRectangleGeometry> shutter;
-    if (SUCCEEDED(factory_->CreateRoundedRectangleGeometry(D2D1::RoundedRect(plate, 2.5f, 2.5f), shutter.GetAddressOf()))) {
-        brush(gray(0, 0.45f * alpha)); // Its edge's shadow on the track.
-        target_->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(plate.left + 1, plate.top + 2, plate.right + 2, plate.bottom + 2.5f), 3, 3), solid_.Get());
-        if (floppy_metal_) { at(floppy_metal_.Get(), 1.6f, 1); floppy_metal_->SetOpacity(alpha); target_->FillGeometry(shutter.Get(), floppy_metal_.Get()); }
-        else { brush(gray(0.62f, alpha)); target_->FillGeometry(shutter.Get(), solid_.Get()); }
-        target_->PushLayer(D2D1::LayerParameters(plate, shutter.Get()), nullptr);
-        // Vertical falloff of the bent sheet, then the lamp: a broad band and the brushed metal's
-        // long horizontal glint (brush lines stretch a reflection across them).
-        if (media_edge_) {
-            media_edge_->SetStartPoint({plate.left, plate.top}); media_edge_->SetEndPoint({plate.left, plate.bottom});
-            media_edge_->SetOpacity(0.85f * alpha); target_->FillRectangle(plate, media_edge_.Get());
-        }
-        if (floppy_sheen_) {
-            const float x = plate.left + pw * light;
-            floppy_sheen_->SetStartPoint({x - pw * 0.42f, plate.top - ph * 0.6f});
-            floppy_sheen_->SetEndPoint({x + pw * 0.22f, plate.bottom + ph * 0.6f});
-            floppy_sheen_->SetOpacity(0.48f * alpha); target_->FillRectangle(plate, floppy_sheen_.Get());
-        }
-        if (floppy_glint_) {
-            const auto centre = D2D1::Point2F(plate.left + pw * (light + 0.05f), plate.top + ph * 0.36f);
-            floppy_glint_->SetCenter(centre); floppy_glint_->SetRadiusX(pw * 0.6f); floppy_glint_->SetRadiusY(ph * 0.11f);
-            floppy_glint_->SetOpacity((0.42f + 0.18f * card.emphasis) * alpha); target_->FillRectangle(plate, floppy_glint_.Get());
-            floppy_glint_->SetCenter({centre.x - pw * 0.08f, plate.top + ph * 0.80f});
-            floppy_glint_->SetRadiusX(pw * 0.38f); floppy_glint_->SetRadiusY(ph * 0.05f);
-            floppy_glint_->SetOpacity(0.14f * alpha); target_->FillRectangle(plate, floppy_glint_.Get());
-        }
-        target_->PopLayer();
-        // Stamped edges: the fold along the top, a lit lower lip and the cut sides.
-        line(plate.left + 2, plate.top + 1, plate.right - 2, plate.top + 1, gray(1, 0.55f * alpha), 1.2f);
-        line(plate.left + 2, plate.top + ph * 0.06f, plate.right - 2, plate.top + ph * 0.06f, gray(0, 0.22f * alpha), 1);
-        line(plate.left + 3, plate.bottom - 0.7f, plate.right - 3, plate.bottom - 0.7f, gray(1, 0.40f * alpha), 1);
-        line(plate.left + 0.6f, plate.top + 2, plate.left + 0.6f, plate.bottom - 3, gray(1, 0.30f * alpha), 1);
-        line(plate.right - 0.6f, plate.top + 2, plate.right - 0.6f, plate.bottom - 3, gray(0, 0.35f * alpha), 1);
-        // The window: a pressed rim on the steel around a dark opening.
-        const auto window = D2D1::RoundedRect(box(0.565f, 0.052f, 0.705f, 0.268f), 2.5f, 2.5f);
-        brush(gray(1, 0.30f * alpha));
-        target_->DrawRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(window.rect.left - 1.4f, window.rect.top - 1.4f, window.rect.right + 1.4f,
-            window.rect.bottom + 1.4f), 3.5f, 3.5f), solid_.Get(), 1);
-        if (floppy_media_) {
-            floppy_media_->SetStartPoint({window.rect.left, window.rect.top}); floppy_media_->SetEndPoint({window.rect.right, window.rect.bottom});
-            floppy_media_->SetOpacity(alpha); target_->FillRoundedRectangle(window, floppy_media_.Get());
-        }
-        if (floppy_plastic_) target_->FillRoundedRectangle(window, floppy_plastic_.Get());
-        line(window.rect.left + 2, window.rect.top + 1.2f, window.rect.right - 2, window.rect.top + 1.2f, gray(0, 0.85f * alpha), 2);
-        line(window.rect.left + 1, window.rect.top + 2, window.rect.left + 1, window.rect.bottom - 2, gray(0, 0.55f * alpha), 1.4f);
-        line(window.rect.left + 2, window.rect.bottom - 0.6f, window.rect.right - 2, window.rect.bottom - 0.6f, gray(1, 0.18f * alpha), 1);
-    }
-    // The label: paper with the square cover printed on it, a narrow white margin, faint gloss.
-    const auto label = media_layout::label(library_view::View::floppy, r);
-    const auto paper = D2D1::RectF(label.left, label.top, label.right, label.bottom);
-    Microsoft::WRL::ComPtr<ID2D1RoundedRectangleGeometry> sheet;
-    if (FAILED(factory_->CreateRoundedRectangleGeometry(D2D1::RoundedRect(paper, 3, 3), sheet.GetAddressOf()))) return;
-    brush(gray(0, 0.35f * alpha));
-    target_->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(paper.left, paper.top + 1.5f, paper.right + 1, paper.bottom + 1.5f), 3, 3), solid_.Get());
-    brush(D2D1::ColorF(0.93f, 0.925f, 0.90f, alpha)); target_->FillGeometry(sheet.Get(), solid_.Get());
-    const float margin = (paper.right - paper.left) * 0.035f;
-    const auto print = D2D1::RectF(paper.left + margin, paper.top + margin, paper.right - margin, paper.bottom - margin);
-    auto* image = index < covers_.size() && covers_[index].bitmap ? &covers_[index] : nullptr;
-    if (image) fillImage(*image, print, 1.5f, alpha * reveal(*image), sessionOf(card.game) == SessionState::frozen);
-    else text(card.game.name, print.left + 8, print.top + (print.bottom - print.top) * 0.40f, print.right - print.left - 16,
-              (print.bottom - print.top) * 0.5f, menu_font_.Get(), gray(0.15f, alpha));
-    if (floppy_paper_) { at(floppy_paper_.Get(), 1, 1); floppy_paper_->SetOpacity(alpha); target_->FillGeometry(sheet.Get(), floppy_paper_.Get()); }
-    if (floppy_sheen_) {
-        floppy_sheen_->SetStartPoint({paper.left + (paper.right - paper.left) * (light - 0.9f), paper.top});
-        floppy_sheen_->SetEndPoint({paper.left + (paper.right - paper.left) * (light + 0.5f), paper.bottom});
-        floppy_sheen_->SetOpacity(0.05f * alpha); target_->FillGeometry(sheet.Get(), floppy_sheen_.Get());
-    }
-    brush(gray(1, 0.22f * alpha)); target_->DrawGeometry(sheet.Get(), solid_.Get(), 0.8f);
-    if (!card.game.installed) { brush(gray(0, 0.24f * alpha)); target_->FillGeometry(body.Get(), solid_.Get()); }
-}
-
-// Kartridż Switch: black plastic, a recessed 2:3 poster label.
-void Renderer::drawMediaCard(const GameCard& card, size_t index) {
-    if (!visible(card, viewport_.width)) return;
-    const auto mode = library_view::View::cartridge_switch;
-    const auto r = coverflow_layout::poster(card);
-    const float w = card.width(), h = card.size, alpha = card.opacity;
-    const auto body = mediaOutline(factory_.Get(), mode, r);
-    if (!body) return;
-    createMediaMaterials();
-    if (media_plastic_) {
-        media_plastic_->SetStartPoint(D2D1::Point2F(r.left, r.top)); media_plastic_->SetEndPoint(D2D1::Point2F(r.right, r.bottom)); media_plastic_->SetOpacity(alpha);
-        target_->FillGeometry(body.Get(), media_plastic_.Get());
-    } else { brush(gray(0.065f, alpha)); target_->FillGeometry(body.Get(), solid_.Get()); }
-    if (media_grain_) {
-        media_grain_->SetTransform(D2D1::Matrix3x2F::Scale(h / 470, h / 470) * D2D1::Matrix3x2F::Translation(r.left, r.top));
-        media_grain_->SetOpacity(0.45f * alpha); target_->FillGeometry(body.Get(), media_grain_.Get());
-    }
-    if (media_edge_) {
-        media_edge_->SetStartPoint(D2D1::Point2F(r.left, r.top)); media_edge_->SetEndPoint(D2D1::Point2F(r.right, r.bottom));
-        media_edge_->SetOpacity(alpha); target_->DrawGeometry(body.Get(), media_edge_.Get(), 1.5f);
-        D2D1_MATRIX_3X2_F base; target_->GetTransform(&base);
-        target_->SetTransform(D2D1::Matrix3x2F::Scale(0.982f, 0.987f, D2D1::Point2F(r.left + w * 0.5f, r.top + h * 0.5f)) * base);
-        media_edge_->SetOpacity(alpha * 0.55f); target_->DrawGeometry(body.Get(), media_edge_.Get(), 1);
-        target_->SetTransform(base);
-    }
-    const auto box = [&](float l, float t, float rr, float b) { return D2D1::RectF(r.left + w * l, r.top + h * t, r.left + w * rr, r.top + h * b); };
-    brush(gray(0.013f, alpha));
-    target_->FillRoundedRectangle(D2D1::RoundedRect(box(0.07f, 0.055f, 0.92f, 0.951f), 5, 5), solid_.Get());
-    line(r.left + w * 0.29f, r.top + h * 0.028f, r.left + w * 0.69f, r.top + h * 0.028f, gray(0.15f, alpha), 2);
-    const auto label = media_layout::label(mode, r);
-    const auto rect = D2D1::RectF(label.left, label.top, label.right, label.bottom);
-    Microsoft::WRL::ComPtr<ID2D1RoundedRectangleGeometry> print;
-    if (FAILED(factory_->CreateRoundedRectangleGeometry(D2D1::RoundedRect(rect, 3, 3), print.GetAddressOf()))) return;
-    brush(gray(0.045f, alpha)); target_->FillGeometry(print.Get(), solid_.Get());
-    auto* image = index < posters_.size() && posters_[index].bitmap ? &posters_[index] :
-                  index < covers_.size() && covers_[index].bitmap ? &covers_[index] : nullptr;
-    if (image) fillImage(*image, rect, 3, alpha * reveal(*image), sessionOf(card.game) == SessionState::frozen, print.Get(), true);
-    else text(card.game.name, label.left + 10, label.top + (label.bottom - label.top) * 0.42f, label.right - label.left - 20,
-        (label.bottom - label.top) * 0.5f, menu_font_.Get(), gray(0.90f, alpha));
-    brush(gray(0.65f, 0.20f * alpha)); target_->DrawGeometry(print.Get(), solid_.Get(), 1);
-}
-
 // A tiny copy of the art (Półka behind a square cover, desktop banners); drawn enlarged with linear filtering it is a soft blur (made once
 // per bitmap, a high-quality downscale where the target allows it).
 ID2D1Bitmap* Renderer::blurredArt(Cover& image) {
@@ -449,49 +128,42 @@ void Renderer::drawCoverflowDisc(const GameCard& card, size_t index) {
     if (card.disc < 0.003f || !visible(card, viewport_.width)) return;
     auto* image = index < posters_.size() && posters_[index].bitmap ? &posters_[index] :
                   index < covers_.size() && covers_[index].bitmap ? &covers_[index] : nullptr;
-    const auto accent = image ? image->accent : D2D1::ColorF(0.24f, 0.39f, 0.48f);
     const auto disc = coverflow_layout::disc(card);
     auto* scan = index < discs_.size() && discs_[index].bitmap ? &discs_[index] : nullptr;
+    const float radius = disc.radius, cx = disc.x, cy = disc.y;
+    // The ambient clock pauses spinning when the launcher is idle or not being watched.
+    const float spin = elapsed_ * 42;
+    if (!context_->library_options.coverflow_cd) {
+        drawGameDisc(cx, cy, radius, card.opacity, spin, image, scan, sessionOf(card.game) == SessionState::frozen, card.game.name);
+        return;
+    }
+    // Printable white CD-R: a quiet label, transparent hub and blue ballpoint handwriting.
     const float scanned = scan ? reveal(*scan) : 0;
-    const float radius = disc.radius, cx = disc.x, cy = disc.y, alpha = card.opacity * (1 - scanned);
-    const bool cd = context_->library_options.coverflow_cd;
+    const float alpha = card.opacity * (1 - scanned);
     const auto circle = D2D1::Ellipse(D2D1::Point2F(cx, cy), radius, radius);
     brush(gray(0.018f, 0.5f * card.opacity));
     target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(cx + 4, cy + 7), radius + 3, radius + 3), solid_.Get());
-    brush(gray(0.78f, alpha)); target_->FillEllipse(circle, solid_.Get());
     Microsoft::WRL::ComPtr<ID2D1EllipseGeometry> shape;
     factory_->CreateEllipseGeometry(circle, shape.GetAddressOf());
-    if (cd) {
-        // Printable white CD-R: a quiet label, transparent hub and blue ballpoint handwriting.
-        brush(gray(0.95f, alpha)); target_->FillEllipse(circle, solid_.Get());
-        D2D1_MATRIX_3X2_F base; target_->GetTransform(&base);
-        target_->SetTransform(D2D1::Matrix3x2F::Scale(radius / 160, radius / 160) *
-            D2D1::Matrix3x2F::Translation(cx, cy) * D2D1::Matrix3x2F::Rotation(elapsed_ * 42, {cx, cy}) * base);
-        textLine(L"esperanza", -108, 66, 216, menu_font_.Get(), gray(0.43f, alpha), DWRITE_TEXT_ALIGNMENT_CENTER);
-        textLine(L"CD-R  700 MB / 80 min", -112, 92, 224, label_font_.Get(), gray(0.56f, alpha), DWRITE_TEXT_ALIGNMENT_CENTER);
-        line(-95, 106, 95, 106, gray(0.64f, alpha), 0.7f);
-        D2D1_MATRIX_3X2_F disc_base; target_->GetTransform(&disc_base);
-        target_->SetTransform(D2D1::Matrix3x2F::Rotation(-8, {0, -68}) * disc_base);
-        paragraph(card.game.name, -114, -108, 228, cd_pen_font_.Get(), D2D1::ColorF(0.08f, 0.16f, 0.36f, alpha), 2);
-        target_->SetTransform(base);
-    } else if (shape && image) {
-        D2D1_MATRIX_3X2_F base; target_->GetTransform(&base);
-        // The ambient clock pauses spinning when the launcher is idle or not being watched.
-        target_->SetTransform(D2D1::Matrix3x2F::Rotation(elapsed_ * 42, D2D1::Point2F(cx, cy)) * base);
-        fillImage(*image, D2D1::RectF(cx - radius, cy - radius, cx + radius, cy + radius), 0,
-            alpha * reveal(*image), false, shape.Get());
-        line(cx - radius * 0.8f, cy, cx - radius * 0.25f, cy, gray(1, 0.42f * alpha), 2);
-        target_->SetTransform(base);
-    }
+    brush(gray(0.95f, alpha)); target_->FillEllipse(circle, solid_.Get());
+    D2D1_MATRIX_3X2_F base; target_->GetTransform(&base);
+    target_->SetTransform(D2D1::Matrix3x2F::Scale(radius / 160, radius / 160) *
+        D2D1::Matrix3x2F::Translation(cx, cy) * D2D1::Matrix3x2F::Rotation(spin, {cx, cy}) * base);
+    textLine(L"esperanza", -108, 66, 216, menu_font_.Get(), gray(0.43f, alpha), DWRITE_TEXT_ALIGNMENT_CENTER);
+    textLine(L"CD-R  700 MB / 80 min", -112, 92, 224, label_font_.Get(), gray(0.56f, alpha), DWRITE_TEXT_ALIGNMENT_CENTER);
+    line(-95, 106, 95, 106, gray(0.64f, alpha), 0.7f);
+    D2D1_MATRIX_3X2_F disc_base; target_->GetTransform(&disc_base);
+    target_->SetTransform(D2D1::Matrix3x2F::Rotation(-8, {0, -68}) * disc_base);
+    paragraph(card.game.name, -114, -108, 228, cd_pen_font_.Get(), D2D1::ColorF(0.08f, 0.16f, 0.36f, alpha), 2);
+    target_->SetTransform(base);
     brush(gray(0.94f, 0.8f * alpha)); target_->DrawEllipse(circle, solid_.Get(), 2.2f);
-    brush(cd ? gray(0.7f, alpha) : D2D1::ColorF(accent.r, accent.g, accent.b, 0.65f * alpha));
+    brush(gray(0.7f, alpha));
     target_->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), radius - 5, radius - 5), solid_.Get(), 1.5f);
     brush(gray(0.72f, alpha)); target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), radius * 0.19f, radius * 0.19f), solid_.Get());
     brush(gray(0.11f, alpha)); target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), radius * 0.075f, radius * 0.075f), solid_.Get());
     brush(gray(1, 0.45f * alpha)); target_->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), radius * 0.14f, radius * 0.14f), solid_.Get(), 1);
     if (scan && shape) {
-        D2D1_MATRIX_3X2_F base; target_->GetTransform(&base);
-        target_->SetTransform(D2D1::Matrix3x2F::Rotation(elapsed_ * 42, {cx, cy}) * base);
+        target_->SetTransform(D2D1::Matrix3x2F::Rotation(spin, {cx, cy}) * base);
         fillImage(*scan, D2D1::RectF(cx - radius, cy - radius, cx + radius, cy + radius), 0,
                   card.opacity * scanned, sessionOf(card.game) == SessionState::frozen, shape.Get(), true);
         target_->SetTransform(base);

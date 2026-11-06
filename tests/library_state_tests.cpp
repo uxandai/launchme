@@ -20,8 +20,9 @@ int main() {
     state.options["43:steam"] = {library_view::Order::last_played, false, library_view::View::bookshelf};
     state.options["43:steam"].bookshelf_gray = false; // Półka's options, the last appended columns.
     state.options["43:epic"] = {library_view::Order::added, false, library_view::View::coverflow};
-    state.options["44:all"] = {library_view::Order::last_played, false, library_view::View::floppy};
-    state.options["44:steam"] = {library_view::Order::alphabetical, false, library_view::View::cartridge_switch};
+    state.options["44:all"] = {library_view::Order::last_played, false, library_view::View::bookshelf};
+    state.options["44:steam"] = {library_view::Order::alphabetical, false, library_view::View::coverflow};
+    state.options["44:steam"].coverflow_cd = true;
     state.options["44:gog"] = {library_view::Order::added, true, library_view::View::list_plus};
     state.options["44:gog"].list_plus_steelbook = true;
     state.options["45:all"] = {library_view::Order::alphabetical, false, library_view::View::overview};
@@ -207,13 +208,16 @@ int main() {
         std::ifstream written(file); const std::string text{std::istreambuf_iterator<char>{written}, {}};
         if (text.find("\" 2 0 0 0 1 1 1 0 5 0 0 0 0 0 0 0 1 1\n") == std::string::npos || text.find("\" 0 0") != std::string::npos) return 23;
     }
-    // Removed views keep their numbers out of new files: Plakat (4) reads as Lista+, Kartridż NES (8)
-    // as Kartridż Switch; 12 is out of range. Rows of seven options (before the steelbook) still load.
+    // Removed views keep their numbers out of new files: Plakat (4) reads as Lista+, the media
+    // carousels (6 Dyskietka, 7 Kartridż Switch, 8 Kartridż NES) as Półka; 12 is out of range. Rows
+    // of seven options (before the steelbook) still load.
     { std::ofstream removed(file); removed << "launchme-library 1\noption \"" << key_codec::encode("1:all") << "\" 1 0 4\noption \""
-                                           << key_codec::encode("2:all") << "\" 1 0 8 0 1 1 1 0 5 0\n"; }
+                                           << key_codec::encode("2:all") << "\" 1 0 8 0 1 1 1 0 5 0\noption \""
+                                           << key_codec::encode("3:all") << "\" 1 0 6\noption \"" << key_codec::encode("4:all") << "\" 1 0 7\n"; }
     const auto migrated = loadLibraryState(file);
     if (!migrated || migrated->options.at("1:all").view != library_view::View::list_plus ||
-        migrated->options.at("2:all").view != library_view::View::cartridge_switch || migrated->options.at("2:all").list_plus_steelbook) return 28;
+        migrated->options.at("2:all").view != library_view::View::bookshelf || migrated->options.at("2:all").list_plus_steelbook ||
+        migrated->options.at("3:all").view != library_view::View::bookshelf || migrated->options.at("4:all").view != library_view::View::bookshelf) return 28;
     { std::ofstream beyond(file); beyond << "launchme-library 1\noption \"" << key_codec::encode("1:all") << "\" 1 0 12\n"; }
     if (loadLibraryState(file)) return 29;
     // 4 is the release-date order (added later); 5 is out of range.

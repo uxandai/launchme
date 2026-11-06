@@ -5,7 +5,6 @@
 #include "../library/search.hpp"
 #include "../ui/grid_layout.hpp"
 #include "../ui/category_rail.hpp"
-#include "../ui/media_layout.hpp"
 #include "../ui/psfive_layout.hpp"
 #include "../ui/snitch_layout.hpp"
 
@@ -314,7 +313,7 @@ bool Launcher::cardHit(size_t index, float x, float y) const {
     if (libraryCarousel()) {
         const auto hit = [&](const GameCard& item) {
             const auto r = coverflow_layout::poster(item);
-            return library_view::media(libraryView()) ? media_layout::hit(libraryView(), r, x, y) : r.contains(x, y);
+            return r.contains(x, y);
         };
         if (y < 180 || card.opacity < 0.05f || !hit(card)) return false;
         if (index != selected_ && hit(cards_[selected_])) return false;
@@ -453,6 +452,22 @@ void Launcher::saveLibraryPreferences() {
 bool Launcher::homeUntouched() const {
     return !input_seen_ && !desktop_mode_ && screen_ == ScreenMode::shelves && category_ == 0 && !cards_.empty();
 }
+bool Launcher::startupHold() {
+    if (!startup_hold_) return false;
+#ifdef LAUNCHME_UI_TEST
+    startup_hold_ = false; return false; // The UI tests check the tiles at once.
+#endif
+    if (!runtime_started_ || desktopActive() || screen_ != ScreenMode::shelves || input_seen_) { startup_hold_ = !runtime_started_ && !desktop_mode_; return false; }
+    if (cards_.empty()) { // Nothing to hold yet: the loading state shows on its own.
+        if (!libraryLoading() && !rom_scanning_) startup_hold_ = false;
+        return false;
+    }
+    const auto now = GetTickCount64();
+    if (!startup_hold_until_) startup_hold_until_ = now + startup_hold_ms;
+    const bool settled = !libraryLoading() && !pc_scanning_ && !rom_scanning_ && gog_initial_ready_ && epic_initial_ready_ && !restore_pending_;
+    if (settled || now >= startup_hold_until_) startup_hold_ = false;
+    return startup_hold_;
+}
 void Launcher::noteUserInput() {
     if (drm_idle_scan_ && drm_stop_) drm_stop_->store(true); // Idle scans give way to the user.
     cancelGameFocus();
@@ -539,9 +554,14 @@ bool Launcher::adjustLibraryView(int amount) {
         else if (library_controls_.view_row == 4) toggle(options.cinematic_playtime);
         break;
     case View::overview: options.overview_columns = std::clamp(options.overview_columns + (amount ? amount : options.overview_columns == 5 ? -3 : 1), 2, 5); break;
-    case View::coverflow: toggle(options.coverflow_cd); break;
+    case View::coverflow:
+    case View::bookshelf:
+        // Wariant: Półka / Steelbook / Piracka płyta; Półka's own switches below it.
+        if (library_controls_.view_row <= 1)
+            library_view::setCoverflowVariant(options, step(library_view::coverflowVariant(options), library_view::coverflow_variants));
+        else toggle(library_controls_.view_row == 2 ? options.bookshelf_gray : options.bookshelf_platform);
+        break;
     case View::list_plus: toggle(options.list_plus_steelbook); break;
-    case View::bookshelf: toggle(library_controls_.view_row <= 1 ? options.bookshelf_gray : options.bookshelf_platform); break;
     default: return true;
     }
     if (options != before) { applyLibraryOptions(); audio_.navigate(); }
@@ -660,7 +680,8 @@ bool Launcher::libraryAccept() {
         const auto view = library_view::drawerView(library_controls_.choice);
         library_controls_.view_dropdown = false; library_controls_.view_row = 0;
         audio_.context();
-        if (view != options.view) { options.view = view; applyLibraryOptions(); }
+        // Coverflow's row keeps the variant already shown (Półka or the flat carousel).
+        if (library_view::drawerRow(view) != library_view::drawerRow(options.view)) { options.view = view; applyLibraryOptions(); }
         InvalidateRect(hwnd_, nullptr, FALSE);
         return true;
     }

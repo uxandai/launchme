@@ -114,8 +114,9 @@ Settings → System → Help → **Open folder** (the version row) opens it.
   Above the description a bar tells whether this PC meets a Steam or GOG game's requirements (green, yellow, red,
   or grey without data); click it to compare your processor, graphics card and RAM with the minimum and recommended.
 - **Library views**: grid (squares, posters or landscape tiles), list, cinematic, detailed, poster,
-  coverflow, a shelf of game cases (their spines carry the name and the platform) and novelty
-  cartridge/floppy views; sorting, filters, search, *Recently added* by the store's acquisition date and
+  coverflow with its variants: a shelf of game cases (each console's own case, size and front; Enter takes the case
+  off the shelf, opens it and slides out its disc, game card or diskette, with Play and Details beside it), Steelbook
+  and Burned CD; sorting, filters, search, *Recently added* by the store's acquisition date and
   remembered positions. Consoles, collections and publishers each open in a default view of their own until one
   gets its own (Settings → Interface → *Library views in TV mode*, with a reset for each). With game videos on, the video plays in List+'s picture, in Cinematic's focused tile
   and in the desktop window's details pane; PC games from other stores play the Steam trailer of the same game.
@@ -224,7 +225,8 @@ Settings → System → Help → **Open folder** (the version row) opens it.
   dot and a moving border saying whether it is connected; pairing and connecting from the same tiles.
 - **Profile** (the drawer's *Profile* widget): this week's play time, games and launches with a chart, the latest
   achievements, a year of achievement history, the games closest to 100 % and every platform with its hours.
-- **In-game Guide overlay** (experimental): back to the dashboard, close the game, optional FPS and frame-time graph from PresentMon, a widget over the game (list or one-line strip, coloured labels, size; CPU temperature from MSI Afterburner when it runs), and an opt-in frame limiter (loads a small DLL into the game; skipped for games with an anti-cheat). Steam's small "Launching…" window is hidden when a game starts from Launchme (Settings → Steam).
+- **In-game overlay** (experimental; Settings → Interface → *In-game overlay*, with its keyboard shortcut: Shift+Tab,
+  Ctrl+Tab, Shift+F1 or Ctrl+Shift+O, and its controller shortcut: Guide / PS, View + Menu or L3 + R3): back to the dashboard, close the game, optional FPS and frame-time graph from PresentMon, a widget over the game (list or one-line strip, coloured labels, size; CPU temperature from MSI Afterburner when it runs), and an opt-in frame limiter (loads a small DLL into the game; skipped for games with an anti-cheat). Steam's small "Launching…" window is hidden when a game starts from Launchme (Settings → Steam).
 - **Plugins** (ZIP + native DLL): HowLongToBeat (completion times in game details) and Achievements
   (after [SuccessStory](https://github.com/Lacro59/playnite-successstory-plugin), MIT) ship with the Windows build;
   write your own with the [Plugin SDK](docs/plugins/README.md) (Windows DLLs; the host also loads Linux `.so` plugins).
@@ -347,4 +349,6 @@ plugin, see [its notice](plugins/achievements/NOTICE.md)) ship in `plugin-packag
 Runtime and SentencePiece, used with the MiniLM model by the companion's memory, in `assets/companion-embeddings/`
 (SQLite is public domain). The publisher and developer logos
 are from HVR88's [Monochrome Gaming Logos](https://github.com/HVR88/Monochrome-Gaming-Logos) (their note:
-`res/studios/LICENSE.txt`, installed as `assets/studios/LICENSE.txt`); the trademarks belong to their owners.
+`res/studios/LICENSE.txt`, installed as `assets/studios/LICENSE.txt`); the console case fronts on Półka are
+from Twicethedad's [Game Cases](https://github.com/Twicethedad/Game-Cases) (MIT: `res/cases/LICENSE.txt`,
+installed as `assets/cases/LICENSE.txt`); the trademarks belong to their owners.

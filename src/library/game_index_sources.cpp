@@ -303,6 +303,19 @@ Patch fromEpicCatalog(std::string_view json) {
     return patch;
 }
 
+Patch fromNintendo(std::string_view json) {
+    const auto root = json::parse(json);
+    if (!root || root->type != json::Value::Type::object) return {};
+    GameDetails details;
+    details.description = text(root->get("description"));
+    details.publisher = text(root->get("publisher"));
+    details.release_date = text(root->get("release"));
+    details.genres = text(root->get("genres"));
+    auto patch = fromDetails(details);
+    if (auto name = text(root->get("title")); !name.empty() && !patch.empty()) patch.aliases = std::vector<std::wstring>{std::move(name)};
+    return patch;
+}
+
 std::vector<std::pair<Source, Patch>> readCaches(const CacheFolders& folders, const CachedGame& game, bool english) {
     std::vector<std::pair<Source, Patch>> result;
     const auto add = [&](Source source, Patch patch, const std::filesystem::path& file) {
@@ -349,6 +362,10 @@ std::vector<std::pair<Source, Patch>> readCaches(const CacheFolders& folders, co
         if (game.key.starts_with("gog:") && !folders.products.empty()) {
             const auto file = folders.products / L"gog" / (wide(game.key.substr(4)) + L".json");
             add(Source::gog, fromGogProduct(readFile(file, 2 * 1024 * 1024)), file);
+        }
+        if (!folders.products.empty()) {
+            const auto file = folders.products / L"nintendo" / (wide_key + L".json");
+            add(Source::nintendo, fromNintendo(readFile(file, 256 * 1024)), file);
         }
     }
     return result;

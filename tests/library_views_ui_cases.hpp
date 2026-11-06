@@ -30,6 +30,12 @@ int LauncherUiTest::libraryViews(HWND window) {
     const auto chooseView = [&](library_view::View mode) {
         app.openLibraryPanel(library_ui::Panel::views); app.libraryAccept();
         app.library_controls_.choice = library_view::drawerRow(mode); app.libraryAccept();
+        // Coverflow's row opens on Półka; its Wariant row turns it into the flat carousel and back.
+        if (library_view::coverflowFamily(mode) && app.library_controls_.options.view != mode) {
+            app.library_controls_.view_row = 1;
+            app.adjustLibraryView(mode == library_view::View::bookshelf ? -2 : 1);
+            app.library_controls_.view_row = 0;
+        }
         app.closeLibraryPanel(); app.library_controls_.focus = -1; app.focusCard(app.selected_);
     };
     const wchar_t* titles[] = {L"Alan Wake", L"Bastion", L"Celeste", L"Dead Cells", L"Elden Ring", L"Factorio", L"Gris", L"Hades",
@@ -505,7 +511,7 @@ int LauncherUiTest::libraryViews(HWND window) {
     app.openPcLibrary(GameSource::steam);
     if (app.libraryView() != library_view::View::detailed) return 1974;
     // Plakat (saved as 4) was removed: such a library opens in Lista+ (library_state_tests).
-    if (library_view::viewFromPersisted(4) != library_view::View::list_plus || library_view::drawerView(library_view::view_count - 1) != library_view::View::cartridge_switch) return 1981;
+    if (library_view::viewFromPersisted(4) != library_view::View::list_plus || library_view::drawerView(library_view::view_count - 1) != library_view::View::bookshelf) return 1981;
     const auto deliver_poster = [&](size_t index) {
         auto image = std::make_unique<CoverMessage>();
         image->generation = app.jobs_->generation.load(); image->kind = CoverMessage::Kind::poster;
@@ -680,48 +686,35 @@ int LauncherUiTest::libraryViews(HWND window) {
         flow_saved->options.at("1:all").view != library_view::View::cinematic) return 2629;
     app.openLibrary(); app.openPcLibrary(GameSource::steam);
     if (!app.libraryCoverflow()) return 2630;
-    const std::pair<library_view::View, const wchar_t*> media_views[] = {
-        {library_view::View::floppy, L"library-floppy.png"},
-        {library_view::View::cartridge_switch, L"library-cartridge-switch.png"}};
-    for (const auto& [mode, screenshot] : media_views) {
-        app.focusCard(2);
-        const auto key = gameKey(app.cards_[2].game);
-        chooseView(mode);
-        if (app.libraryView() != mode || !app.libraryCarousel() || app.libraryCoverflow() || gameKey(app.cards_[app.selected_].game) != key) return 2650;
-        settle(); app.paint();
-        const auto& selected = app.cards_[2];
-        const auto body = coverflow_layout::poster(selected);
-        const auto label = media_layout::label(mode, body);
-        const float expected_aspect = mode == library_view::View::floppy ? 1.0f : 2.0f / 3.0f;
-        if (std::abs((label.right - label.left) / (label.bottom - label.top) - expected_aspect) > 0.001f ||
-            selected.size <= app.cards_[3].size || selected.disc != 0 || app.renderer_.steelbookReadyForTest(2) ||
-            std::abs(app.cards_[3].x - body.right - coverflow_layout::gap) > 1) return 2651;
-        if (mode == library_view::View::floppy ? app.renderer_.hasPoster(2) || !app.renderer_.hasCover(2) : !app.renderer_.hasPoster(2)) return 2652;
-        if (!app.cardHit(2, (label.left + label.right) * 0.5f, (label.top + label.bottom) * 0.5f) ||
-            app.cardHit(2, body.right - 1, body.top + 1)) return 2653;
-        if (!capture(screenshot)) return 2654;
-        const auto next = media_layout::label(mode, coverflow_layout::poster(app.cards_[3]));
-        app.mouse_transition_until_ = 0;
-        app.click((next.left + next.right) * 0.5f * scale, (next.top + next.bottom) * 0.5f * scale, false);
-        if (app.selected_ != 3) return 2655;
-        app.navigate(-1); settle();
-        app.openArtworkBrowser(app.cards_[2].game);
-        if (app.artwork_state_.kind() != (mode == library_view::View::floppy ? ArtworkKind::cover : ArtworkKind::poster)) return 2656;
-        app.closeArtworkBrowser(); settle();
-        if (app.libraryView() != mode || gameKey(app.cards_[app.selected_].game) != key) return 2657;
-        app.saveLibraryPreferences();
-        const auto saved = loadLibraryState(userConfigDirectory() / L"library-state.ini");
-        if (!saved || saved->options.at("1:steam").view != mode || saved->options.at("1:all").view != library_view::View::cinematic) return 2658;
-        app.openLibrary(); if (!app.libraryCinematic()) return 2659;
-        app.openPcLibrary(GameSource::steam); if (app.libraryView() != mode) return 2660;
+    // Coverflow's Wariant row: Półka / Steelbook / Piracka płyta, one drawer row for all three (Półka
+    // has its own geometry inside, saved as 10); its two switches show only on Półka.
+    {
+        const auto key = gameKey(app.cards_[app.selected_].game);
+        app.openLibraryPanel(library_ui::Panel::views); app.library_views_progress_ = 1;
+        if (library_ui::views::optionCount(library_view::View::coverflow) != 1) return 2650;
+        app.library_controls_.view_row = 1; app.adjustLibraryView(1); settle(); // Steelbook → Piracka płyta.
+        if (!app.libraryCoverflow() || !app.library_controls_.options.coverflow_cd) return 2651;
+        app.adjustLibraryView(1); // The last: stays.
+        if (!app.library_controls_.options.coverflow_cd) return 2652;
+        app.adjustLibraryView(-2); settle(); // → Półka.
+        if (!app.libraryBookshelf() || library_view::label(app.libraryView()) != std::wstring(tr(L"Coverflow")) ||
+            library_ui::views::optionCount(app.libraryView()) != 3 || gameKey(app.cards_[app.selected_].game) != key) return 2653;
+        if (!capture(L"library-coverflow-variants.png")) return 2654;
+        app.adjustLibraryView(1); settle(); // Back to the flat carousel; the CD choice was kept.
+        if (!app.libraryCoverflow() || app.library_controls_.options.coverflow_cd) return 2655;
+        app.adjustLibraryView(1); settle();
+        if (!app.library_controls_.options.coverflow_cd) return 2656;
+        // The drawer: Coverflow stays on its row and keeps the variant shown.
+        app.library_controls_.view_row = 0; app.libraryAccept();
+        app.library_controls_.choice = library_view::drawerRow(library_view::View::coverflow); app.libraryAccept();
+        if (!app.libraryCoverflow() || !app.library_controls_.options.coverflow_cd) return 2657;
+        app.library_controls_.options.coverflow_cd = false; app.applyLibraryOptions();
+        app.closeLibraryPanel(); app.library_views_progress_ = 0; app.library_controls_.focus = -1; settle();
     }
-    app.openLibraryPanel(library_ui::Panel::views); app.library_views_progress_ = 1; settle();
-    if (!capture(L"library-views-media-drawer.png")) return 2661;
-    app.closeLibraryPanel(); app.library_views_progress_ = 0;
-    // The drawer lists Przegląd beside Kinowy and Półka under Coverflow; the saved numbers stay.
+    // The drawer lists Przegląd beside Kinowy; Półka has no row of its own; the saved numbers stay.
     if (library_view::drawerView(library_view::drawerRow(library_view::View::cinematic) + 1) != library_view::View::overview ||
-        library_view::drawerView(library_view::drawerRow(library_view::View::coverflow) + 1) != library_view::View::bookshelf ||
-        static_cast<int>(library_view::View::overview) != 9 || static_cast<int>(library_view::View::bookshelf) != 10) return 2670;
+        library_view::drawerRow(library_view::View::bookshelf) != library_view::drawerRow(library_view::View::coverflow) ||
+        library_view::view_count != 7 || static_cast<int>(library_view::View::overview) != 9 || static_cast<int>(library_view::View::bookshelf) != 10) return 2670;
     const auto screen = app.renderer_.viewport();
     // Półka in the steam library: Cover Flow. The focused poster faces front in the middle with
     // its title, year and developer under it; the others stand turned on both sides in perspective
@@ -762,15 +755,16 @@ int LauncherUiTest::libraryViews(HWND window) {
         if (!app.preview_.find(app.cards_[3].game) || app.libraryButtons()) return 2675;
         if (!capture(L"library-bookshelf.png")) return 2676;
         // Its two options in the view drawer: grey side cases (on) and the platform band atop each spine (on).
-        if (library_ui::views::optionCount(library_view::View::bookshelf) != 2 || !app.library_controls_.options.bookshelf_gray ||
+        // (Under its Wariant row.)
+        if (library_ui::views::optionCount(library_view::View::bookshelf) != 3 || !app.library_controls_.options.bookshelf_gray ||
             !app.library_controls_.options.bookshelf_platform) return 2780;
-        app.library_controls_.view_row = 1; app.adjustLibraryView(0); settle();
+        app.library_controls_.view_row = 2; app.adjustLibraryView(0); settle();
         if (app.library_controls_.options.bookshelf_gray || !app.libraryPresentation().bookshelf_platform) return 2781;
         if (!capture(L"library-bookshelf-colour.png")) return 2782;
-        app.library_controls_.view_row = 2; app.adjustLibraryView(0); settle();
+        app.library_controls_.view_row = 3; app.adjustLibraryView(0); settle();
         if (app.libraryPresentation().bookshelf_platform || app.libraryPresentation().bookshelf_gray) return 2783;
         if (!capture(L"library-bookshelf-plain-spines.png")) return 2784;
-        app.library_controls_.view_row = 1; app.adjustLibraryView(1); app.library_controls_.view_row = 2; app.adjustLibraryView(1);
+        app.library_controls_.view_row = 2; app.adjustLibraryView(1); app.library_controls_.view_row = 3; app.adjustLibraryView(1);
         app.library_controls_.view_row = 0; settle();
         if (!app.libraryPresentation().bookshelf_gray || !app.libraryPresentation().bookshelf_platform) return 2785;
         // A click on a turned cover glides it to the middle; halfway it is turning.
@@ -789,11 +783,86 @@ int LauncherUiTest::libraryViews(HWND window) {
         settle();
         if (!capture(L"library-bookshelf-last.png")) return 2721;
         app.focusCard(3); settle();
-        // The focused cover is a launch target (double click).
+        // The focused case opens (double click, Enter, A): it flies to the left and opens, its medium
+        // slides out, Graj and Szczegóły wait on the right; Graj launches, Szczegóły opens the
+        // details, Back closes the case backwards.
         app.mouse_transition_until_ = 0;
         app.click(cx * scale, cy * scale, true);
-        if (!app.pending_launch_ || gameKey(app.pending_game_) != key) return 2722;
+        if (app.pending_launch_ || !app.gameCaseOpen() || app.topModal() != Launcher::Modal::game_case || app.game_case_.key != key) return 2722;
+        const auto deliver_disc = [&](size_t index) {
+            wchar_t file[4096]{};
+            if (!GetEnvironmentVariableW(L"LAUNCHME_UI_DISC_IMAGE", file, 4096)) return;
+            auto image = std::make_unique<CoverMessage>();
+            image->generation = app.jobs_->generation.load(); image->kind = CoverMessage::Kind::disc;
+            image->key = gameKey(app.cards_[index].game);
+            std::ifstream input(std::filesystem::path(file), std::ios::binary);
+            image->bytes = std::vector<uint8_t>(std::istreambuf_iterator<char>(input), {});
+            app.onCover(std::move(image));
+        };
+        auto case_preview = std::make_unique<PreviewMessage>();
+        case_preview->generation = app.preview_.generation(); case_preview->app_id = app.cards_[3].game.app_id;
+        case_preview->details = {L"Krótki opis gry na półce: bohater wyrusza w podróż przez świat pełen zagadek, a każda plansza skrywa coś nowego.",
+                                 L"17 Sep 2015", L"Fixture Studio", L"Fixture Publisher", L"Action"};
+        app.onPreview(std::move(case_preview));
+        const auto steps = [&](float seconds) {
+            for (int i = 0; i < static_cast<int>(seconds / 0.05f); ++i) { app.last_frame_ -= std::chrono::milliseconds(50); app.tick(); }
+        };
+        steps(0.4f);
+        if (app.game_case_.time <= 0.3f || app.game_case_.time >= game_case::end_time) return 2723;
+        if (!capture(L"library-case-flight.png")) return 2724;
+        steps(0.6f);
+        if (!capture(L"library-case-opening.png")) return 2725;
+        steps(1.6f);
+        deliver_disc(3);
+        if (std::abs(app.game_case_.time - game_case::end_time) > 0.001f) return 2726;
+        if (!capture(L"library-case-disc.png")) return 2727;
+        // The buttons: Right moves to Szczegóły, a click and the pointer pick them.
+        const game_case::Layout scene{screen.width, screen.height, app.gameCaseKind()};
+        if (app.gameCaseKind().media != game_case::Media::disc || scene.hit(4, 4) >= 0) return 2728;
+        app.modalKey(VK_RIGHT, false);
+        if (app.game_case_.focus != 1) return 2729;
+        app.modalKey(VK_LEFT, false);
+        if (app.game_case_.focus != 0) return 2730;
+        // Graj: launches; the case stays open behind it.
+        app.modalKey(VK_RETURN, false);
+        if (!app.pending_launch_ || gameKey(app.pending_game_) != key || !app.gameCaseOpen()) return 2731;
         app.pending_launch_ = false; app.launch_progress_ = 0;
+        // Szczegóły (a click): the details; the case is gone at once, Back returns to Półka.
+        const auto details_button = scene.button(1);
+        app.mouse_transition_until_ = 0;
+        app.click((details_button.left + 4) * scale, (details_button.top + 4) * scale, false);
+        if (app.screen_ != ScreenMode::details || app.gameCaseShown()) return 2732;
+        app.back(); settle();
+        if (app.screen_ != ScreenMode::library || !app.libraryBookshelf() || app.topModal() != Launcher::Modal::none) return 2733;
+        // Back closes it backwards; meanwhile the library has the keys again.
+        app.accept();
+        if (!app.gameCaseOpen()) return 2734;
+        steps(3);
+        app.back();
+        if (app.gameCaseOpen() || !app.gameCaseShown() || app.topModal() != Launcher::Modal::none) return 2735;
+        steps(0.3f);
+        if (!capture(L"library-case-closing.png")) return 2736;
+        steps(1.5f);
+        if (app.gameCaseShown()) return 2737;
+        // The platforms' own packages: an Amiga big box with its diskette, a Switch (2) case with its cartridge.
+        const std::pair<const wchar_t*, const wchar_t*> packages[] = {
+            {L"Amiga", L"library-case-amiga.png"}, {L"Switch", L"library-case-switch.png"}, {L"Switch 2", L"library-case-switch2.png"},
+            {L"Xbox 360", L"library-case-xbox360.png"}, {L"Wii", L"library-case-wii.png"}};
+        const auto kept = app.cards_[3].game;
+        for (const auto& [platform, screenshot] : packages) {
+            app.cards_[3].game.kind = GameKind::nonsteam; app.cards_[3].game.platform = platform;
+            app.openGameCase();
+            const auto expected = game_case::kindOf(platform);
+            if (!app.gameCaseOpen() || app.gameCaseKind().package != expected.package || app.gameCaseKind().media != expected.media) return 2738;
+            steps(0.3f); // Closed, on its way: its front as on the shelf.
+            if (!capture((std::wstring(L"closed-") + screenshot).c_str())) return 2741;
+            steps(0.6f);
+            if (!capture((std::wstring(L"mid-") + screenshot).c_str())) return 2739;
+            steps(2.5f);
+            if (!capture(screenshot)) return 2740;
+            app.closeGameCase(true);
+        }
+        app.cards_[3].game = kept;
         app.saveLibraryPreferences();
         const auto saved = loadLibraryState(userConfigDirectory() / L"library-state.ini");
         if (!saved || saved->options.at("1:steam").view != library_view::View::bookshelf) return 2677;

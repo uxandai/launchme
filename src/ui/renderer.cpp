@@ -625,6 +625,7 @@ void Renderer::paint(const std::vector<GameCard>& cards, size_t selected, bool s
             if (!context.aurelia) { drawFileBrowser(); drawKeyboard(); } // Aurelia's field belongs above its page.
             drawCompanionPicker();
             drawThemeStudio();
+            drawGameCase(); // Półka's open case: the library's own layer, below every dialog.
             drawProfile(); // Over any screen, from the drawer: the lowest dialog.
             drawTarot(); // Over the home it opens from; the walkthrough, prompts and toasts above it.
             drawAurelia();

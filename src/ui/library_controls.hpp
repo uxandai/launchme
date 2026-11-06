@@ -62,8 +62,9 @@ namespace views {
 constexpr float width = 400, padding = 28;
 inline int optionCount(library_view::View view) {
     using library_view::View;
-    // Kinowy: its scrolling, then the platform, last played and playtime beside the year.
-    return view == View::cinematic ? 4 : view == View::list ? 3 : view == View::bookshelf ? 2 : view == View::grid || view == View::overview || view == View::coverflow ||
+    // Kinowy: its scrolling, then the platform, last played and playtime beside the year. Coverflow:
+    // its variant; on Półka also the grey side cases and the platform band.
+    return view == View::cinematic ? 4 : view == View::list ? 3 : view == View::bookshelf ? 3 : view == View::grid || view == View::overview || view == View::coverflow ||
         view == View::list_plus ? 1 : 0;
 }
 inline int closeRow(library_view::View view) { return optionCount(view) + 1; }

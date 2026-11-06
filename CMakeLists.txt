@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(launchme VERSION 0.7.6 LANGUAGES C CXX)
+project(launchme VERSION 0.7.7 LANGUAGES C CXX)
 
 if(NOT WIN32)
     # Linux (highly experimental, docs/linux-port.md): the shared core, its tests and the launcher on SDL3 + Skia.
@@ -181,6 +181,14 @@ add_custom_target(launchme_platform_logos ALL
     DEPENDS ${LAUNCHME_PLATFORM_LOGOS} VERBATIM)
 add_dependencies(launchme launchme_platform_logos)
 install(FILES ${LAUNCHME_PLATFORM_LOGOS} DESTINATION assets/platforms COMPONENT Runtime)
+# Półka's case fronts (src/ui/package_look.hpp: frameOf; Twicethedad's Game Cases, see its LICENSE.txt).
+file(GLOB LAUNCHME_CASE_FRONTS CONFIGURE_DEPENDS "${LAUNCHME_RES_DIR}/cases/*.png")
+add_custom_target(launchme_case_fronts ALL
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets/cases"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${LAUNCHME_CASE_FRONTS} "${LAUNCHME_RES_DIR}/cases/LICENSE.txt" "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets/cases/"
+    DEPENDS ${LAUNCHME_CASE_FRONTS} VERBATIM)
+add_dependencies(launchme launchme_case_fronts)
+install(FILES ${LAUNCHME_CASE_FRONTS} res/cases/LICENSE.txt DESTINATION assets/cases COMPONENT Runtime)
 
 # Lexend (Google Fonts, SIL OFL): the static weights cut from the variable font, loaded by Renderer::loadLocalFonts.
 file(GLOB LAUNCHME_LEXEND CONFIGURE_DEPENDS "${LAUNCHME_RES_DIR}/fonts/Lexend-*.ttf")

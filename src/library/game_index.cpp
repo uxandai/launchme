@@ -18,16 +18,16 @@
 namespace game_index {
 namespace {
 constexpr std::array<const char*, source_count> source_keys{
-    "library", "steam_appinfo", "steam_store", "rawg", "reviews", "hltb", "emulation", "gog", "epic", "steam_stats", "achievements"};
+    "library", "steam_appinfo", "steam_store", "rawg", "reviews", "hltb", "emulation", "gog", "epic", "steam_stats", "achievements", "nintendo"};
 
 // Per-field trust: the first source with the field wins.
 using Order = std::initializer_list<Source>;
 // Source::library first: only the player's own metadata (Edytuj metadane) puts these facts there.
-constexpr Order release_order{Source::library, Source::steam_appinfo, Source::steam_store, Source::gog, Source::epic, Source::rawg, Source::emulation};
-constexpr Order studio_order{Source::library, Source::steam_appinfo, Source::steam_store, Source::gog, Source::epic, Source::rawg, Source::emulation};
-constexpr Order genre_order{Source::library, Source::steam_appinfo, Source::steam_store, Source::rawg, Source::gog, Source::epic, Source::emulation};
+constexpr Order release_order{Source::library, Source::steam_appinfo, Source::steam_store, Source::gog, Source::epic, Source::nintendo, Source::rawg, Source::emulation};
+constexpr Order studio_order{Source::library, Source::steam_appinfo, Source::steam_store, Source::gog, Source::epic, Source::nintendo, Source::rawg, Source::emulation};
+constexpr Order genre_order{Source::library, Source::steam_appinfo, Source::steam_store, Source::rawg, Source::gog, Source::epic, Source::nintendo, Source::emulation};
 constexpr Order tag_order{Source::steam_appinfo, Source::rawg, Source::gog, Source::epic};
-constexpr Order description_order{Source::library, Source::steam_store, Source::gog, Source::epic, Source::rawg, Source::emulation};
+constexpr Order description_order{Source::library, Source::steam_store, Source::gog, Source::epic, Source::nintendo, Source::rawg, Source::emulation};
 constexpr Order franchise_order{Source::steam_appinfo, Source::gog, Source::rawg};
 constexpr Order title_order{Source::library, Source::steam_appinfo, Source::steam_store, Source::gog, Source::epic, Source::rawg, Source::emulation};
 constexpr Order review_order{Source::reviews, Source::steam_appinfo, Source::steam_store};

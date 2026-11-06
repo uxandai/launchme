@@ -431,7 +431,7 @@ LRESULT CALLBACK windowProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lpara
             if (app->desktopWheel(static_cast<float>(point.x), static_cast<float>(point.y), raw,
                                   (GET_KEYSTATE_WPARAM(wparam) & MK_CONTROL) != 0)) {} // Grid, sidebar, pane, poster size.
             else if (app->companionOpen() && !app->friendsOpen() && modal == Launcher::Modal::none) app->companionWheel(raw);
-            else if (modal == Launcher::Modal::tarot) {} // The reading has nothing to scroll.
+            else if (modal == Launcher::Modal::tarot || modal == Launcher::Modal::game_case) {} // Nothing to scroll.
             else if (modal == Launcher::Modal::profile) app->profileScroll(-static_cast<float>(raw) / WHEEL_DELTA * 96.0f); // Smooth, as a page.
             else if (modal == Launcher::Modal::aurelia) app->aureliaScroll(raw > 0 ? -2 : 2);
             else if (modal == Launcher::Modal::theme_studio) app->themeStudioWheel(-static_cast<float>(raw) / WHEEL_DELTA * 90.0f);

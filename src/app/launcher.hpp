@@ -40,6 +40,7 @@
 #include "../net/remote_server.hpp"
 #include "../artwork/identified_artwork.hpp"
 #include "../ui/identify_view.hpp"
+#include "../ui/game_case_view.hpp"
 #include "../ui/theme_studio.hpp"
 #include "../ui/bulk_covers_view.hpp"
 #include "../ui/achievements_view.hpp"
@@ -201,6 +202,22 @@ public:
     void tarotPointer(float x, float y); // Hover.
     bool tarotPointerOver(float x, float y) const;
     bool tickTarot(float dt);
+    // Półka's open case (src/app/game_case.cpp, src/ui/game_case_view.hpp): Enter on the focused case
+    // lifts it to the left and opens it, its medium slides out, Graj / Szczegóły on the right. A modal
+    // layer while open (Modal::game_case); closing plays backwards over the shelf.
+    bool gameCaseOpen() const { return game_case_.open; }
+    bool gameCaseShown() const { return game_case_.open || game_case_.time > 0; }
+    void openGameCase();
+    void closeGameCase(bool at_once = false);
+    void gameCaseKey(WPARAM key, bool repeated);
+    void gameCaseAccept();
+    void gameCaseClick(float x, float y);
+    void gameCasePointer(float x, float y);
+    bool gameCasePointerOver(float x, float y) const;
+    bool tickGameCase(float dt);
+    game_case::Kind gameCaseKind() const;
+    // Disc art is wanted: Coverflow's discs, or a disc sliding out of Półka's open case.
+    bool discArt() const;
     // Profil (src/app/profile.cpp): the player's page over the launcher, a modal layer
     // (Modal::profile) opened from its widget in the drawer and the desktop window's widgets.
     bool profileOpen() const { return profile_.open; }
@@ -764,6 +781,13 @@ public:
     void togglePerformance();
     void noteUserInput();
     bool homeUntouched() const; // Before the first key, click or pad press, on the home's first row.
+    // Start-up: the libraries come in one after another (Steam, GOG, Epic, the PC stores, ROMs) and
+    // re-sort Ostatnio grane. The tiles wait (the loading state) until they are all in, at most
+    // startup_hold_ms after the first cards or until the first input, then enter once.
+    bool startupHold();
+    static constexpr ULONGLONG startup_hold_ms = 2000;
+    bool startup_hold_ = true;
+    ULONGLONG startup_hold_until_ = 0;
     bool identifyOpen() const { return identify_state_.open; }
     void identifyKey(WPARAM key, bool repeated);
     void onRatings(std::unique_ptr<RatingsMessage> message);
@@ -815,7 +839,7 @@ public:
     // topmost open one takes keys, pad buttons, the wheel and clicks before any screen, drawer or
     // menu. The on-screen keyboard is not a layer: it types into the field of the layer beneath.
     enum class Modal { none, exit_prompt, power_menu, tour, file_browser, library_dialog, custom_editor, bulk_covers, identify, gog_install, companion_picker, tarot,
-                       whats_new, profile, metadata, aurelia, theme_studio };
+                       whats_new, profile, metadata, aurelia, theme_studio, game_case };
     Modal topModal() const;
     // The topmost of the dialogs under the walkthrough (file picker … installer): Back and typed
     // characters reach it even under the exit prompt or the power menu.
@@ -910,6 +934,7 @@ private:
     std::shared_ptr<std::atomic_bool> glance_cancel_ = std::make_shared<std::atomic_bool>(false);
     // Injectable transport; the UI and parser tests never contact real providers.
     glance::Get glance_get_ = httpGet;
+    game_case_ui::State game_case_; // Półka's open case.
     // Tarot (src/app/tarot.cpp): the reading on screen, its seed, the store search in flight.
     tarot_ui::State tarot_;
     uint32_t tarot_seed_ = 0, tarot_generation_ = 0;
@@ -1252,7 +1277,11 @@ private:
     std::optional<GameWindow> overlay_return_;
     void pollOverlayReturn();
     void overlayKey(WPARAM key, bool repeated = false);
-    void overlayKeyboard(WPARAM key, bool repeated, bool shift_tab);
+    // `chord`: exactly the modifiers of the configured keyboard shortcut are held (Settings, AppSettings::overlay_key).
+    void overlayKeyboard(WPARAM key, bool repeated, bool chord);
+    bool overlayChordModifiers() const;
+    // The pad pair that opens the overlay instead of Guide (AppSettings::overlay_pad); 0 for Guide itself.
+    WORD overlayPadPair() const;
     void overlayClick(float x, float y);
     void overlayAccept();
     bool overlayForeground(HWND window) const {

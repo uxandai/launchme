@@ -5,6 +5,7 @@
 // so the covers turn while they pass the middle. Geometry: shelf_layout (coverflow_layout.hpp).
 #include "renderer.hpp"
 #include "coverflow_layout.hpp"
+#include "package_look.hpp"
 #include "renderer_internal.hpp"
 #include "../library/steam_stats.hpp"
 
@@ -28,21 +29,6 @@ ComPtr<ID2D1PathGeometry> quadGeometry(ID2D1Factory* factory, const D2D1_POINT_2
     sink->AddLines(corners + 1, 3);
     sink->EndFigure(D2D1_FIGURE_END_CLOSED);
     return SUCCEEDED(sink->Close()) ? path : ComPtr<ID2D1PathGeometry>{};
-}
-D2D1_POINT_2F middle(D2D1_POINT_2F a, D2D1_POINT_2F b) { return {(a.x + b.x) * 0.5f, (a.y + b.y) * 0.5f}; }
-// A rounded rectangle in face fractions (corner radius rs of the width, rt of the height),
-// clockwise in four arcs of equal length: top right, bottom right, bottom left, top left.
-std::vector<D2D1_POINT_2F> roundedOutline(float rs, float rt) {
-    constexpr int steps = 6;
-    constexpr float pi = 3.14159265f;
-    const struct { float cx, cy, from; } arcs[] = {{1 - rs, rt, -90}, {1 - rs, 1 - rt, 0}, {rs, 1 - rt, 90}, {rs, rt, 180}};
-    std::vector<D2D1_POINT_2F> points;
-    for (const auto& arc : arcs)
-        for (int i = 0; i <= steps; ++i) {
-            const float angle = (arc.from + 90.0f * static_cast<float>(i) / steps) * pi / 180;
-            points.push_back({arc.cx + rs * std::cos(angle), arc.cy + rt * std::sin(angle)});
-        }
-    return points;
 }
 }
 
@@ -82,11 +68,18 @@ ID2D1Bitmap* Renderer::desaturatedArt(Cover& image) {
 // thickness allows and smaller until it fits (an ellipsis below half size). With `band`, its top is
 // a band in the platform's colour with the platform's logo (or name) along it, white. Spine-shaped
 // (its thickness by its height); mapped onto the spine face in perspective. Cached by its content.
-ID2D1Bitmap* Renderer::shelfSpine(const std::wstring& name, const std::wstring& platform, std::optional<D2D1_COLOR_F> band) {
+ID2D1Bitmap* Renderer::shelfSpine(const std::wstring& name, const std::wstring& platform, std::optional<D2D1_COLOR_F> band,
+                                  std::optional<D2D1_COLOR_F> ink_colour, std::optional<D2D1_COLOR_F> band_ink) {
     if (name.empty() || !dwrite_) return nullptr;
     const auto found_logo = band && !platform.empty() ? platform_badges_.find(platform) : platform_badges_.end();
     Cover* logo = found_logo != platform_badges_.end() && found_logo->second.bitmap ? &found_logo->second : nullptr;
-    const std::wstring key = name + L'\x1f' + (band ? platform : std::wstring{}) + (logo ? L"\x1f" L"logo" : L"");
+    const auto title_ink = ink_colour.value_or(gray(0.86f));
+    const auto rgb = [](const D2D1_COLOR_F& c) {
+        return std::to_wstring(std::lround(c.r * 255)) + L"." + std::to_wstring(std::lround(c.g * 255)) + L"." + std::to_wstring(std::lround(c.b * 255));
+    };
+    const auto head_ink = band_ink.value_or(gray(0.97f));
+    const std::wstring key = name + L'\x1f' + (band ? platform + L'\x1f' + rgb(*band) + L'\x1f' + rgb(head_ink) : std::wstring{}) + (logo ? L"\x1f" L"logo" : L"") +
+                             L'\x1f' + rgb(title_ink);
     if (const auto found = shelf_spines_.find(key); found != shelf_spines_.end()) return found->second.Get();
     if (shelf_spines_.size() >= 96) shelf_spines_.clear();
     constexpr UINT32 length = 768;
@@ -111,7 +104,7 @@ ID2D1Bitmap* Renderer::shelfSpine(const std::wstring& name, const std::wstring& 
     ComPtr<ID2D1Bitmap> bitmap;
     if (FAILED(target_->CreateCompatibleRenderTarget(D2D1::SizeF(thick, static_cast<float>(length)), D2D1::SizeU(thickness, length),
                                                      surface.GetAddressOf())) ||
-        FAILED(surface->CreateSolidColorBrush(gray(0.86f), ink.GetAddressOf()))) return nullptr;
+        FAILED(surface->CreateSolidColorBrush(title_ink, ink.GetAddressOf()))) return nullptr;
     surface->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE); // On transparent: no ClearType fringes.
     surface->BeginDraw();
     surface->Clear(D2D1::ColorF(0, 0, 0, 0));
@@ -123,7 +116,7 @@ ID2D1Bitmap* Renderer::shelfSpine(const std::wstring& name, const std::wstring& 
     if (band) {
         ink->SetColor(*band);
         surface->FillRectangle(D2D1::RectF(0, 0, thick, band_length), ink.Get());
-        ink->SetColor(gray(0.97f));
+        ink->SetColor(head_ink);
         const float middle = band_length * 0.5f;
         surface->SetTransform(along(middle));
         if (logo) {
@@ -142,7 +135,7 @@ ID2D1Bitmap* Renderer::shelfSpine(const std::wstring& name, const std::wstring& 
         } else if (ComPtr<IDWriteTextLayout> label; !platform.empty() && layoutOf(platform, thick * 0.42f, band_length * 0.86f, label)) {
             surface->DrawTextLayout({thick * 0.5f - band_length * 0.43f, middle - thick * 0.5f}, label.Get(), ink.Get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
         }
-        ink->SetColor(gray(0.86f));
+        ink->SetColor(title_ink);
     }
     const float middle = band_length + (length - band_length) * 0.5f;
     surface->SetTransform(along(middle));
@@ -190,6 +183,8 @@ void Renderer::drawLibraryShelf() {
     std::vector<size_t> order;
     const auto side = static_cast<ptrdiff_t>(layout.sideCount());
     const auto centre = static_cast<ptrdiff_t>(std::lround(std::clamp(flow, 0.0f, static_cast<float>(count - 1))));
+    // The open case (game_case_renderer.cpp) has taken the focused one off the shelf.
+    const bool case_open = context_->game_case && context_->game_case->time > 0;
     for (ptrdiff_t i = std::max<ptrdiff_t>(0, centre - side); i < std::min<ptrdiff_t>(static_cast<ptrdiff_t>(count), centre + side + 1); ++i)
         if (cards[static_cast<size_t>(i)].opacity > 0.005f) order.push_back(static_cast<size_t>(i));
     std::stable_sort(order.begin(), order.end(), [&](size_t a, size_t b) {
@@ -217,10 +212,8 @@ void Renderer::drawLibraryShelf() {
     // under its clear front, the spine (left; the art wraps onto it) or the opening edge (right)
     // showing on the side that faces the viewer. Only the focused cover keeps its colour; the
     // others turn grey, and colour returns as one glides to the middle.
-    const float depth = w * shelf_layout::depth * scale;
     const float floor_y = h * 0.5f * scale; // The floor plane, from the camera's origin.
     const auto unit = perspective::Vec3{0, 0, 1};
-    const auto outline = roundedOutline(shelf_layout::corner, shelf_layout::corner * shelf_layout::aspect);
     // Półka's option "Platforma na grzbiecie": the spine's top band, in the console's colour or the store's.
     const auto spineBand = [&](const Game& game) -> std::optional<D2D1_COLOR_F> {
         if (!context_->library_options.bookshelf_platform) return std::nullopt;
@@ -236,12 +229,24 @@ void Renderer::drawLibraryShelf() {
         default: return D2D1::ColorF(0.18f, 0.25f, 0.33f);
         }
     };
-    const size_t arc = outline.size() / 4;
     const auto cover = [&](size_t index, bool mirrored) {
         const auto& card = cards[index];
+        // Each game in its own package (package_look.hpp): a keep case, a Switch case, an Amiga big box.
+        const auto platform = activePlatformName(card.game);
+        const auto kind = game_case::kindOf(platform);
+        const auto look = package_look::of(kind);
+        const float package_aspect = game_case::aspect(kind), package_height = game_case::height(kind);
         const float offset = static_cast<float>(index) - flow, along = std::abs(offset);
         const float lift = index == selected_ ? launch * w * 0.16f : 0;
-        const auto front = layout.face(offset, lift, scale);
+        auto front = layout.face(offset, lift, scale);
+        {
+            // Its own size around the slot's middle, standing on the floor.
+            const float narrow = package_aspect * package_height / shelf_layout::aspect;
+            front.origin = front.origin + front.u * ((1 - narrow) * 0.5f) + front.v * (1 - package_height);
+            front.u = front.u * narrow;
+            front.v = front.v * package_height;
+        }
+        const float depth = w * package_aspect * package_height / shelf_layout::aspect * game_case::depth(kind) * scale;
         const float angle = std::clamp(offset, -1.0f, 1.0f) * shelf_layout::turn;
         const auto back = perspective::turned(unit, angle) * depth; // Into the screen, as the case is turned.
         const auto world = [&](float s, float t, bool rear) {
@@ -251,6 +256,11 @@ void Renderer::drawLibraryShelf() {
             return camera.project(p);
         };
         const auto flat = [&](const perspective::Face& face) { return mirrored ? face.mirrored(floor_y) : face; };
+        const auto partOf = [&](float l, float t, float r, float b) {
+            return perspective::Face{front.origin + front.u * l + front.v * t, front.u * (r - l), front.v * (b - t)};
+        };
+        const auto outline = package_look::outline(look.corner, look.corner * package_aspect);
+        const size_t arc = outline.size() / 4;
         // A closed outline through `points`; its bounds for the clipping layers.
         D2D1_RECT_F bounds{};
         const auto shape = [&](const std::vector<D2D1_POINT_2F>& points) {
@@ -305,15 +315,10 @@ void Renderer::drawLibraryShelf() {
             if (const auto clip = quadGeometry(factory_.Get(), q)) target_->FillGeometry(clip.Get(), art.brush);
         };
         // The grey print, the coloured one over it as the cover nears the middle.
-        const auto print = [&](const perspective::Face& part, float crop_aspect, float opacity, float crop_left = 0, float crop_width = 1) {
-            const auto source = [&](ID2D1Bitmap* bitmap) {
-                auto r = perspective::cropTo(bitmap->GetSize(), crop_aspect);
-                const float width = r.right - r.left;
-                r.left += width * crop_left; r.right = r.left + width * crop_width;
-                return r;
-            };
-            if (colourful < 0.999f && grey.bitmap) picture(grey, flat(part), source(grey.bitmap), opacity);
-            if (colourful > 0.001f && colour.bitmap) picture(colour, flat(part), source(colour.bitmap), opacity * (grey.bitmap ? colourful : 1));
+        const auto print = [&](const perspective::Face& part, float crop_aspect, float opacity) {
+            if (colourful < 0.999f && grey.bitmap) picture(grey, flat(part), perspective::cropTo(grey.bitmap->GetSize(), crop_aspect), opacity);
+            if (colourful > 0.001f && colour.bitmap)
+                picture(colour, flat(part), perspective::cropTo(colour.bitmap->GetSize(), crop_aspect), opacity * (grey.bitmap ? colourful : 1));
         };
         // The side that faces the viewer: a cover on the right shows its opening edge, one on the
         // left its spine (the centre one shows neither).
@@ -326,9 +331,11 @@ void Renderer::drawLibraryShelf() {
             if (const auto edge = shape(strip)) {
                 const float lit = 1 - std::min(1.0f, along) * 0.35f;
                 if (left_side) {
-                    // A black spine with the game's name printed along it, darker: it faces away from the lamp.
-                    brush(gray(0.012f, alpha)); target_->FillGeometry(edge.Get(), solid_.Get());
-                    if (auto* label = shelfSpine(card.game.name, activePlatformName(card.game), spineBand(card.game))) {
+                    // The spine with the game's name printed along it (a Switch case's head band always),
+                    // darker: it faces away from the lamp.
+                    brush(D2D1::ColorF(look.spine.r, look.spine.g, look.spine.b, alpha)); target_->FillGeometry(edge.Get(), solid_.Get());
+                    const auto head = look.spine_head_always ? std::optional<D2D1_COLOR_F>(look.spine_head) : spineBand(card.game);
+                    if (auto* label = shelfSpine(card.game.name, platform, head, look.spine_ink, look.head_ink)) {
                         target_->PushLayer(D2D1::LayerParameters(bounds, edge.Get()), nullptr);
                         const perspective::Face spine{front.origin, back, front.v};
                         const auto size = label->GetSize();
@@ -337,68 +344,48 @@ void Renderer::drawLibraryShelf() {
                     }
                     brush(gray(0, (0.26f - 0.12f * lit + (mirrored ? 0.15f : 0)) * alpha)); target_->FillGeometry(edge.Get(), solid_.Get());
                 } else {
-                    // Clear plastic over the insert's white edge, then the case's dark rim.
-                    brush(D2D1::ColorF(0.10f * lit, 0.105f * lit, 0.115f * lit, alpha)); target_->FillGeometry(edge.Get(), solid_.Get());
+                    // The opening edge: the plastic (clear over the insert's white on a Switch case), or cardboard.
+                    brush(D2D1::ColorF(look.edge.r * lit, look.edge.g * lit, look.edge.b * lit, alpha)); target_->FillGeometry(edge.Get(), solid_.Get());
                     if (!mirrored) {
-                        const auto a = world(right_side ? 1.0f : 0.0f, 0.12f, false), b = world(right_side ? 1.0f : 0.0f, 0.88f, false);
-                        const auto c = world(right_side ? 1.0f : 0.0f, 0.12f, true), d = world(right_side ? 1.0f : 0.0f, 0.88f, true);
+                        const auto a = world(1.0f, 0.12f, false), b = world(1.0f, 0.88f, false);
+                        const auto c = world(1.0f, 0.12f, true), d = world(1.0f, 0.88f, true);
+                        const bool light_edge = look.edge.r > 0.5f;
                         line((a.x * 0.62f + c.x * 0.38f), (a.y * 0.62f + c.y * 0.38f), (b.x * 0.62f + d.x * 0.38f), (b.y * 0.62f + d.y * 0.38f),
-                             gray(0.85f, 0.20f * alpha), 1.2f * scale);
+                             light_edge ? gray(0, 0.16f * alpha) : gray(0.85f, 0.20f * alpha), 1.2f * scale);
                     }
                 }
                 brush(gray(1, (mirrored ? 0.03f : 0.09f) * alpha)); target_->DrawGeometry(edge.Get(), solid_.Get(), 0.7f * scale);
             }
         }
-        // The front: the case's rim, the poster behind clear plastic with the same rounded corners.
-        std::vector<D2D1_POINT_2F> rim;
-        for (const auto& p : outline) rim.push_back(world(p.x, p.y, false));
-        const auto front_shape = shape(rim);
-        if (!front_shape) return;
-        brush(gray(0.05f, alpha)); target_->FillGeometry(front_shape.Get(), solid_.Get());
-        constexpr float border = 0.018f;
-        const float border_t = border * shelf_layout::aspect;
-        // The insert behind the clear front keeps square corners: the art itself is never rounded.
-        const std::vector<D2D1_POINT_2F> window{world(border, border_t, false), world(1 - border, border_t, false),
-                                                world(1 - border, 1 - border_t, false), world(border, 1 - border_t, false)};
-        const auto insert = shape(window);
-        if (insert && image) {
-            target_->PushLayer(D2D1::LayerParameters(bounds, insert.Get()), nullptr);
-            const auto paper = front.inset(border, border_t);
-            if (poster) print(paper, shelf_layout::aspect, shown);
-            else {
-                // A square cover stands in for the poster: its own blur behind it fills the 2:3 face.
-                if (context && colourful > 0.001f) if (auto* blur = blurredArt(*image))
-                    picture({blur, nullptr}, flat(paper), perspective::cropTo(blur->GetSize(), shelf_layout::aspect), shown * 0.85f * colourful);
-                print(paper.inset(0, (1 - shelf_layout::aspect) * 0.5f), 1, shown);
-            }
-            target_->PopLayer();
-        }
-        const auto corner = [&](float s, float t) { return world(s, t, false); };
-        // Turned away from the light: darkest at the far edge, more so towards the screen's edges.
+        // The front (package_renderer.cpp): the same drawing as the open case's.
         const float turned = std::min(1.0f, along);
-        const float shade = std::clamp(0.30f * turned + 0.07f * std::max(0.0f, along - 1), 0.0f, 0.62f) + (mirrored ? 0.18f : 0);
-        if (shade > 0.003f) {
-            const bool right = offset > 0;
-            shelf_shade_->SetStartPoint(right ? middle(corner(0, 0), corner(0, 1)) : middle(corner(1, 0), corner(1, 1)));
-            shelf_shade_->SetEndPoint(right ? middle(corner(1, 0), corner(1, 1)) : middle(corner(0, 0), corner(0, 1)));
-            shelf_shade_->SetOpacity(std::min(1.0f, shade) * alpha);
-            target_->FillGeometry(front_shape.Get(), shelf_shade_.Get());
-        }
-        if (!card.game.installed) { brush(gray(0, 0.26f * alpha)); target_->FillGeometry(front_shape.Get(), solid_.Get()); }
-        if (mirrored) return;
-        // Glossy plastic: a light band moving across the front as it turns past the middle.
-        const float band = 0.5f - std::clamp(offset, -1.6f, 1.6f) * 0.32f;
-        const auto diagonal = [&](float t) {
-            const auto a = corner(0, 0), b = corner(1, 1);
-            return D2D1::Point2F(std::lerp(a.x, b.x, t), std::lerp(a.y, b.y, t));
+        PackageFront face;
+        face.kind = kind;
+        face.platform = platform;
+        face.aspect = package_aspect;
+        face.alpha = alpha;
+        face.scale = scale;
+        face.at = [&](float s, float t) { return world(s, t, false); };
+        face.picture = [&](float l, float t, float r, float b, ID2D1Bitmap* bitmap, D2D1_RECT_F source, float opacity) {
+            picture({bitmap, nullptr}, flat(partOf(l, t, r, b)), source, opacity);
         };
-        shelf_gloss_->SetStartPoint(diagonal(band - 0.42f));
-        shelf_gloss_->SetEndPoint(diagonal(band + 0.42f));
-        shelf_gloss_->SetOpacity((0.075f + 0.035f * turned) * alpha);
-        target_->FillGeometry(front_shape.Get(), shelf_gloss_.Get());
-        // The rim catches the light along its top; a faint edge all round.
-        brush(gray(1, 0.10f * alpha)); target_->DrawGeometry(front_shape.Get(), solid_.Get(), 0.9f * scale);
-        if (insert) { brush(gray(0, 0.35f * alpha)); target_->DrawGeometry(insert.Get(), solid_.Get(), 0.8f * scale); }
+        face.print = [&](float l, float t, float r, float b, float art_aspect, float) {
+            if (!image) return;
+            const auto paper = partOf(l, t, r, b);
+            if (poster) { print(paper, art_aspect, shown); return; }
+            // A square cover stands in for the poster: its own blur behind it fills the face.
+            if (context && colourful > 0.001f) if (auto* blur = blurredArt(*image))
+                picture({blur, nullptr}, flat(paper), perspective::cropTo(blur->GetSize(), art_aspect), shown * 0.85f * colourful);
+            print(art_aspect < 1 ? paper.inset(0, (1 - art_aspect) * 0.5f) : paper.inset((1 - 1 / art_aspect) * 0.5f, 0), 1, shown);
+        };
+        face.gloss = 0.5f - std::clamp(offset, -1.6f, 1.6f) * 0.32f;
+        face.gloss_strength = 0.075f + 0.035f * turned;
+        // Turned away from the light: darkest at the far edge, more so towards the screen's edges.
+        face.shade = std::clamp(0.30f * turned + 0.07f * std::max(0.0f, along - 1), 0.0f, 0.62f) + (mirrored ? 0.18f : 0);
+        face.shade_right = offset <= 0;
+        face.dim = !card.game.installed;
+        face.reflection = mirrored;
+        drawPackageFront(face);
     };
     // The mirror images first, all through one fading mask anchored at the floor.
     shelf_fade_->SetStartPoint({0, floor * scale});
@@ -416,13 +403,13 @@ void Renderer::drawLibraryShelf() {
             target_->FillRectangle(D2D1::RectF(0, 180, viewport_.width, viewport_.height), solid_.Get());
             target_->SetTransform(D2D1::Matrix3x2F::Identity());
         }
-        cover(index, false);
+        if (!(case_open && index == selected_)) cover(index, false); // Its mirror image stays under the dimming.
     }
     target_->SetTransform(base);
 
     // The focused game's state over its cover once it faces front; its title when it has no art.
     const auto& card = cards[selected_];
-    const float facing = std::clamp(1 - std::abs(static_cast<float>(selected_) - flow) * 3, 0.0f, 1.0f) * card.opacity;
+    const float facing = case_open ? 0.0f : std::clamp(1 - std::abs(static_cast<float>(selected_) - flow) * 3, 0.0f, 1.0f) * card.opacity;
     const auto r = layout.bounds(static_cast<float>(selected_) - flow);
     const bool art = (selected_ < posters_.size() && posters_[selected_].bitmap) || (selected_ < covers_.size() && covers_[selected_].bitmap);
     if (!art && facing > 0.01f)
@@ -443,7 +430,8 @@ void Renderer::drawLibraryShelf() {
     target_->PopAxisAlignedClip();
 
     // Title, then year · developer, centred under the cover; they rise in with every new focus.
-    const float fade = smoothFade(detail_ * 1.6f) * (1 - launch * 0.6f), rise = 10 * (1 - fade);
+    const float fade = smoothFade(detail_ * 1.6f) * (1 - launch * 0.6f) * (case_open ? 0.0f : 1.0f), rise = 10 * (1 - fade);
+    if (fade < 0.003f) return;
     const float text_left = 68, text_width = viewport_.width - 136;
     fadingLine(card.game.name, text_left, layout.titleY() + rise, text_width, settings_heading_font_.Get(), gray(0.97f, fade), true, DWRITE_TEXT_ALIGNMENT_CENTER);
     // Under it, as in PSfive: the platform's badge, then year · developer · playtime, all at once when

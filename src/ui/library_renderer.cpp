@@ -205,11 +205,17 @@ void Renderer::drawViewDrawer() {
                 }
                 break;
             case View::overview: label = tr(L"Liczba kolumn"); value = std::to_wstring(state.options.overview_columns); break;
-            case View::coverflow: label = tr(L"Opakowanie"); value = state.options.coverflow_cd ? tr(L"Piracka płyta") : L"Steelbook"; break;
-            case View::list_plus: label = tr(L"Efekt steelbooka"); toggle = true; checked = state.options.list_plus_steelbook; break;
+            case View::coverflow:
             case View::bookshelf:
-                label = i == 0 ? tr(L"Szare pudełka z boku") : tr(L"Platforma na grzbiecie"); toggle = true;
-                checked = i == 0 ? state.options.bookshelf_gray : state.options.bookshelf_platform; break;
+                if (i == 0) {
+                    const int variant = library_view::coverflowVariant(state.options);
+                    label = tr(L"Wariant"); value = variant == 0 ? tr(L"Półka") : variant == 2 ? tr(L"Piracka płyta") : L"Steelbook";
+                } else {
+                    label = i == 1 ? tr(L"Szare pudełka z boku") : tr(L"Platforma na grzbiecie"); toggle = true;
+                    checked = i == 1 ? state.options.bookshelf_gray : state.options.bookshelf_platform;
+                }
+                break;
+            case View::list_plus: label = tr(L"Efekt steelbooka"); toggle = true; checked = state.options.list_plus_steelbook; break;
             default: break;
             }
             if (toggle) {
@@ -269,17 +275,7 @@ void Renderer::drawViewDrawer() {
             line(gx - 4, gy - 11, gx - 4, gy + 11, ink, 1.8f);
             line(gx + 1, gy + 3, gx + 8, gy + 3, ink, 1.5f);
             line(gx + 1, gy + 7, gx + 8, gy + 7, ink, 1.5f);
-        } else if (row_view == library_view::View::floppy) {
-            target_->DrawRectangle(D2D1::RectF(gx - 12, gy - 12, gx + 12, gy + 12), solid_.Get(), 1.8f);
-            target_->DrawRectangle(D2D1::RectF(gx - 4, gy - 12, gx + 7, gy - 4), solid_.Get(), 1.5f);
-            target_->DrawRectangle(D2D1::RectF(gx - 7, gy + 1, gx + 7, gy + 11), solid_.Get(), 1.5f);
-        } else if (row_view == library_view::View::cartridge_switch) {
-            target_->DrawRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(gx - 9, gy - 13, gx + 9, gy + 13), 3, 3), solid_.Get(), 1.8f);
-            target_->DrawRectangle(D2D1::RectF(gx - 5, gy - 8, gx + 5, gy + 8), solid_.Get(), 1.5f);
-        } else if (row_view == library_view::View::coverflow) {
-            target_->DrawRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(gx - 14, gy - 12, gx, gy + 12), 2, 2), solid_.Get(), 1.8f);
-            for (int edge = 0; edge < 3; ++edge) line(gx + 5 + edge * 5.0f, gy - 9 + edge, gx + 5 + edge * 5.0f, gy + 9 - edge, ink, 1.8f);
-        } else if (row_view == library_view::View::bookshelf) {
+        } else if (row_view == library_view::View::coverflow || row_view == library_view::View::bookshelf) {
             // Cover Flow: one cover facing front between two turned in perspective, over a floor line.
             target_->DrawRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(gx - 5, gy - 11, gx + 5, gy + 5), 1.5f, 1.5f), solid_.Get(), 1.6f);
             for (const float side : {-1.0f, 1.0f}) {
@@ -765,7 +761,6 @@ void Renderer::drawLibraryAmbient(float opacity) {
     if (!cards_ || selected_ >= cards_->size()) return;
     auto* candidate = selected_ < heroes_.size() ? heroes_[selected_].bitmap.Get() : nullptr;
     if (!candidate && selected_ < posters_.size()) candidate = posters_[selected_].bitmap.Get();
-    if (!candidate && library_view::media(context_->library_mode) && selected_ < covers_.size()) candidate = covers_[selected_].bitmap.Get();
     const float fade = stepCinematicFade(candidate);
     const CropFocus focus = selected_ < heroes_.size() && heroes_[selected_].bitmap.Get() == cinematic_hero_.Get() ? heroes_[selected_].focus : CropFocus{};
     drawWallpapers({cinematic_previous_hero_.Get(), opacity * (1 - fade)}, {cinematic_hero_.Get(), opacity * fade, focus});

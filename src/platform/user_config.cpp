@@ -129,6 +129,20 @@ bool parseLookSetting(AppSettings& settings, std::string_view key, std::string_v
         if (value == "inside") settings.focus_gap = AppSettings::FocusGap::inside;
         return true;
     }
+    if (key == "overlay_key") { // The in-game overlay's keyboard shortcut.
+        if (value == "shift_tab") settings.overlay_key = AppSettings::OverlayKey::shift_tab;
+        if (value == "ctrl_tab") settings.overlay_key = AppSettings::OverlayKey::ctrl_tab;
+        if (value == "shift_f1") settings.overlay_key = AppSettings::OverlayKey::shift_f1;
+        if (value == "ctrl_shift_o") settings.overlay_key = AppSettings::OverlayKey::ctrl_shift_o;
+        if (value == "none") settings.overlay_key = AppSettings::OverlayKey::none;
+        return true;
+    }
+    if (key == "overlay_pad") { // ... and its pad button or pair.
+        if (value == "guide") settings.overlay_pad = AppSettings::OverlayPad::guide;
+        if (value == "view_menu") settings.overlay_pad = AppSettings::OverlayPad::view_menu;
+        if (value == "sticks") settings.overlay_pad = AppSettings::OverlayPad::sticks;
+        return true;
+    }
     if (key == "search_art") {
         if (value == "square") settings.search_art = AppSettings::SearchArt::square;
         if (value == "poster") settings.search_art = AppSettings::SearchArt::poster;
@@ -308,7 +322,7 @@ AppSettings parseAppSettings(std::string_view text) {
                 settings.start_done = static_cast<uint32_t>(std::stoul(std::string(value))) & 0xFFu;
             continue;
         }
-        if (key == "guide_open_widgets") { if (value == "0" || value == "1") settings.guide_open_widgets = value == "1"; continue; }
+        if (key == "guide_open_widgets") continue; // Retired option: the pad's Guide over a game always opens on the widgets.
         if (key == "hud_pins") { // Widgets kept on the game's screen, at most the three that exist.
             while (!value.empty() && settings.hud_pins.size() < 5) {
                 const auto comma = value.find(',');
@@ -573,7 +587,7 @@ AppSettings parseAppSettings(std::string_view text) {
         else if (key == "game_action" && (value == "launch" || value == "details"))
             settings.accept_action = value == "details" ? AppSettings::AcceptAction::details : AppSettings::AcceptAction::launch;
         else if (key == "quick_resume" && (value == "0" || value == "1")) settings.quick_resume = value == "1";
-        else if (key == "guide_menu" && (value == "0" || value == "1")) settings.guide_menu = value == "1";
+        else if (key == "guide_menu") {} // Retired option: Guide / PS always opens the menu (the in-game overlay setting decides over games).
         else if (key == "guide_overlay" && (value == "0" || value == "1")) settings.guide_overlay = value == "1";
         else if (key == "game_fps" && (value == "0" || value == "1")) settings.game_fps = value == "1";
         else if (key == "game_fps_low" && (value == "0" || value == "1")) settings.game_fps_low = value == "1";
@@ -795,9 +809,13 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
            << "show_private=" << settings.show_private << '\n'
            << "show_store=" << settings.show_store << '\n'
            << "quick_resume=" << settings.quick_resume << '\n'
-           << "guide_menu=" << settings.guide_menu << '\n'
            << "guide_overlay=" << settings.guide_overlay << '\n'
-           << "guide_open_widgets=" << settings.guide_open_widgets << '\n'
+           << "overlay_key=" << (settings.overlay_key == AppSettings::OverlayKey::ctrl_tab ? "ctrl_tab" :
+                                 settings.overlay_key == AppSettings::OverlayKey::shift_f1 ? "shift_f1" :
+                                 settings.overlay_key == AppSettings::OverlayKey::ctrl_shift_o ? "ctrl_shift_o" :
+                                 settings.overlay_key == AppSettings::OverlayKey::none ? "none" : "shift_tab") << '\n'
+           << "overlay_pad=" << (settings.overlay_pad == AppSettings::OverlayPad::view_menu ? "view_menu" :
+                                 settings.overlay_pad == AppSettings::OverlayPad::sticks ? "sticks" : "guide") << '\n'
            << "game_fps=" << settings.game_fps << '\n'
            << "game_fps_low=" << settings.game_fps_low << '\n'
            << "steam_controller=" << settings.steam_controller << '\n'

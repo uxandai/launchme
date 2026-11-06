@@ -12,6 +12,7 @@
 #include "quick_menu.hpp"
 #include "palette.hpp"
 #include "avatar.hpp"
+#include "package_look.hpp"
 #include "../platform/user_config.hpp"
 #include "../platform/performance.hpp"
 #include "../platform/layered_surface.hpp"
@@ -799,9 +800,43 @@ private:
     ID2D1Bitmap* blurredArt(Cover& image); // Cover::blurred, made on first use.
     ID2D1Bitmap* desaturatedArt(Cover& image); // Cover::desaturated (Saturation effect), else the WIC grey copy.
     // Półka: a spine's print (the name; with a band, the platform's colour and logo at its top), cached.
-    ID2D1Bitmap* shelfSpine(const std::wstring& name, const std::wstring& platform, std::optional<D2D1_COLOR_F> band);
-    void drawMediaCard(const GameCard& card, size_t index); // Kartridż Switch.
-    void drawFloppy(const GameCard& card, size_t index);
+    ID2D1Bitmap* shelfSpine(const std::wstring& name, const std::wstring& platform, std::optional<D2D1_COLOR_F> band,
+                            std::optional<D2D1_COLOR_F> ink = std::nullopt, std::optional<D2D1_COLOR_F> band_ink = std::nullopt);
+    // One game package's front (src/ui/package_renderer.cpp, package_look.hpp): Półka's shelf and the open
+    // case both draw it, so a case looks the same on the shelf and in the hand. Points are face fractions
+    // (s across, t down); the caller maps them (perspective, mirror image) and prints pictures onto parts.
+    struct PackageFront {
+        game_case::Kind kind;
+        std::function<D2D1_POINT_2F(float s, float t)> at;
+        // A bitmap over the part [l, r] x [t, b] of the face.
+        std::function<void(float l, float t, float r, float b, ID2D1Bitmap* bitmap, D2D1_RECT_F source, float opacity)> picture;
+        // The game's art over a part, cropped to `aspect` (its width : height on the package).
+        std::function<void(float l, float t, float r, float b, float aspect, float opacity)> print;
+        std::wstring platform;      // The Switch band's logo.
+        float aspect = 2.0f / 3.0f; // The front's width : height.
+        float alpha = 1;
+        float gloss = 0.5f;         // Where the lamp's band crosses the front's diagonal.
+        float gloss_strength = 0.075f;
+        float shade = 0;            // Turned from the lamp: darkest at the far edge.
+        bool shade_right = false;   // That far edge is the right one.
+        bool dim = false;           // Not installed.
+        bool reflection = false;    // The floor's mirror image: no gloss, no edges.
+        float scale = 1;            // Device pixels per DIP (stroke widths).
+    };
+    void drawPackageFront(const PackageFront& front);
+    // A console's cover band (its colour, its logo), cached; `ratio` its long side : short side. Down:
+    // PS1's inlay stripe, the logo at its head reading downwards; square: Switch's corner tile.
+    ID2D1Bitmap* packageBand(const game_case::Kind& kind, const std::wstring& platform, float ratio, package_look::Band shape);
+    // A console's real case front (assets/cases), read on first use and kept with the platform badges
+    // ("case:<file>"); null while it decodes or when the program has none.
+    Cover* packageFrame(const package_look::Frame& frame);
+    // Półka's open case (src/ui/game_case_renderer.cpp, ViewContext::game_case) and its media
+    // (src/ui/game_media_renderer.cpp; Coverflow's printed disc too).
+    void drawGameCase();
+    void drawFloppyDisk(D2D1_RECT_F r, float alpha, float light, Cover* art, bool frozen, const std::wstring& name);
+    void drawGameCartridge(D2D1_RECT_F r, float alpha, const game_case::Kind& kind, const std::wstring& platform, Cover* art, bool frozen,
+                           const std::wstring& name);
+    void drawGameDisc(float cx, float cy, float radius, float alpha, float spin, Cover* art, Cover* scan, bool frozen, const std::wstring& name);
     void createMediaMaterials();
     void createFloppyMaterials();
     // sweep: coverflow_layout::Layout::lightSweep, the light's slide while the case glides.
@@ -1160,9 +1195,10 @@ private:
     Microsoft::WRL::ComPtr<ID2D1RadialGradientBrush> steelbook_light_, steelbook_sheen_, steelbook_haze_;
     Microsoft::WRL::ComPtr<ID2D1BitmapBrush> steelbook_streak_; // A8 smooth anisotropic band across the brush lines.
     Microsoft::WRL::ComPtr<ID2D1Bitmap> steelbook_surface_;
-    Microsoft::WRL::ComPtr<ID2D1LinearGradientBrush> media_plastic_, media_edge_;
+    Microsoft::WRL::ComPtr<ID2D1LinearGradientBrush> media_plastic_, media_edge_, media_gloss_, disc_metal_;
+    Microsoft::WRL::ComPtr<ID2D1PathGeometry> disc_wedge_; // A 6° slice of the unit circle: the disc's rainbow sweep.
     Microsoft::WRL::ComPtr<ID2D1BitmapBrush> media_grain_;
-    // Dyskietka: textured plastic, brushed steel (both procedural tiles), the light along the
+    // The diskette: textured plastic, brushed steel (both procedural tiles), the light along the
     // shutter, its bevel and the paper of the label (createFloppyMaterials).
     Microsoft::WRL::ComPtr<ID2D1BitmapBrush> floppy_plastic_, floppy_metal_, floppy_paper_;
     Microsoft::WRL::ComPtr<ID2D1LinearGradientBrush> floppy_sheen_, floppy_bevel_, floppy_media_;
@@ -1172,6 +1208,8 @@ private:
     Microsoft::WRL::ComPtr<ID2D1LinearGradientBrush> shelf_floor_, shelf_fade_, shelf_shade_, shelf_gloss_;
     Microsoft::WRL::ComPtr<ID2D1RadialGradientBrush> shelf_glow_;
     std::unordered_map<std::wstring, Microsoft::WRL::ComPtr<ID2D1Bitmap>> shelf_spines_; // shelfSpine, by content.
+    std::unordered_map<std::wstring, Microsoft::WRL::ComPtr<ID2D1Bitmap>> package_bands_; // packageBand, by console and logo.
+    Microsoft::WRL::ComPtr<ID2D1LinearGradientBrush> package_light_; // A front's light from above: brighter top, darker foot.
     // fadingLine: every gliding name of the frame (a list's focused row, the category pill...), since when it shows.
     struct Marquee { std::chrono::steady_clock::time_point since{}; bool used = true; };
     std::map<std::wstring, Marquee> marquees_;

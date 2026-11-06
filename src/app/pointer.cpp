@@ -50,6 +50,7 @@ void Launcher::click(float mouse_x, float mouse_y, bool double_click) {
     case Modal::theme_studio: if (!double_click) { themeStudioClick(x, y); if (theme_.dragging) SetCapture(hwnd_); } return;
     case Modal::tarot: if (!double_click) tarotClick(x, y); return;
     case Modal::profile: if (!double_click) profileClick(x, y); return;
+    case Modal::game_case: if (!double_click) gameCaseClick(x, y); return;
     case Modal::aurelia: if (!double_click) aureliaClick(x, y); return;
     case Modal::whats_new: if (!double_click) whatsNewClick(x, y); return;
     case Modal::exit_prompt: if (!double_click) exitPromptClick(x, y); return;
@@ -325,6 +326,7 @@ bool Launcher::hoverButton(float mouse_x, float mouse_y) const {
     case Modal::theme_studio: return themeStudioHot(x, y);
     case Modal::tarot: return tarotPointerOver(x, y);
     case Modal::profile: return profilePointerOver(x, y);
+    case Modal::game_case: return gameCasePointerOver(x, y);
     case Modal::aurelia: return aurelia_ui::Layout{view.width, view.height}.hit(aurelia_ui_, x, y) != -9;
     case Modal::whats_new: return update_ui::WhatsNewLayout{view.width, view.height}.ok().contains(x, y);
     }
@@ -496,6 +498,11 @@ void Launcher::mouseMove(float mouse_x, float mouse_y) {
     if (topModal() == Modal::tarot) {
         const auto view = renderer_.viewport();
         tarotPointer(mouse_x / view.scale, mouse_y / view.scale);
+        return;
+    }
+    if (topModal() == Modal::game_case) {
+        const auto view = renderer_.viewport();
+        gameCasePointer(mouse_x / view.scale, mouse_y / view.scale);
         return;
     }
     if (topModal() == Modal::profile) {

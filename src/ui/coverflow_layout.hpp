@@ -114,8 +114,7 @@ struct Layout {
     library_view::View mode = library_view::View::coverflow;
     bool cd = false;
     float itemAspect() const {
-        if (mode == library_view::View::coverflow && cd) return 1.12f;
-        return mode == library_view::View::floppy ? 1.0f : mode == library_view::View::cartridge_switch ? 0.72f : aspect;
+        return mode == library_view::View::coverflow && cd ? 1.12f : aspect;
     }
     float coverHeight() const { return std::max(1.0f, std::min({height * 0.53f, width * 0.29f, 570.0f})); }
     float left() const { return std::max(88.0f, width * 0.065f); }
@@ -133,7 +132,7 @@ struct Layout {
         item_aspect = itemAspect();
         size = coverHeight() * (index == selected ? 1.0f : compact);
         x = index == selected ? left() : index < selected ? left() - coverHeight() - 70 + offset * step() :
-            left() + coverHeight() * itemAspect() * (mode == library_view::View::coverflow ? 1 + disc_radius * disc_exposure : 1) +
+            left() + coverHeight() * itemAspect() * (1 + disc_radius * disc_exposure) +
                 gap + (offset - 1) * step();
         y = top() + (coverHeight() - size) * 0.5f;
     }

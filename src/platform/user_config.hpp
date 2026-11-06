@@ -301,7 +301,12 @@ struct AppSettings {
     // already own that button on this PC.
     bool guide_menu = true;
     bool guide_overlay = false; // Experimental: Guide over a foreground game.
-    bool guide_open_widgets = true; // Guide over a game opens on the widgets (pad only; Shift+Tab always shows the bar).
+    bool guide_open_widgets = true; // Guide over a game opens on the widgets (pad only; the keyboard shortcut always shows the bar).
+    // The in-game overlay's shortcuts (Windows): the keyboard chord and the pad button or pair.
+    enum class OverlayKey { shift_tab, ctrl_tab, shift_f1, ctrl_shift_o, none };
+    enum class OverlayPad { guide, view_menu, sticks };
+    OverlayKey overlay_key = OverlayKey::shift_tab;
+    OverlayPad overlay_pad = OverlayPad::guide;
     bool game_fps = false, game_fps_low = false; // Read-only widget in the right drawer.
     std::vector<std::string> hud_pins;
     // Ustawienia -> FPS i limiter. The limiter loads a library into the game, so it is opt-in.

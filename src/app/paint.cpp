@@ -122,6 +122,8 @@ void Launcher::paint(bool overlay) {
         if (!steamArtwork(game) || (own && own->playtime)) {
             if (context.preview) local_preview = *context.preview;
             local_preview.playtime_minutes = gamePlaytime(game, context.preview ? context.preview->playtime_minutes : std::nullopt);
+            // What Szczegóły shows: the game index fills the gaps (store descriptions, RAWG, Edytuj metadane).
+            if (!steamArtwork(game)) completeDetails(local_preview, game);
             context.preview = &local_preview;
         }
         // A Steam game's store details are on their way (the worker always answers, empty on failure).
@@ -713,6 +715,13 @@ void Launcher::paint(bool overlay) {
     }
     if (gogInstallOpen()) context.gog_install = &gog_install_ui_;
     if (tarot_.open || tarot_.alpha > 0.003f) { context.tarot = &tarot_; context.hint_device = hintDevice(); } // Its own line of hints.
+    if (gameCaseShown() && selected_ < cards_.size()) {
+        context.game_case = &game_case_;
+        context.game_case_kind = gameCaseKind();
+        context.game_case_action = actionLabel(cards_[selected_].game);
+        context.game_case_action_enabled = actionEnabled(cards_[selected_].game);
+        context.hint_device = hintDevice();
+    }
     if (profile_.open || profile_.alpha > 0.003f) { context.profile = &profile_; context.hint_device = hintDevice(); }
     if (whats_new_.open) context.whats_new = &whats_new_;
     if (aurelia_ui_.open) context.aurelia = &aurelia_ui_;
@@ -768,7 +777,8 @@ void Launcher::paint(bool overlay) {
         context.window_dpi = windowDpi();
     }
     // Store games still arriving: "loading" rather than "no games" while nothing is shown yet.
-    renderer_.paint(cards_, selected_, scanning_ || (cards_.empty() && libraryLoading()), ambient_time_, detail_, context);
+    // Start-up (startupHold): the cards wait behind the loading state until the libraries are in.
+    renderer_.paint(cards_, selected_, scanning_ || (cards_.empty() && libraryLoading()) || startup_hold_, ambient_time_, detail_, context);
     if (closing_ && exit_progress_ >= 1) exit_black_painted_ = true;
     profiler_.frame(renderer_.timing());
     if (!scanning_ && !cards_.empty() && screen_ == ScreenMode::shelves) profiler_.startup(FrameProfiler::Startup::first_shelf);

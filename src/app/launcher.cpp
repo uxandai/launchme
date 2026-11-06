@@ -524,6 +524,8 @@ void Launcher::tick() {
     if (std::abs(wallpaper_zoom_ - wallpaper_target) < 0.0002f) wallpaper_zoom_ = wallpaper_target;
     arrived_ += dt;
     detail_ = std::min(1.0f, detail_ + dt * 1.7f);
+    const bool startup_hold = startupHold(); // The libraries still re-sort the first row: the entrance waits.
+    if (startup_hold) { arrived_ = 0; detail_ = 0; }
     library_focus_age_ += dt;
     if (pending_launch_) {
         launch_age_ += dt;
@@ -586,9 +588,10 @@ void Launcher::tick() {
     const bool companion_motion = tickCompanion(dt);
     const bool tarot_motion = tickTarot(dt);
     const bool profile_motion = tickProfile(dt);
+    const bool case_motion = tickGameCase(dt);
     tickGameIndex();
     tickUpdates();
-    bool needs_paint = scanning_ || detail_ < 1.0f || screen_transitioning || wallpaper_moving || glance_motion || companion_motion || tarot_motion || profile_motion ||
+    bool needs_paint = scanning_ || startup_hold || detail_ < 1.0f || screen_transitioning || wallpaper_moving || glance_motion || companion_motion || tarot_motion || profile_motion || case_motion ||
                        dashboardEditing() ||
                        launch_progress_ > 0.003f || pending_launch_ || launchAnimationMoving(now) ||
                         (friends_progress_ > 0.003f && friends_progress_ < 0.997f) ||

@@ -32,6 +32,9 @@ Patch fromDetails(const GameDetails& details, std::wstring_view name = {});
 // keeps them (gog_api.cpp / epic_api.cpp).
 Patch fromGogProduct(std::string_view json);
 Patch fromEpicCatalog(std::string_view json);
+// The Nintendo eShop match the index chose for a game (knowledge/nintendo/<cache key>.json, written by the
+// service): {"title", "description", "publisher", "release" ("2026-06-25"), "genres" ("A, B")}.
+Patch fromNintendo(std::string_view json);
 
 // The plain text of a store description: tags, entities and runs of space removed; ≤ 400 chars
 // on a word boundary.

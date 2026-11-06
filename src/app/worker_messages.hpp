@@ -201,6 +201,7 @@ struct IdentifyMessage {
     std::vector<screenscraper::GameInfo> found;    // ScreenScraper search: the game of each row.
     bool screenscraper = false;                    // The search was answered by ScreenScraper (else RAWG).
     std::vector<metadata_sources::Offer> texts;    // The stores' text details of the game, best first.
+    bool texts_first = false;                      // A Nintendo game: the eShop's rows lead the list.
     std::optional<screenscraper::GameInfo> picked; // ScreenScraper identification, saved.
     std::optional<rawg::Metadata> metadata;
     IdentifiedArtworkResult artwork;

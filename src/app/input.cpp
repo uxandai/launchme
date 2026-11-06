@@ -53,7 +53,8 @@ Launcher::Modal Launcher::topDialog() const {
     if (bulkCoversOpen()) return Modal::bulk_covers;
     if (gogInstallOpen()) return Modal::gog_install;
     if (tarot_.open) return Modal::tarot; // Opened only from the bare home.
-    if (profile_.open) return Modal::profile; // Over any screen, from the drawer: the lowest dialog.
+    if (profile_.open) return Modal::profile; // Over any screen, from the drawer.
+    if (game_case_.open) return Modal::game_case; // Półka's open case: the library's own layer, the lowest.
     return Modal::none;
 }
 
@@ -84,6 +85,7 @@ bool Launcher::modalKey(WPARAM key, bool repeated) {
     case Modal::theme_studio: themeStudioKey(key, repeated); break;
     case Modal::tarot: tarotKey(key, repeated); break;
     case Modal::profile: profileKey(key, repeated); break;
+    case Modal::game_case: gameCaseKey(key, repeated); break;
     case Modal::aurelia: aureliaKey(key, repeated); break;
     case Modal::whats_new: if (!repeated || key == VK_UP || key == VK_DOWN) whatsNewKey(key); break;
     }
@@ -264,6 +266,15 @@ power_menu::Geometry Launcher::powerMenuGeometry() const {
 
 // --- Gamepad ----------------------------------------------------------------
 
+WORD Launcher::overlayPadPair() const {
+    switch (settings_.overlay_pad) {
+    case AppSettings::OverlayPad::view_menu: return XINPUT_GAMEPAD_BACK | XINPUT_GAMEPAD_START;
+    case AppSettings::OverlayPad::sticks: return XINPUT_GAMEPAD_LEFT_THUMB | XINPUT_GAMEPAD_RIGHT_THUMB;
+    case AppSettings::OverlayPad::guide: break;
+    }
+    return 0;
+}
+
 void Launcher::controllerNavigate(int direction) {
     if (!direction) { pad_edge_direction_ = 0; return; }
     navigation_edge_ = false;
@@ -373,6 +384,11 @@ void Launcher::controllerInput(const PadReading& state) {
         if (!foreground) { swallow(); return; } // Transient focus handoff / secure desktop.
         if (!overlayForeground(foreground)) { closeGameOverlay(false); swallow(); return; }
         const auto pressed = [&](WORD button) { return (buttons & button) && !(controller_buttons_ & button); };
+        // The configured pair (View + Menu, L3 + R3) closes the overlay it opened.
+        const WORD pair = overlayPadPair();
+        if (pair && (buttons & pair) == pair && (controller_buttons_ & pair) != pair) {
+            pad_start_.swallow(buttons & XINPUT_GAMEPAD_START); dismissGameOverlay(); swallow(); return;
+        }
         const auto guide = pad_guide_.update(buttons & pad_guide, now);
         if (guide == HoldGesture::Event::press) { overlayKey(VK_HOME); swallow(); return; }
         if (guide == HoldGesture::Event::hold && !power_menu_) { openPowerMenu(); invalidateGameOverlay(); }
@@ -406,13 +422,19 @@ void Launcher::controllerInput(const PadReading& state) {
             swallow(); return;
         }
         controllerNavigate(0); controller_input_.stopRumble();
-        // Guide is the only global pad shortcut. Options/Start belongs to the game.
-        // Face buttons and sticks stay with the game until the overlay is open.
+        // Guide (or the pair chosen in Settings) is the only global pad shortcut. Options/Start belongs to
+        // the game. Face buttons and sticks stay with the game until the overlay is open.
+        const WORD pair = overlayPadPair();
+        const bool pair_pressed = pair && (buttons & pair) == pair && (controller_buttons_ & pair) != pair;
         const auto guide = pad_guide_.update(buttons & pad_guide, now);
         pad_start_.swallow(buttons & XINPUT_GAMEPAD_START);
         controller_buttons_ = buttons; controller_direction_ = 0;
+        if (pair) {
+            if (pair_pressed) toggleGameOverlay(true);
+            return;
+        }
         if (guide == HoldGesture::Event::press || guide == HoldGesture::Event::hold) {
-            toggleGameOverlay(true); // The pad opens on the widgets; Shift+Tab opens the bar.
+            toggleGameOverlay(true); // The pad opens on the widgets; the keyboard shortcut opens the bar.
             if (guide == HoldGesture::Event::hold && gameOverlayOpen()) { openPowerMenu(); invalidateGameOverlay(); }
         }
         return;
@@ -742,6 +764,16 @@ bool Launcher::modalPad(const PadReading& state, WORD buttons, ULONGLONG now) {
         if (pressed(XINPUT_GAMEPAD_A)) { noteUserInput(); customEditorKey(VK_RETURN, false); }
         else if (pressed(XINPUT_GAMEPAD_B)) { noteUserInput(); customEditorKey(VK_ESCAPE, false); }
         else if (pressed(XINPUT_GAMEPAD_X)) { noteUserInput(); openKeyboard(); } // The focused field, else the name.
+        break;
+    case Modal::game_case:
+        // Półka's open case: D-pad/stick between Graj and Szczegóły, A presses, B closes the case.
+        controllerNavigate(0);
+        if (direction && (direction != controller_direction_ || now >= controller_repeat_)) {
+            noteUserInput(); gameCaseKey(direction, direction == controller_direction_);
+            controller_repeat_ = now + (direction != controller_direction_ ? 280 : 200);
+        }
+        if (pressed(XINPUT_GAMEPAD_A)) { noteUserInput(); gameCaseKey(VK_RETURN, false); }
+        else if (pressed(XINPUT_GAMEPAD_B) || pressed(XINPUT_GAMEPAD_BACK)) { noteUserInput(); gameCaseKey(VK_ESCAPE, false); }
         break;
     case Modal::metadata:
         // Edytuj metadane: D-pad moves between fields and buttons, A types into a field (the on-screen

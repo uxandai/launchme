@@ -93,6 +93,10 @@ void Launcher::accept() {
         (screen_ == ScreenMode::shelves || screen_ == ScreenMode::platform_games || screen_ == ScreenMode::library || screen_ == ScreenMode::search) &&
         !(libraryControls() && (library_controls_.focus >= 0 || library_controls_.open() || library_controls_.action >= 0)) &&
         selected_ < cards_.size() && isGame(cards_[selected_].game) && cards_[selected_].game.kind != GameKind::catalog;
+    // Półka: the case opens first (Graj and Szczegóły are in it).
+    if (libraryBookshelf() && !launchAnimationActive() && !pending_launch_ && !friends_open_ && !category_menu_open_ && !quick_open_ && !menu_open_ &&
+        topDialog() == Modal::none && !(library_controls_.focus >= 0 || library_controls_.open()) &&
+        selected_ < cards_.size() && isGame(cards_[selected_].game) && cards_[selected_].game.kind != GameKind::catalog) { openGameCase(); return; }
     if (details) openDetails(cards_[selected_].game); else launch();
 }
 

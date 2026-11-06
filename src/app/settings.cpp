@@ -648,6 +648,10 @@ void Launcher::settingsChoose(const Row& row) {
         settings_.focus_gap = static_cast<AppSettings::FocusGap>(std::clamp(settings_state_.choice, 0, static_cast<int>(focus_gaps.size()) - 1));
     else if (row.id == Id::search_art)
         settings_.search_art = static_cast<AppSettings::SearchArt>(std::clamp(settings_state_.choice, 0, static_cast<int>(search_arts.size()) - 1));
+    else if (row.id == Id::overlay_key)
+        settings_.overlay_key = static_cast<AppSettings::OverlayKey>(std::clamp(settings_state_.choice, 0, static_cast<int>(overlay_keys.size()) - 1));
+    else if (row.id == Id::overlay_pad)
+        settings_.overlay_pad = static_cast<AppSettings::OverlayPad>(std::clamp(settings_state_.choice, 0, static_cast<int>(overlay_pads.size()) - 1));
     else settings_.cover_accent_rgb = choice.color;
     settings_state_.editing = false;
     // A new language rebuilds shelves (titles, tiles) and with them these rows.

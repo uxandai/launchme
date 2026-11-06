@@ -37,8 +37,8 @@ std::wstring releaseLabel(std::wstring_view text, bool english);
 
 // Sources in no particular order; priorities are per field (game_index.cpp).
 // achievements: counts from an achievements plugin (games outside Steam, src/app/plugin_achievements.cpp).
-enum class Source : uint8_t { library, steam_appinfo, steam_store, rawg, reviews, hltb, emulation, gog, epic, steam_stats, achievements };
-inline constexpr size_t source_count = 11;
+enum class Source : uint8_t { library, steam_appinfo, steam_store, rawg, reviews, hltb, emulation, gog, epic, steam_stats, achievements, nintendo };
+inline constexpr size_t source_count = 12;
 const char* sourceKey(Source source);
 std::optional<Source> sourceFromKey(std::string_view key);
 
