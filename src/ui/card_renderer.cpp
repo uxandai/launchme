@@ -223,12 +223,12 @@ void Renderer::drawCard(const GameCard& card, size_t index) {
         target_->SetTransform(D2D1::Matrix3x2F::Scale(size, size) * D2D1::Matrix3x2F::Translation(x, y) * base);
     } else if (edge > 0.004f) {
         if (glowAlpha() > 0.004f) {
-            brush(color(tint.r, tint.g, tint.b, std::min(1.0f, edge * transparency * glowAlpha() * (0.07f + pulse * 0.09f))));
+            brush(color(tint.r, tint.g, tint.b, std::min(1.0f, edge * transparency * glowAlpha() * (0.045f + pulse * 0.14f))));
             strokeSquircle(solid_.Get(), glowWidth(13.0f) / size);
-            brush(color(tint.r, tint.g, tint.b, std::min(1.0f, edge * transparency * glowAlpha() * (0.20f + pulse * 0.21f))));
+            brush(color(tint.r, tint.g, tint.b, std::min(1.0f, edge * transparency * glowAlpha() * (0.145f + pulse * 0.32f))));
             strokeSquircle(solid_.Get(), glowWidth(7.0f) / size);
         }
-        brush(color(tint.r, tint.g, tint.b, edge * transparency * (0.73f + pulse * 0.27f)));
+        brush(color(tint.r, tint.g, tint.b, edge * transparency * std::min(1.0f, 0.665f + pulse * 0.40f)));
         strokeSquircle(solid_.Get(), 3.2f / size);
     }
     if (edge < 0.996f && !context_->psfive) {
@@ -398,14 +398,14 @@ void Renderer::drawCoverOutline(ID2D1Geometry* shape, D2D1_COLOR_F tint, float t
     if (glow_trace_) { drawOrbitOutline(shape, tint, transparency); return; }
     const float pulse = glowPulse();
     if (glowAlpha() > 0.004f) {
-        brush(color(tint.r, tint.g, tint.b, std::min(1.0f, transparency * glowAlpha() * (0.07f + pulse * 0.09f))));
+        brush(color(tint.r, tint.g, tint.b, std::min(1.0f, transparency * glowAlpha() * (0.045f + pulse * 0.14f))));
         target_->DrawGeometry(shape, solid_.Get(), glowWidth(13.0f));
         if (middle_glow) {
-            brush(color(tint.r, tint.g, tint.b, std::min(1.0f, transparency * glowAlpha() * (0.20f + pulse * 0.21f))));
+            brush(color(tint.r, tint.g, tint.b, std::min(1.0f, transparency * glowAlpha() * (0.145f + pulse * 0.32f))));
             target_->DrawGeometry(shape, solid_.Get(), glowWidth(7.0f));
         }
     }
-    brush(color(tint.r, tint.g, tint.b, transparency * (0.73f + pulse * 0.27f)));
+    brush(color(tint.r, tint.g, tint.b, transparency * std::min(1.0f, 0.665f + pulse * 0.40f)));
     target_->DrawGeometry(shape, solid_.Get(), 3.2f);
 }
 

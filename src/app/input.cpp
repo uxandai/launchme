@@ -566,6 +566,7 @@ void Launcher::controllerInput(const PadReading& state) {
     dashboardPollHold(now);
     if (!(buttons & XINPUT_GAMEPAD_A) && (controller_buttons_ & XINPUT_GAMEPAD_A)) {
         dashboardPress(2, false, now);
+        if (settings_hold_) { settings_hold_ = false; settingsActivate(); } // Let go before the lift: the row's page.
         // A released before the hold opened the game's menu: a plain press.
         if (pad_enter_hold_) {
             pad_enter_hold_ = false;
@@ -574,7 +575,7 @@ void Launcher::controllerInput(const PadReading& state) {
     }
     if (pressed(XINPUT_GAMEPAD_A) && !dashboardPress(2, true, now)) {
         noteUserInput();
-        if (settingsOpen()) settingsActivate();
+        if (settingsOpen()) { if (homeRowHoldable()) beginSettingsHold(); else settingsActivate(); } // Held on a home row: lift it.
         else if (flixRailFocused()) flixRailAccept(flix_rail_focus_);
         else if (quick_open_) quickAccept();
         else if (friends_open_) friendsAccept();

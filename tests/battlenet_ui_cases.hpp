@@ -75,7 +75,7 @@ int LauncherUiTest::battlenet(HWND window) {
         if (app.screen_ == ScreenMode::details || std::any_of(app.public_library_.begin(), app.public_library_.end(), [](const Game& g) {
             return g.source == GameSource::battlenet;
         })) return 413;
-        app.openSettings(); app.settings_state_.selectCategory(static_cast<int>(settings_ui::Category::library)); app.buildSettingsRows();
+        app.openSettings(); app.settings_state_.selectCategory(static_cast<int>(settings_ui::Category::library)); app.platforms_all_ = true; app.buildSettingsRows();
         const auto row = std::find_if(app.settings_rows_.begin(), app.settings_rows_.end(), [](const auto& row) {
             return row.id == settings_ui::Id::pc_platform && row.source == GameSource::battlenet;
         });

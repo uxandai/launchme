@@ -36,6 +36,11 @@ int LauncherUiTest::amazonGames(HWND window) {
     auto service = std::make_unique<FakeAmazon>(); auto* fake = service.get(); app.amazon_service_ = std::move(service);
     app.onLibrary(std::make_unique<LibraryMessage>());
     app.openSettings(); app.settings_state_.selectCategory(static_cast<int>(settings_ui::Category::library)); app.buildSettingsRows();
+    // Off, it waits in "Więcej platform".
+    const auto fold = std::find_if(app.settings_rows_.begin(), app.settings_rows_.end(), [](const auto& r) { return r.id == Id::platforms_more; });
+    if (fold == app.settings_rows_.end() || fold->checked) return 9690;
+    app.settings_state_.selected[app.settings_state_.category] = static_cast<int>(fold - app.settings_rows_.begin());
+    app.settings_state_.options = true; app.settings_state_.editing = false; app.settingsActivate();
     // Amazon Games is one of the platforms, by its name; switching it on without Nile offers the download.
     const auto platform = std::find_if(app.settings_rows_.begin(), app.settings_rows_.end(), [](const auto& r) { return r.id == Id::pc_platform && r.source == GameSource::amazon; });
     if (platform == app.settings_rows_.end() || platform->checked || platform->title != L"Amazon Games") return 9601;

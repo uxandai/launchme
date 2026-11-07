@@ -26,6 +26,8 @@ bool content(Id id) {
 
 void Launcher::buildSettingsSearchIndex() {
     const auto saved = settings_state_;
+    const bool platforms_all = platforms_all_;
+    platforms_all_ = true; // The stores folded away are found too.
     settings_hits_.clear();
     const std::function<void(int, int, std::vector<Page>, std::wstring)> walk = [&](int category, int depth, std::vector<Page> path, std::wstring where) {
         const auto rows = settings_rows_; // The list is rebuilt when a page opens.
@@ -63,6 +65,7 @@ void Launcher::buildSettingsSearchIndex() {
         walk(category, 0, {}, tr(categories[static_cast<size_t>(category)].title));
     }
     settings_state_ = saved;
+    platforms_all_ = platforms_all;
     settings_rows_page_.clear();
     buildSettingsRows(); // The list the search was opened from, for the page's opener.
 }
@@ -135,6 +138,7 @@ void Launcher::settingsSearchJump(size_t index) {
     settings_search_query_.clear();
     clearSecretInput();
     settings_state_.selectCategory(hit.category);
+    if (hit.id == Id::pc_platform) platforms_all_ = true; // A store in "Więcej platform": the fold opens on it.
     settings_motion_.valid = false;
     buildSettingsRows();
     const auto select = [&](const std::function<bool(const Row&)>& wanted) {

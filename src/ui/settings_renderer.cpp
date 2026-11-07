@@ -1,6 +1,7 @@
 #include "renderer.hpp"
 #include "renderer_internal.hpp"
 #include "brand_icons.hpp"
+#include "desktop_view.hpp"
 
 #include <algorithm>
 #include <array>
@@ -177,7 +178,8 @@ void Renderer::drawSettings() {
         const float shown = 1.0f - solid;
         // A lighter card, no outline; the accent frame only while the row's value is being edited.
         fill(highlight, gray(1, 0.10f * shown), 16);
-        if (state.editing && rows[state.row()].control != Control::collection) outline(highlight, accent, 1.5f, 16);
+        if (rows[state.row()].lifted) { fill(highlight, uiAccent(0.12f * shown), 16); outline(highlight, accent, 3.5f, 16); } // Being moved.
+        else if (state.editing && rows[state.row()].control != Control::collection) outline(highlight, accent, 1.5f, 16);
     }
     for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
         const auto& item = rows[i];
@@ -271,9 +273,10 @@ void Renderer::drawSettings() {
             textLine(item.value, controls_left - 40, y, cog.left - 16 - (controls_left - 40), body, gray(0.78f), DWRITE_TEXT_ALIGNMENT_TRAILING);
             drawCog(cog, faint(button(cog, selected, hovered), 0.85f));
         } else if (item.control == Control::page) {
-            // A page of its own: its summary, then a chevron.
-            textLine(item.value, controls_left, y, r.right - 58 - controls_left, body, gray(0.78f), DWRITE_TEXT_ALIGNMENT_TRAILING);
-            chevron(r.right - 34, y, 1, selected ? accent : gray(0.68f));
+            // A page of its own: its summary, then a chevron (a row being moved: the reorder mark).
+            textLine(item.value, controls_left, y, r.right - 58 - controls_left, body, item.lifted ? accent : gray(0.78f), DWRITE_TEXT_ALIGNMENT_TRAILING);
+            if (item.lifted) desktopGlyph(desktop_ui::glyph::sort, r.right - 34, y, 22, accent);
+            else chevron(r.right - 34, y, 1, selected ? accent : gray(0.68f));
         } else if (item.control == Control::fold) {
             // An accordion heading: its summary, then a chevron pointing down while it is open.
             textLine(item.value, controls_left, y, r.right - 58 - controls_left, body, item.value.empty() ? gray(0.6f) : accent, DWRITE_TEXT_ALIGNMENT_TRAILING);

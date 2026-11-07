@@ -36,7 +36,7 @@ int LauncherUiTest::ubisoft(HWND window) {
     const auto count = dispatched.size();
     app.launch(); app.finishLaunch();
     if (dispatched.size() != count + 1 || dispatched.back() != L"uplay://install/5555" || !app.game_sessions_.empty()) return 1805;
-    app.openSettings(); app.settings_state_.selectCategory(static_cast<int>(settings_ui::Category::library)); app.buildSettingsRows();
+    app.openSettings(); app.settings_state_.selectCategory(static_cast<int>(settings_ui::Category::library)); app.platforms_all_ = true; app.buildSettingsRows();
     const auto row = std::find_if(app.settings_rows_.begin(), app.settings_rows_.end(), [](const auto& entry) {
         return entry.id == settings_ui::Id::pc_platform && entry.source == GameSource::ubisoft;
     });

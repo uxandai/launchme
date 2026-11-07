@@ -719,7 +719,7 @@ AppSettings parseAppSettings(std::string_view text) {
                 value = comma == value.npos ? std::string_view{} : value.substr(comma + 1);
             }
         } else if (key == "hidden_collections" || key == "collection_order" || key == "pc_platforms" || key == "hidden_studios" || key == "studio_order" ||
-                   key == "hidden_home_sections" || key == "hidden_library_tabs") {
+                   key == "hidden_home_sections" || key == "hidden_library_tabs" || key == "home_row_order") {
             while (!value.empty()) {
                 const auto comma = value.find(',');
                 const auto id = trim(value.substr(0, comma));
@@ -731,7 +731,9 @@ AppSettings parseAppSettings(std::string_view text) {
                     } else if (auto* set = key == "hidden_collections" ? &settings.hidden_collections : key == "hidden_studios" ? &settings.hidden_studios :
                                            key == "hidden_home_sections" ? &settings.hidden_home_sections :
                                            key == "hidden_library_tabs" ? &settings.hidden_library_tabs : nullptr) set->emplace(id);
-                    else if (key == "studio_order") { if (std::find(settings.studio_order.begin(), settings.studio_order.end(), id) == settings.studio_order.end()) settings.studio_order.emplace_back(id); }
+                    else if (auto* order = key == "studio_order" ? &settings.studio_order : key == "home_row_order" ? &settings.home_row_order : nullptr) {
+                        if (std::find(order->begin(), order->end(), id) == order->end()) order->emplace_back(id);
+                    }
                     else settings.collection_order.emplace_back(id);
                 }
                 value = comma == std::string_view::npos ? std::string_view{} : value.substr(comma + 1);
@@ -1033,6 +1035,8 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
         output << id;
         first = false;
     }
+    output << "\nhome_row_order=";
+    for (size_t i = 0; i < settings.home_row_order.size(); ++i) output << (i ? "," : "") << settings.home_row_order[i];
     output << "\nhidden_studios=";
     std::vector<std::string> hidden_studios(settings.hidden_studios.begin(), settings.hidden_studios.end());
     std::sort(hidden_studios.begin(), hidden_studios.end());

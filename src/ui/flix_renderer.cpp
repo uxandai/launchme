@@ -245,10 +245,10 @@ void Renderer::drawRectangularCard(const GameCard& card, size_t index, float alp
     } else if (ring > 0.004f) {
         const float pulse = glowPulse();
         if (glowAlpha() > 0.004f) {
-            brush(D2D1::ColorF(accent.r, accent.g, accent.b, std::min(1.0f, ring * transparency * glowAlpha() * (0.07f + pulse * 0.09f))));
+            brush(D2D1::ColorF(accent.r, accent.g, accent.b, std::min(1.0f, ring * transparency * glowAlpha() * (0.045f + pulse * 0.14f))));
             target_->DrawGeometry(outline.Get(), solid_.Get(), glowWidth(13.0f));
         }
-        brush(D2D1::ColorF(accent.r, accent.g, accent.b, ring * transparency * (0.73f + pulse * 0.27f)));
+        brush(D2D1::ColorF(accent.r, accent.g, accent.b, ring * transparency * std::min(1.0f, 0.665f + pulse * 0.40f)));
         target_->DrawGeometry(outline.Get(), solid_.Get(), 3.2f);
     }
     if (ring < 0.996f) {

@@ -985,9 +985,9 @@ void Launcher::buildSettingsRows() {
         add({Id::autostart, Control::toggle, tr(L"Uruchamiaj z systemem Windows"),
             tr(L"Po zalogowaniu, zminimalizowany na pasku zadań."), {}, settings_.autostart});
         section(tr(L"Funkcje"));
-        add({Id::glance, Control::toggle, tr(L"Glance — hub gamingowy"),
+        add({Id::glance, Control::toggle, L"Glance",
             tr(L"Nowości, premiery i artykuły. Kafel na ekranie głównym (w Flix pasek u góry): kliknięcie, G lub R2/RT."), {}, settings_.glance});
-        add({Id::tarot, Control::toggle, tr(L"Tarot — wróżba z kart"),
+        add({Id::tarot, Control::toggle, L"Tarot",
             tr(L"Kilka pytań w kartach i do trzech gier na koniec: z Twojej biblioteki albo do kupienia na Steam. T, przycisk View/Select albo ikona w oknie desktopowym."),
             {}, settings_.tarot});
         pageRow(Page::screensaver, tr(L"Wygaszacz ekranu"), tr(L"Grafiki gier, gdy launcher jest bezczynny: styl, czas i podgląd."),
@@ -1011,14 +1011,14 @@ void Launcher::buildSettingsRows() {
         // The version, and the folder with launchme.log and crash reports a user can send.
         add({Id::about, Control::action, L"Launchme " + diagnostics::version(),
             tr(L"Dane, dziennik (launchme.log) i raporty awarii (crashes): ") + userConfigDirectory().wstring(), tr(L"Otwórz folder")});
-        add({Id::start_reset, Control::action, tr(L"Jak zacząć"),
-            tr(L"Panel z pierwszymi krokami (platformy, klucze, ROM-y, pierwsza gra) nad Towarzyszką w oknie desktopowym. Zacznij od nowa: wraca i zeruje postęp."),
-            tr(L"Zacznij od nowa")});
-        if (!desktop_mode_) { // The walkthrough is Tryb TV's (its panels, menus and layouts).
-            // Resets the first-run state and shows the walkthrough again (src/app/tour.cpp).
+        // Przewodnik: one row in each face. The desktop window: the first steps' panel again, its progress reset
+        // (src/app/getting_started.cpp); Tryb TV: the first-run walkthrough again (src/app/tour.cpp).
+        if (desktop_mode_)
+            add({Id::start_reset, Control::action, tr(L"Przewodnik"),
+                tr(L"Pierwsze kroki (platformy, klucze, ROM-y, pierwsza gra) w panelu nad Towarzyszką, od początku."), tr(L"Pokaż")});
+        else
             add({Id::tour, Control::action, tr(L"Przewodnik"),
                 tr(L"Wprowadzenie z pierwszego uruchomienia: panele, menu gry i wybór układu."), tr(L"Pokaż")});
-        }
         add({Id::discord, Control::action, L"Discord",
             tr(L"Pytania, pomysły i nowości: serwer społeczności Launchme."), tr(L"Otwórz")});
         break;

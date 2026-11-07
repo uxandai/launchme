@@ -24,7 +24,8 @@ int LauncherUiTest::webImports(HWND window) {
         app.settings_state_.options = true;
         app.settings_state_.selected[app.settings_state_.category] = static_cast<int>(row - app.settings_rows_.begin());
     };
-    app.openSettings(); app.settings_state_.selectCategory(static_cast<int>(settings_ui::Category::library)); app.buildSettingsRows();
+    app.openSettings(); app.settings_state_.selectCategory(static_cast<int>(settings_ui::Category::library));
+    app.platforms_all_ = true; app.buildSettingsRows(); // The stores that are off: "Więcej platform" open.
 
     // EA: Połącz opens ea.com's sign-in, then the silent token page, and focuses the paste field.
     auto ea_row = find(settings_ui::Id::pc_platform, GameSource::ea);

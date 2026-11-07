@@ -28,7 +28,7 @@ int LauncherUiTest::epicAccount(HWND window) {
     };
     auto service = std::make_unique<FakeEpic>(); auto* fake = service.get(); app.epic_service_ = std::move(service);
     app.onLibrary(std::make_unique<LibraryMessage>());
-    app.openSettings(); app.settings_state_.selectCategory(static_cast<int>(settings_ui::Category::library)); app.buildSettingsRows();
+    app.openSettings(); app.settings_state_.selectCategory(static_cast<int>(settings_ui::Category::library)); app.platforms_all_ = true; app.buildSettingsRows();
     const auto row = std::find_if(app.settings_rows_.begin(), app.settings_rows_.end(), [](auto& r) { return r.id == settings_ui::Id::pc_platform && r.source == GameSource::epic; });
     if (row == app.settings_rows_.end() || row->value != L"Opcje") return 1701;
     app.settings_state_.selected[app.settings_state_.category] = static_cast<int>(row - app.settings_rows_.begin());

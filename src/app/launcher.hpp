@@ -2072,7 +2072,8 @@ private:
     std::wstring homeRowPlace(const std::string& id) const; // "Wszędzie", "Ekran główny", "Zakładka", "Ukryty".
     void setHomeRow(const std::string& id, bool home, bool tab);
     void toggleHomeRow(const std::string& id, bool tab);
-    bool moveHomeCollection(const std::string& id, int amount);
+    bool moveHomeRow(const std::string& id, int amount);
+    bool homeRowMovable(const std::string& id) const; // Every row but Ostatnio grane.
     void homeRowsSettingsRows(const std::function<void(settings_ui::Row)>& add);
     void homeRowSettingsRows(const std::string& id, const std::function<void(settings_ui::Row)>& add);
     bool homeRowActivate(const settings_ui::Row& row);
@@ -2083,6 +2084,12 @@ private:
     // Ekran główny i kolekcje → Kolejność: the collection lifted on the list; ↑↓ carry it, Enter, Back or a click put it down.
     std::string home_row_moving_;
     bool homeRowMoving(); // Also drops a lift the list is no longer open for.
+    // A held A / Enter on a row of the list lifts it (enter_hold_seconds); let go sooner, it opens the row's page.
+    bool settings_hold_ = false;
+    std::chrono::steady_clock::time_point settings_hold_started_{};
+    bool homeRowHoldable() const;
+    void beginSettingsHold();
+    void tickSettingsHold(std::chrono::steady_clock::time_point now);
     void stopHomeRowMove();
     bool steam_rows_available_ = false; // buildShelves: Ostatnio zaktualizowane and Jeszcze niegrane can be rows.
     void settingsSearchEdited(); // The typed words changed: the list follows.
@@ -2624,6 +2631,10 @@ private:
     std::wstring emulationFoundText(const emulation_scan::Rule& rule, const emulators::Found& found) const;
     std::map<std::wstring, size_t> rom_system_counts_;
     bool emulation_all_systems_ = false;
+    // Biblioteka: the stores that are off wait in a fold ("Więcej platform"). Which stores stand above it is
+    // fixed while Settings stay open, so switching one on or off never moves its row away from the focus.
+    bool platforms_all_ = false;
+    std::optional<std::vector<GameSource>> platforms_top_;
     bool rom_folder_notice_ = false; // A ROM folder picked in Dodaj grę: its count when the scan ends.
     std::wstring rom_rescan_system_;  // Szukaj gier ponownie on a system's page: its count when the scan ends.
     // Biblioteka → DRM-free → Gry dodane ręcznie (drm_free.cpp).

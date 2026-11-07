@@ -35,7 +35,7 @@ struct Rows {
     bool steam_account = false;  // Details' "…": a Steam game and more than one remembered account to launch it from.
     bool remove = false;         // Launcher::canRemoveFromLibrary (never while the game runs).
     bool compat = false;         // Details' "…": Launcher::compatGame (Linux).
-    bool identify = false;       // The game's menu: Launcher::unidentifiedGame.
+    bool identify = false;       // The game's menu: Launcher::unidentifiedGame; Details' "…": an identified game.
     bool shortcuts = false;      // Details' "…": the game can have shortcuts (Launcher::shortcutAvailable).
     bool studio = false;         // A studio's logo tile: only its three rows.
     bool emulator = false;       // Details' "…": an emulated game's own emulator (Launcher::gameEmulatorEditable).
@@ -49,7 +49,7 @@ constexpr bool visible(Item entry, Rows options) {
     const bool studio_item = entry == Item::studio_earlier || entry == Item::studio_later || entry == Item::studio_hide;
     if (options.studio || studio_item) return options.studio && studio_item;
     if (entry == Item::aurelia) return options.aurelia;
-    if (entry == Item::identify) return options.identify && !options.detail_options; // Details has its own Zidentyfikuj button.
+    if (entry == Item::identify) return options.identify; // Details: only an identified game's (its button is gone then).
     if (entry == Item::steam_account) return options.detail_options && options.steam_account;
     if (entry == Item::emulator) return options.detail_options && options.emulator;
     if (options.detail_options) return entry == Item::artwork || (entry == Item::launch && options.launch) || (entry == Item::compat && options.compat) ||

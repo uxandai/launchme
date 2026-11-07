@@ -279,6 +279,9 @@ struct AppSettings {
     LanguageChoice language = LanguageChoice::system;
     std::unordered_set<std::string> hidden_collections;
     std::vector<std::string> collection_order;
+    // Biblioteka → Ekran główny i kolekcje: the home rows' order after Ostatnio grane (row ids; a collection's
+    // id marks a place for a collection, collection_order says which one stands there). Empty: the built-in order.
+    std::vector<std::string> home_row_order;
     // Wydawcy and Developerzy (src/app/studio_libraries.cpp): the libraries of the publishers and developers
     // with a logo, each row on its own; a studio needs studio_min_games games (1, 2, 3 or 5) to show; hidden
     // ones ("publisher:capcom") and the player's order (the rest: most games first).

@@ -539,6 +539,7 @@ void Launcher::tick() {
         openContextMenu();
     }
     pollHoldGestures();
+    tickSettingsHold(now);
     pollFileBrowserPreview();
     pollCustomEditorPoster(); // Dodaj / Edytuj grę: the typed name's poster once typing rests.
     menu_progress_ += ((menu_open_ ? 1.0f : 0.0f) - menu_progress_) * ease(dt, 13.0f);

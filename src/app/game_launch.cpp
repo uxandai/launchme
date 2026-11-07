@@ -32,7 +32,7 @@ void Launcher::enterDown(bool repeated) {
     if (flixRailFocused()) { flixRailAccept(flix_rail_focus_); return; }
     if (snitchProfileFocused()) { openProfile(); return; }
     if (quick_open_) { quickAccept(); return; }
-    if (screen_ == ScreenMode::settings) { settingsActivate(); return; }
+    if (screen_ == ScreenMode::settings) { if (homeRowHoldable()) beginSettingsHold(); else settingsActivate(); return; } // Held on a home row: lift it.
     if (screen_ == ScreenMode::details) { if (menu_open_) menuAccept(); else launch(); return; }
     if (category_menu_open_) { categoryMenuAccept(); return; }
     if (enter_held_) return; // Ignore Windows auto-repeat while holding Enter.
@@ -53,6 +53,7 @@ void Launcher::enterDown(bool repeated) {
 }
 
 void Launcher::enterUp() {
+    if (settings_hold_) { settings_hold_ = false; settingsActivate(); return; } // Let go before the lift: the row's page.
     if (dashboardPress(1, false, GetTickCount64())) return;
     if (!enter_held_) return;
     enter_held_ = false;

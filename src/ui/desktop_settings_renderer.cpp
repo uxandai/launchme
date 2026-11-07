@@ -221,6 +221,7 @@ void Renderer::drawDesktopSettings() {
         desktopStroke(r, 10, gray(1, fold ? 0.07f : 0.045f));
         if (selected && view.keyboard && !picking && item.control != Control::avatar) desktopFocusRing(r, 10);
         if (selected && state.editing && item.control == Control::slider) desktopStroke(r, 10, uiAccent(0.8f), 1.5f);
+        if (item.lifted) { desktopFill(r, 10, uiAccent(0.12f)); desktopStroke(r, 10, uiAccent(), 3.0f); } // Being moved.
         const float text_left = r.left + 16;
         const float cy = L.controlY(i, s);
         // The text ends before the row's controls (and its badge).
@@ -335,9 +336,10 @@ void Renderer::drawDesktopSettings() {
                 textLine(item.value, a.left - 120, cy, c.left - 12 - (a.left - 120), desktop_font_.Get(), gray(0.78f), DWRITE_TEXT_ALIGNMENT_TRAILING);
                 break;
             }
-            // A page of its own: its summary, then a chevron.
-            desktopGlyph(glyph::chevron_right, a.right - 8, cy, 10, hover_row ? palette::text() : gray(0.6f));
-            textLine(item.value, a.left - 60, cy, a.right - a.left + 60 - 24, desktop_font_.Get(), gray(0.78f), DWRITE_TEXT_ALIGNMENT_TRAILING);
+            // A page of its own: its summary, then a chevron (a row being moved: the reorder mark).
+            if (item.lifted) desktopGlyph(glyph::sort, a.right - 8, cy, 14, uiAccent());
+            else desktopGlyph(glyph::chevron_right, a.right - 8, cy, 10, hover_row ? palette::text() : gray(0.6f));
+            textLine(item.value, a.left - 60, cy, a.right - a.left + 60 - 24, desktop_font_.Get(), item.lifted ? uiAccent() : gray(0.78f), DWRITE_TEXT_ALIGNMENT_TRAILING);
             break;
         }
         case Control::fold: {

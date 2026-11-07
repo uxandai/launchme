@@ -108,6 +108,8 @@ context_menu::Rows Launcher::menuRows() const {
         rows.steam_account = steamAccountChoices(game).size() > 1;
         rows.emulator = gameEmulatorEditable(game);
         rows.metadata = isGame(game) && game.kind != GameKind::catalog && !gameKey(game).empty(); // Not a store's offer.
+        // Zidentyfikuj grę… under "…" once the game is identified (unidentified: Details' own button).
+        rows.identify = rows.metadata && !steamArtwork(game) && !unidentifiedGame(game);
         rows.remove = canRemoveFromLibrary(game) && sessionState(game) == SessionState::none; // Usuń z biblioteki, never while it runs.
         return rows;
     }

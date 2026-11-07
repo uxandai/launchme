@@ -1,6 +1,7 @@
 // Library -> shelves: applying scanned libraries and collection names, building the
 // categories, and turning the current screen's source list into cards.
 #include "launcher.hpp"
+#include "launcher_internal.hpp"
 #include "library_snapshot.hpp"
 #include "../artwork/cover_cache.hpp"
 #include "../library/owned_games.hpp"
@@ -415,6 +416,20 @@ void Launcher::buildShelves() {
         categories_.push_back(Category{private_category_.title, std::move(games), 0, "private"});
     }
     for (auto& category : categories_) category.games = versions_.collapse(category.games, library_state_.preferred_versions, library_state_.first_seen);
+    if (!settings_.home_row_order.empty()) {
+        // The player's order (Biblioteka → Ekran główny i kolekcje); Ostatnio grane first, Ctrl+H's row last.
+        std::vector<std::string> natural;
+        for (const auto& category : categories_) if (category.id != "recent" && category.id != "private") natural.push_back(category.id);
+        std::unordered_set<std::string> collection_ids;
+        for (const auto& collection : settings_collections_) collection_ids.insert(collection.id);
+        const auto order = orderedHomeRows(natural, settings_.home_row_order, [&](const std::string& id) { return collection_ids.contains(id); });
+        std::unordered_map<std::string, size_t> rank;
+        for (size_t i = 0; i < order.size(); ++i) rank.emplace(order[i], i + 1);
+        std::stable_sort(categories_.begin(), categories_.end(), [&](const Category& a, const Category& b) {
+            const auto of = [&](const Category& c) { return c.id == "recent" ? size_t{0} : c.id == "private" ? SIZE_MAX : rank.contains(c.id) ? rank.at(c.id) : SIZE_MAX - 1; };
+            return of(a) < of(b);
+        });
+    }
     // Biblioteka → Sekcje: rows kept off the home screen stay libraries (tabs of Wszystkie gry, their tiles').
     // Ostatnio grane (the first row: the home layouts' own) and Ctrl+H's hidden games always stay.
     library_categories_.clear();

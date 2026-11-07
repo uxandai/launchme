@@ -45,9 +45,11 @@ int LauncherUiTest::drmFree(HWND window) {
         const auto row = std::find_if(app.settings_rows_.begin(), app.settings_rows_.end(), [&](const Row& r) { return r.id == id; });
         return row == app.settings_rows_.end() ? nullptr : &*row;
     };
-    if (app.settings_rows_.size() <= pc_sources.size() + 3 || app.settings_rows_[0].id != Id::pc_platform ||
+    if (app.settings_rows_.size() < 4 || app.settings_rows_[0].id != Id::pc_platform ||
         app.settings_rows_[0].source != GameSource::drmfree || app.settings_rows_[0].title != L"Katalog DRM-free" || app.settings_rows_[0].checked ||
-        !optionsTile(app.settings_rows_[1]) || app.settings_rows_[2].source != GameSource::steam || app.settings_rows_[3].source != app.platformOrder()[2]) return 2101;
+        !optionsTile(app.settings_rows_[1]) || app.settings_rows_[2].source != GameSource::steam ||
+        // The stores that are on, then the others in "Więcej platform".
+        !(app.settings_rows_[3].id == Id::platforms_more || (app.settings_rows_[3].id == Id::pc_platform && app.settings_rows_[3].checked))) return 2101;
     if (!capture(L"drm-free-overview.png")) return 2102;
     const auto view = app.renderer_.viewport();
     const auto layout = Layout::of(view.width, view.height, app.settings_state_, app.settings_rows_);

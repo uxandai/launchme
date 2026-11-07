@@ -47,6 +47,17 @@ void Launcher::pcSettingsRows() {
             std::wstring(tr(L"Oczekiwanie na dane logowania")) : ea_import_.snapshot ? library(source) : std::wstring(tr(L"Konto niepołączone"));
         return library(source);
     };
+    const auto platformRow = [&](GameSource source, int indent) {
+        auto summary = account(source);
+        if (source == GameSource::gog || source == GameSource::epic || source == GameSource::amazon ||
+            (source == GameSource::xbox && (xbox_state_.state != xbox_account::State::disconnected || xbox_state_.failure != xbox_account::Failure::none)) ||
+            (source == GameSource::ea && (!ea_import_.snapshot || ea_import_.busy || ea_import_.awaiting))) summary += L" · " + library(source);
+        if (source == GameSource::battlenet && battlenet_import_.snapshot)
+            summary += L" · " + std::wstring(tr(L"Gry konta: ")) + std::to_wstring(battlenet_import_.snapshot->games.size());
+        Row row{Id::pc_platform, Control::platform, sourceName(source), std::move(summary), tr(L"Opcje"), settings_.enabled_pc_sources.contains(sourceSlug(source))};
+        row.source = source; row.indent = indent;
+        settings_rows_.push_back(std::move(row));
+    };
     if (!settings_state_.platform()) {
         // The DRM-free catalogue first (the user's own library: its folders and the games added by
         // hand), Emulacja under it, then Steam and the stores by name.
@@ -69,17 +80,23 @@ void Launcher::pcSettingsRows() {
             steam.section = tr(L"Sklepy"); // A gap after the user's own library (DRM-free, Emulacja).
             settings_rows_.push_back(std::move(steam));
         }
+        // The stores that are on, then the others in a fold: most players use two or three of them.
+        if (!platforms_top_) {
+            platforms_top_.emplace();
+            for (const auto source : platformOrder())
+                if (settings_.enabled_pc_sources.contains(sourceSlug(source))) platforms_top_->push_back(source);
+        }
+        std::vector<GameSource> off;
         for (const auto source : platformOrder()) {
             if (source == GameSource::steam || source == GameSource::drmfree) continue;
-            auto summary = account(source);
-            if (source == GameSource::gog || source == GameSource::epic || source == GameSource::amazon ||
-                (source == GameSource::xbox && (xbox_state_.state != xbox_account::State::disconnected || xbox_state_.failure != xbox_account::Failure::none)) ||
-                (source == GameSource::ea && (!ea_import_.snapshot || ea_import_.busy || ea_import_.awaiting))) summary += L" · " + library(source);
-            if (source == GameSource::battlenet && battlenet_import_.snapshot)
-                summary += L" · " + std::wstring(tr(L"Gry konta: ")) + std::to_wstring(battlenet_import_.snapshot->games.size());
-            Row row{Id::pc_platform, Control::platform, sourceName(source), std::move(summary), tr(L"Opcje"), settings_.enabled_pc_sources.contains(sourceSlug(source))};
-            row.source = source; settings_rows_.push_back(std::move(row));
+            if (std::find(platforms_top_->begin(), platforms_top_->end(), source) == platforms_top_->end()) { off.push_back(source); continue; }
+            platformRow(source, 0);
         }
+        if (off.empty()) return;
+        Row fold{Id::platforms_more, Control::fold, tr(L"Więcej platform"), tr(L"Wyłączone sklepy i launchery. Włącz, żeby dodać ich gry."),
+                 std::to_wstring(off.size()), platforms_all_};
+        settings_rows_.push_back(std::move(fold));
+        if (platforms_all_) for (const auto source : off) platformRow(source, 1);
         return;
     }
 

@@ -581,10 +581,13 @@ public:
             if (!capture(L"settings-library-overview.png")) return 7571;
             // Ekran główny i kolekcje: the fixed rows (Ostatnio grane first), then Nowa kolekcja and the collections.
             if (!press(tileOf(Page::home_rows)) || !app.settings_state_.at(Page::home_rows)) return 7002;
-            if (app.settings_rows_.empty() || app.settings_rows_[0].id != Id::home_row || app.settings_rows_[0].key != "recent") return 7572;
-            const int create = rowOf(Id::home_row_new);
-            if (create < 0 || app.settings_rows_[create].section != tr(L"Kolekcje") || create + 2 >= static_cast<int>(app.settings_rows_.size()) ||
-                !app.homeRowCollection(app.settings_rows_[create + 1].key) || !app.homeRowCollection(app.settings_rows_[create + 2].key)) return 7573;
+            // Nowa kolekcja first, then every row in the home order (Ostatnio grane first).
+            if (app.settings_rows_.size() < 2 || app.settings_rows_[0].id != Id::home_row_new || app.settings_rows_[1].key != "recent" ||
+                app.settings_rows_[1].section != tr(L"Kolejność na ekranie głównym")) return 7572;
+            int create = -1; // The row before the first two collections.
+            for (int i = 1; i + 2 < static_cast<int>(app.settings_rows_.size()) && create < 0; ++i)
+                if (app.homeRowCollection(app.settings_rows_[i + 1].key) && app.homeRowCollection(app.settings_rows_[i + 2].key)) create = i;
+            if (create < 0) return 7573;
             app.settings_state_.selected[app.settings_state_.category] = create + 1; app.ensureSettingVisible();
             if (!capture(L"settings-home-rows.png")) return 92;
             // Shift+↓ (RB): a collection one place down, its row keeping the focus; another account's order stays.
@@ -625,6 +628,27 @@ public:
             if (!app.homeRowOnHome("recent")) return 7581;
             app.closeSettingsPage();
             if (!app.settings_state_.at(Page::home_rows)) return 7582;
+            // Any row moves, not only the collections: Wydawcy one place down and back.
+            {
+                const int publishers = rowOf(Id::home_row, "publishers");
+                if (publishers < 0 || publishers + 1 >= static_cast<int>(app.settings_rows_.size())) return 7585;
+                const auto below = app.settings_rows_[static_cast<size_t>(publishers + 1)].key;
+                app.settings_state_.selected[app.settings_state_.category] = publishers;
+                app.settingsReorder(1);
+                if (app.settings_rows_[static_cast<size_t>(publishers)].key != below || rowOf(Id::home_row, "publishers") != publishers + 1 ||
+                    app.settings_.home_row_order.empty() || app.settings_state_.row() != publishers + 1) return 7586;
+                // Held A lifts the row: the arrows carry it, A puts it down.
+                app.enterDown(false);
+                if (!app.settings_hold_) return 7587;
+                app.tickSettingsHold(std::chrono::steady_clock::now() + std::chrono::seconds(1));
+                if (app.home_row_moving_ != "publishers" || !app.settings_rows_[static_cast<size_t>(publishers + 1)].lifted) return 7588;
+                if (!capture(L"settings-home-row-lifted.png")) return 7589;
+                app.settingsMove(-1);
+                if (rowOf(Id::home_row, "publishers") != publishers || app.settings_state_.row() != publishers) return 7590;
+                app.enterUp(); app.settingsActivate();
+                if (!app.home_row_moving_.empty() || !app.settings_state_.at(Page::home_rows)) return 7591;
+                app.settings_.home_row_order.clear(); app.buildSettingsRows();
+            }
             // Steam ROM Manager collections: while Emulacja lists their games by platform they are no home
             // row and not on this list; with Emulacja off they are ordinary.
             {
@@ -902,10 +926,14 @@ public:
         app.settings_state_.selected[app.settings_state_.category] = 0; // Biblioteka remembered its Kolekcje row.
         app.buildSettingsRows();
         // Platforms: DRM-free, Emulacja's tile, Steam, then the stores by name (Launcher::platformOrder, the tile after its first).
-        const auto order = app.platformOrder();
-        const auto at = [&](GameSource source) { return static_cast<int>(std::find(order.begin(), order.end(), source) - order.begin()) + (source == GameSource::drmfree ? 0 : 1); };
-        app.settingsActivate(); app.settingsMove(at(GameSource::gog)); app.settingsActivate(); // Enable GOG.
-        app.settingsMove(at(GameSource::epic) - at(GameSource::gog)); app.settingsActivate(); // Enable Epic.
+        // Stores that are off wait in "Więcej platform": open it, then switch two of them on.
+        app.platforms_all_ = true; app.buildSettingsRows();
+        const auto select = [&](GameSource source) {
+            for (size_t i = 0; i < app.settings_rows_.size(); ++i)
+                if (app.settings_rows_[i].id == settings_ui::Id::pc_platform && app.settings_rows_[i].source == source) app.settings_state_.selected[app.settings_state_.category] = static_cast<int>(i);
+        };
+        app.settingsActivate(); select(GameSource::gog); app.settingsActivate(); // Enable GOG.
+        select(GameSource::epic); app.settingsActivate(); // Enable Epic.
         if (app.categories_[1].title != L"Platformy PC" || app.categories_[2].title != L"Emulacja" || app.categories_[1].games.size() != 3) return 41;
         if (std::count_if(app.public_library_.begin(), app.public_library_.end(), [](const auto& game) { return game.source != GameSource::steam; }) != 2 || app.private_category_.games.size() != 1) return 42;
         const auto launches = dispatched.size();

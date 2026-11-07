@@ -7,7 +7,8 @@
 #include <algorithm>
 
 int Launcher::identifyDetailAction() const {
-    if (screen_ != ScreenMode::details || cards_.empty() || !isGame(cards_[0].game) || steamArtwork(cards_[0].game)) return -2;
+    // Only while nothing names the game yet; once identified, "…" has it (menuRows) for another match.
+    if (screen_ != ScreenMode::details || cards_.empty() || !unidentifiedGame(cards_[0].game)) return -2;
     return 2;
 }
 void Launcher::openIdentify() {

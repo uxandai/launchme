@@ -37,6 +37,7 @@ void Launcher::openSettings() {
     screen_ = ScreenMode::settings;
     color_editor_ = {};
     settings_page_exits_ = false;
+    platforms_top_.reset(); platforms_all_ = false; // Biblioteka splits the stores again (on above, off in the fold).
     settings_state_.closeAll();
     settings_state_.options = settings_state_.editing = settings_state_.back_focused = false;
     settings_motion_.valid = false;
@@ -112,6 +113,7 @@ void Launcher::settingsMove(int amount) {
     if (bulkCoversOpen()) { bulkCoversKey(amount < 0 ? VK_LEFT : VK_RIGHT, false); return; }
     if (!settingsOpen() || !amount) return;
     desktop_sheet_keyboard_ = true; // Keys or the pad: the desktop dialog shows its focus.
+    settings_hold_ = false; // Moving away while A is held: no lift, no page.
     if (homeRowMoving()) { settingsReorder(amount); return; } // A lifted collection goes with the arrows.
     if (color_editor_.open) { colorEditorMove(amount); return; }
     if (editingSecret()) return;
@@ -182,7 +184,7 @@ void Launcher::settingsReorder(int amount) {
         const int index = settings_state_.row();
         if (index < 0 || index >= static_cast<int>(settings_rows_.size()) || settings_rows_[index].id != Id::home_row) return;
         const auto key = settings_rows_[index].key;
-        if (!homeRowCollection(key) || !moveHomeCollection(key, amount)) return;
+        if (!homeRowMovable(key) || !moveHomeRow(key, amount)) return;
         for (size_t i = 0; i < settings_rows_.size(); ++i)
             if (settings_rows_[i].id == Id::home_row && settings_rows_[i].key == key) settings_state_.selected[settings_state_.category] = static_cast<int>(i);
         InvalidateRect(hwnd_, nullptr, FALSE);
@@ -379,6 +381,11 @@ void Launcher::settingsActivate() {
     if (row.control == Control::page) { openSettingsPage(row.page, row.id == Id::page ? std::string{} : row.key); return; }
     if (row.id == Id::bulk_covers) { openBulkCovers(); return; }
     if (settingsExtraActivate(row)) return; // The wallpaper picker, Bez tapety (settings_extras.cpp).
+    if (row.id == Id::platforms_more) {
+        platforms_all_ = !platforms_all_;
+        buildSettingsRows(); audio_.context(); InvalidateRect(hwnd_, nullptr, FALSE);
+        return;
+    }
     if (homeRowActivate(row)) return; // Ekran główny i kolekcje: a collection's games, name, place (home_rows.cpp).
     if (row.id == Id::steam_sync) { requestSteamSync(true); audio_.context(); return; }
     if (row.id == Id::collection_manage) { openCollectionManager(); return; }

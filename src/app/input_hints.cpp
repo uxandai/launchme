@@ -125,8 +125,8 @@ void Launcher::inputHints(ViewContext& context) const {
         else if (row->control == settings_ui::Control::page || row->control == settings_ui::Control::count) add(HintButton::accept, tr(L"Otwórz"));
         else if (row->control == settings_ui::Control::fold) add(HintButton::accept, row->checked ? tr(L"Zwiń") : tr(L"Rozwiń"));
         else add(HintButton::accept, tr(L"Wybierz"));
-        if (settings_state_.at(settings_ui::Page::home_rows) && row && row->id == settings_ui::Id::home_row && homeRowCollection(row->key))
-            hints.push_back({HintButton::shoulders, tr(L"Przesuń"), L"Shift ↑↓"});
+        if (settings_state_.at(settings_ui::Page::home_rows) && row && row->id == settings_ui::Id::home_row && homeRowMovable(row->key))
+            add(HintButton::accept, tr(L"Przytrzymaj: przesuń")); // A or Enter held lifts the row (home_rows.cpp).
         if (row && !row->reset.empty()) hints.push_back({HintButton::search, tr(L"Przywróć domyślne"), L"Del"}); // A game's own value.
         if (row && row->removable) hints.push_back({HintButton::search, tr(L"Usuń kolekcję"), L"Del"}); // An own collection's question.
         if (row && row->control == settings_ui::Control::sources && !row->tiles.empty() &&

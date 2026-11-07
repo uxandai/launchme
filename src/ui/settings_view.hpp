@@ -125,7 +125,7 @@ enum class Id { font, home_layout, ui_accent, accent, uninstalled, emulation, co
                    // Biblioteka → Emulacja (src/app/emulation_settings.cpp): a system's row (Row::key its folder),
                    // the other systems' fold; a system's page: its emulator, how it was found, the program
                    // chosen by hand and its reset, the launch arguments and the command they make.
-                   emulation_system, emulation_more, emulation_emulator, emulation_detected, emulation_program,
+                   emulation_system, emulation_more, platforms_more, emulation_emulator, emulation_detected, emulation_program,
                     emulation_program_reset, emulation_arguments, emulation_preview,
                     emulation_system_folder, emulation_system_folder_reset, emulation_system_rescan,
                    // DRM-free → Katalogi: the page of the scanned folders.
@@ -336,6 +336,7 @@ struct Row {
     GameSource source = GameSource::steam;
     std::string key; // Id::custom_game / drm_game: the game's ID; Id::drm_root: the folder (UTF-8).
     bool locked = false; // Shown in its current state; the switch does not change (Id::collection from SRM).
+    bool lifted = false; // Picked up to be moved (Ekran główny i kolekcje): a thick accent frame, the reorder mark.
     std::string plugin_setting; // Plugin setting/contribution ID; key identifies its owner.
     std::vector<std::wstring> tags;
     // Nonempty: a section heading drawn above this row (Layout::section_gap). Headings are never
