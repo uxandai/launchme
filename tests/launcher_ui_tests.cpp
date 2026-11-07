@@ -597,8 +597,8 @@ public:
             // Its page: where it shows, then its games, name and place.
             app.settingsActivate();
             if (!app.settings_state_.at(Page::home_row) || app.settings_state_.top()->key != first || rowOf(Id::home_section) != 0 ||
-                rowOf(Id::library_tab) != 1 || rowOf(Id::home_row_games) < 0 || rowOf(Id::home_row_up) < 0 ||
-                !app.settings_rows_[static_cast<size_t>(rowOf(Id::home_row_up))].locked || app.settingsPageTitle() != app.homeRowTitle(first)) return 48;
+                rowOf(Id::library_tab) != 1 || rowOf(Id::home_row_games) < 0 || rowOf(Id::home_row_move) < 0 ||
+                app.settingsPageTitle() != app.homeRowTitle(first)) return 48;
             if (!capture(L"settings-home-row-collection.png")) return 7574;
             const auto key = collectionKey(app.account_, *app.homeRowCollection(first));
             // Off the home screen: no shelf, still a tab of Wszystkie gry.

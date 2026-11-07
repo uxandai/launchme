@@ -122,6 +122,19 @@ void Launcher::toggleHomeRow(const std::string& id, bool tab) {
 }
 
 // A collection one place up or down among the collections (the home screen's order and the tabs').
+bool Launcher::homeRowMoving() {
+    if (home_row_moving_.empty()) return false;
+    if (settings_state_.at(Page::home_rows) && homeRowCollection(home_row_moving_)) return true;
+    home_row_moving_.clear(); // Left the list some other way (Guide, a closed Settings, a deleted collection).
+    return false;
+}
+
+void Launcher::stopHomeRowMove() {
+    home_row_moving_.clear();
+    buildSettingsRows(); audio_.context();
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
 bool Launcher::moveHomeCollection(const std::string& id, int amount) {
     std::vector<size_t> listed; // The collections the list shows (not SRM's while Emulacja has their games).
     for (size_t i = 0; i < settings_collections_.size(); ++i)
@@ -169,6 +182,10 @@ void Launcher::homeRowsSettingsRows(const std::function<void(Row)>& add) {
         Row row{Id::home_row, Control::page, entry.title, description(entry), homeRowPlace(entry.id)};
         row.page = Page::home_row;
         row.key = entry.id;
+        if (!home_row_moving_.empty() && entry.id == home_row_moving_) { // Lifted: says how to carry and put it down.
+            row.description = tr(L"Strzałki ↑↓ przesuwają kolekcję; Enter albo Wstecz ją odkłada.");
+            row.value = tr(L"Przesuwasz");
+        }
         if (first) { row.section = tr(L"Rzędy"); first = false; }
         if (!entry.collection && collections) row.section = tr(L"Rzędy Steam"); // Konto bez kolekcji: after them.
         add(std::move(row));
@@ -240,16 +257,13 @@ void Launcher::homeRowSettingsRows(const std::string& id, const std::function<vo
         games.section = tr(L"Kolekcja");
         key(std::move(games));
         if (!favoriteCollection(*c)) key({Id::home_row_rename, Control::action, tr(L"Zmień nazwę"), c->name, tr(L"Zmień")});
-        // Its place among the collections (also Shift+↑↓ or LB/RB on the list).
+        // Its place among the collections: picked up on the list and moved there (also Shift+↑↓ or LB/RB).
         size_t position = 0, count = 0;
         for (const auto& item : entries) if (item.collection) { ++count; if (item.id == id) position = count; }
-        const auto place = tr(L"Pozycja ") + std::to_wstring(position) + L" / " + std::to_wstring(count);
-        Row up{Id::home_row_up, Control::action, tr(L"Przenieś wyżej"), place, tr(L"Wyżej")};
-        up.locked = position <= 1;
-        key(std::move(up));
-        Row down{Id::home_row_down, Control::action, tr(L"Przenieś niżej"), place, tr(L"Niżej")};
-        down.locked = position >= count;
-        key(std::move(down));
+        Row move{Id::home_row_move, Control::action, tr(L"Kolejność"),
+                 std::to_wstring(position) + tr(L". z ") + std::to_wstring(count) + tr(L" kolekcji na ekranie głównym i w zakładkach."), tr(L"Przesuń")};
+        move.locked = count <= 1;
+        key(std::move(move));
         if (localCollection(*c)) {
             key({Id::home_row_steam, Control::action, tr(L"Przenieś do Steam"), tr(L"Kolekcja Steam synchronizuje się z klientem Steam na tym koncie."), tr(L"Przenieś")});
             key({Id::home_row_delete, Control::action, tr(L"Usuń kolekcję"), tr(L"Gry zostają w bibliotece; znika tylko kolekcja."), tr(L"Usuń")});
@@ -276,9 +290,13 @@ bool Launcher::homeRowActivate(const Row& row) {
         return true;
     case Id::home_row_games: openCollectionPage(row.key, false); return true;
     case Id::home_row_rename: openCollectionPage(row.key, true); return true;
-    case Id::home_row_up: case Id::home_row_down:
+    case Id::home_row_move:
         if (row.locked) { navigationBoundary(); return true; }
-        moveHomeCollection(row.key, row.id == Id::home_row_up ? -1 : 1);
+        // Back on the list with the collection lifted: ↑↓ carry it, Enter or Back put it down.
+        closeSettingsPage();
+        home_row_moving_ = row.key;
+        buildSettingsRows(); audio_.context();
+        InvalidateRect(hwnd_, nullptr, FALSE);
         return true;
     case Id::home_row_steam: {
         const auto* c = homeRowCollection(row.key);

@@ -2080,6 +2080,10 @@ private:
     // A collection's games or its new name in the collection dialog, Back returning to Settings.
     void openCollectionPage(const std::string& id, bool rename);
     std::string home_row_confirm_; // Przywróć przypisania Steam: the second press does it.
+    // Ekran główny i kolekcje → Kolejność: the collection lifted on the list; ↑↓ carry it, Enter, Back or a click put it down.
+    std::string home_row_moving_;
+    bool homeRowMoving(); // Also drops a lift the list is no longer open for.
+    void stopHomeRowMove();
     bool steam_rows_available_ = false; // buildShelves: Ostatnio zaktualizowane and Jeszcze niegrane can be rows.
     void settingsSearchEdited(); // The typed words changed: the list follows.
     void settingsSearchJump(size_t hit);

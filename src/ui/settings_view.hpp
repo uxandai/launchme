@@ -70,8 +70,8 @@ enum class Id { font, home_layout, ui_accent, accent, uninstalled, emulation, co
                    update, update_check,
                    // Platformy PC → MultiMC / Prism: the launcher picked by hand (portable MultiMC).
                    multimc_path, studio_publishers, studio_developers, studio_companies, studio_min_games, studio_hidden, studio_hidden_entry, studio_show_all,
-                   updated_row, discovery_row, home_section, library_tab, home_row, home_row_new, home_row_games, home_row_rename, home_row_up,
-                   home_row_down, home_row_steam, home_row_delete, home_row_reset, home_row_options, home_tab_icons, flix_rail, excluded_games, excluded_game, excluded_restore_all,
+                   updated_row, discovery_row, home_section, library_tab, home_row, home_row_new, home_row_games, home_row_rename, home_row_move,
+                   home_row_steam, home_row_delete, home_row_reset, home_row_options, home_tab_icons, flix_rail, excluded_games, excluded_game, excluded_restore_all,
                    // System → Wydajność: the low memory mode (AppSettings::low_memory) and Kompresja grafik
                    // (AppSettings::texture_compression).
                    low_memory, texture_compression,

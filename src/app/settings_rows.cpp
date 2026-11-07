@@ -554,15 +554,15 @@ void Launcher::buildSettingsRows() {
                 settings_rows_[first_platform].section = std::move(next_section); next_section.clear();
             }
         }
-        // Porządek: what the home screen and the libraries show; Granie: starting games, saves, shortcuts.
+        // Wyświetlanie: what the home screen and the libraries show; Granie: starting games, saves, shortcuts.
         // Each a page of its own, its state on the right.
-        section(tr(L"Porządek"));
+        section(tr(L"Wyświetlanie"));
         {
             const auto entries = homeRowEntries();
             const auto shown = std::count_if(entries.begin(), entries.end(), [&](const HomeRowEntry& entry) { return homeRowOnHome(entry.id); });
             pageRow(Page::home_rows, tr(L"Ekran główny i kolekcje"),
                     tr(L"Rzędy ekranu głównego, zakładki Wszystkich gier i kolekcje."),
-                    tr(L"Rzędy: ") + std::to_wstring(shown));
+                    tr(L"Na ekranie: ") + std::to_wstring(shown));
         }
         {
             std::wstring summary = settings_.show_uninstalled ? tr(L"Wszystkie gry") : tr(L"Tylko zainstalowane");

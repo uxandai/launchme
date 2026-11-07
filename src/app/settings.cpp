@@ -112,6 +112,7 @@ void Launcher::settingsMove(int amount) {
     if (bulkCoversOpen()) { bulkCoversKey(amount < 0 ? VK_LEFT : VK_RIGHT, false); return; }
     if (!settingsOpen() || !amount) return;
     desktop_sheet_keyboard_ = true; // Keys or the pad: the desktop dialog shows its focus.
+    if (homeRowMoving()) { settingsReorder(amount); return; } // A lifted collection goes with the arrows.
     if (color_editor_.open) { colorEditorMove(amount); return; }
     if (editingSecret()) return;
     if (!drm_confirm_.empty()) { drm_confirm_.clear(); buildSettingsRows(); } // Moving away cancels "Potwierdź".
@@ -245,6 +246,7 @@ void Launcher::settingsSetLevel(float level) {
 void Launcher::settingsAdjust(int amount) {
     if (bulkCoversOpen()) { bulkCoversKey(amount < 0 ? VK_LEFT : VK_RIGHT, false); return; }
     if (!settingsOpen() || !amount) return;
+    if (homeRowMoving()) { stopHomeRowMove(); return; }
     desktop_sheet_keyboard_ = true;
     if (color_editor_.open) { colorEditorAdjust(amount); return; }
     if (editingSecret()) {
@@ -312,6 +314,7 @@ void Launcher::settingsAdjust(int amount) {
 void Launcher::settingsActivate() {
     if (bulkCoversOpen()) { bulkCoversKey(VK_RETURN, false); return; }
     if (!settingsOpen()) return;
+    if (homeRowMoving()) { stopHomeRowMove(); return; }
     if (color_editor_.open) {
         // A on a slider saves as well: the colour is already shown everywhere. Cancel restores it.
         closeColorEditor(color_editor_.focus != settings_ui::ColorEditor::cancel);
@@ -873,6 +876,7 @@ void Launcher::settingsToggle(const Row& row) {
 }
 
 void Launcher::settingsClick(float x, float y) {
+    if (homeRowMoving()) { stopHomeRowMove(); return; } // A click puts the lifted collection down.
     const auto view = renderer_.viewport();
     const auto layout = Layout::of(view.width, view.height, settings_state_, settings_rows_);
     if (color_editor_.open) { colorEditorClick(x, y); return; }

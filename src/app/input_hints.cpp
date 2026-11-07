@@ -107,6 +107,11 @@ void Launcher::inputHints(ViewContext& context) const {
     case ScreenMode::settings: {
         if (settings_rows_.empty() && settings_state_.options) { add(HintButton::back, tr(L"Wstecz")); return; }
         const auto* row = settings_state_.options && !settings_rows_.empty() ? &settings_rows_[settings_state_.row()] : nullptr;
+        if (!home_row_moving_.empty() && settings_state_.at(settings_ui::Page::home_rows)) { // A lifted collection.
+            hints.push_back({HintButton::shoulders, tr(L"Przesuń"), L"↑↓"});
+            add(HintButton::accept, tr(L"Odłóż"));
+            return;
+        }
         if (settings_state_.editing && row && row->picker()) { add(HintButton::accept, tr(L"Wybierz")); add(HintButton::back, tr(L"Anuluj")); return; }
         if (editingSecret()) {
             add(HintButton::accept, settings_secret_browse_ ? tr(L"Przeglądaj…") : settings_secret_cancel_ ? tr(L"Anuluj") : tr(L"Zapisz"));

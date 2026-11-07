@@ -359,6 +359,7 @@ SheetHit Launcher::desktopSettingsHit(float x, float y) const {
 void Launcher::desktopSettingsClick(float mouse_x, float mouse_y, bool double_click) {
     const float scale = desktopScale(), x = mouse_x / scale, y = mouse_y / scale;
     desktop_sheet_keyboard_ = false;
+    if (screen_ == ScreenMode::settings && homeRowMoving()) { stopHomeRowMove(); return; } // A click puts the lifted collection down.
     if (screen_ != ScreenMode::settings) {
         const auto hit = desktopHotspotHit(x, y);
         // A click beside the artwork's "Z dysku" panel closes it.

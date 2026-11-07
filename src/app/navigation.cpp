@@ -287,6 +287,7 @@ void Launcher::back() {
     if (screen_ == ScreenMode::settings) {
         pointerUp();
         mouseLeave();
+        if (homeRowMoving()) { stopHomeRowMove(); return; } // Back puts the lifted collection down first.
         if (const auto platform = settings_state_.platform()) {
             // A sign-in in progress ends with its page; while editing, Back ends the edit first.
             const bool editing = settings_state_.editing;
