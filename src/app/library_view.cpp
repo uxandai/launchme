@@ -60,10 +60,7 @@ bool Launcher::libraryTabsShown() const {
 }
 std::vector<Launcher::LibraryTab> Launcher::libraryTabs() const {
     std::vector<LibraryTab> tabs;
-    const auto shelf = [&](const char* id) -> const Category* {
-        for (const auto& category : categories_) if (category.id == id) return &category;
-        return nullptr;
-    };
+    const auto shelf = [&](const char* id) { return findCategory(id); };
     if (pc_source_) {
         // The stores of the Platformy PC shelf, in its order.
         if (const auto* stores = shelf("pc-platforms")) for (const auto& tile : stores->games) {
@@ -86,7 +83,7 @@ std::vector<Launcher::LibraryTab> Launcher::libraryTabs() const {
     }
     if (studioBoard()) {
         // The boards of logos: Wydawcy, Developerzy.
-        for (const auto& category : categories_)
+        for (const auto* list : {&categories_, &library_categories_}) for (const auto& category : *list)
             if (studioCategory(category.id) && !category.games.empty()) tabs.push_back({category.id, category.title, category.games.size()});
         return tabs;
     }
@@ -103,8 +100,13 @@ std::vector<Launcher::LibraryTab> Launcher::libraryTabs() const {
     const auto all = grouped_library_.empty() ? static_cast<size_t>(std::count_if(public_library_.begin(), public_library_.end(),
         [](const Game& game) { return isGame(game); })) : grouped_library_.size();
     tabs.push_back({{}, tr(L"Wszystkie gry"), all});
-    for (const auto& category : categories_) {
+    // The home rows, those kept off the home screen among them; Biblioteka → Sekcje leaves some out (the open one stays).
+    for (const auto& id : category_order_) {
+        const auto* found = findCategory(id);
+        if (!found) continue;
+        const auto& category = *found;
         if (category.id == "pc-platforms" || category.id == "emulation") continue;
+        if (settings_.hidden_library_tabs.contains(category.id) && category.id != library_category_) continue;
         const auto games = static_cast<size_t>(std::count_if(category.games.begin(), category.games.end(), [](const Game& game) { return isGame(game); }));
         if (games) tabs.push_back({category.id, category.title, games});
     }
@@ -146,8 +148,8 @@ void Launcher::switchLibraryTab(int amount) {
         grouped_library_ = versions_.collapse(public_library_, library_state_.preferred_versions, library_state_.first_seen);
         library_category_.clear(); category_library_.clear();
     } else {
-        const auto category = std::find_if(categories_.begin(), categories_.end(), [&](const Category& item) { return item.id == tab.id; });
-        if (category == categories_.end()) return;
+        const auto* category = findCategory(tab.id);
+        if (!category) return;
         library_category_ = tab.id;
         category_library_title_ = category->title;
         category_library_.clear();

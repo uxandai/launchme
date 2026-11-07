@@ -155,6 +155,7 @@ int LauncherUiTest::excludedGames(HWND window) {
         if (present(app.public_library_, portal) || present(app.private_category_.games, portal)) return 3137;
         app.togglePrivateCategory();
         app.openSettings(); app.settings_state_.selectCategory(static_cast<int>(settings_ui::Category::library)); app.buildSettingsRows();
+        app.openSettingsPage(settings_ui::Page::library_visibility); // Biblioteka → Co pokazywać.
         const auto excluded = std::find_if(app.settings_rows_.begin(), app.settings_rows_.end(), [](const auto& r) { return r.id == settings_ui::Id::excluded_games; });
         if (excluded == app.settings_rows_.end() || excluded->value != L"1") return 3138;
         app.settings_state_.options = true;

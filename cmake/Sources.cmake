@@ -77,6 +77,7 @@ set(LAUNCHME_APP_SOURCES
     src/ui/plugin_page_renderer.cpp
     src/app/downloads.cpp
     src/app/glance.cpp
+    src/app/home_rows.cpp
     src/app/tarot.cpp
     src/app/game_case.cpp
     src/app/profile.cpp

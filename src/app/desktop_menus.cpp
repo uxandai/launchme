@@ -209,7 +209,7 @@ void Launcher::desktopOpenSectionMenu(int entry_index, float x, float y) {
         };
         add(Action::section_rename, tr(L"Zmień nazwę…"), glyph::edit, L"F2");
         add(Action::section_games, tr(L"Wybierz gry…"), glyph::check);
-        add(Action::section_tv, tr(L"Pokaż w trybie TV"), glyph::tv).checked = !settings_.hidden_collections.contains(scope);
+        add(Action::section_tv, tr(L"Na ekranie głównym (TV)"), glyph::tv).checked = !settings_.hidden_collections.contains(scope);
         MenuItem line; line.separator = true; menu.items.push_back(line);
         std::vector<std::string> shown;
         for (const auto& item : desktop_entries_) if (item.kind == EntryKind::collection) shown.push_back(item.collection);

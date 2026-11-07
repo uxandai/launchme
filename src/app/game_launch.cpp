@@ -348,10 +348,13 @@ void Launcher::stopLaunchAnimation() {
 }
 
 // The picture stays until the game is there (src/ui/launch_animation.hpp):
-// - another window in front (the game, its launcher): it rests, still, behind it;
-// - the launcher seen again after that while the game runs (Alt+Tab, the Guide's home): it fades out;
-// - in front all along: at least `seconds`, longer while the game still starts or its window is
-//   being brought forward, never beyond `longest`;
+// - another program's window in front (the game, its own launcher): it rests, still, behind it. A
+//   store client's window (Steam's "Preparing to launch", an update) or the desktop is not the game:
+//   the picture goes on, and the launcher seen again after it is still waiting;
+// - the launcher seen again after the game's window while the game runs (Alt+Tab, the Guide's home):
+//   it fades out;
+// - in front all along: at least `seconds`, then for as long as the game has shown no window of its
+//   own (its process may already run: a splash, a shader compile, an anti-cheat), never beyond `longest`;
 // - the game's session ending (or failing to start) ends it at once (onGameActivity).
 void Launcher::tickLaunchAnimation(std::chrono::steady_clock::time_point now) {
     if (!launchAnimationActive()) return;
@@ -362,15 +365,15 @@ void Launcher::tickLaunchAnimation(std::chrono::steady_clock::time_point now) {
     if (pending_launch_) return; // Waiting for a Steam account switch: the game is not started yet.
     const float age = std::chrono::duration<float>(now - *launch_animation_started_).count();
     if (const HWND foreground = overlay_backend_.foreground(); foreground != hwnd_) {
-        if (foreground) launch_animation_rested_ = true; // No foreground at all is a moment between two windows.
+        // No foreground at all is a moment between two windows; a client's or the shell's is not the game.
+        if (foreground && !leftByGame(foreground)) launch_animation_rested_ = true;
         return;
     }
     const auto session = game_sessions_.find(launch_artwork_key_);
     const bool running = session != game_sessions_.end() && session->second.running();
-    const bool starting = session != game_sessions_.end() && !running;
     if (launch_animation_rested_ && running) { fadeLaunchAnimation(now); return; }
     if (age < launch_animation::seconds) return;
-    if (age < launch_animation::longest && (starting || (running && launch_focus_key_ == launch_artwork_key_))) return;
+    if (age < launch_animation::longest && session != game_sessions_.end()) return;
     fadeLaunchAnimation(now);
 }
 

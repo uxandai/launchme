@@ -26,6 +26,7 @@ struct State {
     // dialog closes once it is saved.
     std::vector<Game> more_games;
     bool close_after_save = false;
+    bool settings_return = false; // Opened from a collection's page in Settings: Back closes the dialog.
     bool textField() const { return page == Page::name || page == Page::games || page == Page::excluded; }
 };
 struct Layout {

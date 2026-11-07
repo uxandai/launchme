@@ -68,6 +68,7 @@ int LauncherUiTest::trayAndBackgroundCrop(HWND window) {
         if (app.inTray() || !IsWindowVisible(window)) return 1960;
         // The row (Biblioteka → Uruchamianie) and its toggle.
         app.openSettings(); app.settings_state_.selectCategory(static_cast<int>(settings_ui::Category::library)); app.buildSettingsRows();
+        app.openSettingsPage(settings_ui::Page::launching);
         const auto row = std::find_if(app.settings_rows_.begin(), app.settings_rows_.end(), [](const auto& r) { return r.id == settings_ui::Id::hide_while_playing; });
         if (row == app.settings_rows_.end() || row->control != settings_ui::Control::toggle || row->checked) return 1961;
         app.settingsToggle(*row);

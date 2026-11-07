@@ -374,14 +374,23 @@ void Launcher::buildShelves() {
         return (left == positions.end() ? SIZE_MAX : left->second) <
                (right == positions.end() ? SIZE_MAX : right->second);
     });
+    // Collections hidden on the home screen were out of Wszystkie gry's tabs too until the rows had a
+    // switch for each: once, they stay out of both.
+    if (!settings_.home_rows_migrated && (!settings_collections_.empty() || settings_.hidden_collections.empty())) {
+        for (const auto& collection : settings_collections_)
+            if (settings_.hidden_collections.contains(collectionKey(account_, collection))) settings_.hidden_library_tabs.insert(collection.id);
+        settings_.home_rows_migrated = true; // Saved with the next change (the migration is idempotent until then).
+    }
     std::vector<SteamCollection> shown; // One call indexes the library once for every shelf.
+    std::unordered_set<std::string> off_home; // Collections hidden on the home screen: still libraries (tabs).
     for (const auto& collection : settings_collections_) {
-        if (settings_.hidden_collections.contains(collectionKey(account_, collection))) continue;
         if (srmCollectionsHidden() && srmCollection(collection)) continue; // Emulacja (or the ROM folder) lists them by platform.
+        if (settings_.hidden_collections.contains(collectionKey(account_, collection))) off_home.insert(collection.id);
         shown.push_back(collection);
     }
     for (auto& shelf : managedShelves(account_, shown, library_state_.collections, public_library_, private_shelf_))
         categories_.push_back(Category{std::move(shelf.name), std::move(shelf.games), 0, std::move(shelf.id)});
+    steam_rows_available_ = collections_source_.empty() && steam;
     if (collections_source_.empty() && steam) {
         std::vector<const Game*> newest;
         newest.reserve(installed_library_.size());
@@ -406,14 +415,29 @@ void Launcher::buildShelves() {
         categories_.push_back(Category{private_category_.title, std::move(games), 0, "private"});
     }
     for (auto& category : categories_) category.games = versions_.collapse(category.games, library_state_.preferred_versions, library_state_.first_seen);
+    // Biblioteka → Sekcje: rows kept off the home screen stay libraries (tabs of Wszystkie gry, their tiles').
+    // Ostatnio grane (the first row: the home layouts' own) and Ctrl+H's hidden games always stay.
+    library_categories_.clear();
+    category_order_.clear();
+    for (const auto& category : categories_) category_order_.push_back(category.id);
+    if (!settings_.hidden_home_sections.empty() || !off_home.empty()) {
+        std::vector<Category> home;
+        home.reserve(categories_.size());
+        for (size_t i = 0; i < categories_.size(); ++i) {
+            const auto& id = categories_[i].id;
+            const bool off = i && id != "private" && (settings_.hidden_home_sections.contains(id) || off_home.contains(id));
+            (off ? library_categories_ : home).push_back(std::move(categories_[i]));
+        }
+        categories_ = std::move(home);
+    }
     pc_library_.clear();
     if (pc_source_) for (const auto& game : public_library_)
         if (platformSource(game.source) == *pc_source_ && game.kind != GameKind::nonsteam) pc_library_.push_back(game);
     category_library_.clear();
     if (!library_category_.empty())
-        for (const auto& category : categories_) if (category.id == library_category_) {
-            category_library_title_ = category.title;
-            for (const auto& game : category.games) if (isGame(game) || studioCategory(category.id)) category_library_.push_back(game); // A board: the logos.
+        if (const auto* category = findCategory(library_category_)) {
+            category_library_title_ = category->title;
+            for (const auto& game : category->games) if (isGame(game) || studioCategory(category->id)) category_library_.push_back(game); // A board: the logos.
         }
     category_ = std::min(category_, categories_.size() - 1);
     for (size_t i = 0; i < categories_.size(); ++i)
@@ -443,7 +467,7 @@ void Launcher::onMetadata(std::unique_ptr<MetadataMessage> message) {
     for (auto& game : public_library_) update(game);
     for (auto& game : uninstalled_library_) update(game);
     for (auto& game : private_category_.games) update(game);
-    for (auto& category : categories_) for (auto& game : category.games) update(game);
+    for (auto* list : {&categories_, &library_categories_}) for (auto& category : *list) for (auto& game : category.games) update(game);
     for (auto& card : cards_) update(card.game);
     for (auto& game : grouped_library_) update(game);
     // A resolved name may reveal a tool (Ubisoft Connect, FramePacer): it leaves the library.

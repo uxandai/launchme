@@ -21,6 +21,10 @@ inline std::wstring trimmedQuery(const std::wstring& text) { return std::wstring
 // A key held right now (Ctrl, Shift with a click or an arrow).
 inline bool keyDown(int key) { return (GetKeyState(key) & 0x8000) != 0; }
 
+// A store client, the shell or a crash reporter (or no window at all): what a game leaves in front
+// when it ends and what stands in front while a client still prepares one (src/app/game_sessions.cpp).
+bool leftByGame(HWND window);
+
 // Holding Enter at least this long on a game opens its context menu instead of launching.
 inline constexpr float enter_hold_seconds = 0.48f;
 

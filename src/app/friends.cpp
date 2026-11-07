@@ -6,7 +6,10 @@
 #include "../library/visibility.hpp"
 #include "../ui/friends_layout.hpp"
 
+#include "../net/http.hpp"
+
 #include <algorithm>
+#include <future>
 
 namespace dashboard = friends_layout::dashboard;
 
@@ -53,9 +56,15 @@ void Launcher::loadFriends(bool retry) {
             auto message = std::make_unique<FriendsMessage>(); message->generation = generation;
             message->result = reply.ok ? aurelia::friends(reply.data) : FriendsResult{{}, reply.error};
             auto people = message->result.friends;
+            // Everyone offline with names known: a session that announces no presence of its own gets none from
+            // Steam (Aurelia's chat presence "offline"); the public profiles say who is online.
+            const bool silent = message->result.error.empty() && std::none_of(people.begin(), people.end(),
+                [](const SteamFriend& person) { return person.status > 0 || !person.game.empty(); });
             app.onFriends(std::move(message));
             // Aurelia's roster carries no avatars: the Steam client's cache or the public profiles have them.
-            if (generation == app.friends_generation_ && !people.empty()) app.loadFriendAvatars(std::move(people), generation);
+            if (generation != app.friends_generation_ || people.empty()) return;
+            if (silent) app.loadFriendPresence(std::move(people), generation);
+            else app.loadFriendAvatars(std::move(people), generation);
         });
         return;
     }
@@ -101,6 +110,53 @@ void Launcher::loadFriendAvatars(std::vector<SteamFriend> people, uint32_t gener
             avatar.release();
         }
     });
+}
+
+void Launcher::loadFriendPresence(std::vector<SteamFriend> people, uint32_t generation) {
+    work_.start([alive = alive_, token = friends_token_, hwnd = hwnd_, generation, people = std::move(people), fetch = fetch_friend_profile_]() mutable {
+        const auto current = [&] { return alive->load() && token->load() == generation; };
+        const auto page = [&fetch](uint64_t id) -> std::string {
+            if (fetch) return fetch(id);
+            const auto reply = httpGet(L"https://steamcommunity.com/profiles/" + std::to_wstring(id) + L"/?xml=1", L"Accept: text/xml\r\n", 256 * 1024);
+            return reply.status == 200 ? std::string(reinterpret_cast<const char*>(reply.body.data()), reply.body.size()) : std::string{};
+        };
+        // A few profiles at a time: a roster of a hundred in seconds, without a burst of a hundred requests.
+        constexpr size_t batch = 6;
+        bool found = false;
+        for (size_t first = 0; first < people.size() && current(); first += batch) {
+            std::vector<std::future<std::string>> pages;
+            for (size_t i = first; i < std::min(people.size(), first + batch); ++i) pages.push_back(std::async(std::launch::async, page, people[i].id));
+            for (size_t i = 0; i < pages.size(); ++i) {
+                const auto presence = profilePresence(pages[i].get());
+                auto& person = people[first + i];
+                if (presence.known) { person.status = presence.status; person.game = presence.game; found |= presence.status > 0; }
+                if (person.avatar_url.empty()) person.avatar_url = presence.avatar_url; // The avatars need no second request.
+            }
+        }
+        if (!current()) return;
+        auto message = std::make_unique<RemoteMessage>();
+        message->run = [generation, people = std::move(people), found](Launcher& app) mutable {
+            if (found) app.friendPresenceFound(generation, people);
+            if (generation == app.friends_generation_ && app.friends_open_) app.loadFriendAvatars(std::move(people), generation);
+        };
+        if (PostMessageW(hwnd, remote_message, 0, reinterpret_cast<LPARAM>(message.get()))) message.release();
+    });
+}
+
+// The public profiles' presence over the shown roster: the same friend keeps the focus as the order changes.
+void Launcher::friendPresenceFound(uint32_t generation, std::vector<SteamFriend> people) {
+    if (!friends_open_ || generation != friends_generation_) return;
+    const uint64_t focused = friends_cursor_ < friends_.friends.size() ? friends_.friends[friends_cursor_].id : 0;
+    for (auto& person : friends_.friends) {
+        const auto found = std::find_if(people.begin(), people.end(), [&](const SteamFriend& other) { return other.id == person.id; });
+        if (found == people.end()) continue;
+        person.status = found->status; person.game = found->game;
+        if (person.avatar_url.empty()) person.avatar_url = found->avatar_url;
+    }
+    sortFriends(friends_.friends);
+    for (size_t i = 0; i < friends_.friends.size(); ++i) if (friends_.friends[i].id == focused) friends_cursor_ = i;
+    invalidateGameOverlay();
+    InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
 // Temperatures and the Discord state, every ~2 s while the drawer is open. The worker

@@ -451,7 +451,8 @@ AppSettings parseAppSettings(std::string_view text) {
                 value = comma == std::string_view::npos ? std::string_view{} : value.substr(comma + 1);
             }
         }
-        else if (key == "show_emulation" && (value == "0" || value == "1")) settings.show_emulation = value == "1";
+        else if ((key == "show_emulation" || key == "home_rows_migrated") && (value == "0" || value == "1"))
+            (key == "show_emulation" ? settings.show_emulation : settings.home_rows_migrated) = value == "1";
         else if (key == "studio_libraries" && (value == "0" || value == "1")) settings.show_publishers = settings.show_developers = value == "1"; // Before 0.5.8: both rows.
         else if (key == "show_private" && (value == "0" || value == "1")) settings.show_private = value == "1";
         else if (key == "show_store" && (value == "0" || value == "1")) settings.show_store = value == "1";
@@ -717,7 +718,8 @@ AppSettings parseAppSettings(std::string_view text) {
                 }
                 value = comma == value.npos ? std::string_view{} : value.substr(comma + 1);
             }
-        } else if (key == "hidden_collections" || key == "collection_order" || key == "pc_platforms" || key == "hidden_studios" || key == "studio_order") {
+        } else if (key == "hidden_collections" || key == "collection_order" || key == "pc_platforms" || key == "hidden_studios" || key == "studio_order" ||
+                   key == "hidden_home_sections" || key == "hidden_library_tabs") {
             while (!value.empty()) {
                 const auto comma = value.find(',');
                 const auto id = trim(value.substr(0, comma));
@@ -726,8 +728,9 @@ AppSettings parseAppSettings(std::string_view text) {
                         if (id == "gog" || id == "battlenet" || id == "ea" || id == "ubisoft" || id == "epic" || id == "xbox" || id == "drmfree" ||
                             id == "multimc" || id == "amazon")
                             settings.enabled_pc_sources.emplace(id);
-                    } else if (key == "hidden_collections") settings.hidden_collections.emplace(id);
-                    else if (key == "hidden_studios") settings.hidden_studios.emplace(id);
+                    } else if (auto* set = key == "hidden_collections" ? &settings.hidden_collections : key == "hidden_studios" ? &settings.hidden_studios :
+                                           key == "hidden_home_sections" ? &settings.hidden_home_sections :
+                                           key == "hidden_library_tabs" ? &settings.hidden_library_tabs : nullptr) set->emplace(id);
                     else if (key == "studio_order") { if (std::find(settings.studio_order.begin(), settings.studio_order.end(), id) == settings.studio_order.end()) settings.studio_order.emplace_back(id); }
                     else settings.collection_order.emplace_back(id);
                 }
@@ -806,6 +809,7 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
            << "default_view_collection=" << std::clamp(settings.default_view_collection, 0, 11) << '\n'
            << "default_view_studio=" << std::clamp(settings.default_view_studio, 0, 11) << '\n'
            << "show_emulation=" << settings.show_emulation << '\n'
+           << "home_rows_migrated=" << settings.home_rows_migrated << '\n'
            << "show_private=" << settings.show_private << '\n'
            << "show_store=" << settings.show_store << '\n'
            << "quick_resume=" << settings.quick_resume << '\n'
@@ -1033,6 +1037,12 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
     std::vector<std::string> hidden_studios(settings.hidden_studios.begin(), settings.hidden_studios.end());
     std::sort(hidden_studios.begin(), hidden_studios.end());
     for (size_t i = 0; i < hidden_studios.size(); ++i) output << (i ? "," : "") << hidden_studios[i];
+    for (const auto& [name, set] : {std::pair{"hidden_home_sections", &settings.hidden_home_sections}, std::pair{"hidden_library_tabs", &settings.hidden_library_tabs}}) {
+        std::vector<std::string> ids(set->begin(), set->end());
+        std::sort(ids.begin(), ids.end());
+        output << '\n' << name << '=';
+        for (size_t i = 0; i < ids.size(); ++i) output << (i ? "," : "") << ids[i];
+    }
     output << "\nstudio_order=";
     for (size_t i = 0; i < settings.studio_order.size(); ++i) output << (i ? "," : "") << settings.studio_order[i];
     output << '\n';

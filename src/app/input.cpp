@@ -434,7 +434,7 @@ void Launcher::controllerInput(const PadReading& state) {
             return;
         }
         if (guide == HoldGesture::Event::press || guide == HoldGesture::Event::hold) {
-            toggleGameOverlay(true); // The pad opens on the widgets; the keyboard shortcut opens the bar.
+            toggleGameOverlay(true); // On the widgets, as the keyboard shortcut opens it.
             if (guide == HoldGesture::Event::hold && gameOverlayOpen()) { openPowerMenu(); invalidateGameOverlay(); }
         }
         return;
@@ -469,6 +469,9 @@ void Launcher::controllerInput(const PadReading& state) {
     if (modalPad(state, buttons, now)) return;
     if (pressed(XINPUT_GAMEPAD_BACK) && tarotAvailable()) { // View / Select / Share: Tarot.
         noteUserInput(); openTarot(); controller_buttons_ = buttons; controller_direction_ = 0; return;
+    }
+    if (pressed(XINPUT_GAMEPAD_BACK) && screen_ == ScreenMode::shelves && homeOverlayAvailable()) { // Without Tarot: the focused row's library.
+        noteUserInput(); viewButton(); controller_buttons_ = buttons; controller_direction_ = 0; return;
     }
     if (pressed(pad_right_trigger) && glanceAvailable()) {
         noteUserInput(); openGlance(); controller_buttons_ = buttons; controller_direction_ = 0; return;

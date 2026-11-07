@@ -32,6 +32,7 @@ int LauncherUiTest::privateGames(HWND window) {
         app.openSettings();
         app.settings_state_.selectCategory(static_cast<int>(settings_ui::Category::library));
         app.buildSettingsRows();
+        app.openSettingsPage(settings_ui::Page::library_visibility); // Biblioteka → Co pokazywać.
         const auto row = std::find_if(app.settings_rows_.begin(), app.settings_rows_.end(), [](const auto& item) { return item.id == settings_ui::Id::show_private; });
         if (row == app.settings_rows_.end() || row->control != settings_ui::Control::toggle || row->checked != app.settings_.show_private) return false;
         app.settings_state_.enter(static_cast<int>(app.settings_rows_.size()));

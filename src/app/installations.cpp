@@ -51,7 +51,7 @@ void Launcher::updateSteamInstallations(const LibraryMessage& library) {
     };
     for (auto* list : {&public_library_, &grouped_library_, &pc_library_, &search_results_, &detail_games_, &store_results_, &uninstalled_library_})
         for (auto& game : *list) update(game);
-    for (auto& category : categories_) for (auto& game : category.games) update(game);
+    for (auto* list : {&categories_, &library_categories_}) for (auto& category : *list) for (auto& game : category.games) update(game);
     for (auto& card : cards_) update(card.game);
     if (pending_launch_) update(pending_game_);
     installed_library_ = library.games;

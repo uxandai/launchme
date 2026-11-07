@@ -175,8 +175,19 @@ void Launcher::saveSettings() {
 }
 
 void Launcher::settingsReorder(int amount) {
-    if (!settingsOpen() || !settings_state_.options || settings_state_.editing ||
-        !settings_state_.at(Page::collections)) return;
+    if (!settingsOpen() || !settings_state_.options || settings_state_.editing) return;
+    if (settings_state_.at(Page::home_rows)) {
+        // Ekran główny i kolekcje: a collection one place up or down, its row keeping the focus.
+        const int index = settings_state_.row();
+        if (index < 0 || index >= static_cast<int>(settings_rows_.size()) || settings_rows_[index].id != Id::home_row) return;
+        const auto key = settings_rows_[index].key;
+        if (!homeRowCollection(key) || !moveHomeCollection(key, amount)) return;
+        for (size_t i = 0; i < settings_rows_.size(); ++i)
+            if (settings_rows_[i].id == Id::home_row && settings_rows_[i].key == key) settings_state_.selected[settings_state_.category] = static_cast<int>(i);
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        return;
+    }
+    if (!settings_state_.at(Page::collections)) return;
     // The page starts with "Zarządzaj kolekcjami": a collection is found by its row's key.
     const int row = settings_state_.row(), next_row = row + amount;
     if (row < 0 || row >= static_cast<int>(settings_rows_.size()) || settings_rows_[row].id != Id::collection ||
@@ -365,6 +376,7 @@ void Launcher::settingsActivate() {
     if (row.control == Control::page) { openSettingsPage(row.page, row.id == Id::page ? std::string{} : row.key); return; }
     if (row.id == Id::bulk_covers) { openBulkCovers(); return; }
     if (settingsExtraActivate(row)) return; // The wallpaper picker, Bez tapety (settings_extras.cpp).
+    if (homeRowActivate(row)) return; // Ekran główny i kolekcje: a collection's games, name, place (home_rows.cpp).
     if (row.id == Id::steam_sync) { requestSteamSync(true); audio_.context(); return; }
     if (row.id == Id::collection_manage) { openCollectionManager(); return; }
     if (row.id == Id::studio_hidden) { openSettingsPage(Page::hidden_studios); return; }
@@ -684,6 +696,12 @@ void Launcher::settingsToggle(const Row& row) {
     // Outside the else-if chain below (MSVC's nesting limit): read after the next game.
     if (row.id == Id::save_backups) { settings_.save_backup_after_game = !settings_.save_backup_after_game; settingsChanged(); audio_.context(); return; }
     if (settingsExtraToggle(row)) return; // 0.4.9's switches (settings_extras.cpp).
+    if ((row.id == Id::home_section || row.id == Id::library_tab) && !row.key.empty()) {
+        // A row's page (Ekran główny i kolekcje): on the home screen, a tab of Wszystkie gry (home_rows.cpp).
+        if (row.locked) navigationBoundary(); else toggleHomeRow(row.key, row.id == Id::library_tab);
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        return;
+    }
     if (row.id == Id::uninstalled) settings_.show_uninstalled = !settings_.show_uninstalled;
     else if (row.id == Id::recent_uninstalled) settings_.recent_uninstalled = !settings_.recent_uninstalled;
     else if (row.id == Id::emulation) settings_.show_emulation = !settings_.show_emulation;

@@ -1596,6 +1596,10 @@ public:
 private:
     void loadFriends(bool retry = false); // retry: the same open drawer asking again after a roster without statuses.
     void loadFriendAvatars(std::vector<SteamFriend> people, uint32_t generation); // On a worker, one message per avatar.
+    // Aurelia's roster with everyone offline (its session announces no presence of its own, so Steam
+    // sends none): the friends' public profiles say who is online and in which game, then the avatars.
+    void loadFriendPresence(std::vector<SteamFriend> people, uint32_t generation);
+    void friendPresenceFound(uint32_t generation, std::vector<SteamFriend> people);
     void startDashboardPoll();
     void stopDashboardPoll();
     void dashboardMove(int horizontal, int vertical);
@@ -2050,6 +2054,33 @@ private:
     std::wstring settings_search_query_;
     void buildSettingsSearchIndex();
     void settingsSearchRows(const std::function<void(settings_ui::Row)>& add);
+    // Biblioteka → Ekran główny i kolekcje (src/app/home_rows.cpp): every row the home screen can have
+    // (the fixed ones, then the collections), whether it is on the home screen and a tab of Wszystkie gry.
+    struct HomeRowEntry {
+        std::string id; // Its category's id ("recent", "pc-platforms", a collection's id...).
+        std::wstring title;
+        const SteamCollection* collection = nullptr;
+        size_t games = 0;
+    };
+    std::vector<HomeRowEntry> homeRowEntries() const;
+    const SteamCollection* homeRowCollection(const std::string& id) const;
+    // Shown at all ("Emulacja", the studios, the Steam rows): the switch the rest of the launcher reads.
+    const bool* homeRowMaster(const std::string& id) const;
+    bool homeRowHasTab(const std::string& id) const { return id != "pc-platforms" && id != "emulation"; }
+    bool homeRowOnHome(const std::string& id) const;
+    bool homeRowTab(const std::string& id) const;
+    std::wstring homeRowPlace(const std::string& id) const; // "Wszędzie", "Ekran główny", "Zakładka", "Ukryty".
+    void setHomeRow(const std::string& id, bool home, bool tab);
+    void toggleHomeRow(const std::string& id, bool tab);
+    bool moveHomeCollection(const std::string& id, int amount);
+    void homeRowsSettingsRows(const std::function<void(settings_ui::Row)>& add);
+    void homeRowSettingsRows(const std::string& id, const std::function<void(settings_ui::Row)>& add);
+    bool homeRowActivate(const settings_ui::Row& row);
+    std::wstring homeRowTitle(const std::string& id) const;
+    // A collection's games or its new name in the collection dialog, Back returning to Settings.
+    void openCollectionPage(const std::string& id, bool rename);
+    std::string home_row_confirm_; // Przywróć przypisania Steam: the second press does it.
+    bool steam_rows_available_ = false; // buildShelves: Ostatnio zaktualizowane and Jeszcze niegrane can be rows.
     void settingsSearchEdited(); // The typed words changed: the list follows.
     void settingsSearchJump(size_t hit);
     void openSettingsCollections();
@@ -2191,6 +2222,9 @@ private:
     bool artBlocked(const Game& game, CoverMessage::Kind kind) const;
     // Library screen with only one shelf category's games (its own title and view options).
     void openCategoryLibrary(const std::string& id);
+    // The pad's View on the home screen: the library of the focused row (Ostatnio grane: Wszystkie gry, or
+    // Ostatnio grane itself when it is a tab), a console's or store's tile its own; in a library, the next tab.
+    void viewButton();
     const std::vector<Game>& librarySource() const;
     void openCategoryMenu();
     void ensureCategoryCursorVisible();
@@ -2327,6 +2361,7 @@ private:
     std::shared_ptr<std::atomic_bool> alive_ = std::make_shared<std::atomic_bool>(true);
     std::shared_ptr<std::atomic_uint32_t> friends_token_ = std::make_shared<std::atomic_uint32_t>(0);
     std::function<std::vector<uint8_t>(const SteamFriend&)> fetch_friend_avatar_; // Tests: no network.
+    std::function<std::string(uint64_t)> fetch_friend_profile_; // Tests: a profile's ?xml=1 page without the network.
     std::shared_ptr<std::atomic_uint32_t> metadata_token_ = std::make_shared<std::atomic_uint32_t>(0);
     std::shared_ptr<std::atomic_uint32_t> pc_token_ = std::make_shared<std::atomic_uint32_t>(0);
     std::shared_ptr<JobQueue> jobs_ = std::make_shared<JobQueue>();
@@ -2500,6 +2535,11 @@ private:
     AddRequests add_requests_;
     ULONGLONG next_install_poll_ = 0;
     std::vector<Category> categories_;
+    // Rows the player keeps off the home screen (Biblioteka → Sekcje, hidden_home_sections): still the
+    // tabs of Wszystkie gry and the libraries their tiles open, in their home order.
+    std::vector<Category> library_categories_;
+    std::vector<std::string> category_order_; // The ids of both, in the home order (Sekcje lists them so).
+    const Category* findCategory(const std::string& id) const; // categories_, then library_categories_.
     std::vector<Game> public_library_;
     std::vector<Game> installed_library_, uninstalled_library_;
     bulk_covers_ui::State bulk_ui_;

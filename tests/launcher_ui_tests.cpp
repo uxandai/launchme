@@ -550,129 +550,157 @@ public:
         app.settingsActivate();
         app.saveSettings();
         if (loadAppSettings().font_family != L"Arial") return 6003;
-        // Biblioteka → Kolekcje: the collections' own page.
+        // Biblioteka: the platforms, then Porządek and Granie, each a tile of its own page (no loose rows).
         app.settings_state_.selectCategory(static_cast<int>(settings_ui::Category::library));
         app.buildSettingsRows();
         app.settings_.collection_order.push_back("2:other-account");
         {
-            const auto open = std::find_if(app.settings_rows_.begin(), app.settings_rows_.end(),
-                                           [](const auto& row) { return row.id == settings_ui::Id::collections_open; });
-            if (open == app.settings_rows_.end()) return 7001;
-            app.settingsActivate();
-            app.settings_state_.selected[app.settings_state_.category] = static_cast<int>(open - app.settings_rows_.begin());
-            app.settingsActivate();
-            // "Zarządzaj kolekcjami" leads the page; the collections follow it.
-            if (!app.settings_state_.at(settings_ui::Page::collections) || app.settings_state_.row() != 0 ||
-                app.settings_rows_.front().id != settings_ui::Id::collection_manage || app.settings_rows_[1].id != settings_ui::Id::collection) return 7002;
-        }
-        app.settingsMove(24);
-        const auto selected_collection_key = collectionKey(app.account_, app.settings_collections_[app.settings_state_.row() - 1]);
-        if (!capture(L"settings-native-collections.png")) return 92;
-        if (app.settings_state_.offset() <= 0) return 7003;
-        app.settingsAdjust(1);
-        if (app.settings_state_.subcontrol != 1 || app.settings_state_.row() != 24) return 47;
-        app.settingsActivate();
-        if (app.settings_state_.row() != 23 ||
-            std::find(app.settings_.collection_order.begin(), app.settings_.collection_order.end(), "2:other-account") == app.settings_.collection_order.end()) return 8;
-        app.settingsAdjust(1);
-        if (app.settings_state_.subcontrol != 2) return 48;
-        app.settingsActivate();
-        if (app.settings_state_.row() != 24) return 49;
-        app.settingsAdjust(-1); app.settingsActivate();
-        app.settingsAdjust(-1); app.settingsActivate();
-        if (!app.settings_.hidden_collections.contains(selected_collection_key)) return 9;
-        // Steam ROM Manager collections: while Emulacja lists their games by platform they are no
-        // home row, and their settings row stays off and locked; with Emulacja off they are ordinary.
-        {
-            Game srm{0x90000002u, L"SRM fixture"};
-            srm.kind = GameKind::nonsteam; srm.platform = L"PS1";
-            app.shortcut_library_.push_back(srm);
-            app.collections_source_.push_back(SteamCollection{L"Sony PlayStation", {0x90000002u}, "user-collections.srm-U29ueSBQbGF5U3RhdGlvbg=="});
-            const auto key = collectionKey(app.account_, app.collections_source_.back());
-            const auto row = [&] {
-                for (size_t i = 0; i < app.settings_rows_.size(); ++i) if (app.settings_rows_[i].title == L"Sony PlayStation") return static_cast<int>(i);
+            using settings_ui::Id; using settings_ui::Page;
+            const auto rowOf = [&](Id id, const std::string& key = {}) {
+                for (size_t i = 0; i < app.settings_rows_.size(); ++i)
+                    if (app.settings_rows_[i].id == id && (key.empty() || app.settings_rows_[i].key == key)) return static_cast<int>(i);
                 return -1;
             };
-            const auto shelf = [&] {
-                return std::any_of(app.categories_.begin(), app.categories_.end(), [](const auto& item) { return item.title == L"Sony PlayStation"; });
-            };
-            app.settings_.show_emulation = true; app.buildShelves();
-            int index = row();
-            if (shelf() || index < 0 || !app.settings_rows_[index].locked || app.settings_rows_[index].checked) return 240;
-            app.settings_state_.selected[app.settings_state_.category] = index; app.settings_state_.subcontrol = 0;
-            app.settingsActivate();
-            if (app.settings_.hidden_collections.contains(key) || !app.settings_.show_emulation) return 241;
-            app.settings_.show_emulation = false; app.buildShelves();
-            index = row();
-            if (!shelf() || index < 0 || app.settings_rows_[index].locked || !app.settings_rows_[index].checked) return 242;
-            app.settings_.show_emulation = true;
-            app.collections_source_.pop_back(); app.shortcut_library_.pop_back();
-            app.buildShelves();
-            if (row() >= 0) return 243;
-        }
-        // An own collection: its trash after ↑ ↓ (a Steam collection has none), red with the focus, and a
-        // question first with Anuluj focused; hiding it on the home screen is the gentler answer.
-        // The desktop window's settings scrolled to a row, as Settings opened at a row does (desktop_settings.cpp).
-        const auto desktopScroll = [&](int row) {
-            const auto L = app.desktopSettingsLayout();
-            app.desktop_sheet_scroll_ = app.desktop_sheet_scroll_target_ = std::clamp(L.tops[static_cast<size_t>(row)] - 60.0f, 0.0f, L.maxScroll());
-            app.desktop_sheet_page_ = app.desktopSettingsPage(); app.desktop_sheet_row_ = row;
-        };
-        {
-            const SteamCollection own{L"Moja kolekcja", {}, "local:fixture-own"};
-            const auto key = collectionKey(app.account_, own);
-            app.library_state_.collections.names[key] = own.name;
-            app.collectionChanged(); app.buildSettingsRows();
-            const auto row = [&] {
-                for (size_t i = 0; i < app.settings_rows_.size(); ++i) if (app.settings_rows_[i].key == key) return static_cast<int>(i);
+            const auto tileOf = [&](Page page) {
+                for (size_t i = 0; i < app.settings_rows_.size(); ++i)
+                    if (app.settings_rows_[i].id == Id::page && app.settings_rows_[i].page == page) return static_cast<int>(i);
                 return -1;
             };
-            int index = row();
-            if (index < 0 || !app.settings_rows_[index].removable || app.settings_rows_[1].removable) return 244;
-            // A Steam collection's focus stops at ↓.
-            app.settings_state_.selected[app.settings_state_.category] = 1; app.settings_state_.subcontrol = 2;
-            app.settingsAdjust(1);
-            if (app.settings_state_.subcontrol != 2) return 245;
-            app.settings_state_.selected[app.settings_state_.category] = index; app.ensureSettingVisible();
-            app.settingsAdjust(1);
-            if (app.settings_state_.subcontrol != 3) return 246;
-            if (!capture(L"settings-collection-trash.png")) return 247;
-            app.desktop_mode_ = true; app.desktop_sheet_keyboard_ = true; desktopScroll(index);
-            const bool desktop_trash = capture(L"settings-collection-trash-desktop.png");
-            app.desktop_mode_ = false;
-            if (!desktop_trash) return 248;
+            const auto press = [&](int index) {
+                if (index < 0) return false;
+                app.settings_state_.options = true; app.settings_state_.subcontrol = 0;
+                app.settings_state_.selected[app.settings_state_.category] = index; app.ensureSettingVisible();
+                app.settingsActivate();
+                return true;
+            };
+            for (const auto page : {Page::home_rows, Page::library_visibility, Page::library_views, Page::launching, Page::save_games})
+                if (tileOf(page) < 0) return 7001;
+            for (const auto id : {Id::collections_open, Id::updated_row, Id::studio_publishers, Id::uninstalled, Id::accept_action, Id::default_view_console})
+                if (rowOf(id) >= 0) return 7570;
+            app.settings_state_.options = true; app.settings_state_.selected[app.settings_state_.category] = tileOf(Page::home_rows); app.ensureSettingVisible();
+            if (!capture(L"settings-library-overview.png")) return 7571;
+            // Ekran główny i kolekcje: the fixed rows (Ostatnio grane first), then Nowa kolekcja and the collections.
+            if (!press(tileOf(Page::home_rows)) || !app.settings_state_.at(Page::home_rows)) return 7002;
+            if (app.settings_rows_.empty() || app.settings_rows_[0].id != Id::home_row || app.settings_rows_[0].key != "recent") return 7572;
+            const int create = rowOf(Id::home_row_new);
+            if (create < 0 || app.settings_rows_[create].section != tr(L"Kolekcje") || create + 2 >= static_cast<int>(app.settings_rows_.size()) ||
+                !app.homeRowCollection(app.settings_rows_[create + 1].key) || !app.homeRowCollection(app.settings_rows_[create + 2].key)) return 7573;
+            app.settings_state_.selected[app.settings_state_.category] = create + 1; app.ensureSettingVisible();
+            if (!capture(L"settings-home-rows.png")) return 92;
+            // Shift+↓ (RB): a collection one place down, its row keeping the focus; another account's order stays.
+            const auto first = app.settings_rows_[create + 1].key;
+            app.settingsReorder(1);
+            if (app.settings_rows_[create + 2].key != first || app.settings_state_.row() != create + 2) return 8;
+            app.settingsReorder(-1);
+            if (app.settings_rows_[create + 1].key != first || app.settings_state_.row() != create + 1 ||
+                std::find(app.settings_.collection_order.begin(), app.settings_.collection_order.end(), "2:other-account") == app.settings_.collection_order.end()) return 47;
+            // Its page: where it shows, then its games, name and place.
             app.settingsActivate();
-            if (app.exit_prompt_ != 2 || app.prompt_kind_ != Launcher::PromptKind::delete_collection) return 249;
-            if (!capture(L"settings-collection-delete-tv.png")) return 250;
-            app.desktop_mode_ = true; const bool desktop_prompt = capture(L"settings-collection-delete-desktop.png"); app.desktop_mode_ = false;
-            if (!desktop_prompt) return 251;
-            app.exitPromptMove(-1); app.exitPromptAccept(); // Ukryj na ekranie głównym.
-            if (!app.settings_.hidden_collections.contains(key) || row() < 0 || app.exit_prompt_) return 252;
-            // Delete (and the pad's X) asks the same; Usuń kolekcję deletes it.
-            index = row(); app.settings_state_.selected[app.settings_state_.category] = index; app.settings_state_.subcontrol = 0;
-            if (!app.settingsResetFocused() || app.exit_prompt_ != 2) return 253;
-            app.exitPromptMove(-2); app.exitPromptAccept();
-            if (row() >= 0 || app.library_state_.collections.names.contains(key) || app.settings_.hidden_collections.contains(key)) return 254;
-        }
-        // Biblioteka → Widoki biblioteki w trybie TV: the view a console's, a collection's or a publisher's library opens
-        // in until it has its own; each row's Zresetuj gives it to all of them again. Not in Interfejs.
-        {
-            using settings_ui::Id;
+            if (!app.settings_state_.at(Page::home_row) || app.settings_state_.top()->key != first || rowOf(Id::home_section) != 0 ||
+                rowOf(Id::library_tab) != 1 || rowOf(Id::home_row_games) < 0 || rowOf(Id::home_row_up) < 0 ||
+                !app.settings_rows_[static_cast<size_t>(rowOf(Id::home_row_up))].locked || app.settingsPageTitle() != app.homeRowTitle(first)) return 48;
+            if (!capture(L"settings-home-row-collection.png")) return 7574;
+            const auto key = collectionKey(app.account_, *app.homeRowCollection(first));
+            // Off the home screen: no shelf, still a tab of Wszystkie gry.
+            if (!press(rowOf(Id::home_section)) || !app.settings_.hidden_collections.contains(key) || app.homeRowOnHome(first) || !app.homeRowTab(first) ||
+                std::any_of(app.categories_.begin(), app.categories_.end(), [&](const auto& c) { return c.id == first; })) return 9;
+            // Off as a tab too: hidden; on again, everywhere.
+            if (!press(rowOf(Id::library_tab)) || !app.settings_.hidden_library_tabs.contains(first) || app.homeRowPlace(first) != tr(L"Ukryty")) return 49;
+            press(rowOf(Id::home_section)); press(rowOf(Id::library_tab));
+            if (!app.homeRowOnHome(first) || !app.homeRowTab(first) || app.settings_.hidden_collections.contains(key)) return 7575;
+            // A row with a switch of its own (Wydawcy): off in both places is the switch off, one place brings it back alone.
+            app.closeSettingsPage();
+            if (!app.settings_state_.at(Page::home_rows) || !press(rowOf(Id::home_row, "publishers"))) return 7576;
+            app.settings_.show_publishers = true; app.settings_.show_companies = false; app.buildSettingsRows();
+            press(rowOf(Id::home_section)); press(rowOf(Id::library_tab));
+            if (app.settings_.show_publishers || app.settings_.hidden_home_sections.contains("publishers") || app.settings_.hidden_library_tabs.contains("publishers")) return 7577;
+            press(rowOf(Id::home_section));
+            if (!app.settings_.show_publishers || !app.homeRowOnHome("publishers") || app.homeRowTab("publishers")) return 7578;
+            press(rowOf(Id::library_tab));
+            if (!app.homeRowTab("publishers") || rowOf(Id::studio_min_games) < 0) return 7579;
+            // Ostatnio grane stays on the home screen.
+            app.closeSettingsPage(); press(rowOf(Id::home_row, "recent"));
+            if (!app.settings_rows_[0].locked || !app.settings_rows_[0].checked) return 7580;
+            press(0);
+            if (!app.homeRowOnHome("recent")) return 7581;
+            app.closeSettingsPage();
+            if (!app.settings_state_.at(Page::home_rows)) return 7582;
+            // Steam ROM Manager collections: while Emulacja lists their games by platform they are no home
+            // row and not on this list; with Emulacja off they are ordinary.
+            {
+                Game srm{0x90000002u, L"SRM fixture"};
+                srm.kind = GameKind::nonsteam; srm.platform = L"PS1";
+                app.shortcut_library_.push_back(srm);
+                app.collections_source_.push_back(SteamCollection{L"Sony PlayStation", {0x90000002u}, "user-collections.srm-U29ueSBQbGF5U3RhdGlvbg=="});
+                const auto row = [&] {
+                    for (size_t i = 0; i < app.settings_rows_.size(); ++i) if (app.settings_rows_[i].title == L"Sony PlayStation") return static_cast<int>(i);
+                    return -1;
+                };
+                const auto shelf = [&] {
+                    return std::any_of(app.categories_.begin(), app.categories_.end(), [](const auto& item) { return item.title == L"Sony PlayStation"; });
+                };
+                app.settings_.show_emulation = true; app.buildShelves();
+                if (shelf() || row() >= 0) return 240;
+                app.settings_.show_emulation = false; app.buildShelves();
+                if (!shelf() || row() < 0) return 242;
+                app.settings_.show_emulation = true;
+                app.collections_source_.pop_back(); app.shortcut_library_.pop_back();
+                app.buildShelves();
+                if (row() >= 0) return 243;
+            }
+            // An own collection: Usuń kolekcję asks first (Anuluj focused); hiding it on the home screen is the
+            // gentler answer. A Steam collection has Przywróć przypisania Steam instead.
+            const auto desktopScroll = [&](int index) {
+                const auto L = app.desktopSettingsLayout();
+                app.desktop_sheet_scroll_ = app.desktop_sheet_scroll_target_ = std::clamp(L.tops[static_cast<size_t>(index)] - 60.0f, 0.0f, L.maxScroll());
+                app.desktop_sheet_page_ = app.desktopSettingsPage(); app.desktop_sheet_row_ = index;
+            };
+            {
+                press(rowOf(Id::home_row, first));
+                if (rowOf(Id::home_row_delete) >= 0 || rowOf(Id::home_row_reset) < 0) return 244;
+                app.closeSettingsPage();
+                const SteamCollection own{L"Moja kolekcja", {}, "local:fixture-own"};
+                const auto own_key = collectionKey(app.account_, own);
+                app.library_state_.collections.names[own_key] = own.name;
+                app.collectionChanged(); app.buildSettingsRows();
+                if (!press(rowOf(Id::home_row, own.id)) || !app.settings_state_.at(Page::home_row)) return 245;
+                const int remove = rowOf(Id::home_row_delete);
+                if (remove < 0 || rowOf(Id::home_row_steam) < 0 || rowOf(Id::home_row_reset) >= 0) return 246;
+                app.settings_state_.selected[app.settings_state_.category] = remove; app.ensureSettingVisible();
+                if (!capture(L"settings-home-row-own.png")) return 247;
+                app.desktop_mode_ = true; app.desktop_sheet_keyboard_ = true; desktopScroll(remove);
+                const bool desktop_page = capture(L"settings-home-row-own-desktop.png");
+                app.desktop_mode_ = false;
+                if (!desktop_page) return 248;
+                press(remove);
+                if (app.exit_prompt_ != 2 || app.prompt_kind_ != Launcher::PromptKind::delete_collection) return 249;
+                if (!capture(L"settings-collection-delete-tv.png")) return 250;
+                app.desktop_mode_ = true; const bool desktop_prompt = capture(L"settings-collection-delete-desktop.png"); app.desktop_mode_ = false;
+                if (!desktop_prompt) return 251;
+                app.exitPromptMove(-1); app.exitPromptAccept(); // Ukryj na ekranie głównym.
+                if (!app.settings_.hidden_collections.contains(own_key) || !app.homeRowCollection(own.id) || app.exit_prompt_) return 252;
+                press(rowOf(Id::home_row_delete));
+                if (app.exit_prompt_ != 2) return 253;
+                app.exitPromptMove(-2); app.exitPromptAccept();
+                // Gone, and its page with it: the list again.
+                if (app.homeRowCollection(own.id) || app.library_state_.collections.names.contains(own_key) || app.settings_.hidden_collections.contains(own_key) ||
+                    !app.settings_state_.at(Page::home_rows) || rowOf(Id::home_row, own.id) >= 0) return 254;
+            }
+            // Widoki bibliotek: the view a console's, a collection's or a publisher's library opens in until it has
+            // its own; each row's Zresetuj gives it to all of them again. Not in Interfejs.
             app.settings_state_.selectCategory(static_cast<int>(settings_ui::Category::appearance));
             app.buildSettingsRows();
             for (const auto& row : app.settings_rows_) if (row.id == Id::default_view_console) return 7109;
             app.settings_state_.selectCategory(static_cast<int>(settings_ui::Category::library));
             app.buildSettingsRows();
-            app.settings_state_.options = true;
+            if (!press(tileOf(Page::library_views)) || !app.settings_state_.at(Page::library_views)) return 7583;
             const auto& rows = app.settings_rows_;
-            int last = 0;
-            for (int i = 0; i < static_cast<int>(rows.size()); ++i) if (rows[i].id == Id::default_view_studio) last = i;
-            if (last < 3 || rows[last - 2].id != Id::default_view_console || rows[last - 1].id != Id::default_view_collection ||
-                rows[last].id != Id::default_view_studio || rows[last - 2].section != tr(L"Widoki biblioteki w trybie TV") ||
-                rows[last - 1].reset != "views:collection" || rows[last - 1].badge.empty()) return 7101;
-            app.settings_state_.selected[app.settings_state_.category] = last - 1; app.ensureSettingVisible();
+            const int last = rowOf(Id::default_view_studio);
+            if (last != 2 || rows[0].id != Id::default_view_console || rows[1].id != Id::default_view_collection ||
+                rows[1].reset != "views:collection" || rows[1].badge.empty()) return 7101;
+            app.settings_state_.selected[app.settings_state_.category] = 1; app.ensureSettingVisible();
             if (!capture(L"settings-library-views.png")) return 7102;
-            app.desktop_mode_ = true; app.desktop_sheet_keyboard_ = true; desktopScroll(last - 2);
+            app.desktop_mode_ = true; app.desktop_sheet_keyboard_ = true; desktopScroll(0);
             const bool desktop_views = capture(L"settings-library-views-desktop.png"); app.desktop_mode_ = false;
             if (!desktop_views) return 7103;
             app.settingsActivate(); // The picker,
@@ -690,11 +718,13 @@ public:
             if (app.libraryOptions().view != library_view::View::cinematic || app.libraryViewOverrides("collection") != collections + 1 ||
                 app.libraryViewOverrides("console") != consoles + 1) return 7106;
             app.buildSettingsRows();
-            if (!app.settingsResetRow(app.settings_rows_[static_cast<size_t>(last - 1)])) return 7107;
+            if (!app.settingsResetRow(app.settings_rows_[1])) return 7107;
             if (app.libraryOptions().view != library_view::View::list || app.library_state_.options.contains(scope) ||
                 app.libraryViewOverrides("collection") != 0 || !app.library_state_.options.contains(console)) return 7108;
             app.library_state_.options.erase(console);
             app.library_category_ = category; app.settings_.default_view_collection = 0;
+            app.settings_state_.selectCategory(static_cast<int>(settings_ui::Category::library));
+            app.buildSettingsRows();
         }
         // Plugins: the repository bundles HowLongToBeat. Packages built outside the repository are
         // removed first, so this flow sees the same plugin set everywhere.

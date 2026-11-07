@@ -104,6 +104,10 @@ int LauncherUiTest::homeOptions(HWND window) {
     if (!app.favoritesShown() || !app.isFavorite(starred)) return 7918;
     app.settings_.hidden_collections.insert(collectionKey(app.account_, app.desktopFavorites()));
     app.buildShelves();
+    // Off the home screen only: still a tab of Wszystkie gry, so still a collection (the star stays).
+    if (!app.favoritesShown()) return 7584;
+    app.settings_.hidden_library_tabs.insert(app.desktopFavorites().id); // Out of the tabs too: off everywhere.
+    app.buildShelves();
     if (app.favoritesShown() || app.isFavorite(starred) ||
         std::any_of(app.categories_.begin(), app.categories_.end(), [](const auto& c) { return c.id == "user-collections.favorite"; })) return 7919;
     app.openDetails(starred);
@@ -112,7 +116,7 @@ int LauncherUiTest::homeOptions(HWND window) {
     app.desktop_mode_ = true; app.audio_.setDesktop(true);
     app.buildDesktopSidebar();
     if (app.desktopEntryIndex("favorites") >= 0 || app.desktopLayout().favorite) return 7921;
-    app.settings_.hidden_collections.clear();
+    app.settings_.hidden_collections.clear(); app.settings_.hidden_library_tabs.clear();
     app.buildDesktopSidebar();
     if (app.desktopEntryIndex("favorites") < 0 || !app.desktopLayout().favorite) return 7922;
     app.desktop_mode_ = false; app.audio_.setDesktop(false);

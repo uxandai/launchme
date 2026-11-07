@@ -70,7 +70,8 @@ enum class Id { font, home_layout, ui_accent, accent, uninstalled, emulation, co
                    update, update_check,
                    // Platformy PC → MultiMC / Prism: the launcher picked by hand (portable MultiMC).
                    multimc_path, studio_publishers, studio_developers, studio_companies, studio_min_games, studio_hidden, studio_hidden_entry, studio_show_all,
-                   updated_row, discovery_row, home_tab_icons, flix_rail, excluded_games, excluded_game, excluded_restore_all,
+                   updated_row, discovery_row, home_section, library_tab, home_row, home_row_new, home_row_games, home_row_rename, home_row_up,
+                   home_row_down, home_row_steam, home_row_delete, home_row_reset, home_row_options, home_tab_icons, flix_rail, excluded_games, excluded_game, excluded_restore_all,
                    // System → Wydajność: the low memory mode (AppSettings::low_memory) and Kompresja grafik
                    // (AppSettings::texture_compression).
                    low_memory, texture_compression,
@@ -169,6 +170,10 @@ enum class Page {
     fps_limiter, // Funkcje -> FPS i limiter: the widget, its graph, the frame limiter and the limits of single games.
     hidden_studios, // Biblioteka → Ukryci wydawcy i developerzy: each one with a switch to show it again.
     excluded_games, // Biblioteka → Widoczność → Wykluczone gry: each title with Przywróć.
+    // Biblioteka → Ekran główny i kolekcje: every home row (key: its id on Page::home_row) with where it shows.
+    home_rows, home_row,
+    // Biblioteka's other pages: what the libraries list, their default views, starting games, saves, shortcuts.
+    library_visibility, library_views, launching, save_games, outside_shortcuts,
     drm_roots, // DRM-free → Katalogi: adding a folder and every folder with its removal.
     settings_search, // Search in every category's settings: the field and the settings found (src/app/settings_search.cpp).
     appearance_all // Interfejs → Wszystkie opcje wyglądu: the classic list of every appearance setting (the studio has them as pictures).

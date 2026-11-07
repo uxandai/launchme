@@ -1,4 +1,5 @@
 #include "launcher.hpp"
+#include "launcher_internal.hpp"
 #include "../platform/unix_time.hpp"
 #include "../platform/game_activity.hpp"
 #ifndef _WIN32
@@ -390,9 +391,8 @@ void Launcher::onGameActivity(std::unique_ptr<GameActivityMessage> message) {
     }
 }
 
-namespace {
 // What a game leaves in front when it ends: the store client that started it, the desktop, a
-// crash reporter, or nothing at all.
+// crash reporter, or nothing at all (declared in launcher_internal.hpp).
 bool leftByGame(HWND window) {
     if (!window) return true;
 #ifdef _WIN32
@@ -417,6 +417,7 @@ bool leftByGame(HWND window) {
 #endif
 }
 
+namespace {
 #ifndef LAUNCHME_UI_TEST
 // SetForegroundWindow is refused to a background process unless, among others, it provided the
 // last input or nothing holds the foreground; a refusal only flashes the taskbar button. Joining

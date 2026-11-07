@@ -6,8 +6,11 @@
 
 using library_manager_ui::Page;
 
+// Ulubione off the home screen and out of Wszystkie gry's tabs: off everywhere (the star, the desktop section).
 bool Launcher::favoritesShown() const {
-    return settings_.hidden_collections.empty() || !settings_.hidden_collections.contains(collectionKey(account_, desktopFavorites()));
+    if (settings_.hidden_collections.empty()) return true;
+    const auto favorites = desktopFavorites();
+    return !settings_.hidden_collections.contains(collectionKey(account_, favorites)) || !settings_.hidden_library_tabs.contains(favorites.id);
 }
 bool Launcher::isFavorite(const Game& game) const {
     if (!favoritesShown()) return false;
@@ -166,6 +169,9 @@ void Launcher::deleteCollection(const SteamCollection& collection) {
     library_state_.collections.members.erase(scope);
     if (!library_state_.collections.creates.contains(scope)) library_state_.collections.names.erase(scope);
     settings_.hidden_collections.erase(scope); std::erase(settings_.collection_order, scope);
+    settings_.hidden_library_tabs.erase(collection.id);
+    // Its page in Settings (Ekran główny i kolekcje) has nothing left to show: the list again.
+    if (settings_state_.at(settings_ui::Page::home_row) && settings_state_.top()->key == collection.id) settings_state_.close();
     // Its library's own view, order and filter ("<account>:category:<id>", libraryScope) go too.
     const auto library = "category:" + collection.id;
     std::erase_if(library_state_.options, [&](const auto& entry) {
@@ -329,8 +335,8 @@ void Launcher::collectionDialogAccept() {
             }
             return;
         }
-        ui.page = ui.name_return == Page::membership ? Page::membership : Page::collection;
-        ui.collection = id; ui.input.clear(); ui.error.clear(); ui.focus = 0;
+        ui.page = ui.name_return == Page::membership ? Page::membership : ui.settings_return ? Page::games : Page::collection;
+        ui.collection = id; ui.input.clear(); ui.error.clear(); ui.focus = ui.page == Page::games ? -2 : 0; // From Settings: its games at once.
         collectionChanged(); return;
     } else {
         const std::string id = ui.page == Page::membership ? row.key : ui.collection;
@@ -388,10 +394,13 @@ void Launcher::collectionDialogAccept() {
 }
 void Launcher::collectionDialogBack() {
     auto& ui = library_dialog_;
+    // Opened from a collection's page in Settings (its games, its name): Back returns there.
+    const bool close = (ui.settings_return && (ui.page == Page::name || ui.page == Page::games)) ||
+                       (ui.page != Page::name && ui.page != Page::games && ui.page != Page::collection);
+    if (close) { ui = {}; saveLibraryPreferences(); saveSettings(); mouse_transition_until_ = GetTickCount64() + GetDoubleClickTime(); InvalidateRect(hwnd_, nullptr, FALSE); return; }
     if (ui.page == Page::name) ui.page = ui.name_return;
     else if (ui.page == Page::games) ui.page = Page::collection;
-    else if (ui.page == Page::collection) ui.page = Page::collections;
-    else { ui = {}; saveLibraryPreferences(); saveSettings(); mouse_transition_until_ = GetTickCount64() + GetDoubleClickTime(); InvalidateRect(hwnd_, nullptr, FALSE); return; }
+    else ui.page = Page::collections;
     ui.input.clear(); ui.error.clear(); ui.confirm = false; ui.focus = 0; ui.scroll = 0; rebuildCollectionDialog();
 }
 void Launcher::collectionDialogEdit(wchar_t ch) {

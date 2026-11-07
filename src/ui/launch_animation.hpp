@@ -6,8 +6,8 @@
 // resting in the middle and, beneath it, a thin ring with a white dot bouncing calmly off its edge; the game
 // opens at once underneath. The picture stays until the game is there: once the game's window takes the
 // foreground it rests, still, behind the game (no repaints), and the launcher fades it out when it is seen
-// again or the game ends. Left in front, it lasts at least `seconds`, longer while the game still starts (up
-// to `longest`). Back (Esc, B, the mouse's back button) hides it after `dismiss_after`; no hint says so.
+// again or the game ends (a store client's window in front, Steam's "Preparing to launch", is not the game).
+// Left in front, it lasts at least `seconds`, and on until the game shows a window (up to `longest`). Back (Esc, B, the mouse's back button) hides it after `dismiss_after`; no hint says so.
 namespace launch_animation {
 inline constexpr float seconds = 10.0f;      // The shortest run in front of the user.
 inline constexpr float longest = 120.0f;     // A game that never shows (the session's start-up limit).

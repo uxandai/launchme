@@ -70,7 +70,7 @@ std::vector<std::wstring> arguments(const Request& r) {
     case C::info: add({L"info", app, L"--extended", L"--lang", r.language}); break;
     case C::achievements: add({L"achievements", app, L"--lang", r.language}); break;
     case C::friends: add({L"friends"}); break;
-    case C::presence: if (r.text != L"online" && r.text != L"invisible" && r.text != L"away" && r.text != L"busy") return {}; add({L"config", L"presence", r.text}); break;
+    case C::presence: if (r.text != L"online" && r.text != L"offline") return {}; // Aurelia's two modes (offline: invisible). add({L"config", L"presence", r.text}); break;
     case C::chat_history: if (!r.id) return {}; add({L"chat", L"history", id, L"--count", L"200"}); break;
     case C::chat_send: if (!r.id || r.text.empty() || r.text.size() > 4000) return {}; add({L"chat", L"send", id, L"--", r.text}); break;
     case C::chat_live: if (!r.id) return {}; add({L"chat", L"open", id}); break;
@@ -197,10 +197,7 @@ FriendsResult friends(const json::Value& value) {
         f.status = static_cast<int>(std::min<uint64_t>(6, integer(item.get("persona_state")).value_or(0)));
         result.friends.push_back(std::move(f));
     }
-    std::stable_sort(result.friends.begin(), result.friends.end(), [](const auto& a, const auto& b) {
-        const int x = !a.game.empty() ? 2 : a.status ? 1 : 0, y = !b.game.empty() ? 2 : b.status ? 1 : 0;
-        return x != y ? x > y : a.name < b.name;
-    });
+    sortFriends(result.friends);
     // A roster of bare IDs would show everyone "offline": say what is wrong instead (the daemon's
     // `persona_state` is null until Steam answers; a session that never declared a presence gets nothing).
     if (!result.friends.empty() && !known) {

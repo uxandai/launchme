@@ -63,8 +63,8 @@ int LauncherUiTest::launchAnimation(HWND window) {
     if (app.dismissLaunchAnimation(started + std::chrono::milliseconds(300)) || !app.launchAnimationActive()) return 2521;
     if (!app.dismissLaunchAnimation(started + std::chrono::seconds(2))) return 2522;
     if (app.launchAnimationActive() || app.screen_ != ScreenMode::shelves || dispatched.size() != 1) return 2513;
-    // Left alone in front, it stays while the game still starts and while its window is being
-    // brought forward, then fades out once the game runs without it.
+    // Left alone in front, it stays while the game still starts and while it runs without having
+    // shown a window (a splash, a shader compile), up to its longest wait.
     const auto after = [&](std::chrono::milliseconds ms) { return *app.launch_animation_started_ + ms; };
     const auto past = std::chrono::milliseconds(static_cast<int>(seconds * 1000) + 50);
     const auto fade = std::chrono::milliseconds(static_cast<int>(fade_out * 1000) + 50);
@@ -79,6 +79,8 @@ int LauncherUiTest::launchAnimation(HWND window) {
     if (!app.launchAnimationActive() || app.launch_animation_ending_ || app.launch_focus_key_ != app.launch_artwork_key_) return 2526;
     app.cancelGameFocus();
     app.tickLaunchAnimation(after(past));
+    if (!app.launchAnimationActive() || app.launch_animation_ending_) return 2537;
+    app.tickLaunchAnimation(after(std::chrono::seconds(static_cast<int>(launch_animation::longest) + 1)));
     if (!app.launchAnimationActive() || !app.launch_animation_ending_ || !app.launchAnimationMoving(after(past))) return 2527;
     app.tickLaunchAnimation(*app.launch_animation_ending_ + fade);
     if (app.launchAnimationActive() || app.screen_ != ScreenMode::shelves) return 2528;

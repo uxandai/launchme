@@ -134,11 +134,35 @@ void Launcher::openLibrary() {
     rebuildCards(true);
 }
 
+// View / Select on the home screen: the whole library of where the focus is. A store's or console's
+// tile opens its games, a category tile ("Wszystkie") its category; a row of games its library, a row
+// of logos its board; Ostatnio grane its own tab of Wszystkie gry (Wszystkie gry once that tab is left
+// out in Biblioteka → Sekcje). Anything else, or an empty row: Wszystkie gry.
+void Launcher::viewButton() {
+    if (screen_ != ScreenMode::shelves || !homeOverlayAvailable() || cards_.empty()) return;
+    const Game* focused = selected_ < cards_.size() ? &cards_[selected_].game : nullptr;
+    const auto id = category_ < categories_.size() ? categories_[category_].id : std::string{};
+    if (focused && focused->kind == GameKind::pc_platform) { openPcLibrary(focused->source); return; }
+    if (focused && focused->kind == GameKind::category) { openCategoryLibrary(focused->source_id); return; }
+    if (focused && focused->kind == GameKind::platform && !studioCategory(id)) { openPlatform(focused->platform); return; }
+    if (!id.empty() && id != "pc-platforms" && id != "emulation" && !(id == "recent" && settings_.hidden_library_tabs.contains(id))) {
+        openCategoryLibrary(id);
+        if (screen_ == ScreenMode::library) return;
+    }
+    openLibrary();
+}
+
+const Launcher::Category* Launcher::findCategory(const std::string& id) const {
+    for (const auto* list : {&categories_, &library_categories_})
+        for (const auto& category : *list) if (category.id == id) return &category;
+    return nullptr;
+}
+
 void Launcher::openCategoryLibrary(const std::string& id) {
-    const auto category = std::find_if(categories_.begin(), categories_.end(), [&](const Category& item) { return item.id == id; });
+    const auto* category = findCategory(id);
     // Wydawcy and Developerzy: a board of their logos; a logo opens its games (openPlatform).
     const bool board = studioCategory(id);
-    if (category == categories_.end() || (!board && std::none_of(category->games.begin(), category->games.end(), [](const Game& game) { return isGame(game); })) ||
+    if (!category || (!board && std::none_of(category->games.begin(), category->games.end(), [](const Game& game) { return isGame(game); })) ||
         category->games.empty()) return;
     rememberPlace(); library_controls_ = {};
     pc_source_.reset(); library_console_.clear(); studio_board_return_.clear();

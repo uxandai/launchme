@@ -8,6 +8,7 @@ int LauncherUiTest::aureliaIntegration(HWND window) {
         if (person.avatar_url.empty()) ++*avatar_requests;
         return std::vector<uint8_t>{};
     };
+    app.fetch_friend_profile_ = [](uint64_t) { return std::string{}; }; // A roster all offline asks the public profiles.
     app.settings_.companion = app.settings_.glance = app.settings_.launch_animation = false;
     app.settings_.tour_done = true; app.settings_.aurelia = false;
     const auto settings = parseAppSettings("aurelia=1\naurelia_intro_done=1\naurelia_standalone=902\naurelia_standalone=../evil\n");

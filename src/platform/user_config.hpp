@@ -288,6 +288,10 @@ struct AppSettings {
     bool show_companies = false;
     int studio_min_games = 3;
     std::unordered_set<std::string> hidden_studios;
+    // Biblioteka → Sekcje: home rows (category ids: "pc-platforms", "emulation", a collection's id...) kept off
+    // the home screen (still tabs of Wszystkie gry), and the tabs left out of Wszystkie gry ("recent"...).
+    std::unordered_set<std::string> hidden_home_sections, hidden_library_tabs;
+    bool home_rows_migrated = false; // hidden_collections (once: home and tabs) carried into hidden_library_tabs.
     std::vector<std::string> studio_order;
     // The Steam rows of an account with no collections: Ostatnio zaktualizowane, Jeszcze niegrane.
     bool show_updated_row = true;
@@ -301,7 +305,7 @@ struct AppSettings {
     // already own that button on this PC.
     bool guide_menu = true;
     bool guide_overlay = false; // Experimental: Guide over a foreground game.
-    bool guide_open_widgets = true; // Guide over a game opens on the widgets (pad only; the keyboard shortcut always shows the bar).
+    bool guide_open_widgets = true; // The overlay's shortcut over a game (Guide, the pad pair or the keyboard chord) opens on the widgets.
     // The in-game overlay's shortcuts (Windows): the keyboard chord and the pad button or pair.
     enum class OverlayKey { shift_tab, ctrl_tab, shift_f1, ctrl_shift_o, none };
     enum class OverlayPad { guide, view_menu, sticks };

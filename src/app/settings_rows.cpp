@@ -60,6 +60,13 @@ std::wstring Launcher::settingsPageTitle(const settings_ui::PageFrame* frame) co
     case Page::collections: return tr(L"Kolekcje");
     case Page::hidden_studios: return tr(L"Ukryci wydawcy i developerzy");
     case Page::excluded_games: return tr(L"Wykluczone gry");
+    case Page::home_rows: return tr(L"Ekran główny i kolekcje");
+    case Page::home_row: return homeRowTitle(frame->key);
+    case Page::library_visibility: return tr(L"Co pokazywać");
+    case Page::library_views: return tr(L"Widoki bibliotek");
+    case Page::launching: return tr(L"Uruchamianie");
+    case Page::save_games: return tr(L"Zapisy gier");
+    case Page::outside_shortcuts: return tr(L"Skróty poza Launchme");
     case Page::layout_options: return tr(L"Opcje układu: ") + std::wstring(tr(home_layouts[std::clamp(static_cast<int>(settings_.home_layout), 0, home_layout_count - 1)]));
     case Page::cover_focus: return tr(L"Zaznaczona okładka");
     case Page::backdrop: return tr(L"Tło i szkło");
@@ -157,6 +164,13 @@ void Launcher::buildSettingsRows() {
                 tr(L"Kolekcje Steam i własne bez własnego widoku. Zresetuj: wszystkie wracają do niego."), settings_.default_view_collection, "collection");
         viewRow(Id::default_view_studio, tr(L"Domyślny widok wydawców"),
                 tr(L"Wydawcy i developerzy bez własnego widoku. Zresetuj: wszystkie wracają do niego."), settings_.default_view_studio, "studio");
+    };
+    // Biblioteka → Skróty poza Launchme: the place exists (Menu Start, Steam) and an installed game has none there yet.
+    const auto shortcutsEverywhere = [&](bool steam) {
+        return shortcutAvailableAnywhere(steam ? ShortcutPlace::steam : ShortcutPlace::menu) &&
+            std::any_of(grouped_library_.begin(), grouped_library_.end(), [&](const Game& game) {
+                return isGame(game) && game.installed && !gameKey(game).empty() && (!steam || game.source != GameSource::steam);
+            });
     };
     if (settings_state_.at(Page::settings_search)) settingsSearchRows(add);
     else switch (static_cast<settings_ui::Category>(settings_state_.category)) {
@@ -456,24 +470,6 @@ void Launcher::buildSettingsRows() {
             }
             break;
         }
-        if (settings_state_.at(Page::collections)) {
-            // "Kolekcje" page: the manager first, then one row per collection (shown on the home screen, its order).
-            add({Id::collection_manage, Control::action, tr(L"Zarządzaj kolekcjami"), tr(L"Nowe kolekcje, nazwy i gry w nich."), tr(L"Otwórz")});
-            for (size_t i = 0; i < settings_collections_.size(); ++i) {
-                const auto& collection = settings_collections_[i];
-                // Steam ROM Manager collections stay off while Emulacja shows their games by platform.
-                const bool emulated = srmCollectionsHidden() && srmCollection(collection);
-                Row row{Id::collection, Control::collection, collection.name,
-                    tr(L"Pozycja ") + std::to_wstring(i + 1) + (emulated ? tr(L" · Steam ROM Manager: gry są w Emulacji") :
-                                                                           tr(L" · kolejność na ekranie głównym")), {},
-                    !emulated && !settings_.hidden_collections.contains(collectionKey(account_, collection))};
-                row.locked = emulated;
-                row.key = collectionKey(account_, collection);
-                row.removable = localCollection(collection); // Steam's own cannot be deleted from here.
-                add(std::move(row));
-            }
-            break;
-        }
         if (settings_state_.at(Page::excluded_games)) {
             // Wykluczone gry: a thin list of titles (with their store), each with Przywróć.
             add({Id::excluded_restore_all, Control::action, tr(L"Przywróć wszystkie"), tr(L"Wszystkie wykluczone gry wracają do biblioteki."), tr(L"Przywróć")});
@@ -485,6 +481,52 @@ void Launcher::buildSettingsRows() {
                 row.key = key;
                 add(std::move(row));
             }
+            break;
+        }
+        if (settings_state_.at(Page::home_rows)) { homeRowsSettingsRows(add); break; } // Ekran główny i kolekcje (home_rows.cpp).
+        if (settings_state_.at(Page::home_row)) { homeRowSettingsRows(settings_state_.top()->key, add); break; } // One row's page.
+        if (settings_state_.at(Page::library_visibility)) {
+            add({Id::uninstalled, Control::toggle, tr(L"Niezainstalowane gry"),
+                tr(L"Pokazuj je w kolekcjach i bibliotekach sklepów."), {}, settings_.show_uninstalled});
+            add({Id::recent_uninstalled, Control::toggle, tr(L"Niezainstalowane w Ostatnio granych"),
+                tr(L"Także gry bez instalacji i dodane bez pliku, według daty dodania do biblioteki."), {}, settings_.recent_uninstalled});
+            add({Id::show_private, Control::toggle, tr(L"Pokaż ukryte/prywatne gry"),
+                tr(L"Gry oznaczone w Steam jako ukryte lub prywatne pojawią się w kolekcjach i bibliotece."), {}, settings_.show_private});
+            add({Id::excluded_games, Control::count, tr(L"Wykluczone gry"),
+                 library_state_.excluded_games.empty() ? std::wstring(tr(L"Menu gry → Wyklucz grę: nie ma jej w bibliotece, kolekcjach ani wyszukiwaniu. Tu ją przywrócisz."))
+                                                       : std::wstring(tr(L"Wykluczone z menu gry (prawy przycisk: Wyklucz grę). Nie ma ich w bibliotece, kolekcjach ani wyszukiwaniu; tu je przywrócisz.")),
+                 std::to_wstring(library_state_.excluded_games.size())});
+            break;
+        }
+        if (settings_state_.at(Page::library_views)) { viewRows(); break; }
+        if (settings_state_.at(Page::launching)) {
+            choiceRow(Id::accept_action, tr(L"Domyślna akcja gry"),
+                      tr(L"Wybranie gry w każdym widoku. Menu gry i ekran szczegółów zawsze uruchamiają."),
+                      accept_actions, static_cast<int>(settings_.accept_action));
+            add({Id::hide_while_playing, Control::toggle, tr(L"Chowaj do zasobnika podczas gry"),
+                tr(L"Gdy gra działa, launcher znika z paska zadań i Alt+Tab, a jego ikona czeka w zasobniku. Wraca po zamknięciu gry."),
+                {}, settings_.hide_while_playing});
+            break;
+        }
+        if (settings_state_.at(Page::save_games)) {
+            const auto program = ludusaviProgram();
+            add({Id::save_backups, Control::toggle, tr(L"Kopia zapisów po każdej grze"),
+                 tr(L"Ludusavi kopiuje zapisy gry, gdy ją zamkniesz. Przywrócisz je z menu gry → Zapisy."), {}, settings_.save_backup_after_game});
+            Row row{Id::ludusavi, Control::action, L"Ludusavi",
+                program.empty() ? std::wstring(tr(L"Program do kopii zapisów: wie, gdzie tysiące gier trzymają zapisy (PCGamingWiki). Pobierany z GitHuba."))
+                                : tr(L"Zainstalowany: ") + program.wstring() + L"\n" + tr(L"Folder kopii i chmurę ustawisz w jego oknie."),
+                ludusavi_busy_ ? tr(L"Pobieranie…") : program.empty() ? tr(L"Pobierz") : tr(L"Otwórz")};
+            row.locked = ludusavi_busy_;
+            add(std::move(row));
+            break;
+        }
+        if (settings_state_.at(Page::outside_shortcuts)) {
+            if (shortcutsEverywhere(false))
+                add({Id::shortcuts_all_menu, Control::action, shortcutPlaceName(ShortcutPlace::menu),
+                     tr(L"Dodaj tam wszystkie zainstalowane gry, które jeszcze nie mają skrótu. Każda startuje przez Launchme."), tr(L"Dodaj wszystkie")});
+            if (shortcutsEverywhere(true))
+                add({Id::shortcuts_all_steam, Control::action, L"Steam",
+                     tr(L"Gry spoza Steam jako skróty w bibliotece Steam (także w trybie gry na Steam Decku). Każda startuje przez Launchme."), tr(L"Dodaj wszystkie")});
             break;
         }
         if (settings_state_.at(Page::hidden_studios)) {
@@ -512,87 +554,30 @@ void Launcher::buildSettingsRows() {
                 settings_rows_[first_platform].section = std::move(next_section); next_section.clear();
             }
         }
-        section(tr(L"Kolekcje"));
+        // Porządek: what the home screen and the libraries show; Granie: starting games, saves, shortcuts.
+        // Each a page of its own, its state on the right.
+        section(tr(L"Porządek"));
         {
-            const auto shown = std::count_if(settings_collections_.begin(), settings_collections_.end(), [&](const auto& collection) {
-                return !(srmCollectionsHidden() && srmCollection(collection)) && !settings_.hidden_collections.contains(collectionKey(account_, collection));
-            });
-            add({Id::collections_open, Control::count, tr(L"Kolekcje"),
-                tr(L"Kolekcje Steam i własne: widoczność i kolejność na ekranie głównym.") +
-                    (settings_collections_.empty() ? std::wstring{} : L" · " + (tr(L"Widoczne: ") + std::to_wstring(shown))),
-                std::to_wstring(settings_collections_.size())});
-        }
-        // The Steam rows of an account with no collections of its own.
-        add({Id::updated_row, Control::toggle, tr(L"Ostatnio zaktualizowane"),
-            tr(L"Rząd na ekranie głównym, gdy konto Steam nie ma kolekcji."), {}, settings_.show_updated_row});
-        add({Id::discovery_row, Control::toggle, tr(L"Jeszcze niegrane"),
-            tr(L"Rząd na ekranie głównym, gdy konto Steam nie ma kolekcji."), {}, settings_.show_discovery_row});
-        // Wydawcy i developerzy: their libraries are collections of a kind, each row on its own.
-        section(tr(L"Wydawcy i developerzy"));
-        add({Id::studio_publishers, Control::toggle, tr(L"Wydawcy"),
-            tr(L"Gry wydawców z logo: rząd na ekranie głównym i sekcja okna desktopowego."), {}, settings_.show_publishers});
-        add({Id::studio_developers, Control::toggle, tr(L"Developerzy"),
-            tr(L"Gry twórców z logo: rząd na ekranie głównym i sekcja okna desktopowego."), {}, settings_.show_developers});
-        add({Id::studio_companies, Control::toggle, tr(L"Firmy"),
-            tr(L"Wydawcy i developerzy w jednej liście, bez powtórzeń logo i kategorii. Zastępuje dwa powyższe."), {}, settings_.show_companies});
-        if (studiosShown()) {
-            Row least{Id::studio_min_games, Control::choice, tr(L"Najmniej gier"),
-                      tr(L"Studio pokazuje się, gdy ma tyle gier w bibliotece. Kolejność: najwięcej gier najpierw.")};
-            for (const int count : studio_min_counts) least.choices.push_back({std::to_wstring(count)});
-            for (size_t i = 0; i < studio_min_counts.size(); ++i) if (studio_min_counts[i] == settings_.studio_min_games) least.choice = static_cast<int>(i);
-            least.value = std::to_wstring(settings_.studio_min_games);
-            add(std::move(least));
-        }
-        if (!settings_.hidden_studios.empty())
-            add({Id::studio_hidden, Control::count, tr(L"Ukryci wydawcy i developerzy"), tr(L"Ukryte w menu ich kafla albo w oknie desktopowym; tu można je przywrócić."),
-                 std::to_wstring(settings_.hidden_studios.size())});
-        section(tr(L"Widoczność"));
-        add({Id::uninstalled, Control::toggle, tr(L"Niezainstalowane gry"),
-            tr(L"Pokazuj je w kolekcjach i bibliotekach sklepów."), {}, settings_.show_uninstalled});
-        add({Id::recent_uninstalled, Control::toggle, tr(L"Niezainstalowane w Ostatnio granych"),
-            tr(L"Także gry bez instalacji i dodane bez pliku, według daty dodania do biblioteki."), {}, settings_.recent_uninstalled});
-        add({Id::show_private, Control::toggle, tr(L"Pokaż ukryte/prywatne gry"),
-            tr(L"Gry oznaczone w Steam jako ukryte lub prywatne pojawią się w kolekcjach i bibliotece."), {}, settings_.show_private});
-        if (!library_state_.excluded_games.empty())
-            add({Id::excluded_games, Control::count, tr(L"Wykluczone gry"),
-                 tr(L"Wykluczone z menu gry (prawy przycisk: Wyklucz grę). Nie ma ich w bibliotece, kolekcjach ani wyszukiwaniu; tu je przywrócisz."),
-                 std::to_wstring(library_state_.excluded_games.size())});
-        section(tr(L"Widoki biblioteki w trybie TV"));
-        viewRows();
-        section(tr(L"Uruchamianie i zapisy"));
-        choiceRow(Id::accept_action, tr(L"Domyślna akcja gry"),
-                  tr(L"Wybranie gry w każdym widoku. Menu gry i ekran szczegółów zawsze uruchamiają."),
-                  accept_actions, static_cast<int>(settings_.accept_action));
-        add({Id::hide_while_playing, Control::toggle, tr(L"Chowaj do zasobnika podczas gry"),
-            tr(L"Gdy gra działa, launcher znika z paska zadań i Alt+Tab, a jego ikona czeka w zasobniku. Wraca po zamknięciu gry."),
-            {}, settings_.hide_while_playing});
-        {
-            const auto program = ludusaviProgram();
-            add({Id::save_backups, Control::toggle, tr(L"Kopia zapisów po każdej grze"),
-                 tr(L"Ludusavi kopiuje zapisy gry, gdy ją zamkniesz. Przywrócisz je z menu gry → Zapisy."), {}, settings_.save_backup_after_game});
-            Row row{Id::ludusavi, Control::action, L"Ludusavi",
-                program.empty() ? std::wstring(tr(L"Program do kopii zapisów: wie, gdzie tysiące gier trzymają zapisy (PCGamingWiki). Pobierany z GitHuba."))
-                                : tr(L"Zainstalowany: ") + program.wstring() + L"\n" + tr(L"Folder kopii i chmurę ustawisz w jego oknie."),
-                ludusavi_busy_ ? tr(L"Pobieranie…") : program.empty() ? tr(L"Pobierz") : tr(L"Otwórz")};
-            row.locked = ludusavi_busy_;
-            add(std::move(row));
+            const auto entries = homeRowEntries();
+            const auto shown = std::count_if(entries.begin(), entries.end(), [&](const HomeRowEntry& entry) { return homeRowOnHome(entry.id); });
+            pageRow(Page::home_rows, tr(L"Ekran główny i kolekcje"),
+                    tr(L"Rzędy ekranu głównego, zakładki Wszystkich gier i kolekcje."),
+                    tr(L"Rzędy: ") + std::to_wstring(shown));
         }
         {
-            // Each game's own shortcuts: its menu → Skróty. Here: every installed game still without one.
-            const auto available = [&](bool steam_only) {
-                return std::any_of(grouped_library_.begin(), grouped_library_.end(), [&](const Game& game) {
-                    return isGame(game) && game.installed && !gameKey(game).empty() && (!steam_only || game.source != GameSource::steam);
-                });
-            };
-            const bool menu = shortcutAvailableAnywhere(ShortcutPlace::menu) && available(false);
-            const bool steam = shortcutAvailableAnywhere(ShortcutPlace::steam) && available(true);
-            if (menu)
-                add({Id::shortcuts_all_menu, Control::action, shortcutPlaceName(ShortcutPlace::menu),
-                     tr(L"Dodaj tam wszystkie zainstalowane gry, które jeszcze nie mają skrótu. Każda startuje przez Launchme."), tr(L"Dodaj wszystkie")});
-            if (steam)
-                add({Id::shortcuts_all_steam, Control::action, L"Steam",
-                     tr(L"Gry spoza Steam jako skróty w bibliotece Steam (także w trybie gry na Steam Decku). Każda startuje przez Launchme."), tr(L"Dodaj wszystkie")});
+            std::wstring summary = settings_.show_uninstalled ? tr(L"Wszystkie gry") : tr(L"Tylko zainstalowane");
+            if (!library_state_.excluded_games.empty()) summary += L" · " + (tr(L"Wykluczone: ") + std::to_wstring(library_state_.excluded_games.size()));
+            pageRow(Page::library_visibility, tr(L"Co pokazywać"), tr(L"Niezainstalowane gry, ukryte i prywatne gry Steam, wykluczone gry."), std::move(summary));
         }
+        pageRow(Page::library_views, tr(L"Widoki bibliotek"), tr(L"Domyślny widok bibliotek konsol, kolekcji, wydawców i developerów."),
+                library_view::label(library_view::viewFromPersisted(std::clamp(settings_.default_view_collection, 0, library_view::persisted_view_count - 1))));
+        section(tr(L"Granie"));
+        pageRow(Page::launching, tr(L"Uruchamianie"), tr(L"Co robi wybranie gry i czy launcher chowa się do zasobnika podczas gry."),
+                tr(accept_actions[std::clamp(static_cast<size_t>(settings_.accept_action), size_t{0}, accept_actions.size() - 1)]));
+        pageRow(Page::save_games, tr(L"Zapisy gier"), tr(L"Kopie zapisów każdej gry po jej zamknięciu (Ludusavi)."),
+                settings_.save_backup_after_game ? tr(L"Włączone") : tr(L"Wyłączone"));
+        if (shortcutsEverywhere(false) || shortcutsEverywhere(true))
+            pageRow(Page::outside_shortcuts, tr(L"Skróty poza Launchme"), tr(L"Menu Start i biblioteka Steam: skróty gier, które startują przez Launchme."), {});
         break;
     case settings_ui::Category::media: {
         if (settings_state_.at(Page::screenscraper)) {

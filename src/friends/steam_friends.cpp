@@ -11,6 +11,7 @@
 #endif
 
 #include <algorithm>
+#include <optional>
 #include <fstream>
 #include <unordered_map>
 
@@ -86,24 +87,56 @@ FriendsResult fetchSteamFriends(uint64_t steam_id) {
             if (const auto* state = profile.get("personastate")) person.status = state->intOr();
         }
     }
-    std::stable_sort(result.friends.begin(), result.friends.end(), [](const SteamFriend& a, const SteamFriend& b) {
+    sortFriends(result.friends);
+    return result;
+}
+
+void sortFriends(std::vector<SteamFriend>& friends) {
+    std::stable_sort(friends.begin(), friends.end(), [](const SteamFriend& a, const SteamFriend& b) {
         const int left = !a.game.empty() ? 2 : a.status ? 1 : 0;
         const int right = !b.game.empty() ? 2 : b.status ? 1 : 0;
         if (left != right) return left > right;
         return a.name < b.name;
     });
-    return result;
+}
+
+namespace {
+// The text of the first <name>…</name> in `xml` (CDATA unwrapped); nullopt without the element.
+std::optional<std::string_view> element(std::string_view xml, std::string_view name) {
+    const auto open = xml.find("<" + std::string(name) + ">");
+    if (open == std::string_view::npos) return std::nullopt;
+    auto value = xml.substr(open + name.size() + 2);
+    const auto close = value.find("</" + std::string(name) + ">");
+    if (close == std::string_view::npos) return std::nullopt;
+    value = value.substr(0, close);
+    if (value.starts_with("<![CDATA[") && value.ends_with("]]>")) value = value.substr(9, value.size() - 12);
+    return value;
+}
+} // namespace
+
+ProfilePresence profilePresence(std::string_view xml) {
+    ProfilePresence presence;
+    const auto state = element(xml, "onlineState");
+    if (!state) return presence;
+    presence.known = true;
+    presence.status = *state == "online" || *state == "in-game" ? 1 : 0;
+    if (*state == "in-game")
+        if (const auto info = element(xml, "inGameInfo"))
+            if (const auto game = element(*info, "gameName")) presence.game = wide(game->substr(0, 256));
+    // Without <inGameInfo> the state message names the game ("In-Game<br/>Name", "In non-Steam game").
+    if (*state == "in-game" && presence.game.empty())
+        if (auto message = element(xml, "stateMessage")) {
+            if (const auto line = message->find("<br/>"); line != std::string_view::npos) message = message->substr(line + 5);
+            presence.game = wide(message->substr(0, 256));
+        }
+    presence.avatar_url = profileAvatarUrl(xml);
+    return presence;
 }
 
 std::wstring profileAvatarUrl(std::string_view xml) {
-    const auto open = xml.find("<avatarMedium>");
-    if (open == std::string_view::npos) return {};
-    auto value = xml.substr(open + 14);
-    const auto close = value.find("</avatarMedium>");
-    if (close == std::string_view::npos) return {};
-    value = value.substr(0, close);
-    if (value.starts_with("<![CDATA[") && value.ends_with("]]>")) value = value.substr(9, value.size() - 12);
-    const auto url = wide(value);
+    const auto value = element(xml, "avatarMedium");
+    if (!value) return {};
+    const auto url = wide(*value);
     const bool steam_cdn = url.starts_with(L"https://avatars.steamstatic.com/") || url.starts_with(L"https://avatars.akamai.steamstatic.com/") ||
                            url.starts_with(L"https://avatars.cloudflare.steamstatic.com/") || url.starts_with(L"https://avatars.fastly.steamstatic.com/");
     return steam_cdn && url.size() < 512 && url.find_first_of(L" \"<>\r\n") == std::wstring::npos ? url : std::wstring{};

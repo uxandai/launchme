@@ -149,6 +149,8 @@ int LauncherUiTest::studioLibraries(HWND window) {
     app.hideStudio("publisher:sega");
     if (publishers.size() != 2 || !app.settings_.hidden_studios.contains("publisher:sega")) return 9818;
     app.openSettings(); app.settings_state_.selectCategory(static_cast<int>(settings_ui::Category::library)); app.buildSettingsRows();
+    // Biblioteka → Ekran główny i kolekcje → Wydawcy: the row's own options.
+    app.openSettingsPage(settings_ui::Page::home_rows); app.openSettingsPage(settings_ui::Page::home_row, "publishers");
     const auto hidden_row = std::find_if(app.settings_rows_.begin(), app.settings_rows_.end(), [](const auto& r) { return r.id == settings_ui::Id::studio_hidden; });
     if (hidden_row == app.settings_rows_.end()) return 9819;
     // Its page: each hidden studio with a switch that shows it again (back to Biblioteka once none is left).

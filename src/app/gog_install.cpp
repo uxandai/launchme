@@ -140,7 +140,7 @@ void Launcher::applyGogInstallProgress() {
     };
     for (auto* list : {&store_library_, &store_private_library_, &public_library_, &grouped_library_, &pc_library_, &search_results_, &detail_games_, &store_results_, &private_category_.games})
         for (auto& game : *list) update(game);
-    for (auto& category : categories_) for (auto& game : category.games) update(game);
+    for (auto* list : {&categories_, &library_categories_}) for (auto& category : *list) for (auto& game : category.games) update(game);
     for (auto& card : cards_) update(card.game);
     if (pending_launch_) update(pending_game_);
 }

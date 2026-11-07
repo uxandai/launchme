@@ -376,7 +376,7 @@ void Launcher::onPcLibrary(std::unique_ptr<PcLibraryMessage> message) {
     };
     for (auto* list : {&public_library_, &grouped_library_, &pc_library_, &search_results_, &detail_games_, &store_results_, &private_category_.games, &nested_games_, &xmb_top_})
         for (auto& game : *list) update(game);
-    for (auto& category : categories_) for (auto& game : category.games) update(game);
+    for (auto* list : {&categories_, &library_categories_}) for (auto& category : *list) for (auto& game : category.games) update(game);
     for (auto& card : cards_) update(card.game);
     if (pending_launch_) update(pending_game_);
     if (!structure) { retryArt(); InvalidateRect(hwnd_, nullptr, FALSE); return; }

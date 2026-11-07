@@ -14,7 +14,8 @@ namespace {
 // Rows that are content, not settings: games, folders, collections and the like would drown the real ones.
 bool content(Id id) {
     switch (id) {
-    case Id::collection: case Id::custom_game: case Id::drm_game: case Id::drm_root: case Id::excluded_game:
+    case Id::collection: case Id::home_section: case Id::library_tab: case Id::home_row: case Id::home_row_games: case Id::home_row_rename:
+    case Id::home_row_up: case Id::home_row_down: case Id::home_row_steam: case Id::home_row_delete: case Id::home_row_reset: case Id::custom_game: case Id::drm_game: case Id::drm_root: case Id::excluded_game:
     case Id::studio_hidden_entry: case Id::prefix_entry: case Id::launch_env: case Id::launch_dll: case Id::launch_option:
     case Id::launch_fold: case Id::artwork_source: case Id::settings_search: case Id::settings_hit:
         return true;
