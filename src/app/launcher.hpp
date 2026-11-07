@@ -2631,10 +2631,8 @@ private:
     std::wstring emulationFoundText(const emulation_scan::Rule& rule, const emulators::Found& found) const;
     std::map<std::wstring, size_t> rom_system_counts_;
     bool emulation_all_systems_ = false;
-    // Biblioteka: the stores that are off wait in a fold ("Więcej platform"). Which stores stand above it is
-    // fixed while Settings stay open, so switching one on or off never moves its row away from the focus.
+    // Biblioteka: the stores that are off wait in a fold ("Więcej platform"); open while this is set.
     bool platforms_all_ = false;
-    std::optional<std::vector<GameSource>> platforms_top_;
     bool rom_folder_notice_ = false; // A ROM folder picked in Dodaj grę: its count when the scan ends.
     std::wstring rom_rescan_system_;  // Szukaj gier ponownie on a system's page: its count when the scan ends.
     // Biblioteka → DRM-free → Gry dodane ręcznie (drm_free.cpp).

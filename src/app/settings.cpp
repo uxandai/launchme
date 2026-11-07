@@ -37,7 +37,7 @@ void Launcher::openSettings() {
     screen_ = ScreenMode::settings;
     color_editor_ = {};
     settings_page_exits_ = false;
-    platforms_top_.reset(); platforms_all_ = false; // Biblioteka splits the stores again (on above, off in the fold).
+    platforms_all_ = false; // Biblioteka: "Więcej platform" starts closed.
     settings_state_.closeAll();
     settings_state_.options = settings_state_.editing = settings_state_.back_focused = false;
     settings_motion_.valid = false;

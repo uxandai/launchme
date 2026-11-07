@@ -122,11 +122,14 @@ Settings → System → Help → **Open folder** (the version row) opens it.
   and in the desktop window's details pane; PC games from other stores play the Steam trailer of the same game.
   Games you hide, and Steam's hidden and private games, stay out of sight until you show them. A game of any
   store (or a DRM-free folder found twice) can be excluded from its menu, after a question; excluded games are
-  listed in Settings → Library → Visibility → *Excluded games*, where they can be restored.
-- **Collections**: Steam's collections (synced with the running client) and your own ones (create them from a
-  game's menu or the desktop window's sidebar, drag games onto them); each can be hidden from the home screen or
-  reordered, and your own ones deleted (Settings → Library → *Collections*). Hiding Favorites switches them off:
-  no stars and no Favorites shelf or section until it is shown again.
+  listed in Settings → Library → What to show → *Excluded games*, where they can be restored.
+- **Home screen and collections** (Settings → Library → *Home screen and collections*): one list of every home row
+  (Recently played, PC platforms, Emulation, publishers, developers, the Steam rows and the collections). Each row is
+  on the home screen, a tab of All Games, both or neither, and moves anywhere below Recently played: hold A / Enter
+  on it, then the arrows (or Shift+↑↓, LB/RB). The View button on a home row opens its tab. Collections are Steam's
+  (synced with the running client) and your own (create them here, from a game's menu or the desktop window's
+  sidebar, drag games onto them); their page has the games, the name, Move to Steam and Delete. Hiding Favorites
+  everywhere switches them off: no stars and no Favorites shelf or section until it is shown again.
 - **Playing**: Play on a game installed by another remembered Steam account switches Steam to that account
   first, and a Steam game can be tied to one account (game menu → *Steam account*); Install picks the Steam
   library (with its free space) in Launchme's own dialog. While a game runs, *Close game* sits next to Play.

@@ -80,16 +80,12 @@ void Launcher::pcSettingsRows() {
             steam.section = tr(L"Sklepy"); // A gap after the user's own library (DRM-free, Emulacja).
             settings_rows_.push_back(std::move(steam));
         }
-        // The stores that are on, then the others in a fold: most players use two or three of them.
-        if (!platforms_top_) {
-            platforms_top_.emplace();
-            for (const auto source : platformOrder())
-                if (settings_.enabled_pc_sources.contains(sourceSlug(source))) platforms_top_->push_back(source);
-        }
+        // The stores that are on, then the others in a fold: most players use two or three of them. A store
+        // switched on or off moves at once (pcSettingsActivate keeps the focus on it).
         std::vector<GameSource> off;
         for (const auto source : platformOrder()) {
             if (source == GameSource::steam || source == GameSource::drmfree) continue;
-            if (std::find(platforms_top_->begin(), platforms_top_->end(), source) == platforms_top_->end()) { off.push_back(source); continue; }
+            if (!settings_.enabled_pc_sources.contains(sourceSlug(source))) { off.push_back(source); continue; }
             platformRow(source, 0);
         }
         if (off.empty()) return;
@@ -288,13 +284,24 @@ bool Launcher::pcSettingsActivate(const Row& row) {
             settings_.steam_enabled = !settings_.steam_enabled;
             settingsChanged(true); rebuildCards(true); audio_.context();
         } else {
-            const auto key = sourceSlug(row.source);
+            const auto source = row.source; // The rows are built again below: row goes with them.
+            const auto key = sourceSlug(source);
             const bool enabled = !settings_.enabled_pc_sources.erase(key);
             if (enabled) settings_.enabled_pc_sources.insert(key);
             settingsChanged(true); audio_.context();
+            // On, it joins the stores above "Więcej platform"; off, it goes into it: the focus goes with it
+            // (onto the fold while that is closed).
+            buildSettingsRows();
+            const auto at = [&](auto wanted) { return std::find_if(settings_rows_.begin(), settings_rows_.end(), wanted); };
+            auto moved = at([&](const Row& r) { return r.id == Id::pc_platform && r.source == source; });
+            if (moved == settings_rows_.end()) moved = at([](const Row& r) { return r.id == Id::platforms_more; });
+            if (moved != settings_rows_.end()) {
+                settings_state_.selected[settings_state_.category] = static_cast<int>(moved - settings_rows_.begin());
+                ensureSettingVisible();
+            }
             // Amazon Games needs Nile: switching it on offers the download (its page, the button first);
             // going back is a normal answer, the button stays there.
-            if (enabled && row.source == GameSource::amazon && !amazon_state_.helper && amazon_state_.account.empty()) {
+            if (enabled && source == GameSource::amazon && !amazon_state_.helper && amazon_state_.account.empty()) {
                 openPlatformSettings(GameSource::amazon);
                 settings_state_.selected[settings_state_.category] = 0; settings_state_.options = true; ensureSettingVisible();
             }

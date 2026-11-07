@@ -933,6 +933,13 @@ public:
                 if (app.settings_rows_[i].id == settings_ui::Id::pc_platform && app.settings_rows_[i].source == source) app.settings_state_.selected[app.settings_state_.category] = static_cast<int>(i);
         };
         app.settingsActivate(); select(GameSource::gog); app.settingsActivate(); // Enable GOG.
+        {
+            // Switched on, GOG moves above "Więcej platform" at once, the focus with it.
+            const auto fold = std::find_if(app.settings_rows_.begin(), app.settings_rows_.end(), [](const auto& r) { return r.id == settings_ui::Id::platforms_more; });
+            const int focus = app.settings_state_.row();
+            if (fold == app.settings_rows_.end() || app.settings_rows_[static_cast<size_t>(focus)].source != GameSource::gog ||
+                focus > static_cast<int>(fold - app.settings_rows_.begin())) return 7592;
+        }
         select(GameSource::epic); app.settingsActivate(); // Enable Epic.
         if (app.categories_[1].title != L"Platformy PC" || app.categories_[2].title != L"Emulacja" || app.categories_[1].games.size() != 3) return 41;
         if (std::count_if(app.public_library_.begin(), app.public_library_.end(), [](const auto& game) { return game.source != GameSource::steam; }) != 2 || app.private_category_.games.size() != 1) return 42;
