@@ -37,7 +37,8 @@ int LauncherUiTest::modalLayers(HWND window) {
         open(true);
         if (app.topModal() != modal || app.homeOverlayAvailable()) return 6902;
         ViewContext context; app.inputHints(context);
-        if (!context.hints.empty()) return 6903;
+        // The case in the hand says what its buttons do (the manual, turning, its inside); the rest none.
+        if (!context.hints.empty() && modal != Modal::game_case) return 6903;
     }
     if (app.topDialog() != Modal::whats_new) return 6904; // Back and typing skip the prompts and the tour.
     for (auto layer = layers.rbegin(); layer != layers.rend(); ++layer) {

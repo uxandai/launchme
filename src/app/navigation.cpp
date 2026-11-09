@@ -235,7 +235,7 @@ void Launcher::back() {
     case Modal::gog_install: gogInstallKey(VK_ESCAPE, false); return;
     case Modal::tarot: closeTarot(); return;
     case Modal::profile: closeProfile(); return;
-    case Modal::game_case: closeGameCase(); return;
+    case Modal::game_case: gameCaseBack(); return;
     case Modal::whats_new: closeWhatsNew(); return;
     default: break;
     }

@@ -85,6 +85,8 @@ PadReading parseDualSense(std::span<const uint8_t> report) {
     result.left_trigger = data[full ? 4 : 7] > 128;
     result.x = static_cast<int16_t>((static_cast<int>(data[0]) - 128) * 255);
     result.y = static_cast<int16_t>((128 - static_cast<int>(data[1])) * 255);
+    result.rx = static_cast<int16_t>((static_cast<int>(data[2]) - 128) * 255);
+    result.ry = static_cast<int16_t>((128 - static_cast<int>(data[3])) * 255);
     const size_t b = full ? 7 : 4;
     const auto hat = data[b] & 15;
     if (hat == 7 || hat == 0 || hat == 1) result.buttons |= XINPUT_GAMEPAD_DPAD_UP;
@@ -121,6 +123,8 @@ PadReading parseDualShock4(std::span<const uint8_t> report) {
     result.connected = true;
     result.x = static_cast<int16_t>((static_cast<int>(data[0]) - 128) * 255);
     result.y = static_cast<int16_t>((128 - static_cast<int>(data[1])) * 255);
+    result.rx = static_cast<int16_t>((static_cast<int>(data[2]) - 128) * 255);
+    result.ry = static_cast<int16_t>((128 - static_cast<int>(data[3])) * 255);
     const auto hat = data[4] & 15;
     if (hat == 7 || hat == 0 || hat == 1) result.buttons |= XINPUT_GAMEPAD_DPAD_UP;
     if (hat >= 1 && hat <= 3) result.buttons |= XINPUT_GAMEPAD_DPAD_RIGHT;

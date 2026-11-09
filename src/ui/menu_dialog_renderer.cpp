@@ -37,6 +37,7 @@ wchar_t icon(context_menu::Item item, bool hidden) {
     case context_menu::Item::compat: return glyph::settings;
     case context_menu::Item::shortcuts: return glyph::open;
     case context_menu::Item::identify: return glyph::search;
+    case context_menu::Item::forget_recent: return glyph::hide;
     case context_menu::Item::studio_earlier: return L'\uE70E'; // Chevron up.
     case context_menu::Item::studio_later: return glyph::chevron_down;
     case context_menu::Item::studio_hide: return glyph::hide;
@@ -113,6 +114,7 @@ void Renderer::drawContextMenuDialog() {
         case context_menu::Item::compat: return L"Proton / Wine";
         case context_menu::Item::shortcuts: return tr(L"Skróty");
         case context_menu::Item::identify: return tr(L"Zidentyfikuj grę…");
+        case context_menu::Item::forget_recent: return tr(L"Usuń z ostatnio granych");
         case context_menu::Item::studio_earlier: return tr(L"Przesuń wcześniej");
         case context_menu::Item::studio_later: return tr(L"Przesuń dalej");
         case context_menu::Item::studio_hide: return tr(L"Ukryj");

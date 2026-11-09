@@ -192,10 +192,9 @@ bool Launcher::initialize(HWND hwnd) {
     if (desktop_mode_) {
         desktop_section_ = settings_.desktop_section.empty() ? std::string("all") : settings_.desktop_section;
         desktop_restore_key_ = settings_.desktop_game;
-        constexpr const char* groups[] = {"library", "platforms", "emulation", "collections", "publishers", "developers"};
-        for (int i = 0; i < desktop_ui::group_count; ++i) // Wydawcy and Developerzy: folded until opened.
-            desktop_collapsed_[static_cast<size_t>(i)] = desktop_ui::studioGroup(static_cast<desktop_ui::Group>(i)) ?
-                !settings_.desktop_expanded.contains(groups[i]) : settings_.desktop_collapsed.contains(groups[i]);
+        for (int i = 0; i < desktop_ui::group_count; ++i) // Below Ostatnio grane: folded until opened (and remembered).
+            desktop_collapsed_[static_cast<size_t>(i)] = desktop_ui::foldedByDefault(static_cast<desktop_ui::Group>(i)) ?
+                !settings_.desktop_expanded.contains(desktop_ui::group_names[i]) : settings_.desktop_collapsed.contains(desktop_ui::group_names[i]);
     } else if (settings_.windowed) { toggleFullscreen(); settings_dirty_ = false; }
     else placeOnTvMonitor();
     if (settings_.autostart) applyAutostart(true); // The EXE may have moved since it was switched on.

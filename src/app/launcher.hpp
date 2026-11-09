@@ -41,6 +41,8 @@
 #include "../artwork/identified_artwork.hpp"
 #include "../ui/identify_view.hpp"
 #include "../ui/game_case_view.hpp"
+#include "../ui/game_manual_view.hpp"
+#include "../platform/pdf_pages.hpp"
 #include "../ui/theme_studio.hpp"
 #include "../ui/bulk_covers_view.hpp"
 #include "../ui/achievements_view.hpp"
@@ -202,20 +204,45 @@ public:
     void tarotPointer(float x, float y); // Hover.
     bool tarotPointerOver(float x, float y) const;
     bool tickTarot(float dt);
-    // Półka's open case (src/app/game_case.cpp, src/ui/game_case_view.hpp): Enter on the focused case
-    // lifts it to the left and opens it, its medium slides out, Graj / Szczegóły on the right. A modal
-    // layer while open (Modal::game_case); closing plays backwards over the shelf.
+    // The case in the hand, on Półka and in Cover Flow (src/app/game_case.cpp, src/ui/game_case_view.hpp):
+    // Enter on the focused game holds its case up in 3D, turned by the right stick, LB / RB or a drag;
+    // Graj, Otwórz (the lid opens, the medium slides out), Instrukcja and Szczegóły on the right. A modal
+    // layer while open (Modal::game_case); Back shuts an open case, then puts the case back.
     bool gameCaseOpen() const { return game_case_.open; }
-    bool gameCaseShown() const { return game_case_.open || game_case_.time > 0; }
+    bool gameCaseShown() const { return game_case_.shown(); }
+    bool gameCaseLibrary() const; // Półka or Cover Flow: the views a case is held in.
+    game_case::Layout gameCaseLayout() const;
     void openGameCase();
     void closeGameCase(bool at_once = false);
+    void gameCaseBack();
     void gameCaseKey(WPARAM key, bool repeated);
     void gameCaseAccept();
+    void gameCaseShowInside();
+    void gameCaseHints(ViewContext& context) const; // input_hints.cpp // Pokaż środek (R3, O, a click on the case): opens it, or shuts it again.
+    void gameCaseTurn(int quarters);
+    void gameCaseStick(int16_t x, int16_t y);
     void gameCaseClick(float x, float y);
     void gameCasePointer(float x, float y);
+    void gameCaseRelease();
+    void gameCaseWheel(int delta);
     bool gameCasePointerOver(float x, float y) const;
     bool tickGameCase(float dt);
     game_case::Kind gameCaseKind() const;
+    // The back of its box and its manual (src/app/game_manual.cpp, src/artwork/case_extras.hpp), and
+    // Instrukcja: the manual read like its booklet over the case (src/ui/game_manual_view.hpp).
+    void requestCaseExtras(const Game& game);
+    void caseExtrasArrived(uint32_t generation, const std::string& key, std::vector<uint8_t> back, std::vector<uint8_t> side,
+                           const std::filesystem::path& manual);
+    std::filesystem::path gameManualFile(const Game& game) const;
+    bool gameManualAvailable(const Game& game) const;
+    void openGameManual(const Game& game);
+    void closeGameManual();
+    void requestManualPages();
+    void manualPageArrived(uint32_t generation, int page, int count, std::vector<uint8_t> png);
+    void manualTurn(int spreads);
+    void manualKey(WPARAM key, bool repeated);
+    void manualClick(float x, float y);
+    bool tickGameManual(float dt);
     // Disc art is wanted: Coverflow's discs, or a disc sliding out of Półka's open case.
     bool discArt() const;
     // Profil (src/app/profile.cpp): the player's page over the launcher, a modal layer
@@ -935,7 +962,14 @@ private:
     std::shared_ptr<std::atomic_bool> glance_cancel_ = std::make_shared<std::atomic_bool>(false);
     // Injectable transport; the UI and parser tests never contact real providers.
     glance::Get glance_get_ = httpGet;
-    game_case_ui::State game_case_; // Półka's open case.
+    game_case_ui::State game_case_; // The case in the hand.
+    std::string case_extras_key_;   // The game whose back and manual were asked for last.
+    uint32_t case_extras_generation_ = 0;
+    std::unordered_map<std::string, std::filesystem::path> case_manuals_; // Game key -> its manual (a PDF).
+    manual_ui::State manual_;       // Instrukcja.
+    std::set<int> manual_pending_;  // Pages asked of the worker.
+    // Tests: pages drawn at once, without the system's PDF engine.
+    std::function<pdf_pages::Page(const std::filesystem::path&, int, uint32_t)> manual_render_;
     // Tarot (src/app/tarot.cpp): the reading on screen, its seed, the store search in flight.
     tarot_ui::State tarot_;
     uint32_t tarot_seed_ = 0, tarot_generation_ = 0;
@@ -1360,6 +1394,9 @@ private:
     // Its time in Ostatnio grane: last played; a game not installed, when it was added (only with
     // AppSettings::recent_uninstalled, else 0: not listed).
     uint64_t recentTime(const Game& game) const;
+    bool recentHidden(const Game& game) const; // Usuń z ostatnio granych, not played since.
+    bool inRecent(const Game& game) const;
+    void forgetRecent(const Game& game);
     void rememberPlace();
     void restorePlace();
     void saveLibraryPreferences();
@@ -3045,7 +3082,7 @@ private:
     };
     std::vector<desktop_ui::Entry> desktop_entries_;
     std::string desktop_section_ = "all";
-    std::array<bool, desktop_ui::group_count> desktop_collapsed_{false, false, false, false, true, true}; // Wydawcy, Developerzy: folded.
+    std::array<bool, desktop_ui::group_count> desktop_collapsed_{false, false, true, true, true, true, true}; // Below Ostatnio grane: folded.
     std::array<float, desktop_ui::group_count> desktop_collapse_anim_{};
     bool desktop_collapse_valid_ = false;
     float desktop_narrow_anim_ = 0;   // The sidebar 0 wide … 1 narrow, easing to settings_.desktop_narrow.
@@ -3102,8 +3139,9 @@ private:
     // The right pane shows the selected game: none (an empty section) or its ✕ / a click beside the games hides it.
     bool desktop_pane_closed_ = false;
     // The grid's cells (the view menu): posters, squares or landscape; the art kind each one binds.
-    CoverMessage::Kind desktopCellKind() const {
-        return settings_.desktop_view == 1 ? CoverMessage::Kind::cover : settings_.desktop_view == 2 ? CoverMessage::Kind::landscape : CoverMessage::Kind::poster;
+    CoverMessage::Kind desktopCellKind() const { // The list shows the square cover beside each name.
+        return settings_.desktop_view == 1 || settings_.desktop_view == 3 ? CoverMessage::Kind::cover :
+               settings_.desktop_view == 2 ? CoverMessage::Kind::landscape : CoverMessage::Kind::poster;
     }
     void desktopOpenViewMenu();
     void desktopSetView(int view);
@@ -3128,6 +3166,30 @@ private:
     std::vector<Game> desktopGames() const;
     void rebuildDesktop(bool preserve_background);
     void desktopShowSection(const std::string& id);
+    // The sidebar's new parts (desktop_sidebar.cpp): Znajomi, Profil and the recent games' shortcuts,
+    // the headings' cogs into Ustawienia, Kontynuuj grę above Wszystkie gry, and the library's place
+    // taken by Ustawienia and Profil beside a live sidebar.
+    void desktopPickEntry(const desktop_ui::Entry& entry, bool double_click = false);
+    void desktopRevealGame(const std::string& key);   // Its card selected (Wszystkie gry when the section lacks it).
+    void desktopOpenFriends();
+    void desktopGroupSettings(desktop_ui::Group group);
+    std::vector<Game> desktop_recent_games_;          // The last three played: the sidebar's and Kontynuuj grę's.
+    int desktopActiveEntry() const;
+    bool desktopContinueShown() const;
+    void desktopBindRecentArt();
+    void desktopRecentArtArrived(const std::string& key, CoverMessage::Kind kind, const ImageBytes& image);
+    std::vector<std::string> desktop_recent_keys_;    // The games of Renderer::desktop_recent_'s slots.
+    std::vector<std::wstring> desktop_list_played_, desktop_list_playtime_; // The list view's columns (as cards_).
+    void desktopListLabels();
+    bool desktopSettingsDocked() const;  // Ustawienia in the library's place (not a dialog).
+    bool profileDocked() const;          // Profil likewise, over the library beside the sidebar.
+    desktop_ui::Rect desktopDock() const; // That place, in desktop DIPs.
+    void desktopChromeView(desktop_ui::View& view);  // The sidebar and top bar only.
+    bool desktopChromeClick(float mouse_x, float mouse_y, bool double_click); // A click on them over Ustawienia or Profil.
+    bool desktopChromeMove(float mouse_x, float mouse_y);
+    void desktopLeaveSettings();
+    Viewport profileViewport() const;
+    std::pair<float, float> profilePoint(float mouse_x, float mouse_y) const;
     void desktopFocus(size_t index, bool reveal = true);
     void desktopRequestArt();
     // The grid's cards around the view, in the order their art is wanted (desktop.cpp).

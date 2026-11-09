@@ -230,6 +230,7 @@ void Renderer::drawContextMenu() {
         case context_menu::Item::compat: return L"Proton / Wine";
         case context_menu::Item::shortcuts: return tr(L"Skróty");
         case context_menu::Item::identify: return tr(L"Zidentyfikuj grę…");
+        case context_menu::Item::forget_recent: return tr(L"Usuń z ostatnio granych");
         case context_menu::Item::studio_earlier: return tr(L"Przesuń wcześniej");
         case context_menu::Item::studio_later: return tr(L"Przesuń dalej");
         case context_menu::Item::studio_hide: return tr(L"Ukryj");

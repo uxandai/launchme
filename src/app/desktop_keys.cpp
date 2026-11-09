@@ -256,6 +256,7 @@ void Launcher::desktopAccept() {
         if (desktop_sidebar_focus_ < 0 || desktop_sidebar_focus_ >= static_cast<int>(rows.size())) { desktop_zone_ = 1; break; }
         const auto& row = rows[static_cast<size_t>(desktop_sidebar_focus_)];
         if (row.heading) desktopActivate({Target::sidebar_row, desktop_sidebar_focus_});
+        else if (actionEntry(desktop_entries_[static_cast<size_t>(row.entry)].kind)) desktopPickEntry(desktop_entries_[static_cast<size_t>(row.entry)]);
         else desktop_zone_ = 1;
         break;
     }

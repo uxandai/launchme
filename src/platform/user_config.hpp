@@ -32,7 +32,7 @@ struct AppSettings {
     // The desktop library: poster width (DIPs), order (library_view::persistedOrder), installed games
     // only, the section shown, its selected game (library_view::selectionKey) and collapsed groups.
     int desktop_poster = 156;
-    int desktop_view = 0; // The grid's cells: 0 posters (2:3), 1 squares (covers), 2 landscape (capsules).
+    int desktop_view = 0; // The grid's cells: 0 posters (2:3), 1 squares (covers), 2 landscape (capsules), 3 a list.
     // The desktop window's panes: the right one's width (dragged by its edge; 0 a quarter of the
     // window) and the left one narrow, its icons only (the toggle by the logo).
     int desktop_pane = 0;

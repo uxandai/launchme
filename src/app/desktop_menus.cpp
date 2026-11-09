@@ -56,16 +56,17 @@ void Launcher::desktopOpenGameMenu(float x, float y, bool keyboard) {
         separator();
         items.push_back({Action::details, tr(L"Szczegóły"), enter_details ? std::wstring(tr(L"Enter")) : std::wstring{}, glyph::info});
         // The rest in three groups, each a submenu: the game's data and art, how it starts, and the extras.
-        const wchar_t* group_names[] = {trKey(L"Dane i grafika"), trKey(L"Opcje gry"), trKey(L"Więcej")};
+        const wchar_t* submenu_names[] = {trKey(L"Dane i grafika"), trKey(L"Opcje gry"), trKey(L"Więcej")};
         const wchar_t group_icons[] = {glyph::picture, glyph::settings, glyph::more};
         for (int group = 0; group < 3; ++group) {
             if (desktopGroupItems(game, group).empty()) continue;
-            MenuItem item{Action::group, tr(group_names[group]), {}, group_icons[group]};
+            MenuItem item{Action::group, tr(submenu_names[group]), {}, group_icons[group]};
             item.submenu = true;
             item.value = group;
             items.push_back(std::move(item));
         }
         separator();
+        if (inRecent(game) && session == SessionState::none) items.push_back({Action::forget_recent, tr(L"Usuń z ostatnio granych"), {}, glyph::hide});
         if (!hideableCopies(game).empty()) {
             const bool hidden = hiddenInLauncher(game);
             items.push_back({Action::hide, hidden ? tr(L"Usuń z ukrytych") : tr(L"Ukryj"), {}, hidden ? glyph::view : glyph::hide});
@@ -285,8 +286,8 @@ void Launcher::desktopOpenViewMenu() {
     Menu menu;
     menu.kind = Menu::Kind::view;
     menu.x = r.left; menu.y = r.bottom + 6;
-    const wchar_t* names[] = {trKey(L"Plakaty"), trKey(L"Kwadraty"), trKey(L"Poziome")};
-    for (int i = 0; i < 3; ++i) {
+    const wchar_t* names[] = {trKey(L"Plakaty"), trKey(L"Kwadraty"), trKey(L"Poziome"), trKey(L"Lista")};
+    for (int i = 0; i < 4; ++i) {
         MenuItem item{Action::view_mode, tr(names[i]), {}, 0};
         item.value = i;
         item.checked = settings_.desktop_view == i;
@@ -297,7 +298,7 @@ void Launcher::desktopOpenViewMenu() {
 }
 
 void Launcher::desktopSetView(int view) {
-    view = std::clamp(view, 0, 2);
+    view = std::clamp(view, 0, 3);
     if (view == settings_.desktop_view) return;
     settings_.desktop_view = view;
     settings_dirty_ = true; settings_edited_ = std::chrono::steady_clock::now();
@@ -442,6 +443,7 @@ void Launcher::desktopMenuPick(const desktop_ui::MenuItem& item, bool /*from_sub
         desktop_marked_.clear();
         return;
     case Action::exclude: if (game) askExcludeGame(*game); return;
+    case Action::forget_recent: if (game) forgetRecent(*game); return;
     case Action::uninstall: if (game) uninstallGame(*game); return;
     case Action::remove_game: if (game) askRemoveFromLibrary(*game); return;
     case Action::sort:

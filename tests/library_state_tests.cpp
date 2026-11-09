@@ -46,6 +46,7 @@ int main() {
     state.steam_unsynced = {{"42:hidden:3564860", true}, {"42:user-collections.favorite:3595150", false}};
     state.excluded_games = {{"gog:456", L"Zażółć \"GOG\""}, {"epic:456", L"Epic game"}};
     state.launch_arguments = {{"steam:620", L"-dx11 \"-name=Gość\" -skipintro"}};
+    state.recent_hidden = {{"steam:620", 1700000000}, {"nonsteam:12", 5}};
     const auto file = root / L"library-state.ini";
     std::filesystem::create_directories(root);
     for (const auto* tail : {"1 0", "2 1 1 1 0 5 0", "0 1 1 1 0 6 0", "0 1 1 1 0 2 -1", "0 1 1 1 0 5 0 2", "0 1 1 1 0 5 0 1 1"}) {

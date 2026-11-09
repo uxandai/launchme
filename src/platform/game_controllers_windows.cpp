@@ -351,11 +351,12 @@ PadReading ControllerInput::read() {
     for (DWORD slot = 0; slot < XUSER_MAX_COUNT; ++slot) {
         if (now < state_->next_probe[slot]) continue;
         XINPUT_STATE input{};
-        if (stateReader()(slot, &input) == ERROR_SUCCESS)
+        if (stateReader()(slot, &input) == ERROR_SUCCESS) {
             available.push_back({true, L"xinput:" + std::to_wstring(slot), static_cast<WORD>(input.Gamepad.wButtons |
                 (input.Gamepad.bRightTrigger > 128 ? pad_right_trigger : 0)), input.Gamepad.sThumbLX, input.Gamepad.sThumbLY,
                 input.Gamepad.bLeftTrigger > 128});
-        else state_->next_probe[slot] = now + 500;
+            available.back().rx = input.Gamepad.sThumbRX; available.back().ry = input.Gamepad.sThumbRY;
+        } else state_->next_probe[slot] = now + 500;
     }
     if (now >= state_->steam_checked) {
         state_->steam_checked = now + 2000;

@@ -205,15 +205,17 @@ void Renderer::drawPackageFront(const PackageFront& p) {
         p.picture(0, 0, 1, split, frame->bitmap.Get(), D2D1::RectF(0, 0, size.width, split_px), shown);
         p.picture(0, split, 1, 1, frame->bitmap.Get(), D2D1::RectF(0, split_px, size.width, size.height), shown);
     } else {
-        window = closedPath(factory_.Get(), {p.at(bs, bt), p.at(1 - bs, bt), p.at(1 - bs, 1 - bt), p.at(bs, 1 - bt)}, window_bounds);
+        const float bl = bs + look.hinge; // A jewel case: the hinge's plastic on the left too.
+        window = closedPath(factory_.Get(), {p.at(bl, bt), p.at(1 - bs, bt), p.at(1 - bs, 1 - bt), p.at(bl, 1 - bt)}, window_bounds);
     }
     if (window) {
         // The insert: the art (Switch: beneath its head band), the clear sleeve's veil over it.
         target_->PushLayer(D2D1::LayerParameters(window_bounds, window.Get()), nullptr);
         brush(gray(0.07f, alpha)); target_->FillGeometry(window.Get(), solid_.Get());
-        const float band = look.band * (1 - 2 * bt);
-        const float stripe = look.stripe * (1 - 2 * bs);
-        const float art_top = bt + band, art_left = bs + stripe;
+        const float bl = bs + look.hinge;
+        const float band = p.scan ? 0.0f : look.band * (1 - 2 * bt);
+        const float stripe = p.scan ? 0.0f : look.stripe * (1 - bs - bl);
+        const float art_top = bt + band, art_left = bl + stripe;
         const float art_aspect = p.aspect * (1 - bs - art_left) / std::max(0.01f, 1 - bt - art_top);
         if (p.print) p.print(art_left, art_top, 1 - bs, 1 - bt, art_aspect, alpha);
         using package_look::Band;
@@ -228,7 +230,7 @@ void Renderer::drawPackageFront(const PackageFront& p) {
             const float ratio = (1 - 2 * bt) / std::max(0.001f, stripe * p.aspect);
             if (auto* strip = packageBand(p.kind, p.platform, ratio, Band::down)) {
                 const auto size = strip->GetSize();
-                p.picture(bs, bt, art_left, 1 - bt, strip, D2D1::RectF(0, 0, size.width, size.height), alpha);
+                p.picture(bl, bt, art_left, 1 - bt, strip, D2D1::RectF(0, 0, size.width, size.height), alpha);
             }
         }
         if (look.mark > 0 && p.picture) {
@@ -273,8 +275,15 @@ void Renderer::drawPackageFront(const PackageFront& p) {
     if (window && look.border > 0) {
         // The sleeve's seam around the insert: in shade at its top and left, lit along its foot.
         brush(gray(0, 0.32f * alpha)); target_->DrawGeometry(window.Get(), solid_.Get(), 0.8f * p.scale);
-        const auto foot_l = p.at(bs, 1 - bt), foot_r = p.at(1 - bs, 1 - bt);
+        const auto foot_l = p.at(bs + look.hinge, 1 - bt), foot_r = p.at(1 - bs, 1 - bt);
         line(foot_l.x, foot_l.y + 0.8f * p.scale, foot_r.x, foot_r.y + 0.8f * p.scale, gray(1, 0.16f * alpha), 0.8f * p.scale);
+        if (look.hinge > 0) {
+            // A jewel case's hinge: the lid's moulded ridges catching the light down its left.
+            for (const float s : {bs + look.hinge * 0.30f, bs + look.hinge * 0.38f, bs + look.hinge * 0.80f}) {
+                const auto top = p.at(s, bt * 0.5f), foot = p.at(s, 1 - bt * 0.5f);
+                line(top.x, top.y, foot.x, foot.y, gray(1, 0.13f * alpha), 0.8f * p.scale);
+            }
+        }
     }
     // The rim: lit along its top, a faint edge all round.
     {

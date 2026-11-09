@@ -72,6 +72,8 @@ PadReading reading(SDL_Gamepad* pad, SDL_JoystickID id) {
     result.left_trigger = SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFT_TRIGGER) > 16384;
     result.x = SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFTX);
     result.y = static_cast<int16_t>(-1 - SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFTY)); // SDL: down is positive.
+    result.rx = SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_RIGHTX);
+    result.ry = static_cast<int16_t>(-1 - SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_RIGHTY));
     power(pad, result.battery, result.charging);
     return result;
 }

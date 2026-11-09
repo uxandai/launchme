@@ -18,11 +18,30 @@ HintDevice Launcher::hintDevice() const {
            picture == Picture::joycon_pair ? HintDevice::nintendo : HintDevice::xbox;
 }
 
+// The case in the hand (game_case.cpp) and its manual (game_manual.cpp).
+void Launcher::gameCaseHints(ViewContext& context) const {
+    const bool pad = pad_input_ && pad_connected_;
+    context.hint_device = hintDevice();
+    auto& hints = context.hints;
+    if (manual_.open) {
+        hints.push_back({HintButton::shoulders, tr(L"Strona"), L"← →"});
+        hints.push_back({HintButton::accept, manual_.zoomed ? tr(L"Pomniejsz") : tr(L"Powiększ")});
+        hints.push_back({HintButton::back, tr(L"Zamknij")});
+        return;
+    }
+    hints.push_back({HintButton::accept, tr(L"Wybierz")});
+    if (!game_case_.opened) hints.push_back({HintButton::shoulders, tr(L"Obróć")});
+    hints.push_back({HintButton::stick_press, game_case_.opened ? tr(L"Schowaj środek") : tr(L"Pokaż środek")});
+    hints.push_back({HintButton::back, game_case_.opened ? tr(L"Zamknij pudełko") : tr(L"Odłóż")});
+    (void)pad;
+}
+
 void Launcher::inputHints(ViewContext& context) const {
     context.hints.clear();
     if (!settings_.input_hints || closing_ || tour_.open || screensaverActive() || launchAnimationActive() || pending_launch_) return;
     // Keep the corner clear until the bottom bar has finished sliding away, too.
     if (quick_open_ || quick_progress_ > 0.003f) return;
+    if (topModal() == Modal::game_case && !keyboard_.open) { gameCaseHints(context); return; }
     if (topModal() != Modal::none || keyboard_.open || color_editor_.open || cropOpen() || artworkOpen() || achievementsOpen()) return;
     const bool pad = pad_input_ && pad_connected_;
     context.hint_device = hintDevice();

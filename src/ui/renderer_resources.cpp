@@ -313,6 +313,10 @@ bool Renderer::createTargetResources() {
     for (auto& thumbnail : glance_thumbnails_) createBitmap(thumbnail);
     for (auto& image : tarot_images_) createBitmap(image);
     for (auto& image : profile_images_) createBitmap(image);
+    for (auto& image : desktop_recent_) createBitmap(image);
+    createBitmap(case_back_);
+    createBitmap(case_side_);
+    for (auto& page : manual_pages_) createBitmap(page);
     for (auto& [id, icon] : widget_icons_) { (void)id; createBitmap(icon); }
     for (auto& tile : tile_thumbnails_) for (auto& thumbnail : tile) createBitmap(thumbnail);
     for (auto& [id, avatar] : avatars_) { (void)id; createBitmap(avatar); }
@@ -353,6 +357,12 @@ void Renderer::discardTarget() {
     for (auto& hero : heroes_) { hero.bitmap.Reset(); hero.brush.Reset(); }
     for (auto& poster : posters_) { poster.bitmap.Reset(); poster.brush.Reset(); poster.gray_bitmap.Reset(); poster.gray_brush.Reset(); poster.gray_failed = false; poster.blurred.Reset(); poster.blurred_source.Reset(); poster.desaturated.Reset(); poster.desaturated_source.Reset(); }
     for (auto& disc : discs_) { disc.bitmap.Reset(); disc.brush.Reset(); disc.gray_bitmap.Reset(); disc.gray_brush.Reset(); disc.gray_failed = false; }
+    for (auto* image : {&case_back_, &case_side_}) { image->bitmap.Reset(); image->brush.Reset(); image->gray_bitmap.Reset(); image->gray_brush.Reset(); image->gray_failed = false; }
+    for (auto& page : manual_pages_) { page.bitmap.Reset(); page.brush.Reset(); }
+    case_faces_ = {};
+#ifdef _WIN32
+    box3d_.reset();
+#endif
     for (auto& thumbnail : artwork_thumbnails_) { thumbnail.bitmap.Reset(); thumbnail.brush.Reset(); }
     file_browser_preview_.bitmap.Reset(); file_browser_preview_.brush.Reset();
     notification_cover_.bitmap.Reset(); notification_cover_.brush.Reset();
@@ -365,6 +375,7 @@ void Renderer::discardTarget() {
     for (auto& thumbnail : glance_thumbnails_) { thumbnail.bitmap.Reset(); thumbnail.brush.Reset(); }
     for (auto& image : tarot_images_) { image.bitmap.Reset(); image.brush.Reset(); }
     for (auto& image : profile_images_) { image.bitmap.Reset(); image.brush.Reset(); }
+    for (auto& image : desktop_recent_) { image.bitmap.Reset(); image.brush.Reset(); }
     for (auto& [id, sprite] : companion_sprites_) { (void)id; sprite.cover.bitmap.Reset(); sprite.cover.brush.Reset(); sprite.cover.decoding.reset(); }
     for (auto& [id, icon] : widget_icons_) { (void)id; icon.bitmap.Reset(); icon.brush.Reset(); }
     for (auto& tile : tile_thumbnails_) for (auto& thumbnail : tile) { thumbnail.bitmap.Reset(); thumbnail.brush.Reset(); }
@@ -395,7 +406,7 @@ void Renderer::discardTarget() {
     for (auto& gradient : metro_gradients_) gradient.Reset();
     squircle_strokes_.clear(); squircle_fill_.Reset(); realizer_.Reset();
     brand_realizations_.clear(); poster_shapes_.clear();
-    desktop_shade_.Reset(); desktop_fade_top_.Reset(); desktop_fade_bottom_.Reset(); desktop_hero_fade_.Reset();
+    desktop_shade_.Reset(); desktop_fade_top_.Reset(); desktop_fade_bottom_.Reset(); desktop_hero_fade_.Reset(); desktop_continue_fade_.Reset();
     squircle_compact_strokes_.clear(); squircle_compact_fill_.Reset();
     aura_.Reset(); status_shade_.Reset(); install_vignette_.Reset(); shade_.Reset(); solid_.Reset(); target_.Reset(); window_target_.Reset();
 #ifdef _WIN32
@@ -524,8 +535,12 @@ void Renderer::uploadDecoded() {
             ready.emplace_back(cover.decoding->priority.load(std::memory_order_relaxed), &cover);
         uploadSteelbook(cover);
     };
-    for (auto* list : {&covers_, &logos_, &heroes_, &posters_, &discs_, &artwork_thumbnails_, &plugin_thumbnails_, &glance_thumbnails_, &tarot_images_, &profile_images_})
+    for (auto* list : {&covers_, &logos_, &heroes_, &posters_, &discs_, &artwork_thumbnails_, &plugin_thumbnails_, &glance_thumbnails_, &tarot_images_, &profile_images_,
+                       &desktop_recent_})
         for (auto& cover : *list) collect(cover);
+    collect(case_back_);
+    collect(case_side_);
+    for (auto& page : manual_pages_) collect(page);
     for (auto& tile : tile_thumbnails_) for (auto& thumbnail : tile) collect(thumbnail);
     for (auto& [id, avatar] : avatars_) { (void)id; collect(avatar); }
     for (auto& [id, icon] : widget_icons_) { (void)id; collect(icon); }

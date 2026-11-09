@@ -184,7 +184,7 @@ void Renderer::drawLibraryShelf() {
     const auto side = static_cast<ptrdiff_t>(layout.sideCount());
     const auto centre = static_cast<ptrdiff_t>(std::lround(std::clamp(flow, 0.0f, static_cast<float>(count - 1))));
     // The open case (game_case_renderer.cpp) has taken the focused one off the shelf.
-    const bool case_open = context_->game_case && context_->game_case->time > 0;
+    const bool case_open = context_->game_case && context_->game_case->shown();
     for (ptrdiff_t i = std::max<ptrdiff_t>(0, centre - side); i < std::min<ptrdiff_t>(static_cast<ptrdiff_t>(count), centre + side + 1); ++i)
         if (cards[static_cast<size_t>(i)].opacity > 0.005f) order.push_back(static_cast<size_t>(i));
     std::stable_sort(order.begin(), order.end(), [&](size_t a, size_t b) {
@@ -275,8 +275,11 @@ void Renderer::drawLibraryShelf() {
             return SUCCEEDED(sink->Close()) ? path : ComPtr<ID2D1PathGeometry>{};
         };
         const float alpha = card.opacity;
-        auto* poster = index < posters_.size() && posters_[index].bitmap ? &posters_[index] : nullptr;
-        auto* square = !poster && index < covers_.size() && covers_[index].bitmap ? &covers_[index] : nullptr;
+        // PS1: the square box scan first (package_look::scanFirst), else the poster, else a square cover.
+        auto* square_art = index < covers_.size() && covers_[index].bitmap ? &covers_[index] : nullptr;
+        const bool scan = package_look::scanFirst(kind) && square_art;
+        auto* poster = !scan && index < posters_.size() && posters_[index].bitmap ? &posters_[index] : nullptr;
+        auto* square = !poster ? square_art : nullptr;
         auto* image = poster ? poster : square;
         const bool frozen = sessionOf(card.game) == SessionState::frozen;
         struct Art { ID2D1Bitmap* bitmap = nullptr; ID2D1BitmapBrush* brush = nullptr; };
@@ -385,6 +388,7 @@ void Renderer::drawLibraryShelf() {
         face.shade_right = offset <= 0;
         face.dim = !card.game.installed;
         face.reflection = mirrored;
+        face.scan = scan;
         drawPackageFront(face);
     };
     // The mirror images first, all through one fading mask anchored at the floor.

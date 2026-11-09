@@ -84,7 +84,33 @@ void Renderer::drawProfileImage(size_t index, D2D1_RECT_F r, float radius, float
     }
 }
 
+// Desktop mode: in the library's place beside the sidebar (ViewContext::profile_dock_*), at the
+// proportions of Tryb TV's layouts in a desktop window (desktopModalViewport); else over the screen.
 void Renderer::drawProfile() {
+    const auto* state = context_ ? context_->profile : nullptr;
+    if (!state || state->alpha <= 0.003f) return;
+    const float dock_w = context_->profile_dock_right - context_->profile_dock_left, dock_h = context_->profile_dock_bottom - context_->profile_dock_top;
+    if (!context_->desktop || dock_w <= 0 || dock_h <= 0) { drawProfilePage(); return; }
+    constexpr float compact = 0.86f;
+    const auto saved = viewport_;
+    D2D1_MATRIX_3X2_F transform;
+    target_->GetTransform(&transform);
+    const auto desk = desktopViewport();
+    Viewport docked;
+    docked.scale = desk.scale * compact;
+    docked.width = dock_w / compact;
+    docked.height = dock_h / compact;
+    viewport_ = docked;
+    target_->SetTransform(D2D1::Matrix3x2F::Scale(docked.scale, docked.scale) *
+                          D2D1::Matrix3x2F::Translation(context_->profile_dock_left * desk.scale, context_->profile_dock_top * desk.scale));
+    target_->PushAxisAlignedClip(D2D1::RectF(0, 0, docked.width, docked.height), D2D1_ANTIALIAS_MODE_ALIASED);
+    drawProfilePage();
+    target_->PopAxisAlignedClip();
+    target_->SetTransform(transform);
+    viewport_ = saved;
+}
+
+void Renderer::drawProfilePage() {
     const auto* state = context_ ? context_->profile : nullptr;
     if (!state || state->alpha <= 0.003f || !createProfileFonts()) return;
     const auto& p = *state;

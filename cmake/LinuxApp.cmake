@@ -48,7 +48,7 @@ list(REMOVE_ITEM LAUNCHME_UI_SHARED
     src/platform/power.cpp               # power_linux.cpp
     src/platform/discord.cpp             # discord_linux.cpp
     src/platform/file_dialog.cpp)        # file_dialog_linux.cpp
-list(APPEND LAUNCHME_UI_SHARED src/platform/etw_access_linux.cpp src/platform/frame_limiter_linux.cpp src/platform/frame_clock_linux.cpp src/platform/file_dialog_linux.cpp src/platform/layered_surface_linux.cpp)
+list(APPEND LAUNCHME_UI_SHARED src/platform/pdf_pages_linux.cpp src/platform/etw_access_linux.cpp src/platform/frame_limiter_linux.cpp src/platform/frame_clock_linux.cpp src/platform/file_dialog_linux.cpp src/platform/layered_surface_linux.cpp)
 message(STATUS "Linux app: shared sources outside the core: ${LAUNCHME_UI_SHARED}")
 
 function(launchme_ui_library name)

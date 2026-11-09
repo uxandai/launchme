@@ -5,6 +5,7 @@
 #include "../artwork/text_crop.hpp"
 #include "image_decoder.hpp"
 #include "swap_chain.hpp"
+#include "box3d.hpp"
 #include "view_context.hpp"
 #include "controller_art.hpp"
 #include "text_layout_cache.hpp"
@@ -39,6 +40,7 @@
 #ifdef LAUNCHME_UI_TEST
 #include <functional>
 #endif
+struct ID3D11Device; // Renderer::device3d (Windows; none elsewhere).
 
 struct Viewport {
     float scale = 1;
@@ -180,6 +182,13 @@ public:
     bool hasPoster(size_t index) const { return index < posters_.size() && posters_[index].loaded(); }
     void releasePoster(size_t index) { if (index < posters_.size()) posters_[index] = {}; }
     void setDisc(size_t index, ImageBytes pixels);
+    // The case in the hand (game_case_held_renderer.cpp): the back of its box, by game; the manual's
+    // pages (a few kept, the farthest from the newest let go).
+    void setCaseBack(const std::string& key, ImageBytes pixels);
+    void setCaseSide(const std::string& key, ImageBytes pixels); // The spine's scan (box-2D-side).
+    void setManualPage(int page, ImageBytes pixels);
+    void clearManualPages();
+    bool hasManualPage(int page) const;
     bool hasDisc(size_t index) const { return index < discs_.size() && discs_[index].loaded(); }
     void releaseDisc(size_t index) { if (index < discs_.size()) discs_[index] = {}; }
     // Przegląd: the focused game's vertical poster in the panel; empty bytes clear it.
@@ -239,6 +248,9 @@ public:
     bool tarotImage(size_t index) const { return index < tarot_images_.size() && tarot_images_[index].loaded(); }
     // Profil's pictures (src/ui/profile_renderer.cpp): the player's, game covers, achievement icons.
     void resetProfileImages(size_t count) { profile_images_.clear(); profile_images_.resize(count); }
+    // Desktop mode's recent games (Launcher::desktopBindRecentArt): 0-2 square covers, 3-5 landscape pictures.
+    void setDesktopRecent(size_t slot, ImageBytes pixels);
+    void clearDesktopRecent(size_t slot) { if (slot < desktop_recent_.size()) desktop_recent_[slot] = {}; }
     void setProfileImage(size_t index, ImageBytes pixels);
     bool profileImage(size_t index) const { return index < profile_images_.size() && profile_images_[index].loaded(); }
     void setPlatformBadge(const std::wstring& platform, std::vector<uint8_t> pixels);
@@ -308,6 +320,9 @@ public:
     bool screenSnapshotForTest() const { return screen_frame_ != nullptr || screen_ui_target_ != nullptr; }
     bool screenBowTargetForTest() const { return screen_bow_target_ != nullptr; }
     bool captureForTest(const std::filesystem::path& file, const std::function<void()>& draw);
+    // Captures through a Direct3D 11 device (hardware, else WARP) and a Direct2D device context, as the
+    // window draws: what needs Direct3D (the held case in 3D) shows in the picture.
+    void gpuCaptureForTest(bool on) { capture_gpu_ = on; }
     uint32_t uiAccentForTest() const { return ui_accent_; }
     float glowLevelForTest() const { return glow_level_; }
     float backgroundGridForTest() const { return background_grid_; }
@@ -700,6 +715,7 @@ private:
     bool createTarotFonts();
     // Profil (src/ui/profile_renderer.cpp): the page, its cards and charts.
     void drawProfile();
+    void drawProfilePage();
     void drawAurelia();        // src/ui/aurelia_renderer.cpp: Tryb TV's dialog, or the desktop one below.
     void drawDesktopAurelia();
     // The cloud saves icon (Szczegoly, after the dots): a cloud, and a badge for synced or a problem.
@@ -822,6 +838,7 @@ private:
         bool dim = false;           // Not installed.
         bool reflection = false;    // The floor's mirror image: no gloss, no edges.
         float scale = 1;            // Device pixels per DIP (stroke widths).
+        bool scan = false;          // The art is a scan of the whole insert (PS1's square cover): no band of ours over it.
     };
     void drawPackageFront(const PackageFront& front);
     // A console's cover band (its colour, its logo), cached; `ratio` its long side : short side. Down:
@@ -833,6 +850,38 @@ private:
     // Półka's open case (src/ui/game_case_renderer.cpp, ViewContext::game_case) and its media
     // (src/ui/game_media_renderer.cpp; Coverflow's printed disc too).
     void drawGameCase();
+    void drawHeldCase();
+    void drawHeldCaseBox(const game_case_ui::State& state, const game_case::Kind& kind, D2D1_RECT_F front, float alpha);
+    void drawGameCasePanel(const game_case::Layout& layout, float time);
+    void drawGameManual();
+    bool caseFaces(const GameCard& card, const game_case::Kind& kind, float aspect, float depth_of_height);
+    Cover* manualPage(int page);
+    // The renderer's Direct3D device: the swap chain's, a GPU capture's (tests), else none.
+    ID3D11Device* device3d() const;
+    // The held case's printed faces (caseFaces), kept while what they show is the same.
+    struct CaseFaces {
+        std::string key;
+        const void* art = nullptr;
+        const void* back_art = nullptr;
+        const void* side_art = nullptr;
+        const void* logo = nullptr;
+        const void* target = nullptr;
+        bool installed = false, frozen = false;
+        std::wstring description;
+        float aspect = 0, depth = 0;
+        Microsoft::WRL::ComPtr<ID2D1Bitmap> front, back, spine;
+        Microsoft::WRL::ComPtr<ID2D1Bitmap1> front1, back1, spine1; // Copies Direct3D samples.
+        uint64_t version = 0;
+    };
+    CaseFaces case_faces_;
+    Cover case_back_;
+    std::string case_back_key_;
+    Cover case_side_;
+    std::string case_side_key_;
+    static constexpr size_t manual_slots = 8;
+    std::vector<Cover> manual_pages_;
+    std::vector<int> manual_page_numbers_;
+    std::vector<uint8_t> manual_page_retries_; // A page whose bitmap went (or never came) is decoded again, a few times.
     void drawFloppyDisk(D2D1_RECT_F r, float alpha, float light, Cover* art, bool frozen, const std::wstring& name);
     void drawGameCartridge(D2D1_RECT_F r, float alpha, const game_case::Kind& kind, const std::wstring& platform, Cover* art, bool frozen,
                            const std::wstring& name);
@@ -919,12 +968,16 @@ private:
     void drawDesktop();
     void drawDesktopTitlebar(const desktop_ui::Layout& layout, const desktop_ui::View& view);
     void drawDesktopSidebar(const desktop_ui::Layout& layout, const desktop_ui::View& view);
+    desktop_ui::Layout desktopLayoutOf(const desktop_ui::View& view) const; // The library's geometry for this view.
     void drawDesktopStart(const desktop_ui::Layout& layout, const desktop_ui::View& view);
     void drawDesktopCompanion(const desktop_ui::Layout& layout, const desktop_ui::View& view);
     void drawDesktopGrid(const desktop_ui::Layout& layout, const desktop_ui::View& view);
     void drawDesktopHeader(const desktop_ui::Layout& layout, const desktop_ui::View& view);
     void drawDesktopEmpty(const desktop_ui::Layout& layout, const desktop_ui::View& view);
     void drawDesktopPoster(const desktop_ui::Layout& layout, const desktop_ui::View& view, size_t index);
+    void drawDesktopListRow(const desktop_ui::Layout& layout, const desktop_ui::View& view, size_t index);
+    void drawDesktopContinue(const desktop_ui::Layout& layout, const desktop_ui::View& view);
+    bool drawDesktopRecentImage(int slot, D2D1_RECT_F box, float radius, float opacity);
     void drawDesktopPane(const desktop_ui::Layout& layout, const desktop_ui::View& view);
     void drawDesktopBulk(const desktop_ui::Layout& layout, const desktop_ui::View& view);
     void drawDesktopDownloads(const desktop_ui::Layout& layout, const desktop_ui::View& view);
@@ -1019,6 +1072,9 @@ private:
     bool bc3_supported_ = false; // BC3 too (logos with transparency); not on Linux.
 #ifdef _WIN32
     SwapChainTarget swap_;    // The window's target (createTarget); empty: the HWND target below or none.
+    Box3D box3d_;             // The held case in 3D (box3d.hpp), on swap_'s device.
+    Microsoft::WRL::ComPtr<ID3D11Device> capture_device_; // captureForTest's GPU target (tests).
+    bool capture_gpu_ = false;
     bool swap_wanted_ = true; // LAUNCHME_SWAPCHAIN=0: the HWND target, for comparisons.
     bool swap_failed_ = false; // Could not be made: the HWND target until releaseGraphics.
     bool tearing_wanted_ = false; // LAUNCHME_PRESENT_IMMEDIATE=1 (the uncapped benchmark).
@@ -1108,6 +1164,7 @@ private:
     std::vector<Cover> tarot_images_; // Tarot's result cards.
     std::vector<bool> tarot_posters_; // Per result: the image is its poster (else a cover standing in).
     std::vector<Cover> profile_images_; // Profil's pictures (Launcher::profile_slots_).
+    std::vector<Cover> desktop_recent_ = std::vector<Cover>(6); // setDesktopRecent's slots.
     Microsoft::WRL::ComPtr<IDWriteTextFormat> profile_name_font_, profile_value_font_, profile_big_font_, profile_title_font_, profile_body_font_, profile_small_font_;
     std::wstring profile_fonts_family_;
     // Tarot's type: a calligraphic title, serif card names and numerals, an italic question.
@@ -1245,7 +1302,7 @@ private:
     std::unordered_map<uint64_t, PosterShape> poster_shapes_;
     uint64_t poster_shape_clock_ = 0;
     const PosterShape* posterShape(float width, float height);
-    Microsoft::WRL::ComPtr<ID2D1LinearGradientBrush> desktop_shade_, desktop_fade_top_, desktop_fade_bottom_, desktop_hero_fade_;
+    Microsoft::WRL::ComPtr<ID2D1LinearGradientBrush> desktop_shade_, desktop_fade_top_, desktop_fade_bottom_, desktop_hero_fade_, desktop_continue_fade_;
     ID2D1LinearGradientBrush* desktopGradient(Microsoft::WRL::ComPtr<ID2D1LinearGradientBrush>& cached, D2D1_COLOR_F from, D2D1_COLOR_F to, float y0, float y1);
     Microsoft::WRL::ComPtr<ID2D1BitmapRenderTarget> screen_bow_target_;
     bool exit_capture_attempted_ = false;

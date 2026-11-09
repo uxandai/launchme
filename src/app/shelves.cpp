@@ -294,7 +294,7 @@ void Launcher::buildShelves() {
     } else
         for (const auto* game : played)
             // snitch retains uninstalled recent games too; public_library_ already respects show_uninstalled.
-            if ((game->installed || game->installation.update || snitch) && game->last_played) pick(*game);
+            if ((game->installed || game->installation.update || snitch) && game->last_played && !recentHidden(*game)) pick(*game);
     if ((psfive || snitch) && recent.games.size() < recent_limit) {
         // The console rows stay full: installed games never played yet follow, newest additions first.
         std::vector<std::pair<uint64_t, const Game*>> added;

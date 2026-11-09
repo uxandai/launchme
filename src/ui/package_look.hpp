@@ -5,16 +5,17 @@
 //   keep case (PC):  black plastic, a clear sleeve over the poster;
 //   Xbox:            opaque lime green, the cover's black head band with the green logo;
 //   Xbox 360:        translucent green, the white head band with the grey logo;
-//   PS1:             a CD jewel case: clear front, black tray, the inlay's black stripe down its left;
+//   PS1:             a CD jewel case (142 x 125 mm): clear front over the black tray, its hinge down the left,
+//                    the square 120 mm insert (its black PlayStation stripe printed on it, else drawn);
 //   PS2:             black, the black head band; PS3: a clear Blu-ray case, the black band;
 //   PS4:             translucent blue, the blue band; PS5: translucent blue, the white band, black logo;
 //   GameCube:        black, the black band curving down; Wii: white, the white band, grey logo; Wii U: cerulean, its blue band;
 //   PSP:             clear, black band; PS Vita: blue, dark blue band, a black game card;
 //   DS:              black, white band; 3DS: white, white band, red logo; their grey game cards;
 //   Switch:          clear plastic (a thin grey rim), the art to the insert's edges with the red logo tile
-//                    in its top left corner; inside, the insert's inner print through the plastic;
+//                    in its top left corner; inside, the insert's white back through the plastic;
 //   Switch 2:        translucent red plastic (a thin red rim), the red head band with the logo in its
-//                    middle; inside, glossy red with the inner print faintly through it;
+//                    middle; inside, glossy red;
 //   big box:         printed cardboard to its edges, square corners.
 // Sizes, colours and bands after en.wikipedia.org/wiki/Keep_case and the boxes themselves. PS2, PS3, PS4,
 // Xbox 360, GameCube, Wii, Wii U and Switch draw their real front (frameOf) over the art; their band
@@ -34,6 +35,7 @@ struct Look {
     float border = 0.018f;   // The plastic rim around the insert, of the width (0: printed to the edges).
     float band = 0;          // The insert's head band, of the insert's height.
     float stripe = 0;        // Or a stripe down its left side, of the insert's width (PS1's inlay).
+    float hinge = 0;         // A jewel case's hinge: the plastic left of the insert, beyond the border, of the width.
     float mark = 0;          // Or a square in its top left corner, of the insert's width (Switch: the red logo tile).
     bool band_centred = false; // The logo in the band's middle (Switch 2), else at its left.
     D2D1_COLOR_F band_colour{}, band_ink{1, 1, 1, 1};
@@ -51,6 +53,9 @@ struct Look {
     bool inside_art = false, inside_gray = false;
     D2D1_COLOR_F inside_tint{0, 0, 0, 0};
 };
+// A case whose front is the box's own square scan (PS1: ScreenScraper's / ES-DE's box-2D, the cover
+// slot) before any poster: the scan is the whole insert, its PlayStation stripe printed on it.
+inline bool scanFirst(const game_case::Kind& kind) { return kind.style == game_case::Style::ps1; }
 // How light a colour reads (0 black, 1 white).
 inline float brightness(D2D1_COLOR_F c) { return 0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b; }
 inline D2D1_COLOR_F rgb(float r, float g, float b) { return D2D1::ColorF(r, g, b); }
@@ -77,7 +82,6 @@ inline Look of(const game_case::Kind& kind) {
         look.spine = rgb(0.94f, 0.94f, 0.93f); look.spine_ink = rgb(0.12f, 0.12f, 0.13f);
         look.edge = rgb(0.72f, 0.735f, 0.75f);
         look.clear = true; look.haze = 0.03f;
-        look.inside_art = true; look.inside_tint = D2D1::ColorF(0.96f, 0.965f, 0.97f, 0.30f);
         break;
     case Style::switch2:
         // Red plastic, a thin rim of it round the insert; the red head band, the logo in its middle.
@@ -90,7 +94,6 @@ inline Look of(const game_case::Kind& kind) {
         look.edge = rgb(0.66f, 0.05f, 0.08f);
         look.card = rgb(0.84f, 0.11f, 0.12f);
         look.tray = rgb(0.86f, 0.13f, 0.11f);
-        look.inside_art = true; look.inside_gray = true; look.inside_tint = D2D1::ColorF(0.90f, 0.12f, 0.10f, 0.80f);
         break;
     case Style::big_box:
         look.corner = 0; look.border = 0;
@@ -117,12 +120,14 @@ inline Look of(const game_case::Kind& kind) {
         look.haze = 0.02f;
         break;
     case Style::ps1:
-        look.corner = 0.008f; look.border = 0.03f;
+        // The insert 120 x 120 mm in the 142 x 125 mm case: 2.5 mm of plastic round it, the hinge's
+        // 17 mm more on its left; the clear lid over the black tray reads black.
+        look.corner = 0.006f; look.border = 0.0176f; look.hinge = 0.12f;
         look.stripe = 0.105f; look.band_colour = rgb(0.025f, 0.025f, 0.03f); look.band_ink = rgb(1, 1, 1); look.band_text = L"PlayStation";
         look.spine_head = rgb(0.025f, 0.025f, 0.03f); look.spine_head_always = true;
-        look.rim = rgb(0.78f, 0.80f, 0.82f);
+        look.rim = rgb(0.045f, 0.045f, 0.05f);
         look.spine = rgb(0.03f, 0.03f, 0.035f); look.spine_ink = rgb(0.92f, 0.92f, 0.92f);
-        look.edge = rgb(0.70f, 0.72f, 0.75f);
+        look.edge = rgb(0.13f, 0.135f, 0.145f);
         look.haze = 0.025f;
         look.tray = rgb(0.035f, 0.035f, 0.04f); // The jewel case's black tray.
         break;

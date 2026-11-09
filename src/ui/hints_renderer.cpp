@@ -23,6 +23,7 @@ static std::wstring keyCaption(HintButton button) {
     case HintButton::type: return L"A–Z";
     case HintButton::menu: return L"Enter";
     case HintButton::search: return L"F";
+    case HintButton::stick_press: return L"O";
     }
     return {};
 }
@@ -48,6 +49,7 @@ float Renderer::drawHintGlyph(const InputHint& hint, float x, float cy, float al
         const auto caption = shoulderCaption(device);
         return pill(textAdvance(caption, friend_section_font_.Get()) + 18, caption);
     }
+    if (hint.button == HintButton::stick_press) return pill(std::max(glyph_size + 6, textAdvance(L"R3", friend_section_font_.Get()) + 18), L"R3");
     const float cx = x + glyph_size * 0.5f, r = glyph_size * 0.5f;
     if (hint.button == HintButton::drawer) {
         // Menu / Options / +: a small pill with three lines (a plus on Nintendo).
@@ -100,6 +102,7 @@ void Renderer::drawHints() {
             const auto caption = hint.key.empty() ? keyCaption(hint.button) : hint.key;
             glyph = std::max(glyph_size + 6, textAdvance(caption, friend_section_font_.Get()) + 18);
         } else if (hint.button == HintButton::shoulders) glyph = textAdvance(shoulderCaption(context_->hint_device), friend_section_font_.Get()) + 18;
+        else if (hint.button == HintButton::stick_press) glyph = std::max(glyph_size + 6, textAdvance(L"R3", friend_section_font_.Get()) + 18);
         else if (hint.button == HintButton::drawer) glyph = 30;
         const float label = std::ceil(textAdvance(hint.label, label_font));
         glyphs.push_back(glyph); labels.push_back(label);

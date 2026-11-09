@@ -79,6 +79,7 @@ void Launcher::onCover(std::unique_ptr<CoverMessage> cover) {
         if (cover->kind == CoverMessage::Kind::poster) tarotArtArrived(cover->key, cover->kind, asset.poster);
         if (flixActive()) for (size_t i = 0; i < cards_.size(); ++i) if (gameKey(cards_[i].game) == cover->key) bindFlixArt(i, true);
         metroArtArrived(cover->key, cover->kind);
+        if (cover->kind == CoverMessage::Kind::landscape) desktopRecentArtArrived(cover->key, cover->kind, asset.landscape); // Kontynuuj grę.
         if (shelfPosters() && cover->kind == CoverMessage::Kind::poster)
             for (size_t i = 0; i < cards_.size(); ++i) if (gameKey(cards_[i].game) == cover->key) bindLibraryPoster(i, true);
         if (cover->kind == CoverMessage::Kind::landscape && shelfWideCard(0) && gameKey(cards_[0].game) == cover->key) bindLibraryLandscape(0, true);
@@ -118,7 +119,10 @@ void Launcher::onCover(std::unique_ptr<CoverMessage> cover) {
     } else if (cover->kind == CoverMessage::Kind::logo) asset.logo = shareImage(std::move(cover->bytes));
     else { asset.hero = shareImage(std::move(cover->bytes)); asset.hero_tone = cover->hero_tone; asset.hero_focus = cover->focus; }
     art_.resize(cover->key);
-    if (cover->kind == CoverMessage::Kind::cover) { tarotArtArrived(cover->key, cover->kind, asset.cover); profileArtArrived(cover->key, cover->kind, asset.cover); }
+    if (cover->kind == CoverMessage::Kind::cover) {
+        tarotArtArrived(cover->key, cover->kind, asset.cover); profileArtArrived(cover->key, cover->kind, asset.cover);
+        desktopRecentArtArrived(cover->key, cover->kind, asset.cover); // Ostatnio grane.
+    }
     if (friends_open_ && plugin_drawer_active_ && cover->kind == CoverMessage::Kind::cover) requestPluginPageArt();
     // The desktop grid binds only around its view (thousands of cards; a card scrolled away is
     // bound again from art_ when it returns) and a cover only where it stands in for a poster.
@@ -272,7 +276,7 @@ void Launcher::prefetchPosters() {
     }
     if (metro) if (const auto* install = metroInstallGame()) queue(*install, CoverMessage::Kind::poster);
     if (desktop && settings_.desktop_view == 2) for (const auto& game : public_library_) queue(game, CoverMessage::Kind::landscape);
-    else if (desktop && settings_.desktop_view == 1) for (const auto& game : public_library_) queue(game, CoverMessage::Kind::cover);
+    else if (desktop && (settings_.desktop_view == 1 || settings_.desktop_view == 3)) for (const auto& game : public_library_) queue(game, CoverMessage::Kind::cover);
     else if (boxes || xmb || desktop) for (const auto& game : public_library_) queue(game, CoverMessage::Kind::poster);
     else if (shelves) for (const auto& category : categories_) for (const auto& game : category.games) queue(game, CoverMessage::Kind::poster);
     if (steam && !categories_.empty() && !categories_[0].games.empty()) queue(categories_[0].games.front(), CoverMessage::Kind::landscape);

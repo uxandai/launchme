@@ -18,10 +18,11 @@ namespace context_menu {
 // "compat": Details' "…" → Proton / Wine (Linux: a Windows game's Wine/Proton options).
 // "shortcuts": Details' "…" → Skróty (the game's desktop, menu and Steam shortcuts).
 // "identify": Zidentyfikuj grę… on a game no RAWG or ScreenScraper match names yet (Launcher::unidentifiedGame).
+// "forget_recent": Usuń z ostatnio granych, a game in the recent rows (Launcher::forgetRecent), in both menus.
 // "studio_*": a publisher's or developer's logo tile (Rows::studio, only these): move it earlier or later in
 // its row, or hide it (Biblioteka → Ukryci wydawcy i developerzy shows it again).
 enum class Item { primary, suspend, plugin, details, artwork, retry, close, folder, hide, exclude, uninstall, launch, metadata, aurelia, steam_account, remove, compat, shortcuts, identify,
-                  studio_earlier, studio_later, studio_hide, emulator };
+                  studio_earlier, studio_later, studio_hide, emulator, forget_recent };
 struct Rows {
     bool suspend = false;
     int plugins = 0;
@@ -39,11 +40,12 @@ struct Rows {
     bool shortcuts = false;      // Details' "…": the game can have shortcuts (Launcher::shortcutAvailable).
     bool studio = false;         // A studio's logo tile: only its three rows.
     bool emulator = false;       // Details' "…": an emulated game's own emulator (Launcher::gameEmulatorEditable).
+    bool recent = false;         // The game stands in the recent rows (Launcher::inRecent): Usuń z ostatnio granych.
 };
 constexpr auto order(Rows options) {
     return options.secondary_only ?
-        std::array{Item::studio_earlier, Item::studio_later, Item::studio_hide, Item::details, Item::primary, Item::suspend, Item::aurelia, Item::plugin, Item::artwork, Item::retry, Item::close, Item::folder, Item::launch, Item::emulator, Item::compat, Item::shortcuts, Item::steam_account, Item::metadata, Item::identify, Item::hide, Item::exclude, Item::uninstall, Item::remove} :
-        std::array{Item::studio_earlier, Item::studio_later, Item::studio_hide, Item::primary, Item::suspend, Item::aurelia, Item::plugin, Item::details, Item::artwork, Item::retry, Item::close, Item::folder, Item::launch, Item::emulator, Item::compat, Item::shortcuts, Item::steam_account, Item::metadata, Item::identify, Item::hide, Item::exclude, Item::uninstall, Item::remove};
+        std::array{Item::studio_earlier, Item::studio_later, Item::studio_hide, Item::details, Item::primary, Item::suspend, Item::aurelia, Item::plugin, Item::artwork, Item::retry, Item::close, Item::folder, Item::launch, Item::emulator, Item::compat, Item::shortcuts, Item::steam_account, Item::metadata, Item::identify, Item::forget_recent, Item::hide, Item::exclude, Item::uninstall, Item::remove} :
+        std::array{Item::studio_earlier, Item::studio_later, Item::studio_hide, Item::primary, Item::suspend, Item::aurelia, Item::plugin, Item::details, Item::artwork, Item::retry, Item::close, Item::folder, Item::launch, Item::emulator, Item::compat, Item::shortcuts, Item::steam_account, Item::metadata, Item::identify, Item::forget_recent, Item::hide, Item::exclude, Item::uninstall, Item::remove};
 }
 constexpr bool visible(Item entry, Rows options) {
     const bool studio_item = entry == Item::studio_earlier || entry == Item::studio_later || entry == Item::studio_hide;
@@ -52,6 +54,7 @@ constexpr bool visible(Item entry, Rows options) {
     if (entry == Item::identify) return options.identify; // Details: only an identified game's (its button is gone then).
     if (entry == Item::steam_account) return options.detail_options && options.steam_account;
     if (entry == Item::emulator) return options.detail_options && options.emulator;
+    if (entry == Item::forget_recent) return options.recent && !options.session; // A game in play keeps its place.
     if (options.detail_options) return entry == Item::artwork || (entry == Item::launch && options.launch) || (entry == Item::compat && options.compat) ||
         (entry == Item::shortcuts && options.shortcuts) ||
         (entry == Item::metadata && options.metadata) || (entry == Item::folder && options.folder) ||

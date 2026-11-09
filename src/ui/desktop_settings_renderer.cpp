@@ -81,6 +81,33 @@ void Renderer::drawDesktopWindowBar(const SheetView& view, bool background) {
 }
 
 void Renderer::drawDesktopSheetFrame(const Sheet& sheet, const SheetView& view, const std::wstring& title, bool back) {
+    if (sheet.dock > 0 && context_->desktop_chrome) {
+        // Docked (Ustawienia): the library's sidebar and top bar stay, live; the page takes the rest.
+        const auto& chrome = *context_->desktop_chrome;
+        const auto layout = desktopLayoutOf(chrome);
+        target_->Clear(panel_bg);
+        drawDesktopSidebar(layout, chrome);
+        drawDesktopTitlebar(layout, chrome);
+        beginScreenForeground();
+        const auto p = sheet.panel();
+        const auto h = sheet.header();
+        brush(gray(1, 0.06f));
+        target_->FillRectangle(D2D1::RectF(p.left, h.bottom - 1, p.right, h.bottom), solid_.Get());
+        float title_left = p.left + 24;
+        if (back) {
+            const auto b = sheet.back();
+            const bool hover = view.hover.kind == SheetHit::Kind::back;
+            if (hover) desktopFill(b, 8, gray(1, 0.08f));
+            desktopGlyph(0xE72B, (b.left + b.right) * 0.5f, middle(b), 14, gray(hover ? 0.98f : 0.8f));
+            title_left = b.right + 10;
+        }
+        textLine(title, title_left, middle(h), p.right - title_left - 400, desktop_title_font_.Get(), palette::text());
+        const auto c = sheet.close();
+        const bool close_hover = view.hover.kind == SheetHit::Kind::close;
+        if (close_hover) desktopFill(c, 8, gray(1, 0.08f));
+        desktopGlyph(glyph::close, (c.left + c.right) * 0.5f, middle(c), 12, gray(close_hover ? 0.98f : 0.75f));
+        return;
+    }
     // The library just left, barely dimmed, as behind a desktop app's dialog; before there is one (or
     // after a resize) the last game's picture, frosted. The window's bar either way.
     target_->Clear(rgb(0.043f, 0.047f, 0.055f));
@@ -159,7 +186,7 @@ void Renderer::drawDesktopSettings() {
     static const std::vector<settings_ui::Row> no_rows;
     const auto& rows = context_->settings_rows ? *context_->settings_rows : no_rows;
     const auto& state = context_->settings_state;
-    const auto L = L_t::of(viewport_.width, viewport_.height, state, rows);
+    const auto L = L_t::of(viewport_.width, viewport_.height, state, rows, view.dock);
     const int category = std::clamp(state.category, 0, static_cast<int>(settings_ui::categories.size()) - 1);
     const bool subpage = state.subpage();
     const std::wstring page_title = context_->settings_title.empty() ? std::wstring(tr(settings_ui::categories[category].title)) : context_->settings_title;

@@ -120,12 +120,16 @@ void Renderer::drawGrid() {
     }
     // The Widok drawer covers the left of the screen, where most views keep their focused game: the
     // view makes way beside it (scaled into the remaining width, centred vertically), so the options
-    // it changes live stay in sight. The header above stays put; pointer input goes to the drawer.
+    // it changes live stay in sight. Coverflow and Półka keep their size (the case, its shadow and the
+    // title as they are): they only move right by half the drawer. The header above stays put;
+    // pointer input goes to the drawer.
     const float drawer = context_->library_panel == library_ui::Panel::views && context_->library_controls ?
         std::max(0.0f, library_ui::views::offset(context_->library_views_progress) + library_ui::views::width) : 0.0f;
     D2D1_MATRIX_3X2_F frame{};
     target_->GetTransform(&frame);
-    if (drawer > 0.5f && width > drawer + 200) {
+    if (drawer > 0.5f && library_view::carousel(context_->library_mode)) {
+        target_->SetTransform(D2D1::Matrix3x2F::Translation(drawer * 0.5f, 0) * frame);
+    } else if (drawer > 0.5f && width > drawer + 200) {
         const float scale = (width - drawer - 16 * drawer / library_ui::views::width) / width;
         target_->SetTransform(D2D1::Matrix3x2F::Scale(scale, scale) *
             D2D1::Matrix3x2F::Translation(width - width * scale, viewport_.height * (1 - scale) * 0.5f) * frame);

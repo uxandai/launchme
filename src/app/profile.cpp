@@ -477,7 +477,7 @@ void Launcher::rebuildProfile() {
     // Keep the focus on something that still exists.
     if (p.focus.section != Section::close && !p.count(p.focus.section)) p.focus = {Section::close, 0};
     p.focus.item = std::clamp(p.focus.item, 0, std::max(0, static_cast<int>(p.count(p.focus.section)) - 1));
-    const auto view = renderer_.viewport();
+    const auto view = profileViewport();
     p.scroll_target = std::clamp(p.scroll_target, 0.0f, profile_ui::Layout{view.width, view.height}.maxScroll(p));
     bindProfileArt();
 }
@@ -591,7 +591,7 @@ void Launcher::profileKey(WPARAM key, bool repeated) {
     p.pointer = false;
     if (key == VK_ESCAPE || key == VK_BACK) { if (!repeated) closeProfile(); return; }
     if (key == VK_RETURN || key == VK_SPACE) { if (!repeated) profileAccept(); return; }
-    const auto view = renderer_.viewport();
+    const auto view = profileViewport();
     const profile_ui::Layout layout{view.width, view.height};
     if (key == VK_PRIOR || key == VK_NEXT) { profileScroll((key == VK_NEXT ? 1 : -1) * (view.height - 160)); return; }
     if (key == VK_HOME) { p.focus = {Section::close, 0}; p.scroll_target = 0; InvalidateRect(hwnd_, nullptr, FALSE); return; }
@@ -603,7 +603,7 @@ void Launcher::profileKey(WPARAM key, bool repeated) {
 
 void Launcher::profileMove(int dx, int dy) {
     auto& p = profile_;
-    const auto view = renderer_.viewport();
+    const auto view = profileViewport();
     const profile_ui::Layout layout{view.width, view.height};
     const auto before = p.focus;
     const auto columns = [&](Section section) {
@@ -683,14 +683,14 @@ void Launcher::profileAccept() {
 
 void Launcher::profileScroll(float amount) {
     auto& p = profile_;
-    const auto view = renderer_.viewport();
+    const auto view = profileViewport();
     p.scroll_target = std::clamp(p.scroll_target + amount, 0.0f, profile_ui::Layout{view.width, view.height}.maxScroll(p));
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
 void Launcher::profileClick(float x, float y) {
     auto& p = profile_;
-    const auto view = renderer_.viewport();
+    const auto view = profileViewport();
     const auto hit = profile_ui::Layout{view.width, view.height}.hit(p, x, y);
     if (!hit) return;
     p.focus = *hit;
@@ -699,7 +699,7 @@ void Launcher::profileClick(float x, float y) {
 
 void Launcher::profilePointer(float x, float y) {
     auto& p = profile_;
-    const auto view = renderer_.viewport();
+    const auto view = profileViewport();
     const auto hit = profile_ui::Layout{view.width, view.height}.hit(p, x, y);
     if (hit == p.hover) return;
     p.hover = hit;
@@ -708,6 +708,6 @@ void Launcher::profilePointer(float x, float y) {
 }
 
 bool Launcher::profilePointerOver(float x, float y) const {
-    const auto view = renderer_.viewport();
+    const auto view = profileViewport();
     return profile_ui::Layout{view.width, view.height}.hit(profile_, x, y).has_value();
 }

@@ -770,8 +770,14 @@ bool Launcher::modalPad(const PadReading& state, WORD buttons, ULONGLONG now) {
         else if (pressed(XINPUT_GAMEPAD_X)) { noteUserInput(); openKeyboard(); } // The focused field, else the name.
         break;
     case Modal::game_case:
-        // Półka's open case: D-pad/stick between Graj and Szczegóły, A presses, B closes the case.
+        // The case in the hand: D-pad / left stick between its buttons, A presses, B puts it back (shuts it
+        // first when open); the right stick turns it, LB / RB a quarter turn (in the manual: the pages),
+        // R3 shows its inside (again: shuts it).
         controllerNavigate(0);
+        gameCaseStick(state.rx, state.ry);
+        if (pressed(XINPUT_GAMEPAD_LEFT_SHOULDER)) { noteUserInput(); gameCaseKey(VK_PRIOR, false); }
+        if (pressed(XINPUT_GAMEPAD_RIGHT_SHOULDER)) { noteUserInput(); gameCaseKey(VK_NEXT, false); }
+        if (pressed(XINPUT_GAMEPAD_RIGHT_THUMB)) { noteUserInput(); gameCaseKey('O', false); } // R3: Pokaż środek.
         if (direction && (direction != controller_direction_ || now >= controller_repeat_)) {
             noteUserInput(); gameCaseKey(direction, direction == controller_direction_);
             controller_repeat_ = now + (direction != controller_direction_ ? 280 : 200);

@@ -181,8 +181,10 @@ LRESULT Launcher::desktopNonClientHit(int x, int y) const {
     if (!desktop_mode_) return HTCLIENT;
     const float px = static_cast<float>(x), py = static_cast<float>(y);
     if (desktopActive()) {
-        // Open menus, the list under Pobierania, dialogs and the drawer take every click.
-        if (desktop_menu_ || desktop_downloads_open_ || topModal() != Modal::none || friends_open_ || keyboard_.open) return HTCLIENT;
+        // Open menus, the list under Pobierania, dialogs and the drawer take every click (Profil in
+        // the library's place leaves the top bar to the window).
+        const bool profile = profileDocked() && profile_.open && topModal() == Modal::profile;
+        if (desktop_menu_ || desktop_downloads_open_ || (topModal() != Modal::none && !profile) || friends_open_ || keyboard_.open) return HTCLIENT;
         const float scale = desktopScale();
         const auto hit = desktopHit(px / scale, py / scale);
         if (hit.target == Target::caption) return HTCAPTION;
@@ -196,6 +198,10 @@ LRESULT Launcher::desktopNonClientHit(int x, int y) const {
         const auto scaled = [&](Rect r) { return Rect{r.left * scale, r.top * scale, r.right * scale, r.bottom * scale}; };
         if (scaled(layout.windowButton(1)).contains(px, py)) return HTMAXBUTTON;
         if (scaled(layout.windowButton(0)).contains(px, py) || scaled(layout.windowButton(2)).contains(px, py)) return HTCLIENT;
+        if (desktopSettingsDocked()) { // The library's top bar: its search and tools stay clickable.
+            if (topModal() != Modal::none || friends_open_ || keyboard_.open) return HTCLIENT;
+            return desktopHit(px / scale, py / scale).target == Target::caption ? HTCAPTION : HTCLIENT;
+        }
         if (py < title_h * scale && topModal() == Modal::none && !friends_open_ && !keyboard_.open) return HTCAPTION;
         return HTCLIENT;
     }

@@ -217,8 +217,7 @@ void Renderer::desktopInstallButton(Rect r, float fraction, const std::wstring& 
 
 // ---- The frame -------------------------------------------------------------------------------
 
-void Renderer::drawDesktop() {
-    const auto& view = *context_->desktop;
+Layout Renderer::desktopLayoutOf(const View& view) const {
     Layout layout;
     layout.width = viewport_.width; layout.height = viewport_.height;
     layout.poster_width = view.poster;
@@ -228,6 +227,14 @@ void Renderer::drawDesktop() {
     layout.narrow = view.sidebar_narrow; layout.pane_width = view.pane_width;
     layout.pane_open = view.pane_open;
     layout.cell_aspect = view.cell_view == 1 ? 1.0f : view.cell_view == 2 ? 0.5625f : 1.5f;
+    layout.list = view.cell_view == 3;
+    layout.continue_count = static_cast<int>(std::min<size_t>(3, view.continue_tiles.size()));
+    return layout;
+}
+
+void Renderer::drawDesktop() {
+    const auto& view = *context_->desktop;
+    const auto layout = desktopLayoutOf(view);
     desktop_chips_.clear(); desktop_chip_add_ = {}; desktop_rating_ = {}; desktop_protondb_ = {}; desktop_hardware_ = {}; desktop_achievements_ = {}; desktop_cloud_ = {}; desktop_studios_ = {};
     desktop_hotspots_.clear(); // Widżety record their controls here.
     companion_bubble_ = {};

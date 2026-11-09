@@ -49,20 +49,28 @@ D2D1_COLOR_F faded(D2D1_COLOR_F c, float alpha) { c.a *= alpha; return c; }
 
 void Renderer::drawGameCase() {
     const auto* state = context_->game_case;
-    if (!state || !cards_ || selected_ >= cards_->size() || state->time <= 0) return;
+    if (!state || !cards_ || selected_ >= cards_->size()) return;
+    // Held up closed (game_case_held_renderer.cpp) until Pokaż środek.
+    // Under the manual, once it covers the screen, the case is not drawn (nor turned in 3D each frame).
+    const bool covered = context_->manual && context_->manual->alpha >= 0.999f;
+    if (state->time <= 0) { if (!covered) drawHeldCase(); drawGameManual(); return; }
+    if (covered) { drawGameManual(); return; }
     const auto& card = (*cards_)[selected_];
     const auto& game = card.game;
     const auto kind = context_->game_case_kind;
     const auto look = package_look::of(kind);
-    const game_case::Layout layout{viewport_.width, viewport_.height, kind};
+    const game_case::Layout layout{viewport_.width, viewport_.height, kind, game_case::buttonCount(state->manual)};
+    // The library stays dimmed while the case was held up first.
+    const float dim = std::max(game_case::phases(state->time).travel, game_case::phases(state->held).travel);
     const float time = state->time;
-    const auto phase = game_case::phases(time);
+    const auto phase = game_case::phases(time, kind);
     // The big box opens its flap first; the diskette rises once the flap is out of its way.
     const float media = kind.package == game_case::Package::big_box ?
         game_case::easeBack((time - game_case::flap_media_start) / game_case::flap_media_time) : phase.media;
     const bool frozen = sessionOf(game) == SessionState::frozen;
-    Cover* poster = selected_ < posters_.size() && posters_[selected_].bitmap ? &posters_[selected_] : nullptr;
     Cover* cover = selected_ < covers_.size() && covers_[selected_].bitmap ? &covers_[selected_] : nullptr;
+    const bool box_scan = package_look::scanFirst(kind) && cover; // PS1: the square box scan first.
+    Cover* poster = !box_scan && selected_ < posters_.size() && posters_[selected_].bitmap ? &posters_[selected_] : nullptr;
     Cover* art = poster ? poster : cover;
     Cover* scan = selected_ < discs_.size() && discs_[selected_].bitmap ? &discs_[selected_] : nullptr;
     const float W = viewport_.width, H = viewport_.height, S = viewport_.scale;
@@ -70,17 +78,18 @@ void Renderer::drawGameCase() {
     if (!createShelfResources()) return;
 
     // The shelf dims away under a soft light where the case will stand.
-    brush(D2D1::ColorF(0.006f, 0.008f, 0.011f, 0.90f * phase.travel)); target_->FillRectangle(D2D1::RectF(0, 0, W, H), solid_.Get());
+    brush(D2D1::ColorF(0.006f, 0.008f, 0.011f, 0.90f * dim)); target_->FillRectangle(D2D1::RectF(0, 0, W, H), solid_.Get());
     const auto rest = layout.rest();
     if (shelf_glow_) {
         const auto spot = D2D1::Point2F((rest.left + rest.right) * 0.5f, (rest.top + rest.bottom) * 0.5f);
         const float reach = layout.caseHeight() * 1.15f;
         shelf_glow_->SetCenter(spot); shelf_glow_->SetRadiusX(reach * 1.25f); shelf_glow_->SetRadiusY(reach);
-        shelf_glow_->SetOpacity(phase.travel);
+        shelf_glow_->SetOpacity(dim);
         target_->FillRectangle(D2D1::RectF(spot.x - reach * 1.25f, spot.y - reach, spot.x + reach * 1.25f, spot.y + reach), shelf_glow_.Get());
     }
 
-    const settings_ui::Rect from{state->from_left, state->from_top, state->from_right, state->from_bottom};
+    // From where it was held (from the shelf when it was never held: no transitions).
+    const settings_ui::Rect from = state->held > 0 ? layout.held() : settings_ui::Rect{state->from_left, state->from_top, state->from_right, state->from_bottom};
     const auto front = layout.at(from, phase.travel);
     const float fw = front.right - front.left, fh = front.bottom - front.top;
     if (fw < 4 || fh < 4) return;
@@ -140,6 +149,7 @@ void Renderer::drawGameCase() {
         f.kind = kind; f.platform = platform; f.aspect = aspect; f.alpha = alpha; f.scale = S;
         f.gloss = gloss; f.gloss_strength = strength; f.shade = shade; f.shade_right = shade_right;
         f.dim = !game.installed;
+        f.scan = box_scan;
         f.at = [&face, &camera](float s, float t) { return camera.project(face.origin + face.u * s + face.v * t); };
         const auto part = [&face](float l, float t, float r, float b) { return perspective::Face{face.origin + face.u * l + face.v * t, face.u * (r - l), face.v * (b - t)}; };
         f.picture = [&, part](float l, float t, float r, float b, ID2D1Bitmap* bitmap, D2D1_RECT_F source, float opacity) {
@@ -232,7 +242,7 @@ void Renderer::drawGameCase() {
         const perspective::Camera camera{centre_x * S, centre_y * S, eye};
         const float w = fw * S, h = fh * S, d = fw * game_case::depth(kind) * S;
         const perspective::Face closed{{-w * 0.5f, -h * 0.5f, 0}, {w, 0, 0}, {0, h, 0}};
-        const float angle = phase.lid * game_case::lid_angle;
+        const float angle = phase.lid * game_case::lidAngle(kind);
         target_->SetTransform(D2D1::Matrix3x2F::Identity());
         if (angle < 0.002f) {
             // Closed: exactly the shelf's case.
@@ -491,17 +501,7 @@ void Renderer::drawGameCase() {
                     const auto part = [&](float l, float t, float r, float b) { return perspective::Face{inner.origin + inner.u * l + inner.v * t, inner.u * (r - l), inner.v * (b - t)}; };
                     const auto quad = [&](const perspective::Face& face, D2D1_POINT_2F (&q)[4]) { face.corners(camera, q); return polygon(factory_.Get(), q, 4); };
                     if (!switch_case) {
-                        // The manual in its clips: the game's cover on its front, a shadow under it.
-                        const auto booklet = part(0.09f, 0.065f, 0.89f, 0.935f);
-                        D2D1_POINT_2F bq[4];
-                        const auto shadow = quad(part(0.10f, 0.075f, 0.905f, 0.95f), bq);
-                        if (shadow) { brush(gray(0, 0.45f * alpha)); target_->FillGeometry(shadow.Get(), solid_.Get()); }
-                        if (const auto paper = quad(booklet, bq)) {
-                            brush(gray(0.95f, alpha)); target_->FillGeometry(paper.Get(), solid_.Get());
-                            if (art) print(part(0.10f, 0.075f, 0.88f, 0.925f), camera, aspect * 0.78f / 0.85f, alpha);
-                            else { brush(D2D1::ColorF(0.16f, 0.20f, 0.30f, alpha)); target_->FillGeometry(paper.Get(), solid_.Get()); }
-                            brush(gray(0, 0.25f * alpha)); target_->DrawGeometry(paper.Get(), solid_.Get(), 0.8f * S);
-                        }
+                        // Its empty clips (no booklet: the medium on the right is what the case shows).
                         for (const float tu : {0.07f, 0.81f}) for (const float tv : {0.045f, 0.925f}) {
                             D2D1_POINT_2F tq[4];
                             if (const auto clip = quad(part(tu, tv, tu + 0.12f, tv + 0.03f), tq)) {
@@ -544,88 +544,7 @@ void Renderer::drawGameCase() {
         }
     }
 
-    // The right half: title, facts, buttons, description, the platform on its tile.
-    // Row after row: each fades in as it rises the last few pixels to its place.
-    if (phase.panel < 0.003f) return;
-    const auto row = [&](int index) { return game_case::panelRow(time, index); };
-    const auto riseOf = [](float shown) { return 22 * (1 - shown); };
-    const float left = layout.panelLeft(), right = layout.panelRight(), width = right - left;
-    float panel = row(0), rise = riseOf(panel);
-    float y = layout.titleTop() + rise;
-    bool logo_drawn = false;
-    if (selected_ < logos_.size() && logos_[selected_].bitmap) {
-        const auto& logo = logos_[selected_];
-        const auto pixels = logo.bitmap->GetPixelSize();
-        const auto source = logo.has_ink_bounds ? logo.ink_bounds : D2D1::RectF(0, 0, static_cast<float>(pixels.width), static_cast<float>(pixels.height));
-        const float lw = source.right - source.left, lh = source.bottom - source.top;
-        if (lw > 0 && lh > 0) {
-            const float f = std::min(std::min(width, 520.0f) / lw, 110.0f / lh);
-            target_->DrawBitmap(logo.bitmap.Get(), D2D1::RectF(left, y + 110 - lh * f, left + lw * f, y + 110), panel * reveal(logo),
-                                D2D1_BITMAP_INTERPOLATION_MODE_LINEAR, &source);
-            logo_drawn = true;
-        }
-    }
-    if (!logo_drawn) paragraph(game.name, left, y + 20, width, settings_heading_font_.Get(), gray(0.97f, panel), 2);
-    // Year · developer · playtime, and the game's state.
-    std::wstring facts;
-    const auto add = [&](const std::wstring& value) { if (!value.empty()) facts += (facts.empty() ? L"" : L"   ·   ") + value; };
-    const auto* info = context_->preview_waiting ? nullptr : context_->preview;
-    if (info) {
-        add(gameReleaseYear(info->release_date)); add(info->developer.empty() ? info->publisher : info->developer);
-        if (info->playtime_minutes && *info->playtime_minutes) add(std::wstring(tr(L"Czas gry: ")) + formatPlaytime(*info->playtime_minutes));
-    }
-    if (game.installation.active()) add(installationText(game.installation));
-    else if (!game.installed && game.kind != GameKind::catalog && sessionOf(game) == SessionState::none)
-        add(localFileGame(game.source) ? std::wstring(missingFileLabel(game)) : std::wstring(tr(L"Do instalacji")));
-    panel = row(1); rise = riseOf(panel);
-    if (!facts.empty()) textLine(facts, left, layout.titleTop() + rise + 130, width, settings_body_font_.Get(), gray(0.74f, panel));
-    // The buttons.
-    panel = row(2); rise = riseOf(panel);
-    for (int i = 0; i < game_case::button_count; ++i) {
-        const auto r = layout.button(i);
-        const auto box = D2D1::RectF(r.left, r.top + rise, r.right, r.bottom + rise);
-        const bool enabled = i == 1 || context_->game_case_action_enabled;
-        const auto ink = drawButton(box, state->focus == i && state->open ? 1.0f : 0.0f, panel, true, state->hover == i, enabled);
-        if (i == 0 && drawInstallProgress(game, box, ink, gray(ink.r, 0.25f * ink.a), menu_font_.Get())) continue;
-        textLine(i == 0 ? context_->game_case_action : std::wstring(tr(L"Szczegóły")), box.left, (box.top + box.bottom) * 0.5f, box.right - box.left, menu_font_.Get(), ink,
-                 DWRITE_TEXT_ALIGNMENT_CENTER);
-    }
-    // A short description (what Szczegóły shows; its genres while none is known).
-    const auto description = layout.description();
-    panel = row(3); rise = riseOf(panel);
-    // A hairline over it, drawn out from the left as it appears.
-    if (panel > 0.01f) {
-        const float line_y = description.top - 18 + rise;
-        brush(gray(1, 0.10f * panel));
-        target_->FillRectangle(D2D1::RectF(left, line_y, left + width * panel, line_y + 1), solid_.Get());
-    }
-    float bottom = description.top + rise;
-    if (info && !info->description.empty()) {
-        const int lines = std::max(2, static_cast<int>((description.bottom - description.top) / 27));
-        bottom += paragraph(info->description, left, description.top + rise, width, details_body_font_.Get(), gray(0.80f, panel), lines);
-    } else if (info && !info->genres.empty()) {
-        bottom += paragraph(info->genres, left, description.top + rise, width, details_body_font_.Get(), gray(0.66f, panel), 2);
-    }
-    // The platform: its logo on a small horizontal tile of its colour.
-    panel = row(4); rise = riseOf(panel);
-    bottom += riseOf(row(4)) - riseOf(row(3));
-    if (!platform.empty() && panel > 0.003f) {
-        constexpr float mark_height = 24, mark_width = 190;
-        const float mark = hasPlatformMark(platform) ? platformMarkWidth(platform, mark_height, mark_width) : std::min(mark_width, textAdvance(platform, settings_body_font_.Get()));
-        const float tile_width = mark + 40;
-        const float top = std::max(bottom + 26, description.top + rise + 60);
-        const auto tile = D2D1::RectF(left, top, left + tile_width, top + 48);
-        const auto colour = game.platform.empty() || game.platform == L"PC" ? D2D1::ColorF(0.13f, 0.20f, 0.30f) : render_detail::platformColor(game.platform);
-        brush(faded(colour, 0.96f * panel)); target_->FillRoundedRectangle(D2D1::RoundedRect(tile, 10, 10), solid_.Get());
-        brush(gray(1, 0.14f * panel)); target_->DrawRoundedRectangle(D2D1::RoundedRect(tile, 10, 10), solid_.Get(), 1);
-        drawPlatformMark(platform, tile.left + 20, (tile.top + tile.bottom) * 0.5f, mark_height, mark_width, panel, settings_body_font_.Get());
-    }
-    // Hints.
-    panel = row(5);
-    if (panel < 0.003f) return;
-    const auto device = context_->hint_device;
-    const bool pad = device != HintDevice::keyboard;
-    const std::wstring accept = pad ? (device == HintDevice::playstation ? L"✕" : device == HintDevice::nintendo ? L"B" : L"A") : L"Enter";
-    const std::wstring close = pad ? (device == HintDevice::playstation ? L"○" : device == HintDevice::nintendo ? L"A" : L"B") : L"Esc";
-    textLine(accept + L"  " + tr(L"Wybierz") + L"      " + close + L"  " + tr(L"Zamknij pudełko"), left, H - 52, width, settings_body_font_.Get(), gray(0.55f, panel));
+    // The right half (game_case_held_renderer.cpp), already shown while the case was held.
+    drawGameCasePanel(layout, std::max(time, state->held));
+    drawGameManual();
 }

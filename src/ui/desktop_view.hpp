@@ -24,7 +24,7 @@ using settings_ui::Rect;
 
 // Icon font glyphs: Segoe Fluent Icons (Windows 11) keeps the code points of Segoe MDL2 Assets.
 namespace glyph {
-inline constexpr wchar_t library = 0xE8F1, history = 0xE81C, star = 0xE734, star_fill = 0xE735, game = 0xE7FC,
+inline constexpr wchar_t library = 0xE8F1, history = 0xE81C, star = 0xE734, star_fill = 0xE735, game = 0xE7FC, profile = 0xE77B, list = 0xE8FD,
     hide = 0xED1A, view = 0xE890, shop = 0xE719, folder = 0xE8B7, folder_open = 0xE838, settings = 0xE713,
     download = 0xE896, tv = 0xE7F4, people = 0xE716, search = 0xE721, close = 0xE711, sort = 0xE8CB, check = 0xE73E,
     add = 0xE710, chevron_down = 0xE70D, chevron_right = 0xE76C, play = 0xE768, pause = 0xE769, more = 0xE712,
@@ -35,17 +35,30 @@ inline constexpr wchar_t library = 0xE8F1, history = 0xE81C, star = 0xE734, star
 
 // ---- Sidebar ----------------------------------------------------------------------------------
 
-// publishers, developers: the studios with a logo (src/app/studio_libraries.cpp), folded by default.
-enum class Group { library, platforms, emulation, collections, publishers, developers };
-inline constexpr int group_count = 6;
+// recent: Ostatnio grane, the last three games as shortcuts (their square covers). publishers,
+// developers: the studios with a logo (src/app/studio_libraries.cpp). Every group below Ostatnio
+// grane starts folded; what the player unfolds is remembered (Launcher::desktopSaveState).
+enum class Group { library, recent, platforms, emulation, collections, publishers, developers };
+inline constexpr int group_count = 7;
+inline constexpr const char* group_names[group_count] = {"library", "recent", "platforms", "emulation", "collections", "publishers", "developers"};
 inline bool studioGroup(Group group) { return group == Group::publishers || group == Group::developers; }
-enum class EntryKind { all, recent, favorites, hidden, source, console, collection, studio };
+inline bool foldedByDefault(Group group) { return group != Group::library && group != Group::recent; }
+// Biblioteka, Platformy and Emulacja: a cog on the heading opens their place in Ustawienia.
+inline bool settingsGroup(Group group) { return group == Group::library || group == Group::platforms || group == Group::emulation; }
+// friends, profile: Znajomi (the drawer's list) and Profil (a page in the library's place); game: a
+// recent game's shortcut. These three are not sections: a click acts, the grid stays as it is.
+enum class EntryKind { all, favorites, hidden, friends, profile, source, console, collection, studio, game };
+inline bool actionEntry(EntryKind kind) { return kind == EntryKind::friends || kind == EntryKind::profile || kind == EntryKind::game; }
 struct Entry {
     EntryKind kind = EntryKind::all;
     Group group = Group::library;
-    std::string id;        // "all", "recent", "favorites", "hidden", "source:gog", "console:PS2", "collection:<id>", "publisher:capcom".
+    std::string id;        // "all", "favorites", "hidden", "friends", "profile", "source:gog", "console:PS2", "collection:<id>", "publisher:capcom", "game:<key>".
     std::wstring title;
+    std::wstring detail;   // A recent game: when it was played (under its name).
     size_t count = 0;
+    bool counted = true;   // The count shows at the row's right.
+    std::string game;      // EntryKind::game: its selection key.
+    int image = -1;        // EntryKind::game: its square cover's slot (Renderer::desktop_recent_).
     GameSource source = GameSource::steam;
     std::wstring console;
     std::string collection; // SteamCollection::id.
@@ -61,19 +74,19 @@ struct Row {
     int entry = -1;
     float top = 0, height = 0;
 };
-inline constexpr float heading_h = 30, row_h = 32, heading_gap = 12, companion_h = 74, start_h = 76;
+inline constexpr float heading_h = 30, row_h = 32, recent_row_h = 44, heading_gap = 12, companion_h = 74, start_h = 76;
 
 // Headings and entries in order; a collapsed group keeps only its heading. Collections always keep
 // their heading (its "+" makes a new one), the others only when they have entries. The narrow
-// sidebar (icons only) has no headings: every entry, a gap between the groups, but no
-// collections or studios (one icon each, nothing to tell them apart).
+// sidebar (icons only) has no headings: every entry, a gap between the groups, but no recent
+// games, collections or studios (one icon each, nothing to tell them apart).
 inline std::vector<Row> layoutRows(const std::vector<Entry>& entries, const std::array<bool, group_count>& collapsed, bool narrow = false) {
     std::vector<Row> rows;
     float y = 2;
     for (int g = 0; g < group_count; ++g) {
         const auto group = static_cast<Group>(g);
         const bool any = std::any_of(entries.begin(), entries.end(), [&](const Entry& e) { return e.group == group; });
-        if (narrow && (!any || group == Group::collections || studioGroup(group))) continue;
+        if (narrow && (!any || group == Group::recent || group == Group::collections || studioGroup(group))) continue;
         if (!any && group != Group::collections) continue;
         if (!rows.empty()) y += heading_gap;
         if (!narrow) {
@@ -83,8 +96,9 @@ inline std::vector<Row> layoutRows(const std::vector<Entry>& entries, const std:
         }
         for (int i = 0; i < static_cast<int>(entries.size()); ++i) {
             if (entries[i].group != group) continue;
-            rows.push_back({false, group, i, y, row_h});
-            y += row_h + 2;
+            const float h = entries[i].kind == EntryKind::game ? recent_row_h : row_h;
+            rows.push_back({false, group, i, y, h});
+            y += h + 2;
         }
     }
     return rows;
@@ -105,9 +119,10 @@ enum class Action {
     save_backup, save_restore, save_ludusavi,
     group,          // The game menu's groups (submenus; value: 0 Dane i grafika, 1 Opcje gry, 2 Więcej).
     tool,           // A title bar tool from the "…" menu (value: Tool).
-    view_mode,      // The grid's cells (value: 0 posters, 1 squares, 2 landscape).
+    view_mode,      // The grid's cells (value: 0 posters, 1 squares, 2 landscape, 3 list).
     start_step,     // "Jak zacząć": one of its steps (value: the step).
-    start_hide      // "Jak zacząć": hide the card.
+    start_hide,     // "Jak zacząć": hide the card.
+    forget_recent   // Usuń z ostatnio granych (Launcher::forgetRecent).
 };
 struct MenuItem {
     Action action = Action::none;
@@ -190,7 +205,9 @@ enum class Target {
     empty_primary, empty_secondary, grid, library_add, library_refresh, companion_more,
     sidebar_toggle, pane_resize, pane_close, view_mode, pane_achievements, pane_cloud,
     pane_protondb, // Linux: ProtonDB and Steam Deck ratings, opening ProtonDB's page.
-    pane_hardware  // The hardware check above Opis: unfolds this PC against the game's requirements.
+    pane_hardware, // The hardware check above Opis: unfolds this PC against the game's requirements.
+    sidebar_settings, // A heading's cog (Biblioteka, Platformy, Emulacja): its place in Ustawienia.
+    continue_tile, continue_play // Kontynuuj grę above Wszystkie gry: a tile (selects its game) and its Graj.
 };
 struct Hit {
     Target target = Target::none;
@@ -227,6 +244,13 @@ struct Pane {
     GameDetails details;
     bool details_loading = false;
     size_t marked = 0; // More than one: the bulk actions.
+};
+// Kontynuuj grę: the last games played, as wide tiles above Wszystkie gry.
+struct ContinueTile {
+    std::wstring name, detail; // Its name; where and when it was played.
+    int image = -1;            // Its landscape picture's slot (Renderer::desktop_recent_).
+    int cover = -1;            // Its square cover's slot: stands in until the picture arrives.
+    bool installed = true;
 };
 struct EmptyState {
     wchar_t icon = 0;
@@ -408,7 +432,10 @@ struct View {
     int start_done = 0, start_total = 0;
     std::wstring start_next;
     float sidebar_narrow = 0;      // 0 wide … 1 narrow (icons only): the toggle's animation (Layout::narrow).
-    int cell_view = 0;             // AppSettings::desktop_view.
+    int cell_view = 0;             // AppSettings::desktop_view (3: the list).
+    std::vector<ContinueTile> continue_tiles; // Kontynuuj grę (Wszystkie gry, nothing searched).
+    const std::vector<std::wstring>* list_played = nullptr;   // The list: each card's "Ostatnio grane" (as cards_).
+    const std::vector<std::wstring>* list_playtime = nullptr; // The list: each card's play time.
     float pane_width = 0;          // The pane's width the user dragged it to; 0 automatic (Layout::pane_width).
     bool companion_bubble = false; // Her line pops out of her card.
 };
@@ -447,6 +474,8 @@ struct Layout {
     bool favorite = true; // The pane's star beside Graj (none while Ulubione is switched off).
     float cell_aspect = 1.5f; // A cell's height over its width: 1.5 posters, 1 squares, 0.5625 landscape.
     bool pane_open = true; // No game selected (or its ✕ pressed): no pane, the grid takes its room.
+    bool list = false;     // Widok → Lista: one game per row (a small cover, its name and columns).
+    int continue_count = 0; // Kontynuuj grę's tiles above the grid (0: none), scrolling with it.
 
     float sidebarWide() const { return std::clamp(std::round(width * 0.17f), 228.0f, 272.0f); }
     float sidebarRight() const { return std::round(sidebarWide() + (sidebar_narrow - sidebarWide()) * std::clamp(narrow, 0.0f, 1.0f)); }
@@ -504,35 +533,58 @@ struct Layout {
     float titleRight() const { return compactHeader() ? main().right - grid_pad : viewButton().left - 16; }
 
     // The poster grid: columns around `poster` wide (down to 88% of it), stretched to the row; a
-    // strict minimum left narrow windows with a few oversized posters.
+    // strict minimum left narrow windows with a few oversized posters. The list: one row per game.
+    static constexpr float list_row = 56, list_gap = 2;
     float gridTop() const { return title_h + headerHeight(); }
     float gridLeft() const { return main().left + grid_pad; }
     float gridRight() const { return main().right - grid_pad; }
     int columns() const {
+        if (list) return 1;
         const float w = gridRight() - gridLeft();
         return std::max(1, static_cast<int>(std::floor((w + gap_x) / (poster_width * 0.88f + gap_x))));
     }
     float cellWidth() const { const int c = columns(); return (gridRight() - gridLeft() - gap_x * (c - 1)) / c; }
-    float posterHeight() const { return std::round(cellWidth() * cell_aspect); }
-    float rowStep() const { return posterHeight() + caption_h + gap_y; }
+    float posterHeight() const { return list ? list_row : std::round(cellWidth() * cell_aspect); }
+    float captionHeight() const { return list ? 0.0f : caption_h; }
+    float gapY() const { return list ? list_gap : gap_y; }
+    float rowStep() const { return posterHeight() + captionHeight() + gapY(); }
+    // Kontynuuj grę: its label, then up to three wide tiles above the first row (in the grid's scroll).
+    static constexpr float continue_label = 34, continue_gap = 30;
+    float continueTileWidth() const { return (gridRight() - gridLeft() - 2 * gap_x) / 3; }
+    float continueTileHeight() const { return std::min(190.0f, std::round(continueTileWidth() * 0.5f)); }
+    float continueHeight() const { return continue_count > 0 ? continue_label + continueTileHeight() + continue_gap : 0.0f; }
+    float continueLabelY(float scroll) const { return gridTop() + 8 + 14 - scroll; }
+    Rect continueTile(int i, float scroll) const {
+        const float w = continueTileWidth(), x = gridLeft() + static_cast<float>(i) * (w + gap_x);
+        const float y = gridTop() + 8 + continue_label - scroll;
+        return {x, y, x + w, y + continueTileHeight()};
+    }
+    int hitContinue(float scroll, float x, float y) const {
+        if (y < gridTop()) return -1;
+        for (int i = 0; i < continue_count; ++i) if (continueTile(i, scroll).contains(x, y)) return i;
+        return -1;
+    }
     Rect poster(size_t index, float scroll) const {
         const auto c = static_cast<size_t>(columns());
         const float x = gridLeft() + static_cast<float>(index % c) * (cellWidth() + gap_x);
-        const float y = gridTop() + 8 + static_cast<float>(index / c) * rowStep() - scroll;
+        const float y = gridTop() + 8 + continueHeight() + static_cast<float>(index / c) * rowStep() - scroll;
         return {x, y, x + cellWidth(), y + posterHeight()};
     }
-    Rect cell(size_t index, float scroll) const { auto r = poster(index, scroll); r.bottom += caption_h; return r; }
+    Rect cell(size_t index, float scroll) const { auto r = poster(index, scroll); r.bottom += captionHeight(); return r; }
+    // The list's small square cover at a row's left.
+    static Rect listThumb(Rect row) { const float s = row.bottom - row.top - 12; return {row.left + 10, row.top + 6, row.left + 10 + s, row.top + 6 + s}; }
     float contentHeight(size_t count) const {
         const size_t rows = (count + columns() - 1) / columns();
-        return rows ? 8 + rows * rowStep() - gap_y + 32 : 0;
+        return rows ? 8 + continueHeight() + rows * rowStep() - gapY() + 32 : continueHeight();
     }
     float viewHeight() const { return height - gridTop(); }
     float maxScroll(size_t count) const { return std::max(0.0f, contentHeight(count) - viewHeight()); }
     std::pair<size_t, size_t> visibleRange(size_t count, float scroll, size_t extra_rows = 1) const {
         const auto c = static_cast<size_t>(columns());
         const float step = rowStep();
-        const auto first_row = static_cast<size_t>(std::max(0.0f, std::floor((scroll - 8) / step)));
-        const auto last_row = static_cast<size_t>(std::max(0.0f, std::floor((scroll + viewHeight()) / step)));
+        const float band = continueHeight();
+        const auto first_row = static_cast<size_t>(std::max(0.0f, std::floor((scroll - 8 - band) / step)));
+        const auto last_row = static_cast<size_t>(std::max(0.0f, std::floor((scroll + viewHeight() - band) / step)));
         const size_t first = (first_row > extra_rows ? first_row - extra_rows : 0) * c;
         const size_t end = std::min(count, (last_row + 1 + extra_rows) * c);
         return {std::min(first, count), end};
@@ -542,7 +594,7 @@ struct Layout {
         if (x < gridLeft() || x >= gridRight() || y < gridTop() || y >= m.bottom) return -1;
         const auto c = static_cast<size_t>(columns());
         const auto column = static_cast<size_t>((x - gridLeft()) / (cellWidth() + gap_x));
-        const float local = y - gridTop() - 8 + scroll;
+        const float local = y - gridTop() - 8 - continueHeight() + scroll;
         if (local < 0 || column >= c) return -1;
         const auto index = static_cast<size_t>(local / rowStep()) * c + column;
         return index < count && cell(index, scroll).contains(x, y) ? static_cast<int>(index) : -1;
@@ -589,6 +641,19 @@ struct Layout {
     Rect headingRefresh(const Row& row, float scroll) const {
         const auto add = headingAdd(row, scroll);
         return {add.left - 28, add.top, add.left - 2, add.bottom};
+    }
+    // The cog of Biblioteka (left of its refresh), Platformy and Emulacja (at the right).
+    Rect headingCog(const Row& row, float scroll) const {
+        if (row.group != Group::library) return headingAdd(row, scroll);
+        const auto refresh = headingRefresh(row, scroll);
+        return {refresh.left - 28, refresh.top, refresh.left - 2, refresh.bottom};
+    }
+    // The heading's chevron, left of its buttons.
+    float headingChevronX(const Row& row, float scroll) const {
+        const auto r = sidebarRow(row, scroll);
+        if (row.group == Group::library) return r.right - 96;
+        if (row.group == Group::collections || settingsGroup(row.group)) return r.right - 40;
+        return r.right - 14;
     }
     float sidebarMaxScroll(const std::vector<Row>& rows) const { return std::max(0.0f, rowsHeight(rows) - (sidebarBottom() - sidebarTop())); }
     int hitRow(const std::vector<Row>& rows, float scroll, float x, float y) const {

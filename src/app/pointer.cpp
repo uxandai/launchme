@@ -40,6 +40,8 @@ void Launcher::click(float mouse_x, float mouse_y, bool double_click) {
     const auto modal = topModal();
     // On-screen keyboard keys; a click elsewhere goes to the layer beneath (and may close its field).
     if (keyboard_.open && modal != Modal::exit_prompt && modal != Modal::power_menu && keyboardClick(x, y)) return;
+    // Ustawienia or Profil in the library's place: the sidebar and top bar around them still work.
+    if (desktopChromeClick(mouse_x, mouse_y, double_click)) return;
     // Desktop mode draws some of them as desktop dialogs: their own controls (desktop_dialogs.cpp).
     if (modal != Modal::none && desktopModalClick(mouse_x, mouse_y, double_click)) return;
     // The topmost layer takes the click. The second click of a double-click never confirms a dialog
@@ -49,7 +51,7 @@ void Launcher::click(float mouse_x, float mouse_y, bool double_click) {
     case Modal::companion_picker: if (!double_click) companionPickerClick(x, y); return;
     case Modal::theme_studio: if (!double_click) { themeStudioClick(x, y); if (theme_.dragging) SetCapture(hwnd_); } return;
     case Modal::tarot: if (!double_click) tarotClick(x, y); return;
-    case Modal::profile: if (!double_click) profileClick(x, y); return;
+    case Modal::profile: if (!double_click) { const auto [px, py] = profilePoint(mouse_x, mouse_y); profileClick(px, py); } return;
     case Modal::game_case: if (!double_click) gameCaseClick(x, y); return;
     case Modal::aurelia: if (!double_click) aureliaClick(x, y); return;
     case Modal::whats_new: if (!double_click) whatsNewClick(x, y); return;
@@ -325,7 +327,7 @@ bool Launcher::hoverButton(float mouse_x, float mouse_y) const {
     case Modal::companion_picker: return companion_ui::PickerLayout{view.width, view.height}.hit(companion_.picker, x, y) != companion_ui::no_hit;
     case Modal::theme_studio: return themeStudioHot(x, y);
     case Modal::tarot: return tarotPointerOver(x, y);
-    case Modal::profile: return profilePointerOver(x, y);
+    case Modal::profile: { const auto [px, py] = profilePoint(mouse_x, mouse_y); return profilePointerOver(px, py); }
     case Modal::game_case: return gameCasePointerOver(x, y);
     case Modal::aurelia: return aurelia_ui::Layout{view.width, view.height}.hit(aurelia_ui_, x, y) != -9;
     case Modal::whats_new: return update_ui::WhatsNewLayout{view.width, view.height}.ok().contains(x, y);
@@ -506,8 +508,9 @@ void Launcher::mouseMove(float mouse_x, float mouse_y) {
         return;
     }
     if (topModal() == Modal::profile) {
-        const auto view = renderer_.viewport();
-        profilePointer(mouse_x / view.scale, mouse_y / view.scale);
+        if (desktopChromeMove(mouse_x, mouse_y)) { profilePointer(-1e6f, -1e6f); return; } // The sidebar's hover; the page's goes.
+        const auto [px, py] = profilePoint(mouse_x, mouse_y);
+        profilePointer(px, py);
         return;
     }
     if (topModal() == Modal::metadata) {
@@ -527,7 +530,7 @@ void Launcher::mouseMove(float mouse_x, float mouse_y) {
             return;
         }
         if (desktopActive() && !(desktop_hover_ == desktop_ui::Hit{})) { desktop_hover_ = {}; InvalidateRect(hwnd_, nullptr, FALSE); }
-        if (desktopSheet() && topModal() == Modal::none && !friends_open_) { desktopSettingsMove(mouse_x, mouse_y); return; }
+        if (desktopSheet() && topModal() == Modal::none && !friends_open_) { desktopChromeMove(mouse_x, mouse_y); desktopSettingsMove(mouse_x, mouse_y); return; }
         if (desktopEmbedded()) {
             // The sheet's ✕, then the screen beneath in its own canvas.
             const float scale = desktopScale();
@@ -648,6 +651,7 @@ void Launcher::pointerUp(bool cancelled) {
     if (crop_state_.dragging) { crop_state_.dragging = false; if (GetCapture() == hwnd_) ReleaseCapture(); }
     if (color_editor_.dragging) { color_editor_.dragging = false; if (GetCapture() == hwnd_) ReleaseCapture(); }
     if (theme_.dragging) { themeStudioRelease(); if (GetCapture() == hwnd_) ReleaseCapture(); }
+    gameCaseRelease();
     if (!settings_dragging_) return;
     settings_dragging_ = false;
     if (GetCapture() == hwnd_) ReleaseCapture();

@@ -128,6 +128,10 @@ bool parseRow(const std::string& line, LibraryState& result) {
             auto text = text_encoding::wide(options);
             if (text.empty()) return {};
             result.launch_arguments[std::move(key)] = std::move(text);
+        } else if (kind == "recent-hidden") {
+            std::string key; uint64_t time = 0;
+            if (!(field(row, key) && row >> time && !key.empty())) return {};
+            result.recent_hidden[std::move(key)] = time;
         } else if (kind == "seen" || kind == "played" || kind == "playtime-ms") {
             std::string key; uint64_t time = 0;
             if (!(field(row, key) && row >> time && !key.empty())) return {};
@@ -246,6 +250,11 @@ bool saveLibraryState(const LibraryState& state, const std::filesystem::path& fi
         const auto text = text_encoding::utf8(options);
         if (key.empty() || !validField(key) || text.empty() || !validField(text)) return false;
         output << "launch-arguments " << std::quoted(encoded(key)) << ' ' << std::quoted(encoded(text)) << '\n';
+        if (!bounded()) return false;
+    }
+    for (const auto& [key, time] : state.recent_hidden) {
+        if (key.empty() || !validField(key)) return false;
+        output << "recent-hidden " << std::quoted(encoded(key)) << ' ' << time << '\n';
         if (!bounded()) return false;
     }
     for (const auto& [key, hidden] : state.steam_hidden_pending) {

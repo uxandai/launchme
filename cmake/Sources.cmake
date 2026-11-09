@@ -80,6 +80,7 @@ set(LAUNCHME_APP_SOURCES
     src/app/home_rows.cpp
     src/app/tarot.cpp
     src/app/game_case.cpp
+    src/app/game_manual.cpp
     src/app/profile.cpp
     src/app/studio_libraries.cpp
     src/app/companion.cpp
@@ -121,6 +122,7 @@ set(LAUNCHME_APP_SOURCES
     src/app/metadata_find.cpp
     src/app/desktop_text.cpp
     src/app/desktop_settings.cpp
+    src/app/desktop_sidebar.cpp
     src/app/desktop_dialogs.cpp
     src/ui/desktop_renderer.cpp
     src/ui/desktop_chrome_renderer.cpp
@@ -268,6 +270,9 @@ set(LAUNCHME_APP_SOURCES
     src/ui/coverflow_renderer.cpp
     src/ui/shelf_renderer.cpp
     src/ui/game_case_renderer.cpp
+    src/ui/game_case_held_renderer.cpp
+    src/ui/game_manual_renderer.cpp
+    src/ui/box3d_windows.cpp
     src/ui/game_media_renderer.cpp
     src/ui/package_renderer.cpp
     src/ui/xmb_renderer.cpp
@@ -334,6 +339,7 @@ set(LAUNCHME_APP_SOURCES
     src/artwork/platform_logo.cpp
     src/artwork/esde_art.cpp
     src/artwork/screenscraper_art.cpp
+    src/artwork/case_extras.cpp
     src/artwork/text_crop.cpp
     src/artwork/background_focus.cpp
     src/artwork/block_compression.cpp
@@ -383,6 +389,7 @@ set(LAUNCHME_APP_SOURCES
     src/platform/sensors.cpp
     src/platform/discord.cpp
     src/platform/video_player_windows.cpp
+    src/platform/pdf_pages_windows.cpp
     src/platform/updater.cpp
     src/app/updates.cpp
     src/ui/update_renderer.cpp

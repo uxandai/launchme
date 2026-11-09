@@ -259,7 +259,7 @@ void Launcher::desktopPageActivate(const SheetHit& hit, bool double_click) {
 
 settings_sheet::Layout Launcher::desktopSettingsLayout() const {
     const auto view = renderer_.desktopViewport();
-    return settings_sheet::Layout::of(view.width, view.height, settings_state_, settings_rows_);
+    return settings_sheet::Layout::of(view.width, view.height, settings_state_, settings_rows_, desktopSettingsDocked() ? desktopLayout().sidebarRight() : 0.0f);
 }
 
 // The control a picker's list opens from: the row's field, or the source tile being changed.
@@ -714,6 +714,7 @@ void Launcher::desktopSheetView(SheetView& view) const {
     view.active_window = desktop_window_active_;
     view.window_hover = desktop_strip_hover_;
     view.max_hover = desktop_max_hover_;
+    if (desktopSettingsDocked()) view.dock = desktopLayout().sidebarRight();
     if (screen_ == ScreenMode::store) view.store_loading = store_loading_;
     if (screen_ == ScreenMode::downloads) {
         for (size_t i = 0; i < downloads_state_.rows.size(); ++i) {

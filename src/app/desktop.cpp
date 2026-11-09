@@ -69,6 +69,8 @@ desktop_ui::Layout Launcher::desktopLayout() const {
     layout.favorite = favoritesShown();
     layout.pane_open = desktopPaneOpen();
     layout.cell_aspect = settings_.desktop_view == 1 ? 1.0f : settings_.desktop_view == 2 ? 0.5625f : 1.5f;
+    layout.list = settings_.desktop_view == 3;
+    layout.continue_count = desktopContinueShown() ? static_cast<int>(std::min<size_t>(3, desktop_recent_games_.size())) : 0;
     return layout;
 }
 
@@ -83,6 +85,7 @@ std::vector<desktop_ui::Tool> Launcher::desktopTools() const {
 }
 
 // What the "…" menu lists: Widżety (the drawer: the profile, friends, sensors, plugins), Glance, Tarot, Sklep.
+// Znajomi and Profil are also the sidebar's, under Ulubione.
 std::vector<desktop_ui::Tool> Launcher::desktopMoreTools() const {
     std::vector<Tool> tools{Tool::friends};
     if (settings_.glance) tools.push_back(Tool::glance);
@@ -103,18 +106,39 @@ void Launcher::buildDesktopSidebar() {
         return entries.back();
     };
     const auto shown = [&](const Game& game) { return isGame(game) && (private_shelf_ || game.visibility == GameVisibility::public_game); };
-    size_t all = 0, recent = 0;
+    size_t all = 0;
+    std::vector<const Game*> played;
     for (const auto& game : grouped_library_) {
         if (!shown(game)) continue;
         ++all;
-        if (settings_.recent_uninstalled ? recentTime(game) != 0 : game.last_played != 0) ++recent;
+        if (game.last_played != 0 && !recentHidden(game)) played.push_back(&game);
     }
+    // Ostatnio grane: the last three played, as shortcuts (and Kontynuuj grę above Wszystkie gry).
+    const size_t recent_count = std::min<size_t>(3, played.size());
+    std::partial_sort(played.begin(), played.begin() + static_cast<std::ptrdiff_t>(recent_count), played.end(),
+                      [](const Game* a, const Game* b) { return a->last_played > b->last_played; });
+    desktop_recent_games_.clear();
+    for (size_t i = 0; i < recent_count; ++i) desktop_recent_games_.push_back(*played[i]);
     const size_t favorites = desktopFavoriteGames().size();
     add(EntryKind::all, Group::library, "all", tr(L"Wszystkie gry"), all, glyph::library);
-    add(EntryKind::recent, Group::library, "recent", tr(L"Ostatnio grane"), recent, glyph::history);
     if (favoritesShown()) add(EntryKind::favorites, Group::library, "favorites", tr(L"Ulubione"), favorites, glyph::star).droppable = true;
     if (private_shelf_ && !private_category_.games.empty()) // Ctrl+H shows the hidden games; their menu: "Usuń z ukrytych".
         add(EntryKind::hidden, Group::library, "hidden", tr(L"Ukryte"), private_category_.games.size(), glyph::hide);
+    {
+        // Znajomi (the drawer's list) with how many are online; Profil (its page in the library's place).
+        const auto online = static_cast<size_t>(std::count_if(friends_.friends.begin(), friends_.friends.end(), [](const auto& person) { return person.status != 0; }));
+        add(EntryKind::friends, Group::library, "friends", tr(L"Znajomi"), online, glyph::people).counted = online > 0;
+        add(EntryKind::profile, Group::library, "profile", tr(L"Profil"), 0, glyph::profile).counted = false;
+    }
+    for (size_t i = 0; i < desktop_recent_games_.size(); ++i) {
+        const auto& game = desktop_recent_games_[i];
+        auto key = library_view::selectionKey(game);
+        auto& entry = add(EntryKind::game, Group::recent, "game:" + key, game.name, 0, glyph::game);
+        entry.game = std::move(key);
+        entry.detail = playedWhen(game.last_played);
+        entry.counted = false;
+        entry.image = static_cast<int>(i);
+    }
     // Every store with games, in the TV mode's order; each copy under its own store.
     std::map<GameSource, size_t> per_source;
     for (const auto& game : public_library_) if (shown(game) && game.kind != GameKind::nonsteam) ++per_source[platformSource(game.source)];
@@ -161,6 +185,7 @@ void Launcher::buildDesktopSidebar() {
                 games->size(), glyph::tag);
         }
     desktop_entries_ = std::move(entries);
+    desktopBindRecentArt();
     // A section not (yet) in the list shows every game meanwhile: stores and consoles may still be
     // scanning. A collection missing once the library is read is gone.
     if (desktopEntryIndex(desktop_section_) < 0 && !scanning_ && desktop_section_.starts_with("collection:")) desktop_section_ = "all";
@@ -211,11 +236,7 @@ std::vector<Game> Launcher::desktopSource() const {
     const auto kind = entry ? entry->kind : EntryKind::all;
     std::vector<Game> games;
     switch (kind) {
-    case EntryKind::all: return grouped_library_;
-    case EntryKind::recent:
-        for (const auto& game : grouped_library_)
-            if (settings_.recent_uninstalled ? recentTime(game) != 0 : game.last_played != 0) games.push_back(game);
-        return games;
+    case EntryKind::all: case EntryKind::friends: case EntryKind::profile: case EntryKind::game: return grouped_library_;
     case EntryKind::favorites: return desktopFavoriteGames();
     case EntryKind::hidden:
         for (const auto& game : private_category_.games)
@@ -239,9 +260,8 @@ std::vector<Game> Launcher::desktopSource() const {
 
 std::vector<Game> Launcher::desktopGames() const {
     const auto* entry = desktopEntry();
-    const bool recent = entry && entry->kind == EntryKind::recent;
     library_view::Options options;
-    options.order = recent ? library_view::Order::last_played : library_view::orderFromPersisted(settings_.desktop_sort);
+    options.order = library_view::orderFromPersisted(settings_.desktop_sort);
     options.installed_only = settings_.desktop_installed;
     std::unordered_map<std::string, int> released;
     if (options.order == library_view::Order::release && game_index_)
@@ -249,9 +269,6 @@ std::vector<Game> Launcher::desktopGames() const {
     const bool include_private = private_shelf_ || (entry && !gameEntry(entry->kind));
     auto games = library_view::arrange(desktopSource(), options, library_state_.first_seen, include_private, &released);
     std::erase_if(games, [](const Game& game) { return !isGame(game); });
-    // Ostatnio grane with games not installed: those by the date they were added, among the played.
-    if (recent && settings_.recent_uninstalled)
-        std::stable_sort(games.begin(), games.end(), [&](const Game& a, const Game& b) { return recentTime(a) > recentTime(b); });
     // Search: the title, a genre/tag the game index knows ("rpg", "roguelike") or its developer or publisher.
     const auto typed = trimmed(desktop_query_);
     const auto query = foldGameTitle(typed);
@@ -298,6 +315,17 @@ void Launcher::rebuildDesktop(bool preserve_background) {
     else { renderer_.resetCovers(cards_.size(), preserve_background); desktop_arrived_ = 0; }
     desktop_keys_ = std::move(keys);
     desktop_slots_ = renderer_.slotGeneration();
+    desktopListLabels();
+    desktopBindRecentArt(); // Ostatnio grane and Kontynuuj grę: their pictures once the runtime runs.
+    // A store's or console's section: its logo is the heading (as Tryb TV's platform badge).
+    if (const auto* entry = desktopEntry(); entry && (entry->kind == EntryKind::source || entry->kind == EntryKind::console)) {
+        Game tile;
+        tile.kind = entry->kind == EntryKind::source ? GameKind::pc_platform : GameKind::platform;
+        tile.source = entry->source;
+        tile.name = entry->title;
+        if (entry->kind == EntryKind::console) tile.platform = entry->console;
+        requestArt(tile, CoverMessage::Kind::badge);
+    }
     std::erase_if(desktop_marked_, [&](const std::string& key) { return std::find(desktop_keys_.begin(), desktop_keys_.end(), key) == desktop_keys_.end(); });
     // The focus: the game restored from the last session, the same game, else the nearest place.
     size_t focus = std::min(selected_, cards_.empty() ? size_t{0} : cards_.size() - 1);
@@ -329,7 +357,8 @@ void Launcher::rebuildDesktop(bool preserve_background) {
 }
 
 void Launcher::desktopShowSection(const std::string& id) {
-    if (desktopEntryIndex(id) < 0) return;
+    const int index = desktopEntryIndex(id);
+    if (index < 0 || actionEntry(desktop_entries_[static_cast<size_t>(index)].kind)) return; // Znajomi, Profil, a game: not sections.
     const bool same = id == desktop_section_;
     desktop_section_ = id;
     desktop_marked_.clear();
@@ -508,8 +537,7 @@ bool Launcher::tickDesktop(float dt) {
     // a drop flashes its target row; Biblioteka's refresh arrows spin while rescans run.
     {
         const auto rows = desktopRows();
-        int active_entry = desktopEntryIndex(desktop_section_);
-        if (active_entry < 0) active_entry = desktopEntryIndex("all");
+        const int active_entry = desktopActiveEntry();
         float active_target = -1;
         for (const auto& row : rows)
             if (!row.heading && row.entry == active_entry) { active_target = row.top; break; }
@@ -647,7 +675,8 @@ const GameDetails& Launcher::desktopDetails(const Game& game, bool& loading) {
     return desktop_details_;
 }
 
-void Launcher::desktopView(desktop_ui::View& view) {
+// The sidebar and the top bar: the library's own frame, and the frame Ustawienia and Profil sit in.
+void Launcher::desktopChromeView(desktop_ui::View& view) {
     view.entries = &desktop_entries_;
     view.companies = settings_.show_companies;
     view.rows = desktopRows();
@@ -655,9 +684,8 @@ void Launcher::desktopView(desktop_ui::View& view) {
     for (int g = 0; g < group_count; ++g)
         view.collapse_progress[static_cast<size_t>(g)] = desktop_collapse_valid_ ? desktop_collapse_anim_[static_cast<size_t>(g)] :
                                                          (desktop_collapsed_[static_cast<size_t>(g)] ? 1.0f : 0.0f);
-    view.active = desktopEntryIndex(desktop_section_);
-    if (view.active < 0) view.active = desktopEntryIndex("all"); // Its games are shown meanwhile.
-    if (desktop_active_y_valid_) view.active_y = desktop_active_y_.value;
+    view.active = desktopActiveEntry();
+    if (desktop_active_y_valid_ && view.active >= 0) view.active_y = desktop_active_y_.value;
     if (desktop_drop_flash_ > 0.0f) {
         view.drop_flash_entry = desktopEntryIndex(desktop_drop_flash_id_);
         view.drop_flash = desktop_drop_flash_;
@@ -666,24 +694,75 @@ void Launcher::desktopView(desktop_ui::View& view) {
     view.refreshing = desktop_refresh_spin_ > 0.0f || scanning_ || pc_scanning_ || drm_scanning_ || steam_rescan_->load();
     view.refresh_angle = desktop_refresh_angle_;
     view.tools = desktopTools();
-    const auto* entry = desktopEntry();
-    view.title = entry ? entry->title : std::wstring(tr(L"Wszystkie gry"));
-    view.title_mark = entry && entry->kind == EntryKind::studio ? text_encoding::wide(entry->id) : std::wstring{}; // Its logo instead.
-    view.count = cards_.size();
     view.query = desktop_query_;
     view.caret = std::min(desktop_caret_, desktop_query_.size());
     view.search_focus = desktop_search_focus_;
     view.caret_on = (GetTickCount64() / 530) % 2 == 0;
-    const bool recent = entry && entry->kind == EntryKind::recent;
-    view.sort_label = recent ? std::wstring(tr(L"Ostatnio grane")) : std::wstring(library_view::label(library_view::orderFromPersisted(settings_.desktop_sort)));
-    view.installed_only = settings_.desktop_installed;
     view.poster = static_cast<float>(settings_.desktop_poster);
-    view.scroll = desktop_scroll_;
-    view.scrollbar = desktop_scrollbar_;
     view.hover = desktop_hover_;
     view.pressed = desktop_pressed_;
     view.max_hover = desktop_max_hover_;
+    view.maximized = IsZoomed(hwnd_) != FALSE;
+    view.active_window = desktop_window_active_;
+    view.keyboard = desktop_keyboard_;
+    view.zone = desktop_zone_;
+    view.focus_row = desktop_zone_ == 0 ? desktop_sidebar_focus_ : -1;
+    if (desktop_hover_.target == Target::sidebar_row) view.hover_row = desktop_hover_.index;
+    view.companion_card = settings_.companion && !settings_.desktop_narrow;
+    view.start_card = desktopStartShown();
+    if (view.start_card) {
+        view.start_total = desktopStartCount(); view.start_done = desktopStartDone();
+        for (int i = 0; i < view.start_total; ++i) if (!desktopStartStepDone(i)) { view.start_next = desktopStartTitle(i); break; }
+    }
+    view.sidebar_narrow = desktop_narrow_anim_;
+    view.pane_width = static_cast<float>(settings_.desktop_pane);
+    view.pane_open = desktopPaneOpen();
+    view.cell_view = settings_.desktop_view;
+    view.companion_bubble = settings_.companion && companion_.bubble.alpha > 0.003f && (companion_.bubble.waiting || !companion_.bubble.text.empty());
+    view.downloads_total = static_cast<int>(desktop_download_rows_.size());
+    double share = 0; int shares = 0;
+    for (const auto& row : desktop_download_rows_) {
+        if (row.moving) ++view.downloads_moving;
+        if (row.fraction) { share += *row.fraction; ++shares; }
+    }
+    view.downloads_fraction = shares ? static_cast<float>(share / shares) : -1.0f;
+    view.update_progress = updateFraction();
+}
+
+// The highlighted entry of the sidebar: Profil while its page shows, none over Ustawienia, else the section.
+int Launcher::desktopActiveEntry() const {
+    if (desktop_mode_ && profile_.open) return desktopEntryIndex("profile");
+    if (desktopSettingsDocked()) return -1;
+    const int active = desktopEntryIndex(desktop_section_);
+    return active < 0 ? desktopEntryIndex("all") : active; // A section not listed yet shows every game meanwhile.
+}
+
+void Launcher::desktopView(desktop_ui::View& view) {
+    desktopChromeView(view);
+    const auto* entry = desktopEntry();
+    view.title = entry ? entry->title : std::wstring(tr(L"Wszystkie gry"));
+    // Its logo instead of the name: a studio, a store or a console (as the platform badge of Tryb TV).
+    view.title_mark = !entry ? std::wstring{} : entry->kind == EntryKind::studio ? text_encoding::wide(entry->id) :
+                      entry->kind == EntryKind::source ? sourceName(entry->source) : entry->kind == EntryKind::console ? entry->console : std::wstring{};
+    view.count = cards_.size();
+    view.sort_label = library_view::label(library_view::orderFromPersisted(settings_.desktop_sort));
+    view.installed_only = settings_.desktop_installed;
+    view.scroll = desktop_scroll_;
+    view.scrollbar = desktop_scrollbar_;
     view.card_hover = desktop_card_hover_;
+    if (settings_.desktop_view == 3) { view.list_played = &desktop_list_played_; view.list_playtime = &desktop_list_playtime_; }
+    if (desktopContinueShown())
+        for (size_t i = 0; i < desktop_recent_games_.size() && i < 3; ++i) {
+            const auto& game = desktop_recent_games_[i];
+            ContinueTile tile;
+            tile.name = game.name;
+            const auto where = activePlatformName(game);
+            tile.detail = (where.empty() ? std::wstring{} : where + L" · ") + playedWhen(game.last_played);
+            tile.image = static_cast<int>(3 + i);
+            tile.cover = static_cast<int>(i);
+            tile.installed = game.installed || game.kind == GameKind::nonsteam;
+            view.continue_tiles.push_back(std::move(tile));
+        }
     view.quick = desktop_quick_;
     view.meta = desktop_meta_;
     view.platform_badges = settings_.desktop_platform_badges;
@@ -695,16 +774,10 @@ void Launcher::desktopView(desktop_ui::View& view) {
         if (const auto found = desktop_mark_pulse_.find(desktop_keys_[i]); found != desktop_mark_pulse_.end())
             view.card_mark[i] = found->second;
     }
-    view.keyboard = desktop_keyboard_;
-    view.zone = desktop_zone_;
     view.pane_focus = desktop_pane_focus_;
-    view.focus_row = desktop_zone_ == 0 ? desktop_sidebar_focus_ : -1;
-    if (desktop_hover_.target == Target::sidebar_row) view.hover_row = desktop_hover_.index;
     view.drop_row = desktop_drag_.active ? desktop_drag_.drop_row : -1;
     if (desktop_drag_.active && desktop_drag_.kind == DesktopDrag::Kind::entry) { view.reorder_row = desktop_drag_.row; view.reorder_y = desktop_drag_.reorder_y; }
     view.pane_scroll = desktop_pane_scroll_;
-    view.maximized = IsZoomed(hwnd_) != FALSE;
-    view.active_window = desktop_window_active_;
     view.scanning = scanning_ || (cards_.empty() && libraryLoading());
     view.launch = launch_progress_;
     view.menu = desktop_menu_ ? &*desktop_menu_ : nullptr;
@@ -715,14 +788,6 @@ void Launcher::desktopView(desktop_ui::View& view) {
         view.download_actions.push_back(desktopOwnInstall(game) ? std::wstring(tr(L"Anuluj")) : std::wstring(tr(L"Otwórz")));
     }
     view.downloads_clearable = desktopDownloadsClearable();
-    view.downloads_total = static_cast<int>(desktop_download_rows_.size());
-    double share = 0; int shares = 0;
-    for (const auto& row : desktop_download_rows_) {
-        if (row.moving) ++view.downloads_moving;
-        if (row.fraction) { share += *row.fraction; ++shares; }
-    }
-    view.downloads_fraction = shares ? static_cast<float>(share / shares) : -1.0f;
-    view.update_progress = updateFraction();
     if (desktop_tooltip_ > 0.01f) {
         view.tooltip = desktopTooltip(desktop_hover_);
         view.tooltip_anchor = desktopTooltipAnchor(desktop_hover_);
@@ -739,17 +804,6 @@ void Launcher::desktopView(desktop_ui::View& view) {
             view.drag_label = std::wstring(tr(L"Dodaj do „")) + desktop_entries_[static_cast<size_t>(rows[desktop_drag_.drop_row].entry)].title + L"”";
         } else view.drag_label = tr(L"Upuść na kolekcję lub Ulubione");
     }
-    view.companion_card = settings_.companion && !settings_.desktop_narrow;
-    view.start_card = desktopStartShown();
-    if (view.start_card) {
-        view.start_total = desktopStartCount(); view.start_done = desktopStartDone();
-        for (int i = 0; i < view.start_total; ++i) if (!desktopStartStepDone(i)) { view.start_next = desktopStartTitle(i); break; }
-    }
-    view.sidebar_narrow = desktop_narrow_anim_;
-    view.pane_width = static_cast<float>(settings_.desktop_pane);
-    view.pane_open = desktopPaneOpen();
-    view.cell_view = settings_.desktop_view;
-    view.companion_bubble = settings_.companion && companion_.bubble.alpha > 0.003f && (companion_.bubble.waiting || !companion_.bubble.text.empty());
     // Empty grid: why, and what helps.
     if (cards_.empty() && !view.scanning) {
         auto& empty = view.empty;
@@ -851,11 +905,10 @@ void Launcher::desktopSaveState() {
     const auto section = desktop_section_;
     const auto game = !cards_.empty() && selected_ < desktop_keys_.size() && desktopActive() ? desktop_keys_[selected_] : settings_.desktop_game;
     std::unordered_set<std::string> collapsed, expanded;
-    constexpr const char* names[] = {"library", "platforms", "emulation", "collections", "publishers", "developers"};
     for (int i = 0; i < group_count; ++i) {
         const bool folded = desktop_collapsed_[static_cast<size_t>(i)];
-        if (studioGroup(static_cast<Group>(i))) { if (!folded) expanded.insert(names[i]); } // Folded unless opened.
-        else if (folded) collapsed.insert(names[i]);
+        if (foldedByDefault(static_cast<Group>(i))) { if (!folded) expanded.insert(group_names[i]); } // Folded unless opened.
+        else if (folded) collapsed.insert(group_names[i]);
     }
     if (settings_.desktop_section != section || settings_.desktop_game != game || settings_.desktop_collapsed != collapsed || settings_.desktop_expanded != expanded) {
         settings_.desktop_section = section;

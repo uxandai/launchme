@@ -48,6 +48,9 @@ struct LibraryState {
     // A Steam game's own launch options ("Opcje uruchamiania…"), by gameKey; passed through
     // steam.exe -applaunch. Row: launch-arguments "<key>" "<options>".
     std::map<std::string, std::wstring> launch_arguments;
+    // Usuń z ostatnio granych, by gameKey: the game stays out of the recent rows until it is played
+    // after this time (Steam's own play dates are never touched). Row: recent-hidden "<key>" <time>.
+    std::map<std::string, uint64_t> recent_hidden;
     bool operator==(const LibraryState&) const = default;
 };
 inline constexpr size_t max_library_state_bytes = 32u * 1024 * 1024;

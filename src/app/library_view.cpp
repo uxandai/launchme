@@ -398,7 +398,28 @@ void Launcher::recordLibraryGames() {
     for (const auto& game : public_library_) if (auto key = gameKey(game); detected.erase(key)) added.push_back(std::move(key));
     companionLibraryChanged(std::move(added));
 }
+bool Launcher::recentHidden(const Game& game) const {
+    const auto found = library_state_.recent_hidden.find(gameKey(game));
+    return found != library_state_.recent_hidden.end() && game.last_played <= found->second;
+}
+bool Launcher::inRecent(const Game& game) const {
+    return isGame(game) && game.kind != GameKind::catalog && !gameKey(game).empty() && (game.last_played || recentTime(game)) && !recentHidden(game);
+}
+// Usuń z ostatnio granych: out of the recent rows until it is played again (Steam's own date is
+// left alone: Launchme only remembers when the player took it off).
+void Launcher::forgetRecent(const Game& game) {
+    const auto key = gameKey(game);
+    if (key.empty()) return;
+    if (!library_state_readable_) { showNotification(NotificationKind::error, tr(L"Nie można odczytać historii biblioteki"), L""); return; }
+    library_state_.recent_hidden[key] = std::max<uint64_t>({unix_time::now(), game.last_played, recentTime(game)});
+    library_state_dirty_ = true;
+    saveLibraryPreferences();
+    refreshRecentGames();
+    audio_.context();
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
 uint64_t Launcher::recentTime(const Game& game) const {
+    if (recentHidden(game)) return 0;
     if (game.installed || game.installation.active()) return game.last_played;
     // Not installed (Niezainstalowane w Ostatnio granych): by the date it was added, never by play.
     return settings_.recent_uninstalled ? library_view::addedTime(game, library_state_.first_seen) : 0;

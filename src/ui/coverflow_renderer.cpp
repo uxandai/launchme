@@ -66,7 +66,8 @@ void Renderer::drawLibraryCoverflow() {
         brush(D2D1::ColorF(0.008f, 0.012f, 0.016f, context_->launch_progress * 0.82f));
         target_->FillRectangle(D2D1::RectF(0, 180, viewport_.width, viewport_.height), solid_.Get());
     }
-    draw(selected_);
+    // The case in the hand (game_case_view.hpp) has taken the focused poster away.
+    if (!(context_->game_case && context_->game_case->shown())) draw(selected_);
     target_->PopAxisAlignedClip();
     const float fade = std::clamp(detail_ * 2, 0.0f, 1.0f);
     const float bottom = std::min(viewport_.height - 88, layout.top() + layout.coverHeight() + 50);

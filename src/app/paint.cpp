@@ -722,6 +722,7 @@ void Launcher::paint(bool overlay) {
         context.game_case_action = actionLabel(cards_[selected_].game);
         context.game_case_action_enabled = actionEnabled(cards_[selected_].game);
         context.hint_device = hintDevice();
+        if (manual_.open || manual_.alpha > 0.003f) context.manual = &manual_;
     }
     if (profile_.open || profile_.alpha > 0.003f) { context.profile = &profile_; context.hint_device = hintDevice(); }
     if (whats_new_.open) context.whats_new = &whats_new_;
@@ -749,15 +750,22 @@ void Launcher::paint(bool overlay) {
     inputHints(context);
     desktop_ui::View desktop_view; // Borrowed by the context until the frame is painted.
     desktop_ui::SheetView sheet_view;
+    desktop_ui::View chrome_view;
     if (desktop) {
         desktopView(desktop_view);
         context.desktop = &desktop_view;
         context.hints.clear(); // Its own buttons say what they do; tooltips explain the rest.
+        if (profileDocked()) {
+            const auto dock = desktopDock();
+            context.profile_dock_left = dock.left; context.profile_dock_top = dock.top;
+            context.profile_dock_right = dock.right; context.profile_dock_bottom = dock.bottom;
+        }
     }
     if (sheet) {
         desktopSheetView(sheet_view);
         context.desktop_sheet = &sheet_view;
         context.hints.clear();
+        if (desktopSettingsDocked()) { desktopChromeView(chrome_view); context.desktop_chrome = &chrome_view; }
     }
     if (embed) {
         desktopSheetView(sheet_view);

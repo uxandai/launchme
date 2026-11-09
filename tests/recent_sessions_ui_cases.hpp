@@ -21,6 +21,19 @@ int LauncherUiTest::recentSessions(HWND window) {
         return ids;
     };
     if (order() != std::vector<uint32_t>{3701, 3702, 3703, 3704}) return 3701;
+    // Usuń z ostatnio granych (the game's menu): out of Recent until it is played again.
+    {
+        app.focusCard(0);
+        if (!app.inRecent(newest) || context_menu::row(context_menu::Item::forget_recent, app.menuRows()) < 0) return 3740;
+        app.openContextMenu();
+        app.menu_selected_ = context_menu::row(context_menu::Item::forget_recent, app.menuRows());
+        app.menuAccept();
+        if (app.menu_open_ || order() != std::vector<uint32_t>{3702, 3703, 3704} || app.inRecent(newest)) return 3741;
+        auto replayed = newest; replayed.last_played = app.library_state_.recent_hidden[gameKey(newest)] + 1;
+        if (app.recentHidden(replayed) || !app.recentHidden(newest)) return 3742; // Played again: back in Recent.
+        app.library_state_.recent_hidden.clear(); app.refreshRecentGames();
+        if (order() != std::vector<uint32_t>{3701, 3702, 3703, 3704}) return 3743;
+    }
 
     // A Steam update keeps FullyInstalled: listed at its own place while it updates, never pinned after.
     LibraryMessage progress; progress.installation_update = true; progress.account = app.account_;

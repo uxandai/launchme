@@ -111,6 +111,7 @@ context_menu::Rows Launcher::menuRows() const {
         // Zidentyfikuj grę… under "…" once the game is identified (unidentified: Details' own button).
         rows.identify = rows.metadata && !steamArtwork(game) && !unidentifiedGame(game);
         rows.remove = canRemoveFromLibrary(game) && sessionState(game) == SessionState::none; // Usuń z biblioteki, never while it runs.
+        rows.recent = inRecent(game);
         return rows;
     }
     const auto state = sessionState(game);
@@ -120,6 +121,7 @@ context_menu::Rows Launcher::menuRows() const {
     rows.remove = canRemoveFromLibrary(game);
     rows.aurelia = aurelia_active_ && aurelia::validGame(game);
     rows.identify = unidentifiedGame(game);
+    rows.recent = inRecent(game) && state == SessionState::none; // A game in play keeps its place.
     return rows;
 }
 

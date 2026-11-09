@@ -68,7 +68,7 @@ void Launcher::desktopQuickUpdate() {
         // The sidebar's sections and collections.
         size_t sections = 0;
         for (const auto& entry : desktop_entries_) {
-            if (sections >= max_sections || !matchScore(entry.title, query)) continue;
+            if (sections >= max_sections || actionEntry(entry.kind) || !matchScore(entry.title, query)) continue;
             QuickItem item;
             item.kind = QuickItem::Kind::section;
             item.title = entry.title;

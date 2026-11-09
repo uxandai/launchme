@@ -47,8 +47,16 @@ void Renderer::drawDesktopHeader(const Layout& layout, const View& view) {
         desktopFill(shape, 8, gray(1, 0.04f + 0.04f * vh));
         desktopStroke(shape, 8, gray(1, 0.085f + 0.06f * vh));
         const float vy = (shape.top + shape.bottom) * 0.5f, vx = shape.left + 16;
-        const float w = view.cell_view == 2 ? 14.0f : view.cell_view == 1 ? 11.0f : 9.0f, h = view.cell_view == 2 ? 8.0f : view.cell_view == 1 ? 11.0f : 13.0f;
-        desktopStroke({vx - w * 0.5f, vy - h * 0.5f, vx + w * 0.5f, vy + h * 0.5f}, 2, gray(0.78f), 1.6f); // The cell itself, drawn to its proportions.
+        if (view.cell_view == 3) { // The list: three lines, each with its dot.
+            for (int line = -1; line <= 1; ++line) {
+                const float ly = vy + static_cast<float>(line) * 4.5f;
+                desktopFill({vx - 7, ly - 1, vx - 5, ly + 1}, 1, gray(0.78f));
+                desktopFill({vx - 3, ly - 0.8f, vx + 7, ly + 0.8f}, 0.8f, gray(0.78f));
+            }
+        } else {
+            const float w = view.cell_view == 2 ? 14.0f : view.cell_view == 1 ? 11.0f : 9.0f, h = view.cell_view == 2 ? 8.0f : view.cell_view == 1 ? 11.0f : 13.0f;
+            desktopStroke({vx - w * 0.5f, vy - h * 0.5f, vx + w * 0.5f, vy + h * 0.5f}, 2, gray(0.78f), 1.6f); // The cell itself, drawn to its proportions.
+        }
         desktopGlyph(glyph::chevron_down, shape.right - 15, vy + 1, 9, gray(0.65f));
     }
     const auto chip = layout.installedChip();
@@ -107,7 +115,12 @@ void Renderer::drawDesktopGrid(const Layout& layout, const View& view) {
     drawDesktopHeader(layout, view);
     target_->PushAxisAlignedClip(D2D1::RectF(m.left, layout.gridTop(), m.right, m.bottom), D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
     if (!cards_ || cards_->empty()) drawDesktopEmpty(layout, view);
-    else {
+    else if (layout.list) {
+        if (!view.continue_tiles.empty()) drawDesktopContinue(layout, view);
+        const auto [first, end] = layout.visibleRange(cards_->size(), view.scroll, 1);
+        for (size_t i = first; i < end; ++i) drawDesktopListRow(layout, view, i);
+    } else {
+        if (!view.continue_tiles.empty()) drawDesktopContinue(layout, view);
         const auto [first, end] = layout.visibleRange(cards_->size(), view.scroll, 1);
         // The hovered poster lifts above its neighbours: drawn last.
         size_t lifted = SIZE_MAX;
@@ -128,6 +141,149 @@ void Renderer::drawDesktopGrid(const Layout& layout, const View& view) {
             const bool hover = view.hover.target == Target::scrollbar;
             const Rect bar{hover ? thumb.left : thumb.left + 2, thumb.top, thumb.right, thumb.bottom};
             desktopFill(bar, 4, gray(1, (hover ? 0.42f : 0.26f) * view.scrollbar));
+        }
+    }
+}
+
+// ---- Kontynuuj grę -----------------------------------------------------------------------------
+
+void Renderer::setDesktopRecent(size_t slot, ImageBytes pixels) {
+    if (slot >= desktop_recent_.size() || !pixels || pixels->empty()) return;
+    auto& image = desktop_recent_[slot];
+    if (image.pixels == pixels) return;
+    image = {};
+    image.short_edge = slot < 3 ? 160 : 420; // Sidebar thumbnails; the tiles' pictures.
+    image.pixels = std::move(pixels);
+    createBitmap(image);
+}
+
+bool Renderer::drawDesktopRecentImage(int slot, D2D1_RECT_F target, float radius, float opacity) {
+    if (slot < 0 || slot >= static_cast<int>(desktop_recent_.size())) return false;
+    auto& image = desktop_recent_[static_cast<size_t>(slot)];
+    if (!image.bitmap) return false;
+    fillImage(image, target, radius, opacity * reveal(image));
+    return true;
+}
+
+// The last games played as wide tiles above Wszystkie gry: the picture, the name and where and when;
+// hovered, Graj in its corner.
+void Renderer::drawDesktopContinue(const Layout& layout, const View& view) {
+    const float label_y = layout.continueLabelY(view.scroll);
+    if (label_y > layout.gridTop() - 20)
+        textLine(upper(tr(L"Kontynuuj grę")), layout.gridLeft() + 2, label_y, 400, desktop_label_font_.Get(), gray(0.6f));
+    for (int i = 0; i < layout.continue_count && i < static_cast<int>(view.continue_tiles.size()); ++i) {
+        const auto& tile = view.continue_tiles[static_cast<size_t>(i)];
+        const auto r = layout.continueTile(i, view.scroll);
+        if (r.bottom < layout.gridTop() || r.top > layout.height) continue;
+        const bool over = (view.hover.target == Target::continue_tile || view.hover.target == Target::continue_play) && view.hover.index == i;
+        const float lift = over ? 3.0f : 0.0f;
+        const Rect card{r.left, r.top - lift, r.right, r.bottom - lift};
+        desktopShadow(card, 12, over ? 1.0f : 0.45f);
+        desktopFill(card, 12, card_bg);
+        const auto picture = box(card);
+        if (!drawDesktopRecentImage(tile.image, picture, 12, 1)) {
+            // Its square cover, dimmed across the tile until the wide picture arrives.
+            if (drawDesktopRecentImage(tile.cover, picture, 12, 0.55f)) desktopFill(card, 12, gray(0, 0.25f));
+        }
+        if (!tile.installed) desktopFill(card, 12, gray(0, 0.3f));
+        // The name over a dark fade at the bottom.
+        if (auto* fade = desktopGradient(desktop_continue_fade_, gray(0, 0), gray(0, 0.78f), card.bottom - 74, card.bottom - 4)) {
+            target_->PushAxisAlignedClip(D2D1::RectF(card.left, card.bottom - 74, card.right, card.bottom), D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
+            target_->FillRoundedRectangle(D2D1::RoundedRect(picture, 12, 12), fade);
+            target_->PopAxisAlignedClip();
+        }
+        const auto play = Layout::playButton(card);
+        const float text_right = (over ? play.left - 10 : card.right - 14);
+        textLine(tile.name, card.left + 14, card.bottom - 34, std::max(1.0f, text_right - card.left - 14), desktop_strong_font_.Get(), gray(0.98f));
+        textLine(tile.detail, card.left + 14, card.bottom - 15, std::max(1.0f, text_right - card.left - 14), desktop_small_font_.Get(), gray(0.8f));
+        desktopStroke(card, 12, over ? uiAccent(0.85f) : gray(1, 0.08f), over ? 1.5f : 1.0f);
+        if (over) {
+            const bool on_play = view.hover.target == Target::continue_play;
+            const float cx = (play.left + play.right) * 0.5f, cy = (play.top + play.bottom) * 0.5f, radius = (play.right - play.left) * 0.5f;
+            brush(on_play ? uiAccent() : gray(0, 0.62f));
+            target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), radius, radius), solid_.Get());
+            const auto accent = uiAccent();
+            const bool light = 0.2126f * accent.r + 0.7152f * accent.g + 0.0722f * accent.b > 0.6f;
+            desktopGlyph(tile.installed ? glyph::play : glyph::download, cx + (tile.installed ? 1.0f : 0.0f), cy, 15, on_play && light ? gray(0.06f) : gray(0.98f));
+        }
+    }
+}
+
+// ---- The list ----------------------------------------------------------------------------------
+
+// One game per row: its small cover, its name with its state, then its platform, when it was last
+// played and its play time in columns (the narrower window drops them from the left).
+void Renderer::drawDesktopListRow(const Layout& layout, const View& view, size_t index) {
+    const auto& card = (*cards_)[index];
+    const auto& game = card.game;
+    const auto row = layout.poster(index, view.scroll);
+    if (row.bottom < layout.gridTop() || row.top > layout.height || card.opacity < 0.01f) return;
+    const float hover = index < view.card_hover.size() ? view.card_hover[index] : 0.0f;
+    const bool selected = index == selected_;
+    const bool marked = index < view.marked.size() && view.marked[index];
+    const float alpha = card.opacity;
+    if (selected) desktopFill(row, 8, gray(1, 0.075f * alpha));
+    else if (marked) desktopFill(row, 8, uiAccent(0.12f * alpha));
+    else if (hover > 0.01f) desktopFill(row, 8, gray(1, 0.045f * hover * alpha));
+    if (selected) {
+        const bool keyboard_here = view.keyboard && view.zone == 1;
+        if (keyboard_here) desktopStroke(row, 8, uiAccent(alpha), 2);
+        else desktopFill({row.left, row.top + 12, row.left + 3, row.bottom - 12}, 1.5f, uiAccent(0.95f * alpha));
+    }
+    // The cover.
+    const auto thumb = Layout::listThumb(row);
+    const auto session = sessionOf(game);
+    const bool frozen = session == SessionState::frozen;
+    const bool installing = game.installation.active();
+    const bool colourless = frozen || (view.gray_uninstalled && !game.installed && !installing && game.kind != GameKind::catalog);
+    Cover* art = index < posters_.size() && posters_[index].bitmap ? &posters_[index] : index < covers_.size() && covers_[index].bitmap ? &covers_[index] : nullptr;
+    desktopFill(thumb, 6, gray(1, 0.06f * alpha));
+    if (art) fillImage(*art, box(thumb), 6, alpha * card.cover_opacity * reveal(*art), colourless);
+    else desktopGlyph(glyph::game, (thumb.left + thumb.right) * 0.5f, (thumb.top + thumb.bottom) * 0.5f, 14, gray(0.5f, alpha));
+    if (marked || hover > 0.5f) { // Marked for a group action: its check over the cover.
+        const auto check = Layout::checkBox(thumb);
+        const float cx = (check.left + check.right) * 0.5f - 4, cy = (check.top + check.bottom) * 0.5f - 4;
+        brush(marked ? uiAccent(alpha) : gray(0, 0.55f * alpha));
+        target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), 8, 8), solid_.Get());
+        if (marked) desktopGlyph(glyph::check, cx, cy, 9, gray(0.98f, alpha));
+        else { brush(gray(1, 0.8f * alpha)); target_->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), 7, 7), solid_.Get(), 1.2f); }
+    }
+    // The columns from the right: play time, last played, platform.
+    const float cy = (row.top + row.bottom) * 0.5f, width = row.right - row.left;
+    float right = row.right - 16;
+    const auto column = [&](const std::wstring& value, float w) {
+        textLine(value, right - w, cy, w, desktop_font_.Get(), gray(0.72f, alpha), DWRITE_TEXT_ALIGNMENT_TRAILING);
+        right -= w + 20;
+    };
+    if (view.list_playtime && index < view.list_playtime->size()) column((*view.list_playtime)[index], 90);
+    if (width > 520 && view.list_played && index < view.list_played->size()) column((*view.list_played)[index], 120);
+    if (width > 680) {
+        std::wstring platform = activePlatformName(game);
+        if (platform.empty() && !game.version_group.empty()) platform = tr(L"Kilka wersji");
+        auto mark = game.platform.empty() ? std::string_view{} : brand_icons::consoleKey(game.platform);
+        if (mark.empty()) mark = brand_icons::sourceKey(game.source);
+        const float w = 150;
+        const float left = right - w;
+        float text_left = left;
+        if (!mark.empty() && desktopBrand(mark, left + 8, cy, 14, gray(0.7f, alpha))) text_left = left + 22;
+        textLine(platform, text_left, cy, right - text_left, desktop_font_.Get(), gray(0.72f, alpha));
+        right = left - 20;
+    }
+    // The name and its state.
+    const float name_left = thumb.right + 14, name_width = std::max(1.0f, right - name_left);
+    textLine(game.name, name_left, cy - 9, name_width, selected ? desktop_strong_font_.Get() : desktop_font_.Get(), palette::text(alpha));
+    std::wstring state = session == SessionState::running ? std::wstring(tr(L"W grze")) : frozen ? std::wstring(tr(L"Wstrzymana")) :
+                         installing ? installationText(game.installation) :
+                         game.installed || game.kind == GameKind::catalog ? std::wstring(tr(L"Zainstalowana")) :
+                         localFileGame(game.source) ? missingFileLabel(game) : std::wstring(tr(L"Do instalacji"));
+    const auto state_ink = session == SessionState::running ? rgb(0.36f, 0.86f, 0.52f, alpha) : installing ? uiAccent(alpha) : palette::muted(alpha);
+    textLine(state, name_left, cy + 10, name_width, desktop_small_font_.Get(), state_ink);
+    if (installing) {
+        const auto percent = game.installation.percent();
+        const float bar_left = name_left + std::min(name_width, textAdvance(state, desktop_small_font_.Get()) + 12), bar_right = std::min(right, bar_left + 140);
+        if (percent && bar_right > bar_left + 20) {
+            desktopFill({bar_left, cy + 9, bar_right, cy + 12}, 1.5f, gray(1, 0.15f * alpha));
+            desktopFill({bar_left, cy + 9, bar_left + (bar_right - bar_left) * std::clamp(*percent / 100.0f, 0.0f, 1.0f), cy + 12}, 1.5f, uiAccent(alpha));
         }
     }
 }

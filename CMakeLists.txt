@@ -92,7 +92,7 @@ endfunction()
 include(cmake/Sources.cmake)
 set(LAUNCHME_APP_LIBS d2d1 dxguid dwrite windowscodecs winhttp shell32 ole32 xaudio2 dwmapi xinput advapi32
     mfplat mfreadwrite mfuuid crypt32 windowsapp hid propsys bcrypt powrprof pdh bthprops cfgmgr32 xmllite shlwapi
-    launchme_webview2 version oleaut32 normaliz dxgi d3d11)
+    launchme_webview2 version oleaut32 normaliz dxgi d3d11 d3dcompiler)
 
 # Backend/parser/platform sources have identical definitions in production, tests
 # and tools. App/UI stay separate: LAUNCHME_UI_TEST changes Renderer's class layout.

@@ -1,8 +1,11 @@
 #pragma once
-// Półka's open case (after PyroCade's case viewer): Enter on the focused case lifts it off the shelf
-// to the left, opens it and lets its medium slide out, while the right half fills in with the
-// game's title, Graj / Zainstaluj and Szczegóły, a short description and the platform's logo on a
-// small tile of its colour. What opens depends on the platform:
+// Półka's and Cover Flow's case in the hand (after PyroCade's case viewer and Boxshelf's inspect view):
+// Enter on the focused case lifts it off the shelf and holds it up, closed, in real 3D (box3d.hpp):
+// the right stick or a mouse drag turns it (it settles on its front, spine or back when let go).
+// The right half fills in with the game's title, Graj / Zainstaluj, Instrukcja (a game with a manual)
+// and Szczegóły, a short description and the platform's logo on a small tile of its colour.
+// Pokaż środek (R3, O, a click on the case) moves it to the left, opens it and lets its medium slide out. What opens depends on
+// the platform:
 // - Amiga: a cardboard big box; its top flap folds back and the 3.5" diskette rises out of it;
 // - Switch, Switch 2, DS, 3DS, PS Vita: their case opens like a book, the game card slides out;
 // - anything else: a keep case (the console's own: Xbox green, PS4 blue, Wii white, a PS3 Blu-ray case,
@@ -84,7 +87,9 @@ inline float depth(const Kind& kind) {
 // The disc against a 12 cm one: GameCube's 8 cm mini disc, the PSP's 6 cm UMD.
 inline float discSize(const Kind& kind) { return kind.style == Style::gamecube ? 0.667f : kind.style == Style::psp ? 0.55f : 1.0f; }
 
-// Seconds since Enter. Closing plays the same timeline backwards, faster. Each step starts while the
+// The case held up (seconds since Enter, State::held): it flies off the shelf over travel_time and the
+// right half rises in as below; Back plays it backwards at close_speed.
+// Pokaż środek (State::time): seconds since the lid began to open; closing it plays backwards, faster. Each step starts while the
 // one before settles: the lid as the case lands, the medium once the lid is two thirds open, the
 // right half as the case arrives.
 constexpr float travel_time = 0.48f;  // Off the shelf to its place on the left.
@@ -94,9 +99,14 @@ constexpr float panel_start = 0.24f, panel_time = 0.42f; // The right half fades
 constexpr float panel_stagger = 0.055f;                  // Each row (title, facts, buttons, description, platform, hints) this much after the one above.
 constexpr int panel_rows = 6;
 constexpr float flap_media_start = 0.74f, flap_media_time = 0.58f; // The big box: the diskette rises once the flap is out of its way.
-constexpr float end_time = std::max({media_start + media_time, flap_media_start + flap_media_time, panel_start + panel_stagger * (panel_rows - 1) + panel_time});
+// A CD jewel case (PS1): its wide, thin lid swings slower and further, down flat beside the tray as
+// a real one lies open, so it never tips towards the viewer; the disc comes out once it is down.
+constexpr float jewel_lid_time = 1.05f, jewel_media_start = 1.02f;
+constexpr float end_time = std::max({media_start + media_time, jewel_media_start + media_time, flap_media_start + flap_media_time,
+                                     panel_start + panel_stagger * (panel_rows - 1) + panel_time});
 constexpr float close_speed = 2.4f;   // Closing runs this much faster.
 constexpr float lid_angle = 2.62f;    // How far the lid swings open (150°), radians.
+constexpr float jewel_lid_angle = 2.97f; // A jewel case's (170°): lying open.
 constexpr float flap_angle = 2.30f;   // The big box's flap (about 130°).
 
 inline float clamp01(float value) { return std::clamp(value, 0.0f, 1.0f); }
@@ -113,15 +123,43 @@ inline Phases phases(float time) {
     return {easeOut(time / travel_time), easeInOut((time - lid_start) / lid_time), easeBack((time - media_start) / media_time),
             easeOut((time - panel_start) / panel_time)};
 }
+inline bool jewel(const Kind& kind) { return kind.style == Style::ps1; }
+// The opening of this kind of case (a jewel case's lid takes its own time).
+inline Phases phases(float time, const Kind& kind) {
+    auto phase = phases(time);
+    if (jewel(kind)) {
+        phase.lid = easeInOut((time - lid_start) / jewel_lid_time);
+        phase.media = easeBack((time - jewel_media_start) / media_time);
+    }
+    return phase;
+}
+inline float lidAngle(const Kind& kind) { return jewel(kind) ? jewel_lid_angle : lid_angle; }
 // One row of the right half (0: the title … panel_rows - 1: the hints).
 inline float panelRow(float time, int row) { return easeOut((time - panel_start - panel_stagger * row) / panel_time); }
 
-// The right half's buttons: the primary action (Graj / Zainstaluj / …) and Szczegóły.
-constexpr int button_count = 2;
+constexpr float held_end = panel_start + panel_stagger * (panel_rows - 1) + panel_time;
+
+// The right half's buttons: the primary action (Graj / Zainstaluj / …), Instrukcja (a game with a
+// manual) and Szczegóły. Opening the case is no button: R3 / O / a click on it (Pokaż środek).
+enum class Button { action, manual, details };
+inline int buttonCount(bool manual) { return manual ? 3 : 2; }
+inline Button buttonAt(int index, bool manual) {
+    if (index <= 0) return Button::action;
+    return manual && index == 1 ? Button::manual : Button::details;
+}
+
+// Turning the held case: radians a second at full stick, how far it tips, and where it settles
+// once let go (the nearest quarter turn: its front, a spine, its back).
+constexpr float turn_speed = 3.4f, tip_limit = 0.55f;
+constexpr float half_pi = 1.57079633f, pi = 3.14159265f;
+inline float settledYaw(float yaw) { return std::round(yaw / half_pi) * half_pi; }
+// One step of a spring towards `goal` (frame-rate independent).
+inline float settle(float value, float goal, float dt, float rate = 10.0f) { return goal + (value - goal) * std::exp(-rate * dt); }
 
 struct Layout {
     float width, height;
     Kind kind;
+    int buttons = 2; // buttonCount()
     float gutter() const { return std::max(64.0f, width * 0.05f); }
     float panelLeft() const { return std::max(width * 0.54f, width - 860); }
     float panelRight() const { return width - gutter(); }
@@ -130,7 +168,7 @@ struct Layout {
     float caseHeight() const {
         const float a = aspect(kind);
         const float room = panelLeft() - 48 - gutter();
-        const float span = kind.package == Package::big_box ? 1.75f : 2.42f; // In front widths.
+        const float span = kind.package == Package::big_box ? 1.75f : jewel(kind) ? 2.62f : 2.42f; // In front widths.
         // Smaller cases stay a little smaller in the hand too (a DS case beside a DVD one).
         const float size = 0.55f + 0.45f * game_case::height(kind);
         return std::max(120.0f, std::min({height * (kind.package == Package::big_box ? 0.50f : 0.58f) * size, room / (span * a), 640.0f}));
@@ -146,8 +184,27 @@ struct Layout {
             const float top = middle - h * 0.5f + h * 0.20f;
             return {left, top, left + w, top + h};
         }
-        const float hinge = gutter() + w * 0.90f;
+        const float hinge = gutter() + w * (jewel(kind) ? 1.06f : 0.90f); // A jewel case's lid lies flat: its whole width.
         return {hinge, middle - h * 0.5f, hinge + w, middle + h * 0.5f};
+    }
+    // The case held up, closed: as large as fits the left part, room left for it to turn.
+    float heldHeight() const {
+        const float a = aspect(kind);
+        const float room = panelLeft() - 56 - gutter();
+        const float size = 0.62f + 0.38f * game_case::height(kind);
+        return std::max(140.0f, std::min({(height - 180 - 150) * size, room / (1.18f * a), 760.0f}));
+    }
+    settings_ui::Rect held() const {
+        const float h = heldHeight(), w = h * aspect(kind);
+        const float cx = gutter() + (panelLeft() - 56 - gutter()) * 0.5f, cy = 180 + (height - 180 - 96) * 0.5f;
+        return {cx - w * 0.5f, cy - h * 0.5f, cx + w * 0.5f, cy + h * 0.5f};
+    }
+    // The case between the shelf (its front there, `from`) and where it is held.
+    settings_ui::Rect heldAt(const settings_ui::Rect& from, float travel) const {
+        const auto to = held();
+        const auto mix = [&](float a, float b) { return a + (b - a) * travel; };
+        const float lift = std::sin(travel * 3.14159265f) * heldHeight() * 0.04f;
+        return {mix(from.left, to.left), mix(from.top, to.top) - lift, mix(from.right, to.right), mix(from.bottom, to.bottom) - lift};
     }
     // The case between the shelf (its front there, `from`) and its rest.
     settings_ui::Rect at(const settings_ui::Rect& from, float travel) const {
@@ -190,13 +247,20 @@ struct Layout {
     // The right half, top down: the title, a line of facts, the buttons, the description, the platform tile.
     float titleTop() const { return std::max(200.0f, rest().top - (kind.package == Package::big_box ? caseHeight() * 0.20f : 0.0f)); }
     float buttonsTop() const { return titleTop() + 150; }
+    // A row of buttons (the primary one wider); one that would pass the right edge starts a second row.
+    static constexpr float button_gap = 14, button_height = 60;
+    static float buttonWidth(int index) { return index == 0 ? 224.0f : 176.0f; }
     settings_ui::Rect button(int index) const {
-        const float left = panelLeft(), w = index == 0 ? 236.0f : 200.0f;
-        const float x = index == 0 ? left : left + 236 + 16;
-        return {x, buttonsTop(), x + w, buttonsTop() + 60};
+        float x = panelLeft(), y = buttonsTop();
+        for (int i = 0; i < index; ++i) {
+            x += buttonWidth(i) + button_gap;
+            if (x + buttonWidth(i + 1) > panelRight()) { x = panelLeft(); y += button_height + button_gap; }
+        }
+        return {x, y, x + buttonWidth(index), y + button_height};
     }
+    float buttonsBottom() const { return button(std::max(0, buttons - 1)).bottom; }
     settings_ui::Rect description() const {
-        const float top = buttonsTop() + 60 + 36;
+        const float top = buttonsBottom() + 36;
         return {panelLeft(), top, panelRight(), std::min(height - 176, top + 190)};
     }
     settings_ui::Rect platformTile(float tile_width) const {
@@ -204,21 +268,40 @@ struct Layout {
         return {panelLeft(), top, panelLeft() + tile_width, top + 48};
     }
     int hit(float x, float y) const {
-        for (int i = 0; i < button_count; ++i) if (button(i).contains(x, y)) return i;
+        for (int i = 0; i < buttons; ++i) if (button(i).contains(x, y)) return i;
         return -1;
+    }
+    // The held case's own area (a drag there turns it), or the open case's (at rest, its lid to its left).
+    bool overHeld(float x, float y, bool opened = false) const {
+        auto r = held();
+        if (opened) { r = rest(); r.left -= caseWidth(); }
+        const float pad = (r.bottom - r.top) * 0.08f;
+        return x >= r.left - pad && x <= r.right + pad && y >= r.top - pad && y <= r.bottom + pad;
     }
 };
 }
 
 namespace game_case_ui {
-// The open case's state (Launcher::game_case_).
+// The case in the hand (Launcher::game_case_).
 struct State {
-    bool open = false;
+    bool open = false;      // The layer is up (Back plays it out).
+    bool opened = false;    // Pokaż środek: the lid opens along `time`; else the closed case is held.
     bool closing = false;   // Playing backwards; the layer ends at time 0.
-    float time = 0;         // Along the timeline (game_case::end_time at rest).
-    int focus = 0;          // 0: the primary action, 1: Szczegóły.
+    float held = 0;         // Seconds along the held timeline (game_case::held_end at rest).
+    float time = 0;         // Along the opening timeline (game_case::end_time at rest).
+    int focus = 0;          // A button (game_case::buttonAt).
     int hover = -1;
+    bool manual = false;    // The game has a manual: Instrukcja is a button.
     std::string key;        // gameKey of the game it shows; a change of library closes it.
     float from_left = 0, from_top = 0, from_right = 0, from_bottom = 0; // The front on the shelf.
+    // The held case turned: yaw round its upright axis (positive: its spine towards the viewer),
+    // pitch tipping its top away. The stick turns it; let go, it settles on the nearest quarter turn.
+    float yaw = 0, pitch = 0;
+    float stick_x = 0, stick_y = 0; // The right stick, -1..1, dead zone removed.
+    bool dragging = false;
+    float drag_x = 0, drag_y = 0, drag_yaw = 0, drag_pitch = 0;
+    bool drag_moved = false; // A click on the case that never turned it opens it (or shuts it).
+    float yaw_goal = 0;     // Where it settles.
+    bool shown() const { return open || time > 0 || held > 0; }
 };
 }

@@ -1249,7 +1249,7 @@ public:
         // Its own rows, and Odinstaluj last for an installed Steam game.
         const auto own_rows = app.menuRows();
         if (own_rows.uninstall != app.canUninstall(app.cards_[app.selected_].game) ||
-            context_menu::rows(own_rows) != context_menu::rows({}) + (own_rows.uninstall ? 1 : 0) || app.menu_selected_ != context_menu::rows(own_rows) - 1 ||
+            context_menu::rows(own_rows) != context_menu::rows({}) + (own_rows.uninstall ? 1 : 0) + (own_rows.recent ? 1 : 0) || app.menu_selected_ != context_menu::rows(own_rows) - 1 ||
             own_rows.uninstall != (context_menu::item(app.menu_selected_, own_rows) == context_menu::Item::uninstall)) return 129;
         app.dismissMenu(); dispatched.clear();
         // The crop editor opens from "Zmień grafikę" ("Kadruj" beside "Szukaj", on Kwadrat), no longer from the game menu.

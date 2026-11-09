@@ -11,6 +11,9 @@
 #include "../platform/user_config.hpp"
 
 #include <d2d1helper.h>
+#ifdef _WIN32
+#include <d2d1_1helper.h>
+#endif
 
 #include <algorithm>
 #include <cmath>
@@ -717,10 +720,48 @@ bool Renderer::captureForTest(const std::filesystem::path& file, const std::func
     const auto width = static_cast<UINT>(std::max(1L, bounds.right));
     const auto height = static_cast<UINT>(std::max(1L, bounds.bottom));
     ComPtr<IWICBitmap> bitmap;
-    if (FAILED(wic_->CreateBitmap(width, height, GUID_WICPixelFormat32bppPBGRA, WICBitmapCacheOnLoad, bitmap.GetAddressOf())) ||
-        FAILED(factory_->CreateWicBitmapRenderTarget(bitmap.Get(), D2D1::RenderTargetProperties(D2D1_RENDER_TARGET_TYPE_SOFTWARE),
-                                                     target_.GetAddressOf())) || !createTargetResources()) return false;
-    draw();
+    if (capture_gpu_) {
+        // A device of its own: Direct2D draws on it through a device context, the frame comes back through memory.
+        ComPtr<ID3D11Device> device;
+        ComPtr<ID3D11DeviceContext> immediate;
+        ComPtr<IDXGIDevice> dxgi;
+        ComPtr<ID2D1Factory1> factory1;
+        ComPtr<ID2D1Device> device2d;
+        ComPtr<ID2D1DeviceContext> context;
+        ComPtr<ID2D1Bitmap1> canvas, readable;
+        const auto make = [&](D3D_DRIVER_TYPE type) {
+            return SUCCEEDED(D3D11CreateDevice(nullptr, type, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT, nullptr, 0, D3D11_SDK_VERSION,
+                                               device.ReleaseAndGetAddressOf(), nullptr, immediate.ReleaseAndGetAddressOf()));
+        };
+        const auto pixels = D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED);
+        const auto drawable = D2D1::BitmapProperties1(D2D1_BITMAP_OPTIONS_TARGET, pixels, 96, 96);
+        const auto mapped_properties = D2D1::BitmapProperties1(D2D1_BITMAP_OPTIONS_CPU_READ | D2D1_BITMAP_OPTIONS_CANNOT_DRAW, pixels, 96, 96);
+        if ((!make(D3D_DRIVER_TYPE_HARDWARE) && !make(D3D_DRIVER_TYPE_WARP)) || FAILED(device.As(&dxgi)) || FAILED(factory_.As(&factory1)) ||
+            FAILED(factory1->CreateDevice(dxgi.Get(), device2d.GetAddressOf())) ||
+            FAILED(device2d->CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE, context.GetAddressOf())) ||
+            FAILED(context->CreateBitmap(D2D1::SizeU(width, height), nullptr, 0, &drawable, canvas.GetAddressOf()))) return false;
+        context->SetDpi(96, 96);
+        context->SetTarget(canvas.Get());
+        capture_device_ = device;
+        target_ = context;
+        if (!createTargetResources()) { discardTarget(); capture_device_.Reset(); return false; }
+        draw();
+        D2D1_MAPPED_RECT mapped{};
+        const bool read = SUCCEEDED(context->CreateBitmap(D2D1::SizeU(width, height), nullptr, 0, &mapped_properties, readable.GetAddressOf())) &&
+                          SUCCEEDED(readable->CopyFromBitmap(nullptr, canvas.Get(), nullptr)) && SUCCEEDED(readable->Map(D2D1_MAP_OPTIONS_READ, &mapped));
+        if (read) {
+            wic_->CreateBitmapFromMemory(width, height, GUID_WICPixelFormat32bppPBGRA, mapped.pitch, mapped.pitch * height, mapped.bits, bitmap.GetAddressOf());
+            readable->Unmap();
+        }
+        discardTarget();
+        capture_device_.Reset();
+        if (!bitmap) return false;
+    } else {
+        if (FAILED(wic_->CreateBitmap(width, height, GUID_WICPixelFormat32bppPBGRA, WICBitmapCacheOnLoad, bitmap.GetAddressOf())) ||
+            FAILED(factory_->CreateWicBitmapRenderTarget(bitmap.Get(), D2D1::RenderTargetProperties(D2D1_RENDER_TARGET_TYPE_SOFTWARE),
+                                                         target_.GetAddressOf())) || !createTargetResources()) return false;
+        draw();
+    }
     ComPtr<IWICStream> stream;
     ComPtr<IWICBitmapEncoder> encoder;
     ComPtr<IWICBitmapFrameEncode> frame;
@@ -817,10 +858,13 @@ Renderer::TextureStats Renderer::textureStats() const {
         }
     };
     for (const auto* list : {&covers_, &logos_, &heroes_, &posters_, &discs_, &plugin_thumbnails_, &glance_thumbnails_, &tarot_images_, &profile_images_,
-                             &psfive_shots_, &psfive_similar_})
+                             &psfive_shots_, &psfive_similar_, &desktop_recent_})
         for (const auto& cover : *list) count(cover);
     count(wallpaper_);
     count(psfive_shot_full_);
+    count(case_back_);
+    count(case_side_);
+    for (const auto& page : manual_pages_) count(page);
     for (const auto& tile : tile_thumbnails_) for (const auto& thumbnail : tile) count(thumbnail);
     return stats;
 }

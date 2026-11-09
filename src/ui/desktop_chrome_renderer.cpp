@@ -152,8 +152,8 @@ void Renderer::drawDesktopSidebar(const Layout& layout, const View& view) {
     const float top = layout.sidebarTop(), bottom = layout.sidebarBottom();
     target_->PushAxisAlignedClip(D2D1::RectF(0, top, side.right - 1, bottom), D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
     const auto* entries = view.entries;
-    constexpr const wchar_t* groups[] = {trKey(L"Biblioteka"), trKey(L"Platformy"), trKey(L"Emulacja"), trKey(L"Kolekcje"), trKey(L"Wydawcy"),
-                                         trKey(L"Developerzy")};
+    constexpr const wchar_t* groups[] = {trKey(L"Biblioteka"), trKey(L"Ostatnio grane"), trKey(L"Platformy"), trKey(L"Emulacja"), trKey(L"Kolekcje"),
+                                         trKey(L"Wydawcy"), trKey(L"Developerzy")};
     // The active section's pill and left bar glide between entries on a spring.
     if (view.active_y) {
         bool drop_on_active = false;
@@ -179,12 +179,23 @@ void Renderer::drawDesktopSidebar(const Layout& layout, const View& view) {
         if (row.heading) {
             const bool collapsed = view.collapsed[static_cast<size_t>(row.group)];
             const float collapse_t = view.collapse_progress[static_cast<size_t>(row.group)];
-            textLine(upper(tr(row.group == Group::publishers && view.companies ? trKey(L"Firmy") : groups[static_cast<int>(row.group)])), r.left + 10, cy + 2, r.right - r.left - 60, desktop_label_font_.Get(),
-                     gray(hover ? 0.78f : 0.55f));
+            float label_left = r.left + 10;
+            if (row.group == Group::emulation) { // RetroArch's mark in white, as Tryb TV's Emulacja tile.
+                desktopBrand("retroarch", r.left + 18, cy + 1, 15, gray(hover ? 0.95f : 0.82f));
+                label_left = r.left + 32;
+            }
+            const float chevron_x = layout.headingChevronX(row, view.sidebar_scroll);
+            textLine(upper(tr(row.group == Group::publishers && view.companies ? trKey(L"Firmy") : groups[static_cast<int>(row.group)])), label_left, cy + 2,
+                     std::max(1.0f, chevron_x - 10 - label_left), desktop_label_font_.Get(), gray(hover ? 0.78f : 0.55f));
             // Always shown (faint at rest), so a group visibly folds; brighter under the pointer.
-            desktopGlyph(glyph::chevron_down,
-                         r.right - (row.group == Group::collections ? 40 : row.group == Group::library ? 68 : 14), cy + 2, 9,
+            desktopGlyph(glyph::chevron_down, chevron_x, cy + 2, 9,
                          gray(0.6f, hover || collapsed || collapse_t > 0.01f ? 1.0f : 0.45f), -90.0f * collapse_t);
+            if (settingsGroup(row.group)) { // Its place in Ustawienia.
+                const auto cog = layout.headingCog(row, view.sidebar_scroll);
+                const bool cog_hover = view.hover == Hit{Target::sidebar_settings, i};
+                if (cog_hover) desktopFill(cog, 6, gray(1, 0.08f));
+                desktopGlyph(glyph::settings, (cog.left + cog.right) * 0.5f, cy + 1, 11, gray(cog_hover ? 0.98f : hover ? 0.75f : 0.5f));
+            }
             if (row.group == Group::library) {
                 // "+": a game from disk; the arrows: read the libraries again.
                 const auto add = layout.headingAdd(row, view.sidebar_scroll), refresh = layout.headingRefresh(row, view.sidebar_scroll);
@@ -220,6 +231,20 @@ void Renderer::drawDesktopSidebar(const Layout& layout, const View& view) {
         }
         if (active && !drop && !view.active_y) desktopFill({r.left, r.top + 8, r.left + 3, r.bottom - 8}, 1.5f, uiAccent(0.95f));
         const float alpha = lifted ? 0.45f : 1.0f;
+        if (entry.kind == EntryKind::game) {
+            // A recent game: its square cover, its name and when it was played.
+            const float s = r.bottom - r.top - 10;
+            const auto thumb = D2D1::RectF(r.left + 8, cy - s * 0.5f, r.left + 8 + s, cy + s * 0.5f);
+            if (!drawDesktopRecentImage(entry.image, thumb, 6, 1)) {
+                desktopFill({thumb.left, thumb.top, thumb.right, thumb.bottom}, 6, gray(1, 0.07f));
+                desktopGlyph(glyph::game, (thumb.left + thumb.right) * 0.5f, cy, 13, gray(0.55f));
+            }
+            if (focused) desktopFocusRing(r, 8);
+            const float text_left = thumb.right + 10, text_width = std::max(1.0f, r.right - 8 - text_left);
+            textLine(entry.title, text_left, cy - 8, text_width, desktop_font_.Get(), hover ? palette::text() : gray(0.86f));
+            textLine(entry.detail, text_left, cy + 10, text_width, desktop_small_font_.Get(), palette::muted());
+            continue;
+        }
         // Narrow: the icon moves to the row's middle and the title and count fade out.
         const float narrow = std::clamp(view.sidebar_narrow, 0.0f, 1.0f);
         const float icon_x = r.left + 20 + ((r.left + r.right) * 0.5f - r.left - 20) * narrow;
@@ -232,8 +257,8 @@ void Renderer::drawDesktopSidebar(const Layout& layout, const View& view) {
         const auto ink = active || drop || flash > 0.2f ? palette::text(text_alpha) : gray(0.80f, text_alpha);
         target_->PushAxisAlignedClip(D2D1::RectF(r.left, r.top, r.right, r.bottom), D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
         struct Unclip { ID2D1RenderTarget* target; ~Unclip() { target->PopAxisAlignedClip(); } } unclip{target_.Get()};
-        const auto count = std::to_wstring(entry.count);
-        const float count_width = textAdvance(count, desktop_small_font_.Get());
+        const auto count = entry.counted ? std::to_wstring(entry.count) : std::wstring{};
+        const float count_width = count.empty() ? 0.0f : textAdvance(count, desktop_small_font_.Get());
         textLine(entry.title, r.left + 38, cy, std::max(1.0f, r.right - r.left - 50 - count_width), active ? desktop_strong_font_.Get() : desktop_font_.Get(), ink);
         if (flash > 0.003f) {
             D2D1_MATRIX_3X2_F base{};
@@ -243,7 +268,7 @@ void Renderer::drawDesktopSidebar(const Layout& layout, const View& view) {
             target_->SetTransform(D2D1::Matrix3x2F::Scale(scale, scale, D2D1::Point2F(cx, cy)) * base);
             textLine(count, r.right - 10 - count_width, cy, count_width + 2, desktop_strong_font_.Get(), uiAccent(text_alpha));
             target_->SetTransform(base);
-        } else textLine(count, r.right - 10 - count_width, cy, count_width + 2, desktop_small_font_.Get(), palette::muted(text_alpha));
+        } else if (!count.empty()) textLine(count, r.right - 10 - count_width, cy, count_width + 2, desktop_small_font_.Get(), palette::muted(text_alpha));
     }
     if (view.reorder_y >= 0) {
         brush(uiAccent());

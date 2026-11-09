@@ -23,6 +23,7 @@ struct PadReading {
     std::optional<int> battery;
     bool charging = false;
     std::wstring name;
+    int16_t rx = 0, ry = 0; // The right stick, Y up (zero where a reader has none).
 };
 // Pure parser: Bluetooth 0x01 (10 bytes, padded to 78 by Raw Input) is distinct
 // from USB 0x01 (64 bytes); simple reports never fabricate battery information.

@@ -15,11 +15,14 @@ namespace desktop_ui {
 
 inline constexpr float sheet_header = 56;
 
-// The sheet: centred under the top bar, as large as the window allows up to its own size.
+// The sheet: centred under the top bar, as large as the window allows up to its own size. Docked
+// (Ustawienia: dock = the sidebar's right edge) it takes the library's place beside the sidebar.
 struct Sheet {
     float width = 1280, height = 800;
     float max_width = 1160, max_height = 860;
+    float dock = 0;
     Rect panel() const {
+        if (dock > 0) return {dock, title_h, width, height};
         const float w = std::min(max_width, width - 48), h = std::min(max_height, height - title_h - 28);
         const float left = std::round((width - w) * 0.5f);
         const float top = std::round(title_h + std::max(12.0f, (height - title_h - h) * 0.5f));
@@ -66,6 +69,7 @@ struct SheetView {
     std::vector<std::wstring> download_actions;
     std::vector<char> download_hidden;
     bool store_loading = false; // Sklep: a search is under way.
+    float dock = 0; // Ustawienia in the library's place: the sidebar's right edge (Sheet::dock).
 };
 // Pages measured while drawn (Szczegóły, Zmień grafikę): every control the renderer drew with the
 // area that answers for it, topmost last (Renderer::desktopHotspots).
@@ -162,9 +166,9 @@ struct Layout : Sheet {
     float footer_top = -1;
     static constexpr float footer_gap = 40, footer_height = 72, footer_logo = 30;
 
-    static Layout of(float width, float height, const settings_ui::State& state, const std::vector<Row>& rows) {
+    static Layout of(float width, float height, const settings_ui::State& state, const std::vector<Row>& rows, float dock = 0) {
         Layout layout;
-        layout.width = width; layout.height = height;
+        layout.width = width; layout.height = height; layout.dock = dock;
         layout.import_help = state.row() >= 0 && state.row() < static_cast<int>(rows.size()) && rows[state.row()].id == settings_ui::Id::companion_import_folder;
         const bool compact = state.at(settings_ui::Page::drm_games);
         float y = 0;
@@ -200,7 +204,8 @@ struct Layout : Sheet {
         return -1;
     }
     float contentLeft() const { return navRight() + pad; }
-    float contentRight() const { return panel().right - pad; }
+    static constexpr float content_max = 940; // A docked page in a wide window keeps its rows readable.
+    float contentRight() const { return std::min(panel().right - pad, contentLeft() + content_max); }
     float headingY() const { return panel().top + sheet_header + 24; }
     float listTop() const { return panel().top + sheet_header + 76; }
     float listBottom() const { return panel().bottom - 12; }

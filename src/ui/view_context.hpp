@@ -34,6 +34,7 @@
 #include "glance_view.hpp"
 #include "tarot_view.hpp"
 #include "game_case_view.hpp"
+#include "game_manual_view.hpp"
 #include "profile_view.hpp"
 #include "update_view.hpp"
 #include "aurelia_view.hpp"
@@ -93,7 +94,7 @@ struct TourView {
 
 // Bottom-right button hints (src/app/input_hints.cpp, src/ui/hints_renderer.cpp). The device decides
 // the glyphs: keycaps, or the pad family's buttons by position (A = the bottom face button).
-enum class HintButton { accept, back, menu, search, drawer, home, shoulders, type };
+enum class HintButton { accept, back, menu, search, drawer, home, shoulders, type, stick_press }; // stick_press: R3.
 enum class HintDevice { keyboard, xbox, playstation, nintendo };
 struct InputHint { HintButton button; std::wstring label; std::wstring key; }; // key: a keycap caption other than the default.
 
@@ -193,6 +194,10 @@ struct ViewContext {
     const desktop_ui::View* desktop = nullptr;
     // A TV screen shown as a desktop dialog (Ustawienia): its sheet's frame state (desktop_sheet.hpp).
     const desktop_ui::SheetView* desktop_sheet = nullptr;
+    // Ustawienia docked in the library's place: the sidebar and top bar around it (desktop_ui::View).
+    const desktop_ui::View* desktop_chrome = nullptr;
+    // Profil docked there: its rectangle in desktop DIPs (Launcher::desktopDock); empty when not.
+    float profile_dock_left = 0, profile_dock_top = 0, profile_dock_right = 0, profile_dock_bottom = 0;
     // Urządzenia, kadrowanie or a plugin page inside a desktop sheet: its frame state and title.
     const desktop_ui::SheetView* desktop_embed = nullptr;
     std::wstring desktop_embed_title;
@@ -311,6 +316,7 @@ struct ViewContext {
     game_case::Kind game_case_kind;
     std::wstring game_case_action; // Graj / Zainstaluj / …
     bool game_case_action_enabled = true;
+    const manual_ui::State* manual = nullptr; // Instrukcja over the case, while open or fading out.
     const profile_ui::State* profile = nullptr; // Profil, while open or fading out.
     aurelia_ui::State* aurelia = nullptr; // The renderer records its measured note and visible rows.
     bool theme_scene = false; // The home screen is drawn into the studio's preview (not the desktop window).

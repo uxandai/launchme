@@ -653,8 +653,12 @@ int LauncherUiTest::libraryViews(HWND window) {
     const auto first_poster = coverflow_layout::poster(app.cards_[0]);
     const auto active_centre = D2D1::Point2F((first_poster.left + first_poster.right) * 0.5f, (first_poster.top + first_poster.bottom) * 0.5f);
     app.click(active_centre.x * scale, active_centre.y * scale, true);
-    if (!app.pending_launch_ || gameKey(app.pending_game_) != gameKey(app.cards_[0].game)) return 2628;
+    // Cover Flow holds the case up first (Graj and Szczegóły beside it); Graj launches.
+    if (app.pending_launch_ || !app.gameCaseOpen() || app.game_case_.key != gameKey(app.cards_[0].game)) return 2628;
+    app.gameCaseAccept();
+    if (!app.pending_launch_ || gameKey(app.pending_game_) != gameKey(app.cards_[0].game)) return 2937;
     app.pending_launch_ = false; app.launch_progress_ = 0;
+    app.closeGameCase(true);
     {
         // Appearance → "Domyślna akcja gry" = Szczegóły: every pick of a game opens its details;
         // the game menu and the details screen still launch.
@@ -662,6 +666,9 @@ int LauncherUiTest::libraryViews(HWND window) {
         const auto key = gameKey(app.cards_[0].game);
         app.mouse_transition_until_ = 0;
         app.click(active_centre.x * scale, active_centre.y * scale, true);
+        // Cover Flow: the case in the hand still comes first; its Szczegóły opens them.
+        if (app.pending_launch_ || !app.gameCaseOpen()) return 2938;
+        app.game_case_.focus = app.gameCaseLayout().buttons - 1; app.gameCaseAccept();
         if (app.pending_launch_ || app.screen_ != ScreenMode::details || gameKey(app.cards_[0].game) != key) return 2660;
         app.launch(); // Details: the primary button.
         if (!app.pending_launch_) return 2661;
@@ -669,10 +676,10 @@ int LauncherUiTest::libraryViews(HWND window) {
         app.back();
         if (app.screen_ != ScreenMode::library || !app.libraryCoverflow()) return 2662;
         app.enterDown(false); app.enterUp();
-        if (app.pending_launch_ || app.screen_ != ScreenMode::details) return 2663;
-        app.back(); app.accept(); // Pad A / Space.
-        if (app.pending_launch_ || app.screen_ != ScreenMode::details) return 2664;
-        app.back(); app.openContextMenu(); app.menu_selected_ = 0; app.menuAccept(); // Menu: primary action.
+        if (app.pending_launch_ || !app.gameCaseOpen()) return 2663;
+        app.closeGameCase(true); app.accept(); // Pad A / Space.
+        if (app.pending_launch_ || !app.gameCaseOpen()) return 2664;
+        app.closeGameCase(true); app.openContextMenu(); app.menu_selected_ = 0; app.menuAccept(); // Menu: primary action.
         if (!app.pending_launch_ || app.screen_ != ScreenMode::library) return 2665;
         app.pending_launch_ = false; app.launch_progress_ = 0;
         app.focusLibraryControls(); app.accept(); // The filter choice is handled without opening game details.
@@ -783,12 +790,13 @@ int LauncherUiTest::libraryViews(HWND window) {
         settle();
         if (!capture(L"library-bookshelf-last.png")) return 2721;
         app.focusCard(3); settle();
-        // The focused case opens (double click, Enter, A): it flies to the left and opens, its medium
-        // slides out, Graj and Szczegóły wait on the right; Graj launches, Szczegóły opens the
-        // details, Back closes the case backwards.
+        // The focused case is lifted off the shelf and held up, closed (double click, Enter, A): Graj,
+        // Szczegóły wait on the right; R3 / O / a click on the case show its inside (it moves to the left, its medium slides
+        // out); Graj launches, Szczegóły opens the details; Back shuts it, then puts it back.
         app.mouse_transition_until_ = 0;
         app.click(cx * scale, cy * scale, true);
-        if (app.pending_launch_ || !app.gameCaseOpen() || app.topModal() != Launcher::Modal::game_case || app.game_case_.key != key) return 2722;
+        if (app.pending_launch_ || !app.gameCaseOpen() || app.topModal() != Launcher::Modal::game_case || app.game_case_.key != key ||
+            app.game_case_.opened) return 2722;
         const auto deliver_disc = [&](size_t index) {
             wchar_t file[4096]{};
             if (!GetEnvironmentVariableW(L"LAUNCHME_UI_DISC_IMAGE", file, 4096)) return;
@@ -807,54 +815,164 @@ int LauncherUiTest::libraryViews(HWND window) {
         const auto steps = [&](float seconds) {
             for (int i = 0; i < static_cast<int>(seconds / 0.05f); ++i) { app.last_frame_ -= std::chrono::milliseconds(50); app.tick(); }
         };
-        steps(0.4f);
-        if (app.game_case_.time <= 0.3f || app.game_case_.time >= game_case::end_time) return 2723;
+        steps(0.25f);
+        if (app.game_case_.held <= 0.2f || app.game_case_.held >= game_case::held_end || app.game_case_.time != 0) return 2723;
         if (!capture(L"library-case-flight.png")) return 2724;
+        steps(1.0f);
+        if (std::abs(app.game_case_.held - game_case::held_end) > 0.001f || app.game_case_.time != 0) return 2909;
+        if (!capture(L"library-case-held.png")) return 2910;
+        // Pokaż środek: no button (Graj and Szczegóły only), O (R3 on a pad) opens it.
+        {
+            ViewContext hinted;
+            app.inputHints(hinted);
+            const auto has = [&](HintButton button, const wchar_t* label) {
+                return std::any_of(hinted.hints.begin(), hinted.hints.end(), [&](const InputHint& hint) { return hint.button == button && hint.label == tr(label); });
+            };
+            if (app.gameCaseLayout().buttons != 2 || !has(HintButton::stick_press, L"Pokaż środek") || !has(HintButton::back, L"Odłóż") ||
+                !has(HintButton::shoulders, L"Obróć")) return 2729;
+        }
+        app.modalKey(VK_RIGHT, false);
+        if (app.game_case_.focus != 1) return 2729;
+        app.modalKey('O', false);
+        if (!app.game_case_.opened) return 2911;
         steps(0.6f);
         if (!capture(L"library-case-opening.png")) return 2725;
         steps(1.6f);
         deliver_disc(3);
         if (std::abs(app.game_case_.time - game_case::end_time) > 0.001f) return 2726;
         if (!capture(L"library-case-disc.png")) return 2727;
-        // The buttons: Right moves to Szczegóły, a click and the pointer pick them.
-        const game_case::Layout scene{screen.width, screen.height, app.gameCaseKind()};
-        if (app.gameCaseKind().media != game_case::Media::disc || scene.hit(4, 4) >= 0) return 2728;
-        app.modalKey(VK_RIGHT, false);
-        if (app.game_case_.focus != 1) return 2729;
+        // The buttons: Left back to Graj, a click and the pointer pick them.
+        const auto scene = app.gameCaseLayout();
+        if (app.gameCaseKind().media != game_case::Media::disc || scene.hit(4, 4) >= 0 || scene.buttons != 2) return 2728;
         app.modalKey(VK_LEFT, false);
         if (app.game_case_.focus != 0) return 2730;
-        // Graj: launches; the case stays open behind it.
+        // Graj: launches; the case stays in the hand behind it.
         app.modalKey(VK_RETURN, false);
         if (!app.pending_launch_ || gameKey(app.pending_game_) != key || !app.gameCaseOpen()) return 2731;
         app.pending_launch_ = false; app.launch_progress_ = 0;
         // Szczegóły (a click): the details; the case is gone at once, Back returns to Półka.
-        const auto details_button = scene.button(1);
+        const auto details_button = scene.button(scene.buttons - 1);
         app.mouse_transition_until_ = 0;
         app.click((details_button.left + 4) * scale, (details_button.top + 4) * scale, false);
         if (app.screen_ != ScreenMode::details || app.gameCaseShown()) return 2732;
         app.back(); settle();
         if (app.screen_ != ScreenMode::library || !app.libraryBookshelf() || app.topModal() != Launcher::Modal::none) return 2733;
-        // Back closes it backwards; meanwhile the library has the keys again.
+        // Back shuts the open case (it is held again), then puts it back; meanwhile the library has the keys again.
         app.accept();
         if (!app.gameCaseOpen()) return 2734;
-        steps(3);
+        steps(1.2f);
+        app.modalKey('O', false);
+        steps(2.6f);
+        if (!app.game_case_.opened || app.game_case_.time < game_case::end_time) return 2912;
+        app.back();
+        if (!app.gameCaseOpen() || app.game_case_.opened) return 2913;
+        steps(1.5f);
+        if (app.game_case_.time != 0 || std::abs(app.game_case_.held - game_case::held_end) > 0.001f) return 2914;
         app.back();
         if (app.gameCaseOpen() || !app.gameCaseShown() || app.topModal() != Launcher::Modal::none) return 2735;
-        steps(0.3f);
+        steps(0.15f);
         if (!capture(L"library-case-closing.png")) return 2736;
         steps(1.5f);
         if (app.gameCaseShown()) return 2737;
+        // Turning the held case: the right stick turns it and, let go, it settles on the nearest quarter
+        // turn (its spine); LB / RB (Page Up / Down) a quarter turn each; a drag across it turns it too.
+        // Drawn in 3D by Direct3D: these pictures go through a GPU capture.
+        app.openGameCase(); steps(1.2f);
+        app.gameCaseStick(32767, 0); steps(0.25f);
+        app.gameCaseStick(0, 0); steps(1.0f);
+        if (std::abs(app.game_case_.yaw - game_case::half_pi) > 0.001f || app.game_case_.pitch != 0) return 2915;
+        app.renderer_.gpuCaptureForTest(true);
+        if (!capture(L"library-case-spine-3d.png")) return 2916;
+        app.modalKey(VK_NEXT, false); steps(1.0f);
+        if (std::abs(app.game_case_.yaw - game_case::pi) > 0.001f) return 2917;
+        if (!capture(L"library-case-back-3d.png")) return 2918;
+        app.modalKey(VK_PRIOR, false); app.modalKey(VK_PRIOR, false); steps(1.0f);
+        if (std::abs(app.game_case_.yaw) > 0.001f) return 2919;
+        if (!capture(L"library-case-front-3d.png")) return 2920;
+        {
+            const auto held = app.gameCaseLayout().held();
+            const float mx = (held.left + held.right) * 0.5f, my = (held.top + held.bottom) * 0.5f;
+            app.mouse_transition_until_ = 0;
+            app.click(mx * scale, my * scale, false);
+            if (!app.game_case_.dragging) return 2921;
+            app.mouseMove((mx + (held.right - held.left) * 0.35f) * scale, (my - 40) * scale);
+            if (app.game_case_.yaw < 0.2f || app.game_case_.pitch <= 0) return 2922;
+            if (!capture(L"library-case-turned-3d.png")) return 2923;
+            app.pointerUp(false); steps(1.0f);
+            if (app.game_case_.dragging || std::abs(std::remainder(app.game_case_.yaw, game_case::half_pi)) > 0.001f || app.game_case_.pitch != 0) return 2924;
+        }
+        // A click on the case that does not turn it shows its inside; again, it shuts.
+        {
+            const auto held = app.gameCaseLayout().held();
+            const float mx = (held.left + held.right) * 0.5f, my = (held.top + held.bottom) * 0.5f;
+            app.mouse_transition_until_ = 0;
+            app.click(mx * scale, my * scale, false); app.pointerUp(false);
+            if (!app.game_case_.opened || app.game_case_.dragging) return 2939;
+            steps(3.0f);
+            const auto rest = app.gameCaseLayout().rest();
+            app.mouse_transition_until_ = 0;
+            app.click((rest.left + rest.right) * 0.5f * scale, (rest.top + rest.bottom) * 0.5f * scale, false); app.pointerUp(false);
+            if (app.game_case_.opened) return 2940;
+            steps(2.0f);
+        }
+        // Pokaż środek comes round to the front before the lid opens.
+        app.modalKey(VK_NEXT, false); steps(1.0f);
+        app.gameCaseShowInside();
+        steps(0.1f);
+        if (app.game_case_.time != 0 || std::abs(app.game_case_.yaw) >= game_case::half_pi) return 2925;
+        steps(3.0f);
+        if (app.game_case_.yaw != 0 || app.game_case_.time < game_case::end_time) return 2926;
+        if (!capture(L"library-case-open-3d.png")) return 2927;
+        app.renderer_.gpuCaptureForTest(false);
+        app.closeGameCase(true);
+        // Instrukcja: the game has a manual (found by the worker); its pages are drawn by a stand-in here
+        // (no PDF engine in tests). It reads like the booklet: the cover, then two pages a spread.
+        app.case_manuals_[key] = std::filesystem::path(L"C:\\fixture\\manual.pdf");
+        // Its last page cannot be drawn: it says so instead of waiting.
+        app.manual_render_ = [](const std::filesystem::path&, int index, uint32_t) {
+            pdf_pages::Page page; page.count = 5; if (index != 4) page.png = discFixture(false); return page;
+        };
+        app.openGameCase(); steps(1.2f);
+        if (!app.game_case_.manual || app.gameCaseLayout().buttons != 3) return 2928;
+        app.game_case_.focus = 1; app.gameCaseAccept();
+        if (!app.manual_.open || app.manual_.pages != 5 || app.manual_.spread != 0) return 2929;
+        {
+            ViewContext hinted;
+            app.inputHints(hinted);
+            if (hinted.hints.size() != 3 || hinted.hints[0].button != HintButton::shoulders || hinted.hints[1].label != tr(L"Powiększ")) return 2942;
+        }
+        app.modalKey(VK_RIGHT, false);
+        if (app.manual_.spread != 1) return 2930;
+        app.gameCaseWheel(-120);
+        if (app.manual_.spread != 2) return 2931;
+        if (!app.manual_.isBroken(4) || app.manual_.isBroken(3)) return 2941;
+        app.modalKey(VK_RIGHT, false); // The last spread: no further.
+        if (app.manual_.spread != 2) return 2932;
+        steps(0.5f);
+        if (!capture(L"library-case-manual.png")) return 2933;
+        app.modalKey(VK_RETURN, false);
+        if (!app.manual_.zoomed) return 2934;
+        app.back();
+        if (app.manual_.open || !app.gameCaseOpen() || app.topModal() != Launcher::Modal::game_case) return 2935;
+        app.closeGameCase(true);
+        app.case_manuals_.clear(); app.manual_render_ = nullptr;
         // The platforms' own packages: an Amiga big box with its diskette, a Switch (2) case with its cartridge.
         const std::pair<const wchar_t*, const wchar_t*> packages[] = {
             {L"Amiga", L"library-case-amiga.png"}, {L"Switch", L"library-case-switch.png"}, {L"Switch 2", L"library-case-switch2.png"},
-            {L"Xbox 360", L"library-case-xbox360.png"}, {L"Wii", L"library-case-wii.png"}};
+            {L"Xbox 360", L"library-case-xbox360.png"}, {L"Wii", L"library-case-wii.png"}, {L"PS1", L"library-case-ps1.png"}};
         const auto kept = app.cards_[3].game;
+        app.renderer_.gpuCaptureForTest(true);
         for (const auto& [platform, screenshot] : packages) {
             app.cards_[3].game.kind = GameKind::nonsteam; app.cards_[3].game.platform = platform;
             app.openGameCase();
             const auto expected = game_case::kindOf(platform);
             if (!app.gameCaseOpen() || app.gameCaseKind().package != expected.package || app.gameCaseKind().media != expected.media) return 2738;
-            steps(0.3f); // Closed, on its way: its front as on the shelf.
+            steps(1.2f); // Held up: in 3D, a little turned.
+            app.game_case_.yaw = app.game_case_.yaw_goal = 0.45f;
+            if (!capture((std::wstring(L"held-") + screenshot).c_str())) return 2936;
+            app.game_case_.yaw = app.game_case_.yaw_goal = 0;
+            app.gameCaseShowInside();
+            steps(0.3f); // Closed, on its way to the left.
             if (!capture((std::wstring(L"closed-") + screenshot).c_str())) return 2741;
             steps(0.6f);
             if (!capture((std::wstring(L"mid-") + screenshot).c_str())) return 2739;
@@ -862,6 +980,7 @@ int LauncherUiTest::libraryViews(HWND window) {
             if (!capture(screenshot)) return 2740;
             app.closeGameCase(true);
         }
+        app.renderer_.gpuCaptureForTest(false);
         app.cards_[3].game = kept;
         app.saveLibraryPreferences();
         const auto saved = loadLibraryState(userConfigDirectory() / L"library-state.ini");
