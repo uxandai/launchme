@@ -39,7 +39,7 @@ workers and comes back as posted messages.
 | `tests/` | Unit tests (`*_tests.cpp`) and the UI regression cases (`*_ui_cases.hpp`) of `launcher_ui_tests`. |
 | `tools/` | `build.ps1`, probes for real services (manual), `tools/linux/` (Impeller SDK, AppImage, WSL scripts). |
 | `cmake/` | Source lists and the Linux, companion and dependency modules. |
-| `changelog/`, `docs/`, `_website/` | Release notes, guides, the landing page. |
+| `changelog/`, `docs/` | Release notes and guides (the landing page: its own repo, `uxandai/launchme-website`). |
 
 ## Threads and messages
 

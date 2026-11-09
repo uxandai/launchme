@@ -1,6 +1,6 @@
 ![launchme](docs/branding/readme-banner.svg)
 
-**[Website](https://uxandai.github.io/launchme/)** · **[Changelog](changelog/)** · **[Download](../../releases/latest)** ·
+**[Website](https://uxandai.github.io/launchme-website/)** · **[Changelog](changelog/)** · **[Download](../../releases/latest)** ·
 **[Discord](https://discord.gg/jhdrzy522)** · **[Architecture](docs/ARCHITECTURE.md)**
 
 A full-screen, console-style game launcher for Windows 10/11, built for a gamepad.
