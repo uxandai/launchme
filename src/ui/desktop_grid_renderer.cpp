@@ -320,6 +320,42 @@ void Renderer::drawDesktopPoster(const Layout& layout, const View& view, size_t 
     const auto* shaped = posterShape(rect.right - rect.left, rect.bottom - rect.top);
     squircle_corner_ = previous_corner; corner_reference_ = previous_reference;
     if (!shaped) return;
+    // Kolorowy obrys i poświata: the selected poster's outline in the cover's colour (as in Tryb TV:
+    // the chosen accent, else the art's own), and its art blurred and spread softly behind it.
+    Cover* glow_art = index < posters_.size() && posters_[index].bitmap ? &posters_[index] :
+                      index < covers_.size() && covers_[index].bitmap ? &covers_[index] : nullptr;
+    const auto ring_tint = [&] {
+        if (!view.poster_glow) return uiAccent();
+        if (sessionOf(game) == SessionState::frozen) return rgb(0.80f, 0.82f, 0.84f);
+        if (cover_accent_) return rgb(((cover_accent_ >> 16) & 255) / 255.0f, ((cover_accent_ >> 8) & 255) / 255.0f, (cover_accent_ & 255) / 255.0f);
+        if (perfectGame(game)) return perfect_gold;
+        if (!glow_art) return uiAccent();
+        const float shown = reveal(*glow_art);
+        return rgb(std::lerp(0.94f, glow_art->accent.r, shown), std::lerp(0.96f, glow_art->accent.g, shown), std::lerp(0.97f, glow_art->accent.b, shown));
+    }();
+    if (selected && view.poster_glow && alpha > 0.01f) {
+        if (auto* blur = glow_art ? blurredArt(*glow_art) : nullptr) {
+            ComPtr<ID2D1BitmapBrush> spread;
+            const auto properties = D2D1::BitmapBrushProperties(D2D1_EXTEND_MODE_CLAMP, D2D1_EXTEND_MODE_CLAMP, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
+            if (SUCCEEDED(target_->CreateBitmapBrush(blur, properties, &spread))) {
+                // Rings of the same picture, each a little larger and fainter: together a soft falloff.
+                const auto size = blur->GetSize();
+                const float strength = reveal(*glow_art) * alpha;
+                for (int step = 5; step >= 1; --step) {
+                    const float grow = 5.0f * static_cast<float>(step);
+                    const auto r = box(inflate(poster, grow));
+                    spread->SetTransform(D2D1::Matrix3x2F::Scale((r.right - r.left) / std::max(1.0f, size.width), (r.bottom - r.top) / std::max(1.0f, size.height)) *
+                                         D2D1::Matrix3x2F::Translation(r.left, r.top));
+                    spread->SetOpacity(0.11f * strength);
+                    target_->FillRoundedRectangle(D2D1::RoundedRect(r, 10 + grow, 10 + grow), spread.Get());
+                }
+            }
+        }
+        if (ring_shape) { // The outline's own halo, still (no pulse on a desktop).
+            brush(rgb(ring_tint.r, ring_tint.g, ring_tint.b, 0.10f * alpha)); target_->DrawGeometry(ring_shape.Get(), solid_.Get(), 13);
+            brush(rgb(ring_tint.r, ring_tint.g, ring_tint.b, 0.18f * alpha)); target_->DrawGeometry(ring_shape.Get(), solid_.Get(), 7);
+        }
+    }
     const float shadow = alpha * (0.35f + 0.65f * std::max(hover, selected ? 0.5f : 0.0f));
     D2D1_MATRIX_3X2_F base{};
     target_->GetTransform(&base);
@@ -381,8 +417,9 @@ void Renderer::drawDesktopPoster(const Layout& layout, const View& view, size_t 
         // thick one when the grid has the keyboard's focus.
         const bool keyboard_here = view.keyboard && view.zone == 1;
         const bool keyboard_away = view.keyboard && view.zone != 1;
-        brush(uiAccent((keyboard_here ? 1.0f : keyboard_away ? 0.55f : 0.92f) * alpha));
-        target_->DrawGeometry(ring_shape.Get(), solid_.Get(), keyboard_here ? 3.0f : keyboard_away ? 1.5f : 2.0f);
+        const float strength = (keyboard_here ? 1.0f : keyboard_away ? 0.55f : 0.92f) * alpha;
+        brush(rgb(ring_tint.r, ring_tint.g, ring_tint.b, ring_tint.a * strength));
+        target_->DrawGeometry(ring_shape.Get(), solid_.Get(), view.poster_glow ? (keyboard_away ? 2.0f : 3.0f) : keyboard_here ? 3.0f : keyboard_away ? 1.5f : 2.0f);
     }
     // Badges: in play, suspended, downloading, to install.
     if (session != SessionState::none) {

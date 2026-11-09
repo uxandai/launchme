@@ -157,6 +157,7 @@ void Launcher::openCustomEditor(const std::string& id, std::optional<Item> focus
         ui.fields[custom_game_ui::platform_field] = found->platform;
         ui.art_name = found->name; // Its artwork was matched by this name.
         compatEditorFill(ui, custom_games::makeGame(*found, true)); // Linux, a Windows game: its Wine/Proton fields.
+        customEditorFlags(ui, gameKey(custom_games::makeGame(*found, true))); // Its switches (logs, HDR).
     } else ui.pending_id = custom_games::newId(custom_games_); // Zidentyfikuj grę keys a new game by it before it is saved.
     ui.open = true;
     ui.desktop = desktop_mode_;
@@ -286,7 +287,22 @@ bool Launcher::launchEditable(const Game& game) const {
     if (game.source == GameSource::custom) return !game.source_id.empty(); // A user-added game, PC or emulated (not one from the ROM folder).
     if (game.source == GameSource::drmfree)
         return std::any_of(drm_catalog_.games.begin(), drm_catalog_.games.end(), [&](const auto& entry) { return entry.id == game.source_id; });
-    return game.source == GameSource::steam && game.kind == GameKind::steam && game.app_id;
+    if (game.source == GameSource::steam && game.kind == GameKind::steam && game.app_id) return true;
+    // Every other game: its switches (logs, HDR) alone.
+    return isGame(game) && game.kind != GameKind::catalog && !gameKey(game).empty();
+}
+
+// Opcje uruchamiania's switches of a game in the panel (State::flags).
+void Launcher::customEditorFlags(custom_game_ui::State& ui, const std::string& key) {
+    ui.flags_key = key;
+    ui.flags = !key.empty();
+    const auto found = library_state_.launch_flags.find(key);
+    const unsigned bits = found == library_state_.launch_flags.end() ? 0u : found->second;
+    ui.log = (bits & launch_flag::log) != 0;
+    ui.hdr = (bits & launch_flag::hdr) != 0;
+#ifdef _WIN32
+    ui.hdr_option = ui.flags;
+#endif
 }
 
 void Launcher::openLaunchEditor(const Game& game) {
@@ -302,6 +318,14 @@ void Launcher::openLaunchEditor(const Game& game) {
         ui.focus = Item::file;
         ui.caret = ui.fields[custom_game_ui::file_field].size();
         compatEditorFill(ui, game);
+    } else if (!(game.source == GameSource::steam && game.kind == GameKind::steam && game.app_id)) {
+        // A game of another store: its client takes no options; the switches, and on Linux its
+        // Windows build's Proton / Wine (WINEDLLOVERRIDES, the options around %command%, the page).
+        ui.target = custom_game_ui::Target::other;
+        ui.key = gameKey(game);
+        ui.focus = Item::log_toggle;
+        compatEditorFill(ui, game);
+        if (ui.compat) { ui.focus = Item::wine; ui.caret = ui.fields[custom_game_ui::wine_field].size(); }
     } else {
         ui.target = custom_game_ui::Target::steam;
         ui.key = gameKey(game);
@@ -311,6 +335,7 @@ void Launcher::openLaunchEditor(const Game& game) {
         ui.focus = Item::arguments;
         ui.caret = ui.fields[custom_game_ui::arguments_field].size();
     }
+    customEditorFlags(ui, gameKey(game));
     ui.open = true;
     custom_editor_ = std::move(ui);
     for (MSG typed{}; PeekMessageW(&typed, hwnd_, WM_CHAR, WM_CHAR, PM_REMOVE);) {} // The key that opened it must not type.
@@ -345,6 +370,7 @@ void Launcher::closeCustomEditor() {
 void Launcher::customEditorFocus(Item item) {
     auto& ui = custom_editor_;
     if (!ui.open || ui.focus == item || (item == Item::remove && !ui.editing()) || (item == Item::identify && !ui.posterShown())) return;
+    if ((item == Item::log_toggle && ui.toggles() < 1) || (item == Item::hdr_toggle && ui.toggles() < 2)) return;
     if ((item == Item::pick_file && !ui.pills()) || (item == Item::pick_folder && !ui.pills() && !ui.folderButton())) return;
     if (item == Item::file_browse && !ui.browses(custom_game_ui::file_field)) return;
     if (item == Item::identify) ui.identify_from = ui.focus;
@@ -362,6 +388,31 @@ void Launcher::customEditorMove(int horizontal, int vertical) {
     const bool poster = custom_editor_.posterShown();
     const bool pills = custom_editor_.pills();
     const bool file_browse = custom_editor_.browses(custom_game_ui::file_field);
+    const int toggles = custom_editor_.toggles();
+    const auto lastField = [&] { // The last row of fields shown, -1 when none.
+        int row = custom_game_ui::field_count - 1;
+        while (row >= 0 && !custom_editor_.shows(row)) --row;
+        return row;
+    };
+    const auto fieldItem = [](int row) {
+        constexpr Item items[] = {Item::name, Item::file, Item::arguments, Item::directory, Item::dll, Item::wine, Item::platform};
+        return items[row];
+    };
+    if (focus == Item::log_toggle || focus == Item::hdr_toggle) {
+        // The switches' row: Left/Right between them, Up to the last field, Down to the buttons.
+        if (horizontal) next = horizontal > 0 ? (toggles > 1 ? Item::hdr_toggle : focus) : Item::log_toggle;
+        else if (vertical > 0) next = Item::save;
+        else if (vertical < 0) {
+            if (const int row = lastField(); row >= 0) next = fieldItem(row);
+            else { navigationBoundary(); return; }
+        }
+        customEditorFocus(next);
+        return;
+    }
+    // Up from the buttons, Down from the last field: the switches between them.
+    const bool last_row = custom_game_ui::row(focus) == lastField() && custom_game_ui::row(focus) < custom_game_ui::field_count;
+    if (toggles && vertical < 0 && custom_game_ui::row(focus) == custom_game_ui::buttons_row) { customEditorFocus(Item::log_toggle); return; }
+    if (toggles && vertical > 0 && last_row) { customEditorFocus(Item::log_toggle); return; }
     if (focus == Item::pick_file || focus == Item::pick_folder) {
         // The pills' row above the fields: Left/Right between them (then the poster's column), Down to the first field.
         if (vertical > 0) {
@@ -473,6 +524,8 @@ void Launcher::customEditorKey(WPARAM key, bool repeated) {
         for (const auto item : {Item::name, Item::file, Item::file_browse, Item::arguments, Item::directory, Item::directory_browse,
                                 Item::dll, Item::wine, Item::wine_page, Item::platform})
             if (ui.shows(custom_game_ui::row(item)) && (item != Item::file_browse || ui.browses(custom_game_ui::file_field))) order.push_back(item);
+        if (ui.toggles() > 0) order.push_back(Item::log_toggle);
+        if (ui.toggles() > 1) order.push_back(Item::hdr_toggle);
         if (ui.posterShown()) order.push_back(Item::identify);
         if (ui.folderButton()) order.push_back(Item::pick_folder);
         if (ui.editing()) order.push_back(Item::remove);
@@ -507,6 +560,8 @@ void Launcher::customEditorAccept() {
         break;
     }
     case Item::platform: customEditorCyclePlatform(1); break;
+    case Item::log_toggle: ui.log = !ui.log; audio_.navigate(); InvalidateRect(hwnd_, nullptr, FALSE); break;
+    case Item::hdr_toggle: ui.hdr = !ui.hdr; audio_.navigate(); InvalidateRect(hwnd_, nullptr, FALSE); break;
     case Item::save: customEditorSave(); break;
     case Item::cancel: closeCustomEditor(); break;
     case Item::identify: customEditorIdentify(); break;
@@ -606,6 +661,8 @@ void Launcher::customEditorSave() {
         InvalidateRect(hwnd_, nullptr, FALSE);
     };
     if (ui.launchOptions()) { launchEditorSave(); return; }
+    const auto flags = (ui.log ? launch_flag::log : 0u) | (ui.hdr ? launch_flag::hdr : 0u);
+    const auto flags_key = ui.flags ? ui.flags_key : std::string{};
     // Linux, a Windows game: its Wine/Proton fields are checked before anything is saved.
     std::wstring compat_error;
     Item compat_field = Item::wine;
@@ -646,6 +703,7 @@ void Launcher::customEditorSave() {
     if (!ui.art_name.empty() && ui.art_name != entry.name) forgetCustomArtwork(previous ? *previous : custom_games::makeGame(entry, false), false);
     ui.identified_new = false; // Saved: its identification stays with it.
     compatEditorApply(ui, true, compat_error, compat_field);
+    setLaunchFlags(flags_key, flags);
     closeCustomEditor();
     applyCustomGames();
     if (settingsOpen() && settings_state_.category == static_cast<int>(settings_ui::Category::library)) {
@@ -682,6 +740,17 @@ void Launcher::launchEditorSave() {
         customEditorFocus(focus);
         InvalidateRect(hwnd_, nullptr, FALSE);
     };
+    // A game of another store: its switches (and on Linux its Proton / Wine fields).
+    if (ui.target == Target::other) {
+        std::wstring compat_error;
+        Item compat_field = Item::wine;
+        if (!compatEditorApply(ui, false, compat_error, compat_field)) { fail(compat_error, compat_field); return; }
+        compatEditorApply(ui, true, compat_error, compat_field);
+        setLaunchFlags(ui.flags_key, (ui.log ? launch_flag::log : 0u) | (ui.hdr ? launch_flag::hdr : 0u));
+        closeCustomEditor();
+        audio_.context();
+        return;
+    }
     // The fields are checked as a user-added game's are (one line of options, full paths).
     custom_games::Entry check;
     check.name = ui.title.empty() ? std::wstring(L"-") : ui.title.substr(0, custom_games::max_name);
@@ -705,6 +774,7 @@ void Launcher::launchEditorSave() {
         if (check.arguments.empty()) library_state_.launch_arguments.erase(ui.key);
         else library_state_.launch_arguments[ui.key] = check.arguments;
         library_state_dirty_ = true;
+        if (ui.flags) setLaunchFlags(ui.flags_key, (ui.log ? launch_flag::log : 0u) | (ui.hdr ? launch_flag::hdr : 0u));
         saveLibraryPreferences();
         closeCustomEditor();
         audio_.context();
@@ -723,6 +793,7 @@ void Launcher::launchEditorSave() {
     }
     if (!saveDrmFree()) { *entry = previous; fail(tr(L"Nie udało się zapisać katalogu DRM-free"), Item::save); return; }
     compatEditorApply(ui, true, compat_error, compat_field);
+    if (ui.flags) setLaunchFlags(ui.flags_key, (ui.log ? launch_flag::log : 0u) | (ui.hdr ? launch_flag::hdr : 0u));
     closeCustomEditor();
     applyDrmFree();
     if (settingsOpen()) buildSettingsRows();

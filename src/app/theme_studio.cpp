@@ -212,6 +212,7 @@ void Launcher::themeBuildOptions() {
         if (desktop_mode_) {
             toggle(Id::desktop_platform_badges, L"Ikona platformy na okładkach", s.desktop_platform_badges);
             toggle(Id::desktop_gray_uninstalled, L"Niezainstalowane w czerni i bieli", s.desktop_gray_uninstalled);
+            toggle(Id::desktop_poster_glow, L"Kolorowy obrys i poświata", s.desktop_poster_glow);
         }
         break;
     }

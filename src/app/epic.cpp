@@ -98,12 +98,17 @@ void Launcher::pollEpic() {
     if (auto result = epic_service_->takeLaunch()) {
         const bool requested = epic_launch_pending_; epic_launch_pending_ = false;
         if (!requested) return;
+        // Opcje uruchamiania's switches; the action's arguments hold Epic's token: not logged.
+        if (result->action) launchFlagsBegin(result->game, nullptr);
         if (result->action && execute_(hwnd_, result->action) > 32) {
             if (settings_.launch_animation) startLaunchAnimation(result->game);
             else audio_.launch();
             audio_.stopMusic(); beginGameSession(result->game);
             if (settings_.quick_resume) freezeOthers(gameKey(result->game));
-        } else showNotification(NotificationKind::error, L"Epic Games", tr(L"Nie udało się uruchomić gry. Sprawdź połączenie i konto Epic."));
+        } else {
+            launchFlagsEnd(gameKey(result->game), L"Not started");
+            showNotification(NotificationKind::error, L"Epic Games", tr(L"Nie udało się uruchomić gry. Sprawdź połączenie i konto Epic."));
+        }
         SecureZeroMemory(result->action.arguments.data(), result->action.arguments.size() * sizeof(wchar_t));
         InvalidateRect(hwnd_, nullptr, FALSE);
     }

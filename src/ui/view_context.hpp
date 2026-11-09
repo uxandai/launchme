@@ -194,6 +194,7 @@ struct ViewContext {
     const desktop_ui::View* desktop = nullptr;
     // A TV screen shown as a desktop dialog (Ustawienia): its sheet's frame state (desktop_sheet.hpp).
     const desktop_ui::SheetView* desktop_sheet = nullptr;
+    const desktop_ui::Menu* desktop_sheet_menu = nullptr; // Szczegóły' "…": the game's menu over the page.
     // Ustawienia docked in the library's place: the sidebar and top bar around it (desktop_ui::View).
     const desktop_ui::View* desktop_chrome = nullptr;
     // Profil docked there: its rectangle in desktop DIPs (Launcher::desktopDock); empty when not.

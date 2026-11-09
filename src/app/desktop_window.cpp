@@ -43,6 +43,7 @@ void Launcher::setDesktopMode(bool desktop) {
     for (int i = 0; i < 8 && screen_ != ScreenMode::shelves; ++i) back();
     if (desktop_mode_) { desktopSaveState(); rememberDesktopWindow(); }
     desktop_mode_ = desktop;
+    applyAccentColors(); // Each mode has its own accent and button colours.
     audio_.setDesktop(desktop);
     applyWindowMode();
     // The canvas switches now, not at the next paint: the first tick lays Tryb TV's tiles out on

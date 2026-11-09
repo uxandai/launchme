@@ -3,6 +3,7 @@
 // shown inside the desktop window. Solid panels with a hairline border and a soft shadow.
 #include "renderer.hpp"
 #include "renderer_internal.hpp"
+#include "desktop_theme.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -14,7 +15,7 @@ using namespace desktop_ui;
 namespace {
 using palette::gray;
 D2D1_COLOR_F rgb(float r, float g, float b, float a = 1) { return D2D1::ColorF(r, g, b, a); }
-const D2D1_COLOR_F panel_bg = rgb(0.082f, 0.088f, 0.102f);
+const D2D1_COLOR_F& panel_bg = desktop_theme::current().menu;
 float luminance(D2D1_COLOR_F c) { return 0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b; }
 }
 

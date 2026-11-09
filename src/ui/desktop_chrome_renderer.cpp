@@ -54,8 +54,8 @@ void Renderer::drawDesktopTitlebar(const Layout& layout, const View& view) {
         else if (!view.search_focus) {
             const Rect key{search.right - 62, cy - 10, search.right - 10, cy + 10};
             desktopStroke(key, 5, gray(1, 0.12f));
-            // Ctrl+K: the quick search over everything (Ctrl+F still types here).
-            textLine(L"Ctrl+K", key.left, cy, key.right - key.left, desktop_small_font_.Get(), palette::muted(ink_alpha), DWRITE_TEXT_ALIGNMENT_CENTER);
+            // Ctrl+F types here (Ctrl+K opens the quick search over everything).
+            textLine(L"Ctrl+F", key.left, cy, key.right - key.left, desktop_small_font_.Get(), palette::muted(ink_alpha), DWRITE_TEXT_ALIGNMENT_CENTER);
         }
     } else {
         if (view.search_focus) desktopSelection(view.query, text_left, cy, text_right - text_left, desktop_font_.Get());
@@ -173,6 +173,11 @@ void Renderer::drawDesktopSidebar(const Layout& layout, const View& view) {
         const auto& row = view.rows[static_cast<size_t>(i)];
         const auto r = layout.sidebarRow(row, view.sidebar_scroll);
         if (r.bottom < top || r.top > bottom) continue;
+        if (row.divided) { // In the middle of the gap above the row, as wide as the labels.
+            const float ly = std::round(r.top - (desktop_ui::divider_gap + 2) * 0.5f);
+            brush(gray(1, 0.08f));
+            target_->FillRectangle(D2D1::RectF(r.left + 10, ly, r.right - 10, ly + 1), solid_.Get());
+        }
         const float cy = (r.top + r.bottom) * 0.5f;
         const bool hover = view.hover_row == i;
         const bool focused = view.keyboard && view.zone == 0 && view.focus_row == i;

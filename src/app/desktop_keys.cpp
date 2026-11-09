@@ -12,6 +12,8 @@ using library_manager_ui::Page;
 
 bool Launcher::desktopKey(WPARAM key, bool repeated) {
     if (desktopTextKey(key)) return true; // Selection, words and the clipboard in the focused field.
+    // The game's menu from Szczegóły' "…" (a page in the library's place): it takes the keys.
+    if (desktop_menu_ && desktopSheet() && topModal() == Modal::none && !friends_open_) { desktopMenuKey(key); return true; }
     if (desktop_mode_ && screen_ == ScreenMode::store && topModal() == Modal::none && !friends_open_ && !keyboard_.open && !launchAnimationActive() && !keyDown(VK_MENU))
         return desktopStoreKey(key);
     if (desktop_meta_.open) {

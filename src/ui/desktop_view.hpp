@@ -77,8 +77,9 @@ struct Row {
     Group group = Group::library;
     int entry = -1;
     float top = 0, height = 0;
+    bool divided = false; // A thin line above it: Biblioteka's entries that act (Znajomi, Profil…) after its sections.
 };
-inline constexpr float heading_h = 30, row_h = 32, recent_row_h = 44, heading_gap = 12, companion_h = 74, start_h = 76;
+inline constexpr float heading_h = 30, row_h = 32, recent_row_h = 44, heading_gap = 12, divider_gap = 13, companion_h = 74, start_h = 76;
 
 // Headings and entries in order; a collapsed group keeps only its heading. Collections always keep
 // their heading (its "+" makes a new one), the others only when they have entries. The narrow
@@ -101,7 +102,11 @@ inline std::vector<Row> layoutRows(const std::vector<Entry>& entries, const std:
         for (int i = 0; i < static_cast<int>(entries.size()); ++i) {
             if (entries[i].group != group) continue;
             const float h = entries[i].kind == EntryKind::game ? recent_row_h : row_h;
-            rows.push_back({false, group, i, y, h});
+            // Biblioteka: Znajomi, Profil… are not parts of the library: a line sets them apart from Wszystkie/Ulubione/Ukryte.
+            const bool divided = group == Group::library && actionEntry(entries[i].kind) && !rows.empty() && !rows.back().heading &&
+                                 rows.back().group == group && !actionEntry(entries[static_cast<size_t>(rows.back().entry)].kind);
+            if (divided) y += divider_gap;
+            rows.push_back({false, group, i, y, h, divided});
             y += h + 2;
         }
     }
@@ -402,6 +407,7 @@ struct View {
     MetaView meta;   // Edytuj metadane.
     bool platform_badges = false;  // Ustawienia: the store's or console's mark top right on each poster.
     bool gray_uninstalled = false; // Ustawienia: posters of games not installed without colour.
+    bool poster_glow = true;       // Ustawienia: the selected poster's outline in the cover's colour, its art's glow behind.
     std::vector<char> marked;
     std::vector<float> card_mark; // Per card, 1 → 0 pop after toggling mark.
     size_t marked_count = 0;

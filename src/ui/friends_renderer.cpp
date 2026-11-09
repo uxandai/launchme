@@ -3,6 +3,7 @@
 #include "renderer.hpp"
 #include "renderer_internal.hpp"
 #include "friends_layout.hpp"
+#include "desktop_theme.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -23,7 +24,7 @@ void Renderer::drawFriends() {
         // The desktop window: a solid side panel, as its other panels, over the barely dimmed window.
         brush(D2D1::ColorF(0.01f, 0.012f, 0.016f, 0.12f * progress));
         target_->FillRectangle(D2D1::RectF(0, 0, viewport_.width, height), solid_.Get());
-        brush(D2D1::ColorF(0.082f, 0.088f, 0.102f));
+        brush(desktop_theme::current().menu); // Motyw okna.
         target_->FillRectangle(D2D1::RectF(x, 0, viewport_.width, height), solid_.Get());
         brush(D2D1::ColorF(1, 1, 1, 0.08f));
         target_->FillRectangle(D2D1::RectF(x, 0, x + 1, height), solid_.Get());

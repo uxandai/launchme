@@ -33,6 +33,8 @@ struct State {
     std::unordered_set<uint32_t> requested;
     std::wstring query;
     bool search_focus = false, query_selected = false, results_mode = false;
+    // SteamGridDB matched no game by the title: its search ran once by itself (the games it finds are listed).
+    bool auto_searched = false;
     std::vector<GridGame> games;
     GridSource override_source;
     // "Z dysku…" under the rail, then its panel: the artwork type (local_kind) and "Wskaż plik…".

@@ -157,6 +157,8 @@ set(LAUNCHME_LINUX_PROCESS_SOURCES
     src/platform/game_activity.cpp
     src/platform/game_overlay_monitor_linux.cpp
     src/platform/launch.cpp
+    src/platform/hdr_display.cpp
+    src/library/game_log.cpp
     src/platform/proc_fs.cpp
     src/platform/process_freeze.cpp
     src/platform/process_spawn.cpp

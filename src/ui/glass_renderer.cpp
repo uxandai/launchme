@@ -2,6 +2,7 @@
 // dialogs, the power menu, the game menu). The scene drawn so far is copied from the target
 // (CopyFromRenderTarget: it flushes the drawing before it) and blurred by Direct2D's Gaussian blur.
 #include "renderer.hpp"
+#include "desktop_theme.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -95,7 +96,12 @@ void Renderer::glassFill(const Glass& glass, D2D1_COLOR_F tint, float opacity) {
         tint.a *= glassTint(); // The blurred scene shows through the tint (half of it at 100%).
     }
     tint.a *= opacity;
-    if (desktop_style_) tint.a = std::max(tint.a, 0.97f * opacity); // Desktop: an opaque panel with a hairline edge.
+    if (desktop_style_) {
+        // Desktop: an opaque panel with a hairline edge; a plain dark one in the theme's card colour.
+        const float peak = std::max({tint.r, tint.g, tint.b}), chroma = peak - std::min({tint.r, tint.g, tint.b});
+        if (peak < 0.16f && chroma < 0.04f) { const auto& card = desktop_theme::current().card; tint.r = card.r; tint.g = card.g; tint.b = card.b; }
+        tint.a = std::max(tint.a, 0.97f * opacity);
+    }
     brush(tint);
     target_->FillGeometry(glass.shape.Get(), solid_.Get());
     if (desktop_style_) { brush(D2D1::ColorF(1, 1, 1, 0.1f * opacity)); target_->DrawGeometry(glass.shape.Get(), solid_.Get(), 1); }

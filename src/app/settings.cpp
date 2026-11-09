@@ -1,5 +1,6 @@
 #include "launcher.hpp"
 #include <functional>
+#include "../platform/diagnostics.hpp"
 #include "../platform/etw_access.hpp"
 #include "../platform/flac.hpp"
 #include "../platform/music_themes.hpp"
@@ -160,8 +161,8 @@ void Launcher::settingsChanged(bool shelves) {
     renderer_.setDrawerStyle(settings_.drawer);
     renderer_.setFontFamily(settings_.font_family);
     renderer_.setCoverAccent(settings_.cover_accent_rgb);
-    renderer_.setUiAccent(settings_.ui_accent_rgb);
-    renderer_.setButtonTheme(settings_.button_rgb, settings_.button_idle);
+    applyAccentColors();
+    renderer_.setDesktopTheme(settings_.desktop_theme);
     renderer_.setFocusGap(settings_.focus_gap);
     renderer_.setGlow(settings_.glow_level, settings_.glow_pulse, settings_.glow_trace);
     renderer_.setBackgroundGrid(settings_.background_grid, settings_.background_grid_style);
@@ -471,7 +472,14 @@ void Launcher::settingsActivate() {
         return;
     }
     if (row.id == Id::update) { updateAction(); return; } // Aktualizuj (one click), or look for one now.
-    if (row.id == Id::about) { // The data folder: launchme.log and crashes\ to send with a report.
+    if (row.id == Id::logs) { // logs\launchme-app and logs\games.
+        const auto folder = diagnostics::logsFolder().empty() ? userConfigDirectory() / L"logs" : diagnostics::logsFolder();
+        std::error_code ec; std::filesystem::create_directories(folder / L"launchme-app", ec);
+        if (execute_(hwnd_, GameAction{folder.wstring(), {}, {}, ActionKind::open_client}) <= 32)
+            showNotification(NotificationKind::error, tr(L"Nie można otworzyć folderu"), folder.wstring());
+        return;
+    }
+    if (row.id == Id::about) { // The data folder: crashes\ to send with a report.
         if (execute_(hwnd_, GameAction{userConfigDirectory().wstring(), {}, {}, ActionKind::open_client}) <= 32)
             showNotification(NotificationKind::error, tr(L"Nie można otworzyć folderu"), userConfigDirectory().wstring());
         return;
@@ -635,6 +643,9 @@ void Launcher::settingsChoose(const Row& row) {
         settings_.screensaver_minutes = screensaver::minute_choices[std::clamp<size_t>(settings_state_.choice, 0, screensaver::minute_choices.size() - 1)];
     else if (row.id == Id::ui_accent) settings_.ui_accent_rgb = choice.color;
     else if (row.id == Id::button_color) settings_.button_rgb = choice.color;
+    else if (row.id == Id::desktop_accent) settings_.desktop_accent_rgb = choice.color ? choice.color : AppSettings{}.desktop_accent_rgb;
+    else if (row.id == Id::desktop_button) settings_.desktop_button_rgb = choice.color;
+    else if (row.id == Id::desktop_theme) settings_.desktop_theme = std::clamp(settings_state_.choice, 0, static_cast<int>(desktop_themes.size()) - 1);
     else if (row.id == Id::button_idle)
         settings_.button_idle = static_cast<AppSettings::ButtonIdle>(std::clamp(settings_state_.choice, 0, static_cast<int>(button_idles.size()) - 1));
     else if (row.id == Id::hint_style)
@@ -756,8 +767,9 @@ void Launcher::settingsToggle(const Row& row) {
         settings_.panel_borders = !settings_.panel_borders;
         settingsChanged(); audio_.context(); return; // Visual only: no shelf rebuild.
     }
-    else if (row.id == Id::desktop_platform_badges || row.id == Id::desktop_gray_uninstalled) {
-        auto& value = row.id == Id::desktop_platform_badges ? settings_.desktop_platform_badges : settings_.desktop_gray_uninstalled;
+    else if (row.id == Id::desktop_platform_badges || row.id == Id::desktop_gray_uninstalled || row.id == Id::desktop_poster_glow) {
+        auto& value = row.id == Id::desktop_platform_badges ? settings_.desktop_platform_badges :
+                      row.id == Id::desktop_poster_glow ? settings_.desktop_poster_glow : settings_.desktop_gray_uninstalled;
         value = !value;
         settingsChanged(); audio_.context(); return; // Visual only: the posters redraw.
     }

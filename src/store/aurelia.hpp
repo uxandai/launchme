@@ -76,6 +76,9 @@ struct Request {
     // login_password: the password, given to the child as AURELIA_PASSWORD (never on a command line).
     std::wstring secret;
     std::shared_ptr<Input> input; // login_qr, login_password: lines for the child's stdin.
+    // play: the game's log (Opcje uruchamiania → Zapisuj logi). Aurelia then runs in this child
+    // (AURELIA_NO_DAEMON) with -vv, and all it writes is appended there.
+    std::filesystem::path log;
 };
 struct Reply {
     bool ok = false, cancelled = false;

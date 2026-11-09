@@ -20,6 +20,8 @@ using namespace desktop_draw;
 
 // ---- Helpers ---------------------------------------------------------------------------------
 
+void Renderer::setDesktopTheme(int theme) { desktop_theme::current() = desktop_theme::make(theme); }
+
 void Renderer::desktopGlyph(wchar_t glyph, float cx, float cy, float size, D2D1_COLOR_F ink, float angle) {
     if (!desktop_icon_font_ || !glyph || ink.a <= 0.003f) return;
     D2D1_MATRIX_3X2_F base{};
@@ -181,12 +183,12 @@ void Renderer::desktopBitmapFill(ID2D1Bitmap* bitmap, D2D1_RECT_F target, float 
 
 // style 0: ghost (no fill until hovered), 1: outline, 2: primary (accent fill, dark or light ink).
 void Renderer::desktopButton(Rect r, int style, float hover, bool pressed, bool enabled, wchar_t glyph, const std::wstring& label) {
-    const auto accent = uiAccent();
+    const auto accent = buttonFill(); // Kolor przycisku Graj (the accent unless chosen apart).
     const float luminance = 0.2126f * accent.r + 0.7152f * accent.g + 0.0722f * accent.b;
     const float radius = 8;
     D2D1_COLOR_F ink = enabled ? palette::text() : gray(0.5f);
     if (style == 2 && enabled) {
-        desktopFill(r, radius, uiAccent(pressed ? 0.82f : 1.0f));
+        desktopFill(r, radius, buttonFill(pressed ? 0.82f : 1.0f));
         if (hover > 0.01f) desktopFill(r, radius, luminance > 0.6f ? gray(0, 0.08f * hover) : gray(1, 0.10f * hover));
         ink = luminance > 0.6f ? gray(0.06f) : gray(0.98f);
     } else {

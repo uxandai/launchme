@@ -283,12 +283,12 @@ int LauncherUiTest::customGames(HWND window) {
     app.back(); app.back(); app.back(); app.back();
     if (app.settingsOpen()) return 640;
 
-    // "Opcje uruchamiania…" of a Steam game: only its options (kept with the library state),
-    // passed through steam.exe -applaunch. Stores started through their clients' links have none.
+    // "Opcje uruchamiania…" of a Steam game: its options (kept with the library state), passed through
+    // steam.exe -applaunch, and its switches. Stores started through their clients' links have the switches alone.
     {
         Game steam_game = steam; steam_game.kind = GameKind::steam; steam_game.installed = true;
         Game gog = steam_game; gog.source = GameSource::gog; gog.kind = GameKind::store; gog.source_id = "1";
-        if (!app.launchEditable(steam_game) || app.launchEditable(gog)) return 650;
+        if (!app.launchEditable(steam_game) || !app.launchEditable(gog)) return 650;
         app.openLaunchEditor(steam_game);
         if (!app.customEditorOpen() || editor.target != ui::Target::steam || editor.focus != Item::arguments || editor.editing() ||
             editor.shows(ui::file_field) || editor.shows(ui::name_field) || !editor.shows(ui::arguments_field)) return 651;
@@ -297,7 +297,9 @@ int LauncherUiTest::customGames(HWND window) {
         app.customEditorInsert(L"-dx11 -skipintro");
         if (!capture(L"launch-options-steam.png")) return 653;
         app.customEditorKey(VK_DOWN, false);
-        if (editor.focus != Item::save) return 654;
+        if (editor.focus != Item::log_toggle) return 654; // The switches under the field…
+        app.customEditorKey(VK_DOWN, false);
+        if (editor.focus != Item::save) return 654; // …then the buttons.
         app.customEditorKey(VK_RETURN, false);
         if (app.customEditorOpen() || app.launchArguments(steam_game) != L"-dx11 -skipintro" || !app.launchArguments(gog).empty()) return 655;
         custom_launches.clear();
@@ -339,6 +341,42 @@ int LauncherUiTest::customGames(HWND window) {
         app.customEditorFocus(Item::file_browse); app.customEditorAccept();
         if (editor.fields[ui::arguments_field] != L"-gog -windowed" || editor.fields[ui::file_field] != exe.native()) return 664;
         app.closeCustomEditor();
+    }
+    // Another store's game: Zapisuj logi and HDR na czas gry alone. A launch with them writes
+    // logs/games/<slug>/<time>.log and switches HDR on (a fake display), back off when it ends.
+    {
+        Game gog; gog.source = GameSource::gog; gog.kind = GameKind::store; gog.source_id = "77"; gog.name = L"Wiedźmin: Dziki Gon"; gog.installed = true;
+        app.openLaunchEditor(gog);
+        if (!app.customEditorOpen() || editor.target != ui::Target::other || editor.focus != Item::log_toggle || editor.toggles() != 2 ||
+            editor.shows(ui::arguments_field)) return 665;
+        app.customEditorAccept(); // Zapisuj logi on.
+        app.customEditorKey(VK_RIGHT, false);
+        if (editor.focus != Item::hdr_toggle) return 666;
+        app.customEditorAccept(); // HDR on.
+        if (!editor.log || !editor.hdr) return 666;
+        if (!capture(L"launch-options-switches.png")) return 667;
+        app.customEditorSave();
+        if (app.customEditorOpen() || app.launchFlags(gog) != (launch_flag::log | launch_flag::hdr)) return 668;
+        std::vector<std::pair<std::wstring, bool>> switched;
+        app.hdr_.query = [](HWND) { return std::optional<hdr_display::State>(hdr_display::State{L"\\\\.\\DISPLAY9", true, false}); };
+        app.hdr_.set = [&](const std::wstring& device, bool on) { switched.emplace_back(device, on); return true; };
+        GameAction action{L"goggalaxy://openGameView/77", {}, {}, ActionKind::play};
+        app.launchFlagsBegin(gog, &action);
+        const auto log = app.launchLog(gameKey(gog));
+        if (switched.size() != 1 || !switched[0].second || log.empty() || log.parent_path().filename() != L"wiedzmin-dziki-gon" ||
+            log.parent_path().parent_path() != userConfigDirectory() / L"logs" / L"games") return 669;
+        app.launchFlagsEnd(gameKey(gog), L"Ended");
+        std::ifstream input(log, std::ios::binary);
+        const std::string text{std::istreambuf_iterator<char>(input), {}};
+        if (switched.size() != 2 || switched[1].second || switched[1].first != L"\\\\.\\DISPLAY9" || !app.launchLog(gameKey(gog)).empty() ||
+            text.find("Target: goggalaxy://openGameView/77") == std::string::npos || text.find("HDR: switched on") == std::string::npos ||
+            text.find("HDR: switched back off") == std::string::npos) return 670;
+        // Both switched off again: nothing of the game stays in the library state.
+        app.openLaunchEditor(gog);
+        app.customEditorAccept(); app.customEditorKey(VK_RIGHT, false); app.customEditorAccept();
+        app.customEditorSave();
+        if (app.library_state_.launch_flags.contains(gameKey(gog))) return 671;
+        app.hdr_ = {};
     }
     return 0;
 }

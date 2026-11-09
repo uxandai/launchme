@@ -112,7 +112,7 @@ std::string_view sourceKey(GameSource source) {
 
 std::string_view consoleKey(std::wstring_view console) {
     if (console.starts_with(L"PS")) return "playstation"; // PS1–PS5 and PSP.
-    if (console == L"Switch") return "switch";
+    if (console == L"Switch" || console == L"Switch 2") return "switch"; // Switch 2: the same mark.
     if (console == L"Wii") return "wii";   // The Wii U logo's Wii...
     if (console == L"Wii U") return "wiiu"; // ...and its U.
     if (console == L"GameCube" || console == L"Wii / GameCube") return "gamecube";

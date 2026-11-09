@@ -559,6 +559,14 @@ void Launcher::onArtworkBrowser(std::unique_ptr<ArtworkBrowserMessage> message) 
         }
         renderer_.resetArtworkThumbnails(state.assets.size());
         requestArtworkThumbnails();
+        // SteamGridDB has no game under this exact title: the games its search finds are listed at
+        // once (as "Szukaj" would), instead of an empty gallery. Once per visit.
+        const bool unmatched = !message->page.source.id && (message->page.error.empty() || message->page.error == tr(L"Nie znaleziono tej gry w SteamGridDB."));
+        if (unmatched && state.assets.empty() && !state.auto_searched && !state.wallpaper && state.page == 0 &&
+            state.provider == ArtworkProvider::steamgriddb && state.kind() != ArtworkKind::disc && !state.query.empty()) {
+            state.auto_searched = true;
+            searchArtwork();
+        }
     } else if (message->type == ArtworkBrowserMessage::Type::thumbnail) {
         if (const auto page = artwork_pages_.find(artwork_page_key_); page != artwork_pages_.end() && !message->bytes.empty())
             page->second.thumbnails[message->asset_id] = message->bytes;

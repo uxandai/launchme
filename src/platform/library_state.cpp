@@ -128,6 +128,10 @@ bool parseRow(const std::string& line, LibraryState& result) {
             auto text = text_encoding::wide(options);
             if (text.empty()) return {};
             result.launch_arguments[std::move(key)] = std::move(text);
+        } else if (kind == "launch-flags") {
+            std::string key; unsigned bits = 0;
+            if (!field(row, key) || key.empty() || !(row >> bits) || !bits || (bits & ~launch_flag::all)) return {};
+            result.launch_flags[std::move(key)] = bits;
         } else if (kind == "recent-hidden") {
             std::string key; uint64_t time = 0;
             if (!(field(row, key) && row >> time && !key.empty())) return {};
@@ -250,6 +254,11 @@ bool saveLibraryState(const LibraryState& state, const std::filesystem::path& fi
         const auto text = text_encoding::utf8(options);
         if (key.empty() || !validField(key) || text.empty() || !validField(text)) return false;
         output << "launch-arguments " << std::quoted(encoded(key)) << ' ' << std::quoted(encoded(text)) << '\n';
+        if (!bounded()) return false;
+    }
+    for (const auto& [key, bits] : state.launch_flags) {
+        if (key.empty() || !validField(key) || !bits || (bits & ~launch_flag::all)) return false;
+        output << "launch-flags " << std::quoted(encoded(key)) << ' ' << bits << '\n';
         if (!bounded()) return false;
     }
     for (const auto& [key, time] : state.recent_hidden) {

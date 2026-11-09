@@ -1,6 +1,9 @@
 #pragma once
 // What a user can send when something goes wrong, all in the data folder:
-//   launchme.log            errors and notable events (1 MiB, then launchme.old.log)
+//   logs/launchme-app/launchme-<YYYY-MM-DD>.log
+//                           starts, errors and notable events, one file a day; files of the last
+//                           log_days days are kept, older ones go at the next start
+//   logs/games/<game>/      a game's launches when "Zapisuj logi" is on for it (game_log.hpp)
 //   crashes\*.dmp           a minidump per crash, from the unhandled-exception filter
 //                           (Linux: crashes/*.txt, the signal and a backtrace)
 //   crashes\unseen.txt      the last crash, reported once at the next start (takeUnseenCrash)
@@ -18,6 +21,7 @@
 #include <unistd.h>
 #endif
 
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <exception>
@@ -56,6 +60,8 @@ inline std::wstring version() {
            std::to_wstring(HIWORD(info->dwProductVersionLS));
 #endif
 }
+// Days of launchme-app logs kept (today included).
+inline constexpr int log_days = 3;
 namespace detail {
 inline std::filesystem::path& folder() { static std::filesystem::path value; return value; }
 inline std::mutex& lock() { static std::mutex value; return value; }
@@ -66,6 +72,15 @@ inline std::wstring stamp(bool file_name) {
     if (file_name) swprintf(text, std::size(text), L"%04d%02d%02d-%02d%02d%02d", now.year, now.month, now.day, now.hour, now.minute, now.second);
     else swprintf(text, std::size(text), L"%04d-%02d-%02d %02d:%02d:%02d.%03d", now.year, now.month, now.day, now.hour, now.minute, now.second, now.millisecond);
     return text;
+}
+// <data>/logs/launchme-app/launchme-<today>.log; empty before install().
+inline std::filesystem::path appLog() {
+    const auto& base = folder();
+    if (base.empty()) return {};
+    const auto now = system_info::localTime();
+    wchar_t name[48]{};
+    swprintf(name, std::size(name), L"launchme-%04d-%02d-%02d.log", now.year, now.month, now.day);
+    return base / L"logs" / L"launchme-app" / name;
 }
 // No allocation-heavy work is safe in a crashing process; this only appends to a file.
 inline void append(const std::filesystem::path& file, std::string_view bytes) {
@@ -105,7 +120,7 @@ inline void crashed(int signal_number, siginfo_t* info, void*) {
                 backtrace_symbols_fd(frames, backtrace(frames, 64), handle);
                 ::close(handle);
             }
-            append(base / L"launchme.log", utf8(stamp(false)) + " [crash] " + code + " -> crashes/" + utf8(name) + "\n");
+            append(appLog(), utf8(stamp(false)) + " [crash] " + code + " -> crashes/" + utf8(name) + "\n");
             const auto unseen = crashes / L"unseen.txt";
             std::filesystem::remove(unseen, error);
             append(unseen, utf8(name) + "\n\n");
@@ -144,7 +159,7 @@ inline LONG WINAPI unhandled(EXCEPTION_POINTERS* info) {
         const auto module = moduleOf(address);
         char code[160]{};
         sprintf_s(code, "code 0x%08lX at %p", info && info->ExceptionRecord ? info->ExceptionRecord->ExceptionCode : 0ul, address);
-        append(base / L"launchme.log", utf8(stamp(false)) + " [crash] " + code + " in " + utf8(module) + " -> crashes\\" + utf8(name) + "\r\n");
+        append(appLog(), utf8(stamp(false)) + " [crash] " + code + " in " + utf8(module) + " -> crashes\\" + utf8(name) + "\r\n");
         // Read (and removed) by the next start: the dump's name, then the faulting module.
         const auto unseen = crashes / L"unseen.txt";
         DeleteFileW(unseen.c_str());
@@ -155,9 +170,28 @@ inline LONG WINAPI unhandled(EXCEPTION_POINTERS* info) {
 #endif
 }
 
-// Call once, early. The data folder must be known (LAUNCHME_CONFIG_DIR applied).
+// <data>/logs: launchme-app (Launchme's own) and games (each game's, when switched on for it).
+inline std::filesystem::path logsFolder() { return detail::folder().empty() ? std::filesystem::path{} : detail::folder() / L"logs"; }
+inline std::filesystem::path appLogsFolder() { const auto logs = logsFolder(); return logs.empty() ? logs : logs / L"launchme-app"; }
+
+// Call once, early. The data folder must be known (LAUNCHME_CONFIG_DIR applied). Makes
+// logs/launchme-app and removes its files older than log_days (and the single launchme.log of
+// older versions).
 inline void install(const std::filesystem::path& data_folder) {
     detail::folder() = data_folder;
+    try {
+        std::error_code error;
+        const auto folder = appLogsFolder();
+        std::filesystem::create_directories(folder, error);
+        for (const auto* old : {L"launchme.log", L"launchme.old.log"}) std::filesystem::remove(data_folder / old, error);
+        const auto cutoff = std::filesystem::file_time_type::clock::now() - std::chrono::hours(24 * log_days);
+        for (std::filesystem::directory_iterator it(folder, error), end; !error && it != end; it.increment(error)) {
+            const auto name = it->path().filename().wstring();
+            if (!name.starts_with(L"launchme-") || it->path().extension() != L".log") continue;
+            std::error_code time_error;
+            if (const auto written = it->last_write_time(time_error); !time_error && written < cutoff) std::filesystem::remove(it->path(), time_error);
+        }
+    } catch (...) {}
 #ifndef _WIN32
     struct sigaction action{};
     action.sa_sigaction = detail::crashed;
@@ -175,16 +209,17 @@ inline void install(const std::filesystem::path& data_folder) {
 #endif
 }
 
-// One line in launchme.log. Thread-safe; never throws.
+// One line in today's launchme-app log. Thread-safe; never throws.
 inline void log(std::string_view level, std::wstring_view text) {
     try {
         const auto& base = detail::folder();
         if (base.empty()) return;
         std::lock_guard guard(detail::lock());
-        const auto file = base / L"launchme.log";
+        const auto file = detail::appLog();
         std::error_code error;
-        if (const auto size = std::filesystem::file_size(file, error); !error && size > 1024 * 1024)
-            std::filesystem::rename(file, base / L"launchme.old.log", error);
+        // A runaway day stops at 8 MiB (the start of the day is what tells most).
+        if (const auto size = std::filesystem::file_size(file, error); !error && size > 8 * 1024 * 1024) return;
+        std::filesystem::create_directories(file.parent_path(), error);
         std::string line = detail::utf8(detail::stamp(false)) + " [" + std::string(level) + "] " + detail::utf8(text);
         for (auto& ch : line) if (ch == '\r' || ch == '\n') ch = ' ';
         detail::append(file, line + "\r\n");

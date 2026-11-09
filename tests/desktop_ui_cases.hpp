@@ -60,6 +60,15 @@ int LauncherUiTest::desktop(HWND window) {
 
     // Ostatnio grane: the sidebar's three latest games (and Kontynuuj grę's); Ulubione keeps its two.
     if (app.desktop_recent_games_.size() != 3 || app.desktop_recent_games_[0].app_id != 7604 || entry("game:" + library_view::selectionKey(app.desktop_recent_games_[0])) < 0) return 7605;
+    // Kontynuuj grę stays out while the grid itself is sorted by Ostatnio grane (the same games first).
+    {
+        const int sort = app.settings_.desktop_sort;
+        app.settings_.desktop_sort = library_view::persistedOrder(library_view::Order::last_played);
+        if (app.desktopContinueShown()) return 7694;
+        app.settings_.desktop_sort = library_view::persistedOrder(library_view::Order::alphabetical);
+        if (!app.desktopContinueShown()) return 7695;
+        app.settings_.desktop_sort = sort;
+    }
     app.desktopShowSection("favorites"); settle();
     if (app.cards_.size() != 2) return 7606;
     app.desktopShowSection("all"); settle();
@@ -203,6 +212,21 @@ int LauncherUiTest::desktop(HWND window) {
         const auto key = gameKey(game);
         app.openArtworkBrowser(game);
         if (!app.artworkOpen() || app.artwork_state_.kind() != ArtworkKind::poster) return 7646;
+        // SteamGridDB knows no game by this exact title: its search runs by itself (once), not an empty gallery.
+        {
+            const auto unmatched = [&] {
+                auto list = std::make_unique<ArtworkBrowserMessage>();
+                list->generation = app.artwork_jobs_->generation.load();
+                list->type = ArtworkBrowserMessage::Type::list; list->kind = ArtworkKind::poster;
+                list->page.error = tr(L"Nie znaleziono tej gry w SteamGridDB.");
+                app.onArtworkBrowser(std::move(list));
+            };
+            unmatched();
+            if (!app.artwork_state_.auto_searched || !app.artwork_state_.results_mode || !app.artwork_state_.loading) return 7692;
+            app.loadArtworkPage();
+            unmatched();
+            if (app.artwork_state_.results_mode || app.artwork_state_.loading) return 7693; // Not again in the same visit.
+        }
         const auto picked = pngFixture(200, 40, 60);
         constexpr uint32_t picked_id = 0x80000123u;
         if (!cacheArtworkVariant(game, ArtworkKind::poster, picked_id, picked, coverCacheDirectory())) return 7647;
@@ -277,8 +301,64 @@ int LauncherUiTest::desktop(HWND window) {
         if (!capture(L"desktop-details-download.png")) return 7659;
         install = saved;
     }
+    { // "…" after Ukryj: the game's menu drops down over the page; Esc closes it, the page stays.
+        const SheetHit more{SheetHit::Kind::tile, -1, static_cast<int>(desktop_ui::DetailsExtra::more)};
+        app.paint();
+        const auto& spots = app.renderer_.desktopHotspots();
+        const auto spot = std::find_if(spots.begin(), spots.end(), [&](const auto& item) { return item.hit == more; });
+        if (spot == spots.end()) return 7696;
+        app.desktopPageActivate(more, false);
+        if (!app.desktop_menu_ || app.desktop_menu_->kind != desktop_ui::Menu::Kind::game || app.desktop_menu_->games.size() != 1 ||
+            app.desktop_menu_->games[0] != library_view::selectionKey(app.cards_[0].game)) return 7697;
+        if (!capture(L"desktop-details-menu.png")) return 7698;
+        app.desktopKey(VK_ESCAPE, false);
+        if (app.desktop_menu_ || app.screen_ != ScreenMode::details) return 7698;
+    }
     app.desktopPageActivate({SheetHit::Kind::close}, false);
     if (app.screen_ != ScreenMode::shelves) return 7628;
+
+    // Motyw okna: the window's surfaces in another tint; Kolorowy obrys i poświata: the selected
+    // poster outlined in the cover accent with its art's glow behind it, the plain ring without it.
+    {
+        const auto saved = app.settings_;
+        app.desktopFocus(0); app.desktop_zone_ = 1;
+        desktop_ui::View view;
+        app.desktopView(view);
+        if (!view.poster_glow) return 7684;
+        app.settings_.desktop_theme = 1;
+        app.settings_.cover_accent_rgb = 0xFF3D7A;
+        app.renderer_.setDesktopTheme(app.settings_.desktop_theme);
+        app.renderer_.setCoverAccent(app.settings_.cover_accent_rgb);
+        // Kolor akcentu and Kolor przycisku Graj: the desktop window's own pair, not Tryb TV's.
+        app.settings_.desktop_accent_rgb = 0xFF8A2A; app.settings_.desktop_button_rgb = 0x3B82F6;
+        app.applyAccentColors();
+        if (app.renderer_.uiAccentForTest() != 0xFF8A2A || app.settings_.ui_accent_rgb == 0xFF8A2A) return 7685;
+        const auto grafit = desktop_theme::make(0), granat = desktop_theme::current();
+        if (granat.app.b <= grafit.app.b || granat.side.b <= granat.app.b || granat.popup.b <= granat.card.b) return 7685;
+        settle();
+        if (!capture(L"desktop-theme-navy.png")) return 7686;
+        // Widgets in the theme: the drawer in its colours.
+        app.desktopToolPick(desktop_ui::Tool::friends);
+        app.friends_progress_ = 1;
+        if (!app.friendsOpen() || !capture(L"desktop-theme-widgets.png")) return 7686;
+        app.toggleFriendsDrawer(); app.friends_progress_ = 0; settle();
+        if (app.friendsOpen()) return 7686;
+        app.settings_.desktop_theme = 3; app.settings_.cover_accent_rgb = 0;
+        app.renderer_.setDesktopTheme(app.settings_.desktop_theme);
+        app.renderer_.setCoverAccent(0);
+        app.desktopFocus(1); // A poster with its art: the outline takes its colour, the art glows behind.
+        settle();
+        if (!capture(L"desktop-theme-sand.png")) return 7687;
+        app.settings_.desktop_poster_glow = false;
+        app.desktopView(view);
+        if (view.poster_glow) return 7688;
+        settle();
+        if (!capture(L"desktop-theme-sand-plain.png")) return 7689;
+        app.settings_ = saved;
+        app.renderer_.setDesktopTheme(app.settings_.desktop_theme);
+        app.renderer_.setCoverAccent(app.settings_.cover_accent_rgb);
+        if (desktop_theme::current().app.r != grafit.app.r) return 7699;
+    }
 
     // Czy to u mnie zadziała: above Opis, grey without data, then a verdict that unfolds into a table.
     {

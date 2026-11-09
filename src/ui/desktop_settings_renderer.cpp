@@ -4,6 +4,7 @@
 // sources, controllers and companions as tiles, then the open list and the key or colour dialog.
 #include "renderer.hpp"
 #include "renderer_internal.hpp"
+#include "desktop_theme.hpp"
 #include "brand_icons.hpp"
 #include "../net/companion_characters.hpp"
 
@@ -25,9 +26,9 @@ using render_detail::box;
 using render_detail::upper;
 Rect inflate(Rect r, float by) { return {r.left - by, r.top - by, r.right + by, r.bottom + by}; }
 float middle(Rect r) { return (r.top + r.bottom) * 0.5f; }
-const D2D1_COLOR_F side_bg = rgb(0.056f, 0.061f, 0.071f);
-const D2D1_COLOR_F panel_bg = rgb(0.071f, 0.076f, 0.089f);
-const D2D1_COLOR_F popup_bg = rgb(0.094f, 0.1f, 0.115f);
+const D2D1_COLOR_F& side_bg = desktop_theme::current().side;
+const D2D1_COLOR_F& panel_bg = desktop_theme::current().panel;
+const D2D1_COLOR_F& popup_bg = desktop_theme::current().popup;
 bool lightAccent(D2D1_COLOR_F c) { return 0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b > 0.6f; }
 }
 
@@ -111,7 +112,7 @@ void Renderer::drawDesktopSheetFrame(const Sheet& sheet, const SheetView& view, 
     }
     // The library just left, barely dimmed, as behind a desktop app's dialog; before there is one (or
     // after a resize) the last game's picture, frosted. The window's bar either way.
-    target_->Clear(rgb(0.043f, 0.047f, 0.055f));
+    target_->Clear(desktop_theme::current().app);
     if (drawDesktopBackdrop(0.36f)) drawDesktopWindowBar(view, false);
     else {
         drawBackground();

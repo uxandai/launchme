@@ -250,6 +250,19 @@ void Launcher::finishLaunch() {
 #ifndef _WIN32
     // A Windows program runs through umu/Proton/Wine with the game's options in its prefix.
     if (compatGame(pending_game_)) action.compat = launch_options_store::compatLaunch(pending_game_);
+    // Zapisuj logi: Proton's or Wine's own log too (the runner's output is always kept).
+    if (action.compat && (launchFlags(pending_game_) & launch_flag::log) && !action.compat->options.log) {
+        auto logged = std::make_shared<CompatLaunch>(*action.compat);
+        logged->options.log = true;
+        action.compat = std::move(logged);
+    }
+#endif
+    // Opcje uruchamiania's switches: the game's log begins, HDR goes on.
+    const auto flags_key = gameKey(pending_game_);
+    if (action.kind == ActionKind::play) launchFlagsBegin(pending_game_, &action);
+#ifndef _WIN32
+    if (action.compat && !launchLog(flags_key).empty())
+        launchFlagsNote(flags_key, L"Proton / Wine logs: " + (wine_runner::logFolder(userConfigDirectory()) / wine_runner::logName(*action.compat)).wstring() + L"(.log)");
 #endif
 #ifndef LAUNCHME_UI_TEST
     // Steam's "Uruchamianie…" window opens a second or two after steam.exe gets the command.
@@ -277,6 +290,8 @@ void Launcher::finishLaunch() {
     for (const auto& code : problems.missing)
         if (const auto* text = launch_options_catalog::text(wine_runner::problemText(code)); text && *text) skipped += (skipped.empty() ? L"" : L"; ") + std::wstring(text);
 #endif
+    if (result <= 32) launchFlagsEnd(flags_key, L"Not started (error " + std::to_wstring(static_cast<long long>(result)) + L")");
+    else launchFlagsNote(flags_key, L"Started");
     if (result <= 32) {
         stopLaunchAnimation();
         if (!anyActiveSession()) audio_.resumeMusic();

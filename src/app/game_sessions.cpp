@@ -334,6 +334,8 @@ void Launcher::onGameActivity(std::unique_ptr<GameActivityMessage> message) {
                 played.emplace_back(tracked->second.game, found->second.playedMs());
         }
         frozen_finished = frozen_finished || found->second.frozen();
+        launchFlagsEnd(key, result == SessionResult::start_failed ? L"The start was not confirmed" :
+                       L"Ended, played " + std::to_wstring(found->second.playedMs() / 60000) + L" min");
         finished.push_back(key); game_sessions_.erase(found);
     }
     // An ended session no longer pins its game to the front of Recent.

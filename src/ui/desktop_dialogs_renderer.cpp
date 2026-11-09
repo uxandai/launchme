@@ -4,6 +4,7 @@
 // control recording the area that answers for it (Renderer::desktopModalHotspots).
 #include "renderer.hpp"
 #include "renderer_internal.hpp"
+#include "desktop_theme.hpp"
 #include "exit_prompt.hpp"
 #include "../store/epic_account.hpp"
 #include "../store/amazon.hpp"
@@ -21,7 +22,7 @@ using palette::gray;
 D2D1_COLOR_F rgb(float r, float g, float b, float a = 1) { return D2D1::ColorF(r, g, b, a); }
 float middle(Rect r) { return (r.top + r.bottom) * 0.5f; }
 Rect inflate(Rect r, float by) { return {r.left - by, r.top - by, r.right + by, r.bottom + by}; }
-const D2D1_COLOR_F dialog_bg = rgb(0.086f, 0.092f, 0.106f);
+const D2D1_COLOR_F& dialog_bg = desktop_theme::current().card;
 bool caretOn() { return (GetTickCount64() / 530) % 2 == 0; }
 }
 
@@ -239,7 +240,8 @@ void Renderer::drawDesktopCustomEditor() {
     constexpr float poster_w = 150, poster_column = poster_w + 22;
     // A new game: "Wskaż plik" / "Wskaż folder" above the fields.
     const float pills = ui.pills() ? 52.0f : 0.0f;
-    const float height = sheet_header + 16 + subtitle + pills + static_cast<float>(fields) * field_step + (ui.error.empty() ? 0.0f : 26.0f) + 64;
+    const float toggles = ui.toggles() ? 52.0f : 0.0f; // Opcje uruchamiania's switches under the fields.
+    const float height = sheet_header + 16 + subtitle + pills + static_cast<float>(fields) * field_step + toggles + (ui.error.empty() ? 0.0f : 26.0f) + 64;
     const float width = ui.compat ? 760.0f : 620.0f; // A Windows game on Linux: its Wine/Proton options are long.
     const auto p = desktopDialogFrame(view, poster ? width + poster_column : width, height,
                                       ui.launchOptions() ? tr(L"Opcje uruchamiania") : ui.editing() ? tr(L"Edytuj grę") : tr(L"Dodaj grę"), false);
@@ -307,6 +309,21 @@ void Renderer::drawDesktopCustomEditor() {
             desktopModalHot({Kind::tile_action, index}, b);
         }
         y += field_step;
+    }
+    if (toggles) {
+        // Each switch with its caption, side by side; a click anywhere on one flips it.
+        const float w = (fields_right - p.left - 22 - 16) / static_cast<float>(ui.toggles());
+        for (int which = 0; which < ui.toggles(); ++which) {
+            const Item item = which ? Item::hdr_toggle : Item::log_toggle;
+            const Rect r{p.left + 22 + static_cast<float>(which) * (w + 16), y + 10, p.left + 22 + static_cast<float>(which) * (w + 16) + w, y + 44};
+            const float hv = hover == SheetHit{Kind::action, static_cast<int>(item)} ? 1.0f : 0.0f;
+            desktopFill(r, 8, gray(1, 0.035f + 0.03f * hv));
+            textLine(which ? tr(L"HDR na czas gry") : tr(L"Zapisuj logi"), r.left + 12, middle(r), r.right - r.left - 70, desktop_font_.Get(), palette::text());
+            desktopSwitch({r.right - 50, middle(r) - 11, r.right - 10, middle(r) + 11}, (which ? ui.hdr : ui.log) ? 1.0f : 0.0f, false, hv);
+            if (ui.focus == item) desktopFocusRing(r, 8);
+            desktopModalHot({Kind::action, static_cast<int>(item)}, r);
+        }
+        y += toggles;
     }
     if (!ui.error.empty()) { textLine(ui.error, p.left + 22, y + 6, fields_right - p.left - 22, desktop_small_font_.Get(), palette::danger()); y += 26; }
     const float by = p.bottom - 20 - 36;

@@ -21,6 +21,8 @@ struct LibraryBookmark {
     std::string epic_account;
     bool operator==(const LibraryBookmark&) const = default;
 };
+// A game's switches in Opcje uruchamiania: its launches logged (logs/games/<slug>), HDR on while it runs (Windows).
+namespace launch_flag { inline constexpr unsigned log = 1, hdr = 2, all = log | hdr; }
 struct LibraryState {
     std::optional<LibraryBookmark> bookmark;
     std::map<std::string, library_view::Options> options;
@@ -48,6 +50,9 @@ struct LibraryState {
     // A Steam game's own launch options ("Opcje uruchamiania…"), by gameKey; passed through
     // steam.exe -applaunch. Row: launch-arguments "<key>" "<options>".
     std::map<std::string, std::wstring> launch_arguments;
+    // Opcje uruchamiania's switches of any game, by gameKey: launch_flag bits (never 0).
+    // Row: launch-flags "<key>" <bits>.
+    std::map<std::string, unsigned> launch_flags;
     // Usuń z ostatnio granych, by gameKey: the game stays out of the recent rows until it is played
     // after this time (Steam's own play dates are never touched). Row: recent-hidden "<key>" <time>.
     std::map<std::string, uint64_t> recent_hidden;

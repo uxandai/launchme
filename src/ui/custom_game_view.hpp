@@ -19,12 +19,14 @@
 namespace custom_game_ui {
 // pick_file / pick_folder: a new game's two pills above the fields ("Wskaż plik", "Wskaż folder"); they
 // take the file row's "Wybierz…" place.
+// log_toggle, hdr_toggle: the switches' row under the fields (State::flags): "Zapisuj logi", "HDR na czas gry" (Windows).
 enum class Item { name, file, file_browse, arguments, directory, directory_browse, dll, wine, wine_page, platform, identify, remove, cancel, save,
-                  pick_file, pick_folder };
+                  pick_file, pick_folder, log_toggle, hdr_toggle };
 // platform_field: an emulated game's console (Left/Right or Enter pick another; never typed). With it the
 // file is the ROM, the options an emulator command of its own and the working directory has no use.
 enum Field { name_field, file_field, arguments_field, directory_field, dll_field, wine_field, platform_field, field_count };
-enum class Target { custom, drm_free, steam };
+// other: a game of another store, whose client takes no options: the switches alone.
+enum class Target { custom, drm_free, steam, other };
 // The poster beside the fields: nothing to look for (no name), being looked for, shown, none found.
 enum class Poster { none, loading, shown, missing };
 
@@ -53,6 +55,11 @@ struct State {
     bool compat = false;
     std::string game_key;
     std::wstring dll_opened, wine_opened;
+    // Opcje uruchamiania's switches of the game (LibraryState::launch_flags by flags_key); hdr_option:
+    // Windows (HDR switching), and not for a new game, which has no key yet.
+    bool flags = false, log = false, hdr = false, hdr_option = false;
+    std::string flags_key;
+    int toggles() const { return flags ? (hdr_option ? 2 : 1) : 0; }
     bool editing() const { return !id.empty(); }
     bool launchOptions() const { return target != Target::custom; }
     // The desktop window: a new game has the file row's "Wybierz" like an edited one, and "Dodaj folder jako bibliotekę" at the bottom.
@@ -68,6 +75,7 @@ struct State {
         if (index == dll_field || index == wine_field) return compat;
         if (index == platform_field) return emulated();
         if (index == directory_field && emulated()) return false;
+        if (target == Target::other) return false;
         return target == Target::custom || (target == Target::drm_free ? index != name_field : index == arguments_field);
     }
     unsigned hidden() const { // Bit per field the panel leaves out.
@@ -129,8 +137,9 @@ struct Layout {
     unsigned hidden = 0; // State::hidden(): left-out fields; the others close up.
     bool poster = false; // State::posterShown(): the poster column on the right.
     bool pills = false;  // State::pills(): "Wskaż plik" / "Wskaż folder" above the fields.
-    static constexpr float margin = 36, button_width = 176, gap = 16, poster_width = 200, poster_gap = 28, pills_height = 76;
-    static Layout of(const State& state, float width, float height) { return {width, height, state.hidden(), state.posterShown(), state.pills()}; }
+    int toggles = 0;     // State::toggles(): the switches' row under the fields.
+    static constexpr float margin = 36, button_width = 176, gap = 16, poster_width = 200, poster_gap = 28, pills_height = 76, toggles_height = 68;
+    static Layout of(const State& state, float width, float height) { return {width, height, state.hidden(), state.posterShown(), state.pills(), state.toggles()}; }
     bool shown(int index) const { return !(hidden & (1u << index)); }
     bool browses(int index) const { return browseRow(index) && (index != file_field || !pills); }
     int slot(int index) const { // A field's row among the shown ones.
@@ -140,7 +149,8 @@ struct Layout {
     }
     float pillsSpace() const { return pills ? pills_height : 0.0f; }
     settings_ui::Rect panel() const {
-        const float w = std::min(poster ? 1100.0f : 920.0f, width - 96), half = 118 + slot(field_count) * 52.0f + pillsSpace() * 0.5f;
+        const float w = std::min(poster ? 1100.0f : 920.0f, width - 96),
+                    half = 118 + slot(field_count) * 52.0f + pillsSpace() * 0.5f + (toggles ? toggles_height * 0.5f : 0.0f);
         return {(width - w) * 0.5f, height * 0.5f - half, (width + w) * 0.5f, height * 0.5f + half};
     }
     float rowTop(int index) const { return panel().top + 96 + pillsSpace() + slot(index) * 104.0f; }
@@ -150,6 +160,12 @@ struct Layout {
         const auto p = panel(); const float top = p.top + 96, w = (fieldsRight() - p.left - margin - gap) * 0.5f;
         const float left = p.left + margin + static_cast<float>(which) * (w + gap);
         return {left, top, left + w, top + 56};
+    }
+    // The switches side by side over the fields' width, under the last field: 0 logs, 1 HDR.
+    settings_ui::Rect toggle(int which) const {
+        const auto p = panel(); const float top = p.top + 96 + pillsSpace() + slot(field_count) * 104.0f + 4;
+        const float w = (fieldsRight() - p.left - margin - gap) * 0.5f, left = p.left + margin + static_cast<float>(which) * (w + gap);
+        return {left, top, left + w, top + 52};
     }
     settings_ui::Rect label(int index) const {
         const auto p = panel(); const float y = rowTop(index);
@@ -190,6 +206,7 @@ struct Layout {
         for (const int index : {static_cast<int>(file_field), static_cast<int>(directory_field), static_cast<int>(wine_field)})
             if (shown(index) && browses(index) && browse(index).contains(x, y)) return browseItem(index);
         if (poster && (identify().contains(x, y) || posterBox().contains(x, y))) return Item::identify;
+        for (int which = 0; which < toggles; ++which) if (toggle(which).contains(x, y)) return which ? Item::hdr_toggle : Item::log_toggle;
         for (const auto item : {Item::remove, Item::cancel, Item::save})
             if ((item != Item::remove || editing) && button(item).contains(x, y)) return item;
         return std::nullopt;

@@ -4,6 +4,7 @@
 // Both are measured while drawn: every control records the area that answers for it.
 #include "renderer.hpp"
 #include "renderer_internal.hpp"
+#include "desktop_theme.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -19,8 +20,8 @@ D2D1_COLOR_F rgb(float r, float g, float b, float a = 1) { return D2D1::ColorF(r
 using render_detail::box;
 using render_detail::upper;
 float middle(Rect r) { return (r.top + r.bottom) * 0.5f; }
-const D2D1_COLOR_F panel_bg = rgb(0.071f, 0.076f, 0.089f);
-const D2D1_COLOR_F popup_bg = rgb(0.094f, 0.1f, 0.115f);
+const D2D1_COLOR_F& panel_bg = desktop_theme::current().panel;
+const D2D1_COLOR_F& popup_bg = desktop_theme::current().popup;
 const D2D1_COLOR_F card_bg = rgb(1, 1, 1, 0.035f);
 }
 
@@ -48,6 +49,28 @@ void Renderer::drawDesktopDetails() {
         if (achievements->card && achievements->selected >= 0 && achievements->selected < static_cast<int>(achievements->items.size()))
             drawDesktopAchievementCard(*achievements);
         return;
+    }
+    // Behind the page: the game's background (else its cover) blurred and faint, fading into the panel
+    // downwards, so each game's page takes on its colours. It stays put while the page scrolls.
+    if (Cover* source = !heroes_.empty() && heroes_[0].bitmap ? &heroes_[0] : !covers_.empty() && covers_[0].bitmap ? &covers_[0] : nullptr) {
+        if (auto* blur = blurredArt(*source)) {
+            const auto area = D2D1::RectF(p.left + 1, h.bottom, p.right - 1, p.bottom - 1);
+            const auto size = blur->GetSize();
+            // Cover the area, cropped to its shape (the blurred copy is tiny: stretching it is the blur).
+            const float want = (area.right - area.left) / std::max(1.0f, area.bottom - area.top), have = size.width / std::max(1.0f, size.height);
+            auto crop = D2D1::RectF(0, 0, size.width, size.height);
+            if (have > want) { const float w = size.height * want; crop.left = (size.width - w) * 0.5f; crop.right = crop.left + w; }
+            else { const float hh = size.width / want; crop.bottom = std::min(size.height, hh); } // The top: where the picture's sky and title are.
+            target_->DrawBitmap(blur, area, 0.30f * reveal(*source), D2D1_BITMAP_INTERPOLATION_MODE_LINEAR, &crop);
+            ComPtr<ID2D1GradientStopCollection> stops;
+            ComPtr<ID2D1LinearGradientBrush> fade;
+            const auto& under = panel_bg;
+            const D2D1_GRADIENT_STOP fade_stops[] = {{0, rgb(under.r, under.g, under.b, 0.25f)}, {0.6f, rgb(under.r, under.g, under.b, 0.82f)}, {1, under}};
+            if (SUCCEEDED(target_->CreateGradientStopCollection(fade_stops, 3, stops.GetAddressOf())) &&
+                SUCCEEDED(target_->CreateLinearGradientBrush(D2D1::LinearGradientBrushProperties(D2D1::Point2F(0, area.top), D2D1::Point2F(0, area.bottom)),
+                                                            stops.Get(), fade.GetAddressOf())))
+                target_->FillRectangle(area, fade.Get());
+        }
     }
     const auto hover = [&](SheetHit hit) { return view.hover == hit ? 1.0f : 0.0f; };
     const auto pressed = [&](SheetHit hit) { return view.pressed == hit; };
@@ -159,6 +182,13 @@ void Renderer::drawDesktopDetails() {
         extra(DetailsExtra::artwork, desktop_ui::glyph::picture, tr(L"Grafika"), true);
         extra(DetailsExtra::folder, desktop_ui::glyph::folder_open, tr(L"Folder"), view.folder);
         if (view.hideable) extra(DetailsExtra::hide, view.hidden ? desktop_ui::glyph::view : desktop_ui::glyph::hide, view.hidden ? tr(L"Pokaż") : tr(L"Ukryj"), true);
+        { // "…": the game's whole menu (as the pane's), dropping down from it.
+            const SheetHit hit{Kind::tile, -1, static_cast<int>(DetailsExtra::more)};
+            const auto r = place(bh);
+            desktopButton(r, 1, hover(hit), pressed(hit), true, 0, {});
+            desktopGlyph(desktop_ui::glyph::more, (r.left + r.right) * 0.5f, middle(r), 14, gray(0.88f));
+            desktopHot(hit, r);
+        }
         // Cloud saves of a game Aurelia manages: its state, a click opens its page.
         outline(context_->detail_cloud_action, 0xE753, context_->aurelia_cloud.empty() ? std::wstring(tr(L"Zapisy w chmurze")) : context_->aurelia_cloud);
         y = row_top + bh + 28;
@@ -260,6 +290,13 @@ void Renderer::drawDesktopDetails() {
     }
     desktop_sheet_height_ = std::max(main_y, side_y) + s - h.bottom + 12;
     target_->PopAxisAlignedClip();
+    // "…": the game's menu over the page, as the library's pane opens it.
+    if (const auto* menu = context_->desktop_sheet_menu) {
+        const auto view_port = desktopViewport();
+        desktop_ui::Layout layout;
+        layout.width = view_port.width; layout.height = view_port.height;
+        drawDesktopMenu(layout, *menu);
+    }
 }
 
 void Renderer::drawDesktopAchievements(const achievements_ui::State& list, float left, float right, float top) {

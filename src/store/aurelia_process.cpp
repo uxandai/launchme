@@ -1,6 +1,7 @@
 #include "aurelia.hpp"
 #include "../platform/file_io.hpp"
 #include "aurelia_stream.hpp"
+#include "../library/game_log.hpp"
 #include "../platform/command_line.hpp"
 #include "../platform/text_encoding.hpp"
 #ifdef _WIN32
@@ -159,7 +160,9 @@ Reply invoke(const Runtime& runtime, const Request& request, const Cancel& cance
     // forwarded to the daemon, which sees only the command line (not AURELIA_PASSWORD) and its own
     // stdin. The session file they write is what the daemon reads on the next command.
     const bool interactive = request.command == Command::login_qr || request.command == Command::login_password;
-    if (local || interactive) env[L"AURELIA_NO_DAEMON"] = L"1";
+    // A logged play runs here too: its -vv output is the game's log.
+    const bool logged = request.command == Command::play && !request.log.empty();
+    if (local || interactive || logged) env[L"AURELIA_NO_DAEMON"] = L"1";
     else if (request.command != Command::login && !daemonReady(endpoint, runtime.executable)) {
         result.error = tr(L"Nie można potwierdzić tożsamości daemona Aurelii. Spróbuj ponownie po zakończeniu jego uruchamiania."); return result;
     }
@@ -222,6 +225,7 @@ Reply invoke(const Runtime& runtime, const Request& request, const Cancel& cance
             if (!PeekNamedPipe(pipe, nullptr, 0, nullptr, &available, nullptr) || !available) break;
             char buffer[16384];
             if (!ReadFile(pipe, buffer, std::min<DWORD>(available, sizeof(buffer)), &received, nullptr) || !received) break;
+            if (logged) game_log::append(request.log, {buffer, received});
             if (stdout_pipe && !live && (output_bytes += received) > limit) { overflow = true; return; }
             auto& parser = stdout_pipe ? stdout_json : stderr_json;
             if (!parser.feed({buffer, received}, [&](const json::Value& item) {
@@ -581,7 +585,9 @@ Reply invoke(const Runtime& runtime, const Request& request, const Cancel& cance
     // forwarded to the daemon, which sees only the command line (not AURELIA_PASSWORD) and its own
     // stdin. The session file they write is what the daemon reads on the next command.
     const bool interactive = request.command == Command::login_qr || request.command == Command::login_password;
-    if (local || interactive) own.push_back("AURELIA_NO_DAEMON=1");
+    // A logged play runs here too: its -vv output is the game's log.
+    const bool logged = request.command == Command::play && !request.log.empty();
+    if (local || interactive || logged) own.push_back("AURELIA_NO_DAEMON=1");
     else if (request.command != Command::login && !daemonReady(endpoint, runtime.executable)) {
         result.error = tr(L"Nie można potwierdzić tożsamości daemona Aurelii. Spróbuj ponownie po zakończeniu jego uruchamiania."); return result;
     }
@@ -629,6 +635,7 @@ Reply invoke(const Runtime& runtime, const Request& request, const Cancel& cance
             if (received < 0 && errno == EINTR) continue;
             if (received < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) return;
             if (received <= 0) { pipe.reset(); return; }
+            if (logged) game_log::append(request.log, {buffer, static_cast<size_t>(received)});
             if (stdout_pipe && !live && (output_bytes += static_cast<size_t>(received)) > limit) { overflow = true; return; }
             auto& parser = stdout_pipe ? stdout_json : stderr_json;
             if (!parser.feed({buffer, static_cast<size_t>(received)}, [&](const json::Value& item) {

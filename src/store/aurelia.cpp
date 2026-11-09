@@ -96,12 +96,12 @@ std::vector<std::wstring> arguments(const Request& r) {
     case C::verify: add({L"verify", app}); break;
     case C::uninstall: add({L"uninstall", app}); break;
 #ifdef _WIN32
-    case C::play: add({L"play", app, L"--windows", L"--no-update"}); if (r.steam) add({L"--steam"}); else add({L"--steam-mode", L"none", L"--platform", L"windows"}); break;
+    case C::play: add({L"play"}); if (!r.log.empty()) add({L"-vv"}); add({app, L"--windows", L"--no-update"}); if (r.steam) add({L"--steam"}); else add({L"--steam-mode", L"none", L"--platform", L"windows"}); break;
 #else
     // Linux: no `--windows` (it would skip Proton); a Windows build runs through Aurelia's own
     // Proton/Wine, the native build directly.
     case C::play:
-        add({L"play", app, L"--no-update"});
+        add({L"play"}); if (!r.log.empty()) add({L"-vv"}); add({app, L"--no-update"});
         if (r.text == L"linux") add({L"--platform", L"linux"}); else if (!r.text.empty() && r.text != L"windows") return {};
         if (r.steam) add({L"--steam"}); else if (r.text != L"linux") add({L"--steam-mode", L"none", L"--platform", L"windows"});
         break;

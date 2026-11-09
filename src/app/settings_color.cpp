@@ -15,7 +15,9 @@ void Launcher::openColorEditor(const Row& row) {
     editor.target = row.id;
     editor.title = row.title;
     editor.hue = hue; // Kept for greys, which have no hue of their own.
-    const uint32_t current = row.id == Id::ui_accent ? settings_.ui_accent_rgb :
+    const uint32_t current = row.id == Id::desktop_accent ? settings_.desktop_accent_rgb :
+                             row.id == Id::desktop_button ? (settings_.desktop_button_rgb ? settings_.desktop_button_rgb : settings_.desktop_accent_rgb) :
+                             row.id == Id::ui_accent ? settings_.ui_accent_rgb :
                              row.id == Id::button_color ? (settings_.button_rgb ? settings_.button_rgb : settings_.ui_accent_rgb) : settings_.cover_accent_rgb;
     if (current) editor.set(current);
     else { editor.hue = 210; editor.saturation = 0.6f; editor.value = 0.9f; } // "Z okładki": a colour to start from.
@@ -24,9 +26,22 @@ void Launcher::openColorEditor(const Row& row) {
     audio_.context();
 }
 
+// The accent and the buttons' fill of the mode on screen: the desktop window has its own pair.
+void Launcher::applyAccentColors() {
+    if (desktop_mode_) {
+        renderer_.setUiAccent(settings_.desktop_accent_rgb);
+        renderer_.setButtonTheme(settings_.desktop_button_rgb ? settings_.desktop_button_rgb : settings_.desktop_accent_rgb, settings_.button_idle);
+    } else {
+        renderer_.setUiAccent(settings_.ui_accent_rgb);
+        renderer_.setButtonTheme(settings_.button_rgb, settings_.button_idle);
+    }
+}
+
 void Launcher::colorEditorPreview() {
     const uint32_t rgb = color_editor_.rgb() ? color_editor_.rgb() : 0x010101; // 0 means "from the cover".
-    if (color_editor_.target == Id::ui_accent) renderer_.setUiAccent(rgb);
+    if (color_editor_.target == Id::desktop_accent) renderer_.setUiAccent(rgb);
+    else if (color_editor_.target == Id::desktop_button) renderer_.setButtonTheme(rgb, settings_.button_idle);
+    else if (color_editor_.target == Id::ui_accent) renderer_.setUiAccent(rgb);
     else if (color_editor_.target == Id::button_color) renderer_.setButtonTheme(rgb, settings_.button_idle);
     else renderer_.setCoverAccent(rgb);
     InvalidateRect(hwnd_, nullptr, FALSE);
@@ -40,14 +55,15 @@ void Launcher::closeColorEditor(bool save) {
     mouse_transition_until_ = GetTickCount64() + GetDoubleClickTime();
     if (save) {
         const uint32_t rgb = editor.rgb() ? editor.rgb() : 0x010101;
-        if (editor.target == Id::ui_accent) settings_.ui_accent_rgb = rgb;
+        if (editor.target == Id::desktop_accent) settings_.desktop_accent_rgb = rgb;
+        else if (editor.target == Id::desktop_button) settings_.desktop_button_rgb = rgb;
+        else if (editor.target == Id::ui_accent) settings_.ui_accent_rgb = rgb;
         else if (editor.target == Id::button_color) settings_.button_rgb = rgb;
         else settings_.cover_accent_rgb = rgb;
         settingsChanged(); // Applies it and lists it as "Własny · #RRGGBB".
     } else {
-        renderer_.setUiAccent(settings_.ui_accent_rgb);
+        applyAccentColors();
         renderer_.setCoverAccent(settings_.cover_accent_rgb);
-        renderer_.setButtonTheme(settings_.button_rgb, settings_.button_idle);
     }
     audio_.context();
     InvalidateRect(hwnd_, nullptr, FALSE);

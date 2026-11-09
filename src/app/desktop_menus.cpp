@@ -40,8 +40,9 @@ void Launcher::desktopOpenGameMenu(float x, float y, bool keyboard, bool pane) {
         const auto& game = games.front();
         // "Enter" beside what Enter does on the card: launch, or its details (the default game action).
         const bool enter_details = settings_.accept_action == AppSettings::AcceptAction::details;
-        if (pane) { // Graj is the button beside it: Szczegóły (the game's page in the library's place) first.
-            items.push_back({Action::details, tr(L"Szczegóły"), enter_details ? std::wstring(tr(L"Enter")) : std::wstring{}, glyph::info});
+        if (pane) { // Graj is the button beside it: Szczegóły (the game's page in the library's place) first, unless that page is open.
+            if (screen_ != ScreenMode::details)
+                items.push_back({Action::details, tr(L"Szczegóły"), enter_details ? std::wstring(tr(L"Enter")) : std::wstring{}, glyph::info});
         } else {
             MenuItem play{Action::play, actionLabel(game), enter_details ? std::wstring{} : std::wstring(tr(L"Enter")), glyph::play};
             play.enabled = actionEnabled(game) && !pending_launch_;

@@ -41,6 +41,8 @@ enum class Id { font, home_layout, ui_accent, accent, uninstalled, emulation, mu
                   launch_tv_mode,
                   // Interfejs  Okno desktopowe: posters' marks of their store; games not installed in black and white.
                   desktop_platform_badges, desktop_gray_uninstalled,
+                  // Interfejs → Okno desktopowe: the window's colours; the selected poster's outline and glow.
+                  desktop_theme, desktop_poster_glow, desktop_accent, desktop_button,
                   // Towarzyszka: the Tavily key for her web search (szukaj_w_sieci).
                    companion_web_key, companion_feed_folder, companion_backup, companion_reply_length, companion_import_folder, companion_typing, companion_weather,
                    // Towarzyszka: who she talks with — your name or nickname and your gender (she says "on"/"ona").
@@ -48,7 +50,7 @@ enum class Id { font, home_layout, ui_accent, accent, uninstalled, emulation, mu
                    // Towarzyszka: her chat and Launchfeed in a phone's browser (companion_remote.cpp).
                    companion_remote, companion_remote_address,
                    // System: start with Windows; the version and the data folder (logs, crash reports).
-                   autostart, about, discord,
+                   autostart, about, logs, discord,
                    // A tile grouping related settings on a page of their own (Control::page, Row::page).
                    page,
                    // Interfejs → Zaznaczona okładka: the glow's animation (still, pulsing or a travelling outline).
@@ -248,6 +250,18 @@ inline constexpr std::array<const wchar_t*, 8> button_color_names{
     trKey(L"Biały (domyślny)"), trKey(L"Jak akcent interfejsu"), L"PlayStation Blue", L"Xbox Green", L"Switch Red", L"Wii Blue",
     trKey(L"Fioletowy"), trKey(L"Pomarańczowy")};
 // Indexed like AppSettings::ButtonIdle.
+// The desktop window's colours (AppSettings::desktop_theme, desktop_theme.hpp).
+inline constexpr std::array<const wchar_t*, 9> desktop_themes{trKey(L"Grafit (domyślny)"), trKey(L"Granat"), trKey(L"Las"), trKey(L"Piasek"), trKey(L"Śliwka"),
+                                                               trKey(L"Morze"), trKey(L"Wino"), trKey(L"Indygo"), trKey(L"Czerń")};
+// The desktop window's accent and primary button (AppSettings::desktop_accent_rgb, desktop_button_rgb).
+inline constexpr std::array<uint32_t, 10> desktop_accents{0xEEEEEE, 0xFF8A2A, 0x3DDC84, 0x3B82F6, 0x22C3D6, 0x8E6CFF, 0xFF4F8B, 0xE5484D, 0xF5C542, 0x52B043};
+inline constexpr std::array<const wchar_t*, 10> desktop_accent_names{
+    trKey(L"Biały (domyślny)"), trKey(L"Pomarańczowy"), trKey(L"Miętowy"), trKey(L"Niebieski"), trKey(L"Turkusowy"), trKey(L"Fioletowy"),
+    trKey(L"Różowy"), trKey(L"Czerwony"), trKey(L"Złoty"), L"Xbox Green"};
+inline constexpr std::array<uint32_t, 11> desktop_buttons{0, 0xF5F5F5, 0xFF8A2A, 0x3DDC84, 0x3B82F6, 0x22C3D6, 0x8E6CFF, 0xFF4F8B, 0xE5484D, 0xF5C542, 0x52B043};
+inline constexpr std::array<const wchar_t*, 11> desktop_button_names{
+    trKey(L"Jak akcent"), trKey(L"Biały"), trKey(L"Pomarańczowy"), trKey(L"Miętowy"), trKey(L"Niebieski"), trKey(L"Turkusowy"), trKey(L"Fioletowy"),
+    trKey(L"Różowy"), trKey(L"Czerwony"), trKey(L"Złoty"), L"Xbox Green"};
 inline constexpr std::array<const wchar_t*, 3> button_idles{trKey(L"Szare szkło (domyślne)"), trKey(L"W kolorze przycisku"), trKey(L"Ciemne")};
 // Indexed like AppSettings::TileEntrance.
 inline constexpr std::array<const wchar_t*, 2> hint_styles{trKey(L"Szklane"), trKey(L"Białe")}; // AppSettings::HintStyle.

@@ -92,9 +92,11 @@ void Launcher::desktopGroupSettings(desktop_ui::Group group) {
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
-// Kontynuuj grę: Wszystkie gry with nothing searched, once something was played.
+// Kontynuuj grę: Wszystkie gry with nothing searched, once something was played. Not while the grid
+// is sorted by Ostatnio grane: its first posters (or rows) are those games already.
 bool Launcher::desktopContinueShown() const {
     if (!desktop_mode_ || desktop_recent_games_.empty() || !trimmedQuery(desktop_query_).empty()) return false;
+    if (library_view::orderFromPersisted(settings_.desktop_sort) == library_view::Order::last_played) return false;
     const auto* entry = desktopEntry();
     return !entry || entry->kind == EntryKind::all;
 }

@@ -422,6 +422,10 @@ void Launcher::aureliaLaunch(const Game& game) {
     if (aurelia_downloads_.contains(game.app_id)) { openAurelia(&game); return; }
     aurelia_playing_.insert(game.app_id);
     aurelia::Request request{C::standalone, game.app_id}; request.steam = false;
+    // Opcje uruchamiania: its log (Aurelia's play -vv goes there too) and HDR.
+    launchFlagsBegin(game, nullptr);
+    request.log = launchLog(gameKey(game));
+    if (!request.log.empty()) launchFlagsNote(gameKey(game), L"Through Aurelia: play -vv " + std::to_wstring(game.app_id) + L" (its output follows)");
     // Its Steam Cloud saves: pulled before the game starts and pushed after it ends, unless turned off for it.
     request.auto_cloud = aureliaCloudEnabled() && !settings_.aurelia_cloud_skip.contains(std::to_string(game.app_id));
     // Managed only through "Domyślnie zarządzaj przez Aurelię": a game that cannot run without the
@@ -433,6 +437,9 @@ void Launcher::aureliaLaunch(const Game& game) {
     aureliaRequest(request, [game, by_default](Launcher& app, aurelia::Reply reply) {
         app.aurelia_playing_.erase(game.app_id);
         app.aurelia_stopping_.erase(game.app_id);
+        // `play` returns when the game has ended (or could not start).
+        app.launchFlagsEnd(gameKey(game), reply.ok ? std::wstring(L"Aurelia: play finished") :
+                           reply.cancelled ? std::wstring(L"Aurelia: cancelled") : L"Aurelia: " + reply.error);
         if (app.launch_artwork_key_ == gameKey(game)) app.stopLaunchAnimation();
         if (const auto* outcome = reply.data.get("cloud_result")) {
             auto& state = app.aurelia_cloud_[game.app_id]; state = aurelia::cloud({true, false, *outcome}, true); state.checked = GetTickCount64();

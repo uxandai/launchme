@@ -808,6 +808,7 @@ void Launcher::desktopView(desktop_ui::View& view) {
     view.quick = desktop_quick_;
     view.meta = desktop_meta_;
     view.platform_badges = settings_.desktop_platform_badges;
+    view.poster_glow = settings_.desktop_poster_glow;
     view.gray_uninstalled = settings_.desktop_gray_uninstalled;
     view.marked.assign(cards_.size(), 0);
     view.card_mark.assign(cards_.size(), 0.0f);

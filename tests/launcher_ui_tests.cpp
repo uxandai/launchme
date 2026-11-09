@@ -7,6 +7,7 @@
 #include "../src/ui/xmb_layout.hpp"
 #include "../src/ui/quick_menu.hpp"
 #include "../src/ui/tour_view.hpp"
+#include "../src/ui/desktop_theme.hpp"
 #include "../src/store/game_details.hpp"
 #include "image_fixture.hpp"
 #include "../src/ui/carousel.hpp"

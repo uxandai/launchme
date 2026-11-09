@@ -193,6 +193,21 @@ void Launcher::buildSettingsRows() {
             accent.choices.push_back({tr(L"Inny…"), current, true});
             add(std::move(accent));
         };
+        // Okno desktopowe's colours: the window's theme, the selected poster's outline and glow.
+        const auto desktopRows = [&] {
+            choiceRow(Id::desktop_theme, tr(L"Motyw okna"), tr(L"Kolory tła, paneli i menu okna desktopowego - wszystkie ciemne."),
+                      desktop_themes, settings_.desktop_theme);
+            accentRow(Id::desktop_accent, tr(L"Kolor akcentu"), tr(L"Przełączniki, zaznaczenia, postęp i linki w oknie desktopowym."),
+                      settings_.desktop_accent_rgb, desktop_accents, desktop_accent_names);
+            accentRow(Id::desktop_button, tr(L"Kolor przycisku Graj"), tr(L"Graj, Zainstaluj i inne główne przyciski. Napis dobiera kolor sam."),
+                      settings_.desktop_button_rgb, desktop_buttons, desktop_button_names);
+            add({Id::desktop_poster_glow, Control::toggle, tr(L"Kolorowy obrys i poświata"),
+                tr(L"Zaznaczona okładka w kolorze akcentu okładek, z lekką rozmytą poświatą swojej grafiki, jak w trybie TV."), {},
+                settings_.desktop_poster_glow});
+            if (settings_.desktop_poster_glow)
+                accentRow(Id::accent, tr(L"Kolor akcentu okładek"), tr(L"Automatycznie: kolor samej okładki. Albo jeden mocny kolor dla wszystkich."),
+                          settings_.cover_accent_rgb, accents, accent_names);
+        };
         using HomeLayout = AppSettings::HomeLayout;
         if (settings_state_.at(Page::layout_options)) {
             // The chosen Tryb TV layout's own options.
@@ -322,6 +337,7 @@ void Launcher::buildSettingsRows() {
                     tr(L"Mały znak sklepu lub konsoli w prawym górnym rogu każdej okładki."), {}, settings_.desktop_platform_badges});
                 add({Id::desktop_gray_uninstalled, Control::toggle, tr(L"Niezainstalowane w czerni i bieli"),
                     tr(L"Okładki gier, których nie ma na dysku, bez kolorów - zainstalowane od razu się wyróżniają."), {}, settings_.desktop_gray_uninstalled});
+                desktopRows();
             }
             section(tr(L"Tryb TV"));
             if (desktop_mode_) {
@@ -365,6 +381,7 @@ void Launcher::buildSettingsRows() {
                 tr(L"Mały znak sklepu lub konsoli w prawym górnym rogu każdej okładki."), {}, settings_.desktop_platform_badges});
             add({Id::desktop_gray_uninstalled, Control::toggle, tr(L"Niezainstalowane w czerni i bieli"),
                 tr(L"Okładki gier, których nie ma na dysku, bez kolorów - zainstalowane od razu się wyróżniają."), {}, settings_.desktop_gray_uninstalled});
+            desktopRows();
         }
         // The console layouts are Tryb TV; the desktop window is the other mode (src/app/desktop*.cpp).
         section(tr(L"Tryb TV"));
@@ -1007,9 +1024,12 @@ void Launcher::buildSettingsRows() {
             tr(L"Okładki i plakaty w pamięci karty graficznej 8 razy mniejsze, loga 4 razy, kosztem odrobiny jakości. W trybie niskiego zużycia RAM także tła."),
             {}, settings_.texture_compression});
         section(tr(L"Pomoc"));
-        // The version, and the folder with launchme.log and crash reports a user can send.
+        // The version, and the folder with the logs and crash reports a user can send.
         add({Id::about, Control::action, L"Launchme " + diagnostics::version(),
-            tr(L"Dane, dziennik (launchme.log) i raporty awarii (crashes): ") + userConfigDirectory().wstring(), tr(L"Otwórz folder")});
+            tr(L"Dane i raporty awarii (crashes): ") + userConfigDirectory().wstring(), tr(L"Otwórz folder")});
+        add({Id::logs, Control::action, tr(L"Logi"),
+            tr(L"Uruchomienia i błędy Launchme z ostatnich 3 dni (logs/launchme-app) oraz logi gier, dla których je włączono w Opcjach uruchamiania (logs/games)."),
+            tr(L"Otwórz folder logów")});
         // Przewodnik: one row in each face. The desktop window: the first steps' panel again, its progress reset
         // (src/app/getting_started.cpp); Tryb TV: the first-run walkthrough again (src/app/tour.cpp).
         if (desktop_mode_)

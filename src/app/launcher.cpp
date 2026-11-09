@@ -118,6 +118,7 @@ void Launcher::rememberTvMonitor() {
 }
 
 Launcher::~Launcher() {
+    if (hwnd_) diagnostics::log("info", "Exit");
     browser_.reset(); // Close WebView/its callbacks before any Launcher state is destroyed.
     { std::lock_guard lock(store_gateway_->mutex); store_gateway_->gog = nullptr; store_gateway_->epic = nullptr; } // The plugin worker may outlive us.
     glance_cancel_->store(true);
@@ -209,7 +210,7 @@ bool Launcher::initialize(HWND hwnd) {
     {
         wchar_t module[MAX_PATH * 2]{};
         GetModuleFileNameW(nullptr, module, static_cast<DWORD>(std::size(module)));
-        diagnostics::log("info", L"Start " + diagnostics::version() + L" " + module);
+        diagnostics::log("info", L"Start " + diagnostics::version() + L" " + module + (desktop_mode_ ? L" (desktop window)" : L" (Tryb TV)"));
     }
     if (settings_.load_failed) {
         diagnostics::log("error", "settings.ini could not be read; defaults in use");
@@ -236,8 +237,8 @@ bool Launcher::initialize(HWND hwnd) {
     renderer_.setDrawerStyle(settings_.drawer);
     renderer_.setFontFamily(settings_.font_family);
     renderer_.setCoverAccent(settings_.cover_accent_rgb);
-    renderer_.setUiAccent(settings_.ui_accent_rgb);
-    renderer_.setButtonTheme(settings_.button_rgb, settings_.button_idle);
+    applyAccentColors();
+    renderer_.setDesktopTheme(settings_.desktop_theme);
     renderer_.setFocusGap(settings_.focus_gap);
     renderer_.setGlow(settings_.glow_level, settings_.glow_pulse, settings_.glow_trace);
     renderer_.setBackgroundGrid(settings_.background_grid, settings_.background_grid_style);

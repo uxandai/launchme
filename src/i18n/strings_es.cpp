@@ -30,7 +30,6 @@ constexpr Entry entries[] = {
     {L"Odinstaluj…", L"Desinstalar…"},
     {L"Uruchamiaj z systemem Windows", L"Iniciar con Windows"},
     {L"Po zalogowaniu. Tryb TV zajmuje ekran, okno desktopowe czeka zminimalizowane na pasku zadań.", L"Al iniciar sesión. El modo TV ocupa la pantalla; la ventana de escritorio espera minimizada en la barra de tareas."},
-    {L"Dane, dziennik (launchme.log) i raporty awarii (crashes): ", L"Datos, registro (launchme.log) e informes de fallos (crashes): "},
     {L"Nie można zmienić uruchamiania z systemem", L"No se pudo cambiar el inicio con Windows"},
     {L"Wydajność", L"Rendimiento"},
     {L"Tryb niskiego zużycia RAM", L"Modo de poca memoria"},

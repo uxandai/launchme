@@ -530,6 +530,7 @@ void Launcher::mouseMove(float mouse_x, float mouse_y) {
             return;
         }
         if (desktopActive() && !(desktop_hover_ == desktop_ui::Hit{})) { desktop_hover_ = {}; InvalidateRect(hwnd_, nullptr, FALSE); }
+        if (desktopSheet() && topModal() == Modal::none && !friends_open_ && desktop_menu_) { desktopMouseMove(mouse_x, mouse_y); return; } // Szczegóły' "…" menu.
         if (desktopSheet() && topModal() == Modal::none && !friends_open_) { desktopChromeMove(mouse_x, mouse_y); desktopSettingsMove(mouse_x, mouse_y); return; }
         if (desktopEmbedded()) {
             // The sheet's ✕, then the screen beneath in its own canvas.

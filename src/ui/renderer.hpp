@@ -60,6 +60,7 @@ public:
     // Settings → Interfejs → Kolor przycisków: the focused button's fill (0 = the interface accent)
     // and the tint of the others; captions take dark or light ink, whichever contrasts more.
     void setButtonTheme(uint32_t focus_rgb, AppSettings::ButtonIdle idle) { button_rgb_ = focus_rgb; button_idle_ = idle; }
+    void setDesktopTheme(int theme); // The desktop window's colours (desktop_theme.hpp).
     // Settings → Interfejs → Zaznaczona okładka: an empty band between the focus outline and the picture.
     void setFocusGap(AppSettings::FocusGap gap) { focus_gap_ = gap; }
     // Settings → Interfejs: halo strength (0..2) and mutually exclusive outline animations.

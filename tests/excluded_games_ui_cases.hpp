@@ -47,11 +47,11 @@ int LauncherUiTest::excludedGames(HWND window) {
     };
     const auto menuClick = [&](Item item) { return menuClickRaw(item) && (item != Item::exclude || confirmExclude()); };
     app.openPcLibrary(GameSource::gog); app.openDetails(gog);
-    // Artwork, folder, Skróty (installed: its shortcuts), Edytuj metadane, hide, exclude and (installed) uninstall.
-    // (Usuń z ostatnio granych before hide when it was played.)
+    // Artwork, folder, Opcje uruchamiania (its switches), Skróty (installed: its shortcuts), Edytuj metadane, hide,
+    // exclude and (installed) uninstall. (Usuń z ostatnio granych before hide when it was played.)
     const int recent_row = app.menuRows().recent ? 1 : 0;
-    if (!options() || context_menu::rows(app.menuRows()) != 7 + recent_row || context_menu::row(Item::shortcuts, app.menuRows()) != 2 ||
-        context_menu::row(Item::uninstall, app.menuRows()) != 6 + recent_row) return 3101;
+    if (!options() || context_menu::rows(app.menuRows()) != 8 + recent_row || context_menu::row(Item::launch, app.menuRows()) != 2 ||
+        context_menu::row(Item::shortcuts, app.menuRows()) != 3 || context_menu::row(Item::uninstall, app.menuRows()) != 7 + recent_row) return 3101;
     app.menu_progress_ = 1;
     if (!capture(L"details-options-exclude.png")) return 3102;
     const auto launches = dispatched.size();
@@ -63,9 +63,10 @@ int LauncherUiTest::excludedGames(HWND window) {
     if (!present(app.store_library_, gog) || !app.library_state_.excluded_games.contains(gameKey(gog))) return 3107;
     app.togglePrivateCategory();
     if (!app.private_shelf_ || !absent(gog) || !present(app.public_library_, private_game)) return 3108;
-    // Uninstalled Epic: no folder. Keyboard/pad selection acts on the menu, not the page beneath.
+    // Uninstalled Epic: no folder, but Opcje uruchamiania (its switches). Keyboard/pad selection acts on the menu, not the page beneath.
     app.openPcLibrary(GameSource::epic); app.openDetails(epic);
-    if (!options() || context_menu::rows(app.menuRows()) != 4 + (app.menuRows().recent ? 1 : 0) || context_menu::row(Item::folder, app.menuRows()) != -1) return 3109;
+    if (!options() || context_menu::rows(app.menuRows()) != 5 + (app.menuRows().recent ? 1 : 0) || context_menu::row(Item::folder, app.menuRows()) != -1 ||
+        context_menu::row(Item::launch, app.menuRows()) < 0) return 3109;
     app.changeCategory(context_menu::row(Item::exclude, app.menuRows())); app.enterDown(false); app.enterUp();
     if (!confirmExclude()) return 3131;
     if (!absent(epic) || app.screen_ == ScreenMode::details || dispatched.size() != launches + 1) return 3110;

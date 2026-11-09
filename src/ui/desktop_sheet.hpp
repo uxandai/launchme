@@ -111,7 +111,7 @@ inline StoreGrid storeGrid(const Sheet& sheet) {
 inline Sheet embedSheet(float width, float height) { Sheet sheet; sheet.width = width; sheet.height = height; sheet.max_width = 1240; sheet.max_height = 900; return sheet; }
 inline Rect embedBody(const Sheet& sheet) { const auto p = sheet.panel(); return {p.left + 1, p.top + sheet_header, p.right - 1, p.bottom - 1}; }
 // Extra hit indices of Szczegóły's buttons (SheetHit::Kind::tile, sub).
-enum class DetailsExtra { artwork, folder, hide };
+enum class DetailsExtra { artwork, folder, hide, more }; // more: "…", the game's menu.
 // Tryb TV's dialogs drawn as desktop dialogs over desktop pages (desktop_dialogs_renderer.cpp).
 enum class DialogKind { none, collections, custom_editor, identify, power_menu, exit_prompt, gog_install, aurelia };
 

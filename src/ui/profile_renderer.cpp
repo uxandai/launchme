@@ -5,6 +5,7 @@
 #include "renderer.hpp"
 #include "renderer_internal.hpp"
 #include "brand_icons.hpp"
+#include "desktop_theme.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -127,7 +128,9 @@ void Renderer::drawProfilePage() {
     };
 
     // The page: almost black, with the accent glowing from two corners.
-    brush(rgba(0.016f, 0.019f, 0.025f, 0.985f * alpha));
+    // The desktop window: its theme's background (Motyw okna), opaque in the library's place.
+    const auto page_bg = desktop_style_ ? desktop_theme::current().app : rgba(0.016f, 0.019f, 0.025f, 1);
+    brush(rgba(page_bg.r, page_bg.g, page_bg.b, (desktop_style_ ? 1.0f : 0.985f) * alpha));
     target_->FillRectangle(D2D1::RectF(0, 0, w, h), solid_.Get());
     for (const auto& [cx, cy, radius, strength] : {std::tuple{w * 0.12f, -h * 0.05f, w * 0.55f, 0.16f}, std::tuple{w * 0.95f, h * 1.05f, w * 0.5f, 0.09f}}) {
         ComPtr<ID2D1GradientStopCollection> stops;
@@ -400,8 +403,9 @@ void Renderer::drawProfilePage() {
         ComPtr<ID2D1GradientStopCollection> stops;
         ComPtr<ID2D1LinearGradientBrush> shade;
         const float under = std::clamp(p.scroll / 40.0f, 0.0f, 1.0f);
-        const D2D1_GRADIENT_STOP colors[] = {{0, rgba(0.016f, 0.019f, 0.025f, 0.96f * under)}, {0.7f, rgba(0.016f, 0.019f, 0.025f, 0.8f * under)},
-                                             {1, rgba(0.016f, 0.019f, 0.025f, 0)}};
+        const auto bg = desktop_style_ ? desktop_theme::current().app : rgba(0.016f, 0.019f, 0.025f, 1);
+        const D2D1_GRADIENT_STOP colors[] = {{0, rgba(bg.r, bg.g, bg.b, 0.96f * under)}, {0.7f, rgba(bg.r, bg.g, bg.b, 0.8f * under)},
+                                             {1, rgba(bg.r, bg.g, bg.b, 0)}};
         if (under > 0 && SUCCEEDED(target_->CreateGradientStopCollection(colors, 3, stops.GetAddressOf())) &&
             SUCCEEDED(target_->CreateLinearGradientBrush(D2D1::LinearGradientBrushProperties(D2D1::Point2F(0, 0), D2D1::Point2F(0, bar_bottom + 30)),
                                                          stops.Get(), shade.GetAddressOf())))

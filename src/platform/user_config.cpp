@@ -390,6 +390,19 @@ AppSettings parseAppSettings(std::string_view text) {
         // Outside the else-if chain below: MSVC refuses one level more of it (C1061).
         if (key == "recent_uninstalled") { if (value == "0" || value == "1") settings.recent_uninstalled = value == "1"; continue; }
         if (key == "save_backup_after_game") { if (value == "0" || value == "1") settings.save_backup_after_game = value == "1"; continue; }
+        if (key == "desktop_poster_glow") { if (value == "0" || value == "1") settings.desktop_poster_glow = value == "1"; continue; }
+        if (key == "desktop_theme") { if (value.size() == 1 && value[0] >= '0' && value[0] <= '9') settings.desktop_theme = value[0] - '0'; continue; }
+        if (key == "desktop_accent" || key == "desktop_button") {
+            // #RRGGBB; the button's "accent": the same as the accent (0).
+            auto& target = key == "desktop_accent" ? settings.desktop_accent_rgb : settings.desktop_button_rgb;
+            if (value == "accent" && key == "desktop_button") target = 0;
+            else if (value.size() == 7 && value.front() == '#') {
+                uint32_t rgb = 0;
+                const auto result = std::from_chars(value.data() + 1, value.data() + 7, rgb, 16);
+                if (result.ec == std::errc{} && result.ptr == value.data() + 7) target = rgb ? rgb : 0x010101;
+            }
+            continue;
+        }
         if (key == "default_view_console" || key == "default_view_collection" || key == "default_view_studio") {
             // library_view::View's saved numbers, 0..11 (library_view::persisted_view_count).
             if (!value.empty() && value.size() <= 2 && std::all_of(value.begin(), value.end(), [](char c) { return c >= '0' && c <= '9'; })) {
@@ -794,6 +807,8 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
            << "tv_monitor=" << (settings.tv_monitor.find_first_of(L"\r\n") == std::wstring::npos ? text_encoding::utf8(settings.tv_monitor) : std::string()) << '\n'
          << "desktop_platform_badges=" << settings.desktop_platform_badges << '\n'
          << "desktop_gray_uninstalled=" << settings.desktop_gray_uninstalled << '\n'
+         << "desktop_poster_glow=" << settings.desktop_poster_glow << '\n'
+         << "desktop_theme=" << std::clamp(settings.desktop_theme, 0, 9) << '\n'
            << "desktop_maximized=" << settings.desktop_maximized << '\n'
            << "desktop_poster=" << std::clamp(settings.desktop_poster, 112, 240) << '\n'
            << "desktop_view=" << std::clamp(settings.desktop_view, 0, 3) << '\n'
@@ -872,6 +887,10 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
     hex_color(settings.ui_accent_rgb ? settings.ui_accent_rgb : AppSettings{}.ui_accent_rgb);
     output << "button_color=";
     if (settings.button_rgb) hex_color(settings.button_rgb); else output << "accent\n";
+    output << "desktop_accent=";
+    hex_color(settings.desktop_accent_rgb ? settings.desktop_accent_rgb : AppSettings{}.desktop_accent_rgb);
+    output << "desktop_button=";
+    if (settings.desktop_button_rgb) hex_color(settings.desktop_button_rgb); else output << "accent\n";
     output << "button_idle=" << (settings.button_idle == AppSettings::ButtonIdle::tinted ? "tinted" :
                                  settings.button_idle == AppSettings::ButtonIdle::dark ? "dark" : "gray") << '\n';
     output << "home_layout=" << (settings.home_layout == AppSettings::HomeLayout::xmb ? "xmb" :

@@ -1753,6 +1753,7 @@ private:
     // "Opcje uruchamiania…" of a library game (my_games.cpp): user-added, DRM-free and Steam games.
     bool launchEditable(const Game& game) const;
     void openLaunchEditor(const Game& game);
+    void customEditorFlags(custom_game_ui::State& ui, const std::string& key);
     void launchEditorSave();
     std::wstring launchArguments(const Game& game) const; // A Steam game's own launch options; empty: none.
     void closeCustomEditor();
@@ -1783,6 +1784,7 @@ private:
     void openColorEditor(const settings_ui::Row& row);
     void closeColorEditor(bool save);
     void colorEditorPreview();
+    void applyAccentColors(); // The renderer's accent and button fill: the desktop window's pair or Tryb TV's.
     void colorEditorMove(int amount);
     void colorEditorAdjust(int amount);
     void colorEditorClick(float x, float y);
@@ -2966,6 +2968,20 @@ private:
     sensors::Reading sensors_;
     bool discord_running_ = false;
     DiscordBackend discord_;
+    // Opcje uruchamiania's switches (launch_flags.cpp): a launch's log and whether it switched HDR
+    // on, by gameKey, until its session ends; the display Launchme switched HDR on for (empty: none).
+    struct LaunchRun { std::filesystem::path log; bool hdr = false; uint64_t started = 0; };
+    std::map<std::string, LaunchRun> launch_runs_;
+    std::wstring hdr_device_;
+    HdrBackend hdr_;
+    unsigned launchFlags(const Game& game) const;
+    void setLaunchFlags(const std::string& key, unsigned flags);
+    // Before a game starts: its log begun (what starts, with `action` when known), HDR switched on.
+    void launchFlagsBegin(const Game& game, const GameAction* action);
+    void launchFlagsNote(const std::string& key, std::wstring_view line);
+    // Its launch failed or its session ended: the log's last line, HDR back off after the last such game.
+    void launchFlagsEnd(const std::string& key, std::wstring_view how);
+    std::filesystem::path launchLog(const std::string& key) const;
     // Empty = the real PDH/D3DKMT reader, created on the poll worker. Tests inject a fixture.
     std::function<sensors::Reading()> read_sensors_;
     // Whether the poll worker takes the CPU temperature from MSI Afterburner (AppSettings::cpu_temp_source).

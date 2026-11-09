@@ -25,6 +25,13 @@ struct AppSettings {
     bool launch_tv_mode = false;
     bool desktop_platform_badges = false;     // The desktop window's posters: the store's or console's mark top right.
     bool desktop_gray_uninstalled = false;    // ...and games not installed in black and white.
+    // The selected poster: an outline in the cover's colour (Kolor akcentu okładek) and its art's glow behind it.
+    bool desktop_poster_glow = true;
+    int desktop_theme = 0; // The window's colours: desktop_themes in settings_view.hpp (desktop_theme.hpp).
+    // The desktop window's own accent (switches, focus, progress, links) and its primary buttons
+    // (Graj, Zainstaluj); 0: the button takes the accent. Tryb TV keeps ui_accent_rgb and button_rgb.
+    uint32_t desktop_accent_rgb = 0xEEEEEE;
+    uint32_t desktop_button_rgb = 0;
     // The desktop window: its restored position and size in physical pixels (width 0: a centred
     // default) and whether it was maximized.
     std::array<int, 4> desktop_window{};

@@ -100,6 +100,18 @@ void Renderer::drawCustomGameEditor() {
         if (layout.browses(index))
             button(layout.browse(index), index == wine_field ? std::wstring(L"Proton / Wine…") : std::wstring(tr(L"Wybierz…")), ui.focus == browseItem(index));
     }
+    for (int which = 0; which < layout.toggles; ++which) {
+        // Opcje uruchamiania's switches: a pill with its caption and a switch at its right end.
+        const auto r = layout.toggle(which);
+        const bool on = which ? ui.hdr : ui.log, focused = ui.focus == (which ? Item::hdr_toggle : Item::log_toggle);
+        const auto ink = drawButton(rect(r), focused ? 1.0f : 0.0f, 1, false);
+        textLine(which ? tr(L"HDR na czas gry") : tr(L"Zapisuj logi"), r.left + 22, (r.top + r.bottom) * 0.5f, r.right - r.left - 100, settings_body_font_.Get(), ink);
+        const float y = (r.top + r.bottom) * 0.5f, right = r.right - 18;
+        // On the lit (light) pill the track is dark, else it would vanish into it.
+        fill({right - 52, y - 14, right, y + 14}, focused ? gray(on ? 0.12f : 0.78f) : on ? accent : gray(0.23f), 14);
+        brush(focused ? gray(on ? 0.96f : 0.45f) : gray(on ? 0.08f : 0.67f));
+        target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(right - (on ? 14.0f : 38.0f), y), 10, 10), solid_.Get());
+    }
     if (layout.pills) {
         // A new game: what to point at, a file or a folder (one game, a ROM folder, a folder of games).
         button(layout.pill(0), tr(L"Wskaż plik"), ui.focus == Item::pick_file);

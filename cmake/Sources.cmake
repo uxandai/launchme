@@ -31,6 +31,7 @@ set(LAUNCHME_APP_SOURCES
     src/app/navigation_menus.cpp
     src/app/flix_rail.cpp
     src/app/game_emulator.cpp
+    src/app/launch_flags.cpp
     src/app/game_launch.cpp
     src/app/pointer.cpp
     src/app/friends.cpp
@@ -369,6 +370,8 @@ set(LAUNCHME_APP_SOURCES
     src/platform/hashing.cpp
     src/platform/library_state.cpp
     src/platform/launch.cpp
+    src/platform/hdr_display.cpp
+    src/library/game_log.cpp
     src/platform/helper_process.cpp
     src/platform/file_dialog.cpp
     src/platform/file_listing.cpp

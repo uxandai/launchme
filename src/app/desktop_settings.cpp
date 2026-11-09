@@ -206,7 +206,18 @@ void Launcher::desktopPageActivate(const SheetHit& hit, bool double_click) {
         case K::dialog: return;
         case K::action: detail_action_ = hit.index; launch(); return;
         case K::tile:
-            if (hit.sub == static_cast<int>(DetailsExtra::artwork)) openArtworkBrowser(game);
+            if (hit.sub == static_cast<int>(DetailsExtra::more)) {
+                // The game's menu under "…", for this game alone (the grid's marks are not its targets here).
+                const auto spot = std::find_if(renderer_.desktopHotspots().begin(), renderer_.desktopHotspots().end(),
+                                               [&](const auto& item) { return item.hit == hit; });
+                const auto marked = std::exchange(desktop_marked_, {});
+                const size_t selected = std::exchange(selected_, size_t{0});
+                if (spot != renderer_.desktopHotspots().end()) {
+                    desktopOpenGameMenu(spot->rect.right, spot->rect.bottom + 6, false, true);
+                    if (desktop_menu_) desktop_menu_->align_right = true;
+                }
+                desktop_marked_ = marked; selected_ = selected;
+            } else if (hit.sub == static_cast<int>(DetailsExtra::artwork)) openArtworkBrowser(game);
             else if (hit.sub == static_cast<int>(DetailsExtra::folder)) {
                 if (const auto folder = gameFolder(game); !folder.empty() && execute_(hwnd_, GameAction{folder.wstring(), {}, {}, ActionKind::open_client}) <= 32)
                     showNotification(NotificationKind::error, tr(L"Nie można otworzyć folderu"), folder.wstring());
@@ -353,6 +364,12 @@ SheetHit Launcher::desktopSettingsHit(float x, float y) const {
 
 void Launcher::desktopSettingsClick(float mouse_x, float mouse_y, bool double_click) {
     const float scale = desktopScale(), x = mouse_x / scale, y = mouse_y / scale;
+    if (desktop_menu_) { // The game's menu from Szczegóły' "…": its items, or a click beside it closes it.
+        const auto hit = desktopHit(x, y);
+        if ((hit.target == desktop_ui::Target::menu_item || hit.target == desktop_ui::Target::submenu_item) && hit.index >= 0) { desktop_pressed_ = hit; SetCapture(hwnd_); }
+        else desktopCloseMenu();
+        return;
+    }
     desktop_sheet_keyboard_ = false;
     if (screen_ == ScreenMode::settings && homeRowMoving()) { stopHomeRowMove(); return; } // A click puts the lifted row down.
     if (screen_ != ScreenMode::settings) {
@@ -414,6 +431,12 @@ void Launcher::desktopSettingsClick(float mouse_x, float mouse_y, bool double_cl
 void Launcher::desktopSettingsRelease(float mouse_x, float mouse_y) {
     const auto drag = std::exchange(desktop_row_drag_, {});
     if (drag.armed && home_row_moving_ == drag.key) { desktop_sheet_pressed_ = {}; stopHomeRowMove(); return; } // Dragged: put down.
+    if (const auto menu_press = std::exchange(desktop_pressed_, {}); desktop_menu_ && menu_press.target != desktop_ui::Target::none) {
+        const float scale = desktopScale();
+        if (desktopHit(mouse_x / scale, mouse_y / scale) == menu_press) desktopActivate(menu_press);
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        return;
+    }
     const auto pressed = std::exchange(desktop_sheet_pressed_, {});
     if (pressed.kind == K::none || !desktopSheet()) return;
     const float scale = desktopScale();
