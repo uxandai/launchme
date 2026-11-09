@@ -237,6 +237,7 @@ struct DrmFreeMessage {
     drm_free::Catalog catalog;
     std::vector<std::string> artwork_reset; // Game keys whose automatic artwork the worker removed.
     rawg::Map metadata;                     // Newly identified games: description, developer, rating.
+    std::unordered_map<std::string, GameDetails> store_details; // Identified by the Steam store or GOG.
 };
 struct CustomGamesMessage {
     uint32_t generation = 0;

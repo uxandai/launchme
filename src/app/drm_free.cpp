@@ -169,8 +169,10 @@ void Launcher::startDrmScan(bool manual, bool idle) {
         });
         { auto message = std::make_unique<DrmFreeMessage>(); message->kind = DrmFreeMessage::Kind::scanned; message->catalog = catalog; post(std::move(message)); }
         if (!cancelled()) {
-            std::unordered_map<std::string, uint32_t> identity;
-            for (const auto& entry : catalog.games) identity.emplace(entry.id, entry.rawg_id);
+            // Who identified each game (RAWG's id, or the store's mark): a change is a newly identified game.
+            const auto identityOf = [](const drm_free::Entry& entry) { return entry.rawg_id ? uint64_t{entry.rawg_id} : entry.store_identity ? (1ULL << 40) : 0; };
+            std::unordered_map<std::string, uint64_t> identity;
+            for (const auto& entry : catalog.games) identity.emplace(entry.id, identityOf(entry));
             auto published = std::chrono::steady_clock::now();
             std::vector<Game> fresh; // Identified since the last message.
             const auto root = userConfigDirectory();
@@ -180,6 +182,7 @@ void Launcher::startDrmScan(bool manual, bool idle) {
                 for (const auto& game : fresh) {
                     message->artwork_reset.push_back(gameKey(game));
                     if (auto metadata = rawg::load(game, root / L"metadata")) message->metadata.emplace(gameKey(game), std::move(*metadata));
+                    else if (auto store = drm_free::loadStoreDetails(game, root / L"metadata")) message->store_details.emplace(gameKey(game), std::move(store->details));
                 }
                 fresh.clear(); published = std::chrono::steady_clock::now();
                 post(std::move(message));
@@ -187,7 +190,7 @@ void Launcher::startDrmScan(bool manual, bool idle) {
             const auto changed = [&](const drm_free::Catalog& current) {
                 for (const auto& entry : current.games) {
                     auto& known = identity[entry.id];
-                    if (entry.rawg_id && entry.rawg_id != known) { known = entry.rawg_id; fresh.push_back(drm_free::makeGame(entry)); }
+                    if (const auto now = identityOf(entry); now && now != known) { known = now; fresh.push_back(drm_free::makeGame(entry)); }
                 }
                 if (std::chrono::steady_clock::now() - published >= std::chrono::seconds(2)) publish(current);
             };
@@ -231,10 +234,15 @@ void Launcher::onDrmFree(std::unique_ptr<DrmFreeMessage> message) {
     case DrmFreeMessage::Kind::identified: {
         if (message->kind == DrmFreeMessage::Kind::scanned) drm_identifying_ = !drm_stop_ || !drm_stop_->load();
         // RAWG details of games identified in the background, as if loaded at startup.
-        for (auto& [key, metadata] : message->metadata) rawg_metadata_[key] = std::move(metadata);
+        for (auto& [key, metadata] : message->metadata) { rawg_metadata_[key] = std::move(metadata); emulation_metadata_.erase(key); }
+        // Identified by the Steam store or GOG: their details, as an emulated game's from ES-DE.
+        for (auto& [key, details] : message->store_details) { rawg_metadata_.erase(key); emulation_metadata_[key] = std::move(details); }
         if (!message->metadata.empty() && screen_ == ScreenMode::details && !detail_games_.empty())
             if (const auto found = rawg_metadata_.find(gameKey(detail_games_[0])); found != rawg_metadata_.end() && message->metadata.contains(found->first))
                 details_ = found->second.details;
+        if (!message->store_details.empty() && screen_ == ScreenMode::details && !detail_games_.empty())
+            if (const auto found = emulation_metadata_.find(gameKey(detail_games_[0])); found != emulation_metadata_.end() && message->store_details.contains(found->first))
+                details_ = found->second;
         auto merged = drm_free::merge(drm_catalog_, std::move(message->catalog));
         size_t added = 0;
         for (const auto& entry : merged.games)

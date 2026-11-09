@@ -1687,6 +1687,11 @@ private:
     void rebuildCustomLibrary();
     void applyCustomGames();
     void forgetCustomArtwork(const Game& game, bool selections);
+    // PC games added by hand identified like DRM-free games (src/app/my_games_identify.cpp): once each,
+    // a game without a match again after a week. custom_identified_: the startup pass ran.
+    void identifyCustomGames(const std::vector<custom_games::Entry>& entries);
+    void customGameIdentified(const std::string& key, const std::optional<rawg::Metadata>& metadata, const GameDetails& details, bool artwork);
+    bool custom_identified_ = false;
     // `focus`: where the panel opens (a new game: "Wybierz…"; an existing one: its name).
     void openCustomEditor(const std::string& id, std::optional<custom_game_ui::Item> focus = std::nullopt);
     // Dodaj grę deciding by itself: a program (PC), a ROM or disc image (emulated, its console guessed) or a

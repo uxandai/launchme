@@ -1,4 +1,5 @@
 #include "launcher.hpp"
+#include "../library/drm_free.hpp"
 #include "launcher_internal.hpp"
 #include "../artwork/failure_cache.hpp"
 #include "../artwork/image_compact.hpp"
@@ -163,6 +164,12 @@ void Launcher::startRatings() {
             if (!alive->load()) return;
             if (!steamArtwork(game) && game.visibility == GameVisibility::public_game)
                 if (auto metadata = rawg::load(game, root / L"metadata")) cached->metadata.emplace(gameKey(game), std::move(*metadata));
+        }
+        // DRM-free games and games added by hand that the Steam store or GOG identified: their details.
+        for (const auto& game : games) {
+            if (!alive->load()) return;
+            if (!localFileGame(game.source) || cached->metadata.contains(gameKey(game))) continue;
+            if (auto store = drm_free::loadStoreDetails(game, root / L"metadata")) cached->emulation.emplace(gameKey(game), std::move(store->details));
         }
         // Emulated shortcuts: what ES-DE scraped for the same ROM file. Local files only.
         if (const auto esde_root = esde::root(); !esde_root.empty()) {

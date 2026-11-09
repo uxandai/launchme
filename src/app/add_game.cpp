@@ -87,7 +87,14 @@ void Launcher::customEditorApplyFile(const std::filesystem::path& picked) {
     } else {
         ui.fields[platform_field].clear();
         ui.fields[file_field] = picked.wstring();
-        if (unnamed) ui.fields[name_field] = picked.stem().wstring().substr(0, custom_games::max_name);
+        if (unnamed) {
+            // A program: named as the DRM-free scan names one (GOG's name, its game folder's, its own cleaned);
+            // a shortcut or a script: its own name.
+            auto extension = picked.extension().wstring();
+            for (auto& ch : extension) ch = static_cast<wchar_t>(std::towlower(ch));
+            const auto name = extension == L".exe" ? drm_free::describeExecutable(picked).title.text : picked.stem().wstring();
+            ui.fields[name_field] = (name.empty() ? picked.stem().wstring() : name).substr(0, custom_games::max_name);
+        }
         // A working directory the user chose stays; the default follows the file.
         if (directory.empty() || directory == previous.parent_path()) ui.fields[directory_field] = picked.parent_path().wstring();
     }

@@ -91,6 +91,13 @@ void Launcher::onCustomGames(std::unique_ptr<CustomGamesMessage> message) {
         custom_installed_[id] = installed;
     }
     if (changed) applyCustomGames();
+    // Once a session, after the files are known: the PC games added by hand that nothing names yet.
+    if (!std::exchange(custom_identified_, true)) {
+        std::vector<custom_games::Entry> present;
+        for (const auto& entry : custom_games_)
+            if (const auto found = custom_installed_.find(entry.id); found != custom_installed_.end() && found->second) present.push_back(entry);
+        identifyCustomGames(present);
+    }
 }
 
 // The definitions changed: rebuild shelves and the visible screen, keeping focus by identity.
@@ -662,6 +669,8 @@ void Launcher::customEditorSave() {
         }
     }
     refreshCustomGames();
+    // A new game, or another file: identified now (a game identified in the editor keeps that).
+    if (!previous || previous->play_action.target != entry.path.wstring()) identifyCustomGames({entry});
     audio_.context();
 }
 

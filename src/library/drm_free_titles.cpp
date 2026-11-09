@@ -6,11 +6,18 @@
 #include "game_ratings.hpp"
 #include "../artwork/cover_cache.hpp"
 #include "../artwork/identified_artwork.hpp"
+#include "../net/json.hpp"
+#include "../net/url_encoding.hpp"
+#include "../platform/atomic_file.hpp"
+#include "../platform/text_encoding.hpp"
+#include "../store/steam_app_match.hpp"
+#include "metadata_sources.hpp"
 
 #include <algorithm>
 #include <chrono>
 #include <climits>
 #include <cwctype>
+#include <fstream>
 #include <regex>
 #include <thread>
 #include <unordered_set>
@@ -22,6 +29,21 @@ namespace {
 std::wstring joined(const std::vector<std::wstring>& list) {
     std::wstring result;
     for (const auto& word : list) result += word;
+    return result;
+}
+// The words that tell titles apart: no articles, "and" (also written "&"), "of", "edition".
+std::vector<std::wstring> significant(const std::vector<std::wstring>& list) {
+    std::vector<std::wstring> result;
+    for (const auto& word : list)
+        if (word != L"the" && word != L"a" && word != L"an" && word != L"of" && word != L"and" && word != L"edition") result.push_back(word);
+    return result.empty() ? list : result;
+}
+// A sequel's or an episode's number ("2", "II" -> "2"), not a year: titles that differ in one are other games.
+std::vector<std::wstring> numbers(const std::vector<std::wstring>& list) {
+    std::vector<std::wstring> result;
+    for (const auto& word : list)
+        if (word.size() <= 3 && word.find_first_not_of(L"0123456789") == std::wstring::npos) result.push_back(word);
+    std::sort(result.begin(), result.end());
     return result;
 }
 } // namespace
@@ -164,26 +186,33 @@ bool genericProduct(std::wstring_view product) {
     return false;
 }
 
-// --- RAWG matching ---------------------------------------------------------------
+// --- Matching by title -------------------------------------------------------------
 
 int matchScore(const Title& query, const rawg::Candidate& candidate, size_t rank) {
     const auto wanted = ratings::normalizedTitle(query.text), offered = ratings::normalizedTitle(candidate.name);
     if (wanted.empty() || offered.empty()) return -1000;
     const auto query_words = words(query.text), candidate_words = words(candidate.name);
+    const auto query_key = significant(query_words), candidate_key = significant(candidate_words);
     int score = 0;
     if (wanted == offered) score = 1000;
-    else if (!query_words.empty() && joined(query_words) == joined(candidate_words)) score = 950;
+    else if (!query_key.empty() && joined(query_key) == joined(candidate_key)) score = 950; // "Tom & Jerry", "The Witcher 3: Wild Hunt".
     else {
         size_t shared = 0;
-        for (const auto& word : query_words)
-            if (std::find(candidate_words.begin(), candidate_words.end(), word) != candidate_words.end()) ++shared;
-        if (!shared) return -1000 + static_cast<int>(rank);
-        const size_t total = query_words.size() + candidate_words.size() - shared;
+        for (const auto& word : query_key)
+            if (std::find(candidate_key.begin(), candidate_key.end(), word) != candidate_key.end()) ++shared;
+        // Most of the title's own words must be there: one shared word of three is another game.
+        if (!shared || shared * 2 < query_key.size()) return -1000 + static_cast<int>(rank);
+        const size_t total = query_key.size() + candidate_key.size() - shared;
         score = static_cast<int>(700 * shared / std::max<size_t>(1, total));
-        const auto query_join = joined(query_words), candidate_join = joined(candidate_words);
+        const auto query_join = joined(query_key), candidate_join = joined(candidate_key);
+        // A subtitle the folder left out ("Disco Elysium" → "… The Final Cut") costs a little; words of the
+        // folder's title the candidate lacks cost more (mostly another game's: "Hollow Knight Silksong").
         if (candidate_join.starts_with(query_join)) score = std::max(score, 820 - 4 * static_cast<int>(candidate_join.size() - query_join.size()));
-        else if (query_join.starts_with(candidate_join)) score = std::max(score, 780 - 4 * static_cast<int>(query_join.size() - candidate_join.size()));
+        else if (query_join.starts_with(candidate_join)) score = std::max(score, 780 - 10 * static_cast<int>(query_join.size() - candidate_join.size()));
+        // One word names a game only as its whole title ("Alpha" is no "Alpha Protocol"), or with the year confirming it.
+        if (query_key.size() == 1) score = std::min(score, min_match - 120); // With PC and its place on the list still short; a year passes it.
     }
+    if (numbers(query_words) != numbers(candidate_words)) score -= 500; // "Portal" for "Portal 2", "DOOM 3" for "DOOM": another game.
     if (query.year && candidate.released.size() >= 4) {
         int year = 0;
         for (size_t i = 0; i < 4; ++i) year = year * 10 + (std::iswdigit(candidate.released[i]) ? candidate.released[i] - L'0' : 0);
@@ -199,7 +228,8 @@ int matchScore(const Title& query, const rawg::Candidate& candidate, size_t rank
         score += pc ? 40 : -150;
     }
     const auto offered_lower = lower(candidate.name), wanted_lower = lower(query.text);
-    for (const auto* edition : {L"soundtrack", L" ost", L"artbook", L"demo", L"season pass", L"dlc", L"bundle", L"expansion", L"beta", L"prologue", L"playtest"})
+    for (const auto* edition : {L"soundtrack", L" ost", L"artbook", L"demo", L"season pass", L"dlc", L"bundle", L"expansion", L"beta", L"prologue",
+                                L"playtest", L"dedicated server", L"editor", L"sdk", L"wallpaper"})
         if (offered_lower.find(edition) != std::wstring::npos && wanted_lower.find(edition) == std::wstring::npos) { score -= 300; break; }
     score += static_cast<int>(rank < 10 ? (10 - rank) * 3 : 0);
     return score;
@@ -207,7 +237,7 @@ int matchScore(const Title& query, const rawg::Candidate& candidate, size_t rank
 
 std::optional<size_t> bestMatch(const Title& query, const std::vector<rawg::Candidate>& candidates) {
     std::optional<size_t> best;
-    int best_score = 0;
+    int best_score = min_match - 1;
     for (size_t i = 0; i < candidates.size(); ++i) {
         const int score = matchScore(query, candidates[i], i);
         if (score > best_score) { best = i; best_score = score; }
@@ -216,15 +246,238 @@ std::optional<size_t> bestMatch(const Title& query, const std::vector<rawg::Cand
 }
 
 bool needsIdentity(const Entry& entry, uint64_t now, const IdentifyLimits& limits) {
-    return !entry.ignored && !entry.manual_identity && !entry.rawg_id && !entry.executable.empty() && !entry.title.empty() &&
+    return !entry.ignored && !entry.manual_identity && !entry.rawg_id && !entry.store_identity && !entry.executable.empty() && !entry.title.empty() &&
            (!entry.checked || now >= entry.checked + limits.retry_unmatched || entry.checked > now + 86400);
+}
+
+// --- The stores (no key) -------------------------------------------------------------
+
+namespace {
+std::string bodyOf(const HttpResponse& response) { return std::string(response.body.begin(), response.body.end()); }
+// No answer, a limit or the server's trouble: try later. Any other answer is the store's word (404: it does not know it).
+bool troubled(const HttpResponse& response) { return !response.status || response.status == 429 || response.status >= 500; }
+constexpr const wchar_t* json_headers = L"Accept: application/json\r\n";
+
+// Steam's store search: its apps as candidates (PC games; no year).
+std::optional<std::vector<rawg::Candidate>> steamSearch(const std::wstring& query, const rawg::Get& get) {
+    const auto response = get(L"https://store.steampowered.com/api/storesearch/?cc=US&l=english&term=" + url_encoding::component(std::wstring_view(query)),
+                              json_headers, 512 * 1024);
+    if (troubled(response)) return std::nullopt;
+    const auto root = response.status == 200 ? json::parse(bodyOf(response)) : std::nullopt;
+    std::vector<rawg::Candidate> result;
+    const auto* items = root ? root->get("items") : nullptr;
+    if (!items || items->type != json::Value::Type::array) return result;
+    for (const auto& item : items->elements) {
+        const auto* id = item.get("id");
+        const auto* name = item.get("name");
+        const auto* type = item.get("type");
+        if (!id || id->type != json::Value::Type::number || id->numeric < 1 || id->numeric > 4294967295.0 || !name || name->type != json::Value::Type::string) continue;
+        if (type && type->type == json::Value::Type::string && type->text != "app") continue;
+        rawg::Candidate candidate;
+        candidate.id = static_cast<uint32_t>(id->numeric);
+        candidate.name = trim(text_encoding::wideLenient(name->text));
+        if (!candidate.name.empty()) result.push_back(std::move(candidate));
+    }
+    return result;
+}
+int yearOf(const std::wstring& date) {
+    int year = 0;
+    for (size_t i = 0; i < 4 && i < date.size() && std::iswdigit(date[i]); ++i) year = year * 10 + (date[i] - L'0');
+    return year >= 1950 && year <= 2200 ? year : 0;
+}
+} // namespace
+
+Identity lookUp(const Lookup& lookup, const std::wstring& rawg_key, const IdentifyBackend& backend, const std::function<bool()>& pace) {
+    Identity result;
+    const auto store_get = backend.store_get ? backend.store_get : rawg::Get(httpGet);
+    const auto rawg_get = backend.get ? backend.get : rawg::Get(httpGetPrivate);
+    const auto request = [&] {
+        if (pace && !pace()) { result.failed = true; return false; }
+        return true;
+    };
+    // A Steam AppID the game's folder names: its store page is the game.
+    const auto steamApp = [&](uint32_t app) -> bool {
+        if (!request()) return false;
+        const auto response = store_get(L"https://store.steampowered.com/api/appdetails?l=english&appids=" + std::to_wstring(app), json_headers, 1024 * 1024);
+        if (troubled(response)) { result.failed = true; return false; }
+        const auto offer = response.status == 200 ? metadata_sources::parseSteamDetails(bodyOf(response), app) : std::nullopt;
+        if (!offer || offer->title.empty()) return false; // Gone from the store: matched by its title instead.
+        result.source = Identity::Source::steam;
+        result.name = trim(offer->title);
+        result.steam_app_id = app;
+        result.details = offer->details;
+        result.year = yearOf(result.details.release_date);
+        return true;
+    };
+    if (lookup.steam_app_id) {
+        if (steamApp(lookup.steam_app_id) || result.failed) return result;
+    }
+    // GOG's product: its own name and description; Steam's page of that very name, when it has one, for the artwork.
+    if (lookup.gog_id) {
+        if (!request()) return result;
+        const auto response = store_get(L"https://api.gog.com/products/" + std::to_wstring(lookup.gog_id) + L"?expand=description", json_headers, 1024 * 1024);
+        if (troubled(response)) { result.failed = true; return result; }
+        const auto root = response.status == 200 ? json::parse(bodyOf(response)) : std::nullopt;
+        const auto* title = root ? root->get("title") : nullptr;
+        if (title && title->type == json::Value::Type::string && !title->text.empty()) {
+            result.source = Identity::Source::gog;
+            result.gog_id = lookup.gog_id;
+            result.name = trim(text_encoding::wideLenient(title->text));
+            if (const auto* released = root->get("release_date"); released && released->type == json::Value::Type::string)
+                result.details.release_date = metadata_sources::isoDate(released->text);
+            if (const auto* description = root->get("description"); description && description->type == json::Value::Type::object)
+                for (const char* part : {"full", "lead"})
+                    if (const auto* value = description->get(part); value && value->type == json::Value::Type::string && !value->text.empty()) {
+                        auto plain = metadata_sources::plainText(value->text);
+                        if (plain.size() > 1800) plain.resize(1800);
+                        result.details.description = std::move(plain);
+                        break;
+                    }
+            result.year = yearOf(result.details.release_date);
+            if (!request()) { result.failed = false; return result; } // Stopped: what GOG said stands.
+            const auto search = store_get(L"https://store.steampowered.com/api/storesearch/?cc=US&l=english&term=" +
+                                          url_encoding::component(std::wstring_view(result.name)), json_headers, 512 * 1024);
+            if (search.status == 200) result.steam_app_id = matchSteamApp(result.name, bodyOf(search));
+            return result;
+        }
+    }
+    // Only a title: RAWG (with a key) and the Steam store answer it and the executable's product name; the best
+    // match of all wins, RAWG's on a tie (it knows more: ratings, every store).
+    struct Pick { int score = INT_MIN; rawg::Candidate candidate; bool steam = false; };
+    Pick pick;
+    bool rawg_usable = !rawg_key.empty();
+    const auto consider = [&](const Title& query, const std::vector<rawg::Candidate>& candidates, bool steam) {
+        if (const auto best = bestMatch(query, candidates)) {
+            const int score = matchScore(query, candidates[*best], *best);
+            if (score > pick.score || (score == pick.score && !steam && pick.steam)) pick = {score, candidates[*best], steam};
+        }
+    };
+    std::vector<Title> queries{lookup.title};
+    if (!lookup.product.empty() && ratings::normalizedTitle(lookup.product) != ratings::normalizedTitle(lookup.title.text))
+        queries.push_back({lookup.product, lookup.title.year});
+    for (const auto& query : queries) {
+        if (query.text.empty() || pick.score >= 1000) continue;
+        if (rawg_usable) {
+            if (!request()) return result;
+            const auto search = rawg::search(query.text, rawg_key, rawg_get);
+            if (!search.error.empty()) { result.rawg_refused = true; rawg_usable = false; }
+            else consider(query, search.games, false);
+        }
+        if (pick.score >= 1000) continue;
+        if (!request()) return result;
+        const auto steam = steamSearch(query.text, store_get);
+        if (!steam) { result.failed = true; return result; }
+        consider(query, *steam, true);
+    }
+    if (pick.score == INT_MIN) return result;
+    if (pick.steam) {
+        steamApp(pick.candidate.id);
+        return result;
+    }
+    if (!request()) return result;
+    auto details = rawg::fetch(pick.candidate.id, rawg_key, rawg_get);
+    if (!details.data) { result.rawg_refused = true; return result; }
+    uint32_t steam = lookup.steam_app_id;
+    if (!steam) {
+        if (!request()) return result;
+        const auto links = rawg::stores(pick.candidate.id, rawg_key, rawg_get);
+        if (!links.valid) { result.rawg_refused = true; return result; }
+        steam = links.steam_app_id;
+    }
+    details.data->steam_app_id = steam;
+    result.source = Identity::Source::rawg;
+    result.rawg_id = pick.candidate.id;
+    result.steam_app_id = steam;
+    result.name = trim(details.data->name);
+    result.details = details.data->details;
+    result.year = yearOf(details.data->details.release_date);
+    result.rawg = std::move(details);
+    return result;
+}
+
+// --- Store details on disk ----------------------------------------------------------
+
+namespace {
+std::filesystem::path storeFile(const Game& game, const std::filesystem::path& metadata) {
+    return metadata / (text_encoding::wide(gameCacheKey(game)) + L".store.json");
+}
+const char* sourceName(Identity::Source source) { return source == Identity::Source::steam ? "steam" : source == Identity::Source::gog ? "gog" : ""; }
+} // namespace
+
+std::optional<StoreDetails> loadStoreDetails(const Game& game, const std::filesystem::path& metadata) {
+    if (gameCacheKey(game).empty()) return std::nullopt;
+    std::ifstream input(storeFile(game, metadata), std::ios::binary | std::ios::ate);
+    if (!input || input.tellg() <= 0 || input.tellg() > 256 * 1024) return std::nullopt;
+    std::string bytes(static_cast<size_t>(input.tellg()), '\0');
+    input.seekg(0);
+    if (!input.read(bytes.data(), static_cast<std::streamsize>(bytes.size()))) return std::nullopt;
+    const auto root = json::parse(bytes);
+    if (!root || root->type != json::Value::Type::object) return std::nullopt;
+    const auto value = [&](const char* key) {
+        const auto* item = root->get(key);
+        return item && item->type == json::Value::Type::string ? text_encoding::wideLenient(item->text) : std::wstring{};
+    };
+    StoreDetails result;
+    const auto source = value("source");
+    result.source = source == L"steam" ? Identity::Source::steam : source == L"gog" ? Identity::Source::gog : Identity::Source::none;
+    result.id = text_encoding::utf8(value("id"));
+    result.name = value("name");
+    if (result.source == Identity::Source::none || result.name.empty()) return std::nullopt;
+    result.details.description = value("description");
+    result.details.developer = value("developer");
+    result.details.publisher = value("publisher");
+    result.details.release_date = value("release_date");
+    result.details.genres = value("genres");
+    return result;
+}
+
+bool saveStoreDetails(const Game& game, const StoreDetails& value, const std::filesystem::path& metadata) {
+    if (gameCacheKey(game).empty() || value.source == Identity::Source::none) return false;
+    std::string output = "{\"source\":" + json::quote(sourceName(value.source)) + ",\"id\":" + json::quote(value.id);
+    const auto put = [&](const char* key, const std::wstring& text) {
+        if (!text.empty()) output += std::string(",\"") + key + "\":" + json::quote(text_encoding::utf8(text));
+    };
+    put("name", value.name);
+    put("description", value.details.description);
+    put("developer", value.details.developer);
+    put("publisher", value.details.publisher);
+    put("release_date", value.details.release_date);
+    put("genres", value.details.genres);
+    output += "}\n";
+    std::error_code ec;
+    std::filesystem::create_directories(metadata, ec);
+    return atomic_file::write(storeFile(game, metadata), output);
+}
+
+bool applyIdentity(const Game& game, const Identity& identity, const IdentifyPaths& paths, const IdentifyBackend& backend, const Cancelled& cancelled) {
+    if (identity.source == Identity::Source::none) return false;
+    std::error_code ec;
+    if (identity.source == Identity::Source::rawg) {
+        if (!identity.rawg.data || !rawg::save(game, identity.rawg, paths.metadata)) return false;
+        ratings::saveIdentified(paths.ratings, game, identity.rawg.data->rating);
+        std::filesystem::remove(storeFile(game, paths.metadata), ec);
+    } else {
+        std::filesystem::remove(paths.metadata / (text_encoding::wide(gameCacheKey(game)) + L".rawg.json"), ec);
+        const StoreDetails value{identity.source,
+                                 identity.source == Identity::Source::steam ? std::to_string(identity.steam_app_id) : std::to_string(identity.gog_id),
+                                 identity.name, identity.details};
+        if (!saveStoreDetails(game, value, paths.metadata)) return false;
+    }
+    if (selectedArtworkSource(game, paths.covers).id) return false; // Chosen before (or by the user): it stays.
+    if (identity.steam_app_id) return selectArtworkSource(game, {identity.steam_app_id, true}, paths.covers);
+    if (backend.sgdb_key.empty() || (cancelled && cancelled())) return false;
+    // Several games share a title ("Revenant"): the identified year picks the right artwork.
+    const auto found = searchGridGames(identity.name, backend.sgdb_key, backend.sgdb_get ? backend.sgdb_get : rawg::Get(httpGet));
+    if (const auto source = matchIdentifiedArtwork(identity.name, found.games, identity.year); source.id)
+        return selectArtworkSource(game, source, paths.covers);
+    return false;
 }
 
 void identify(Catalog& catalog, const std::wstring& key, const IdentifyPaths& paths, const Cancelled& cancelled,
               const std::function<void(const Catalog&)>& changed, const IdentifyBackend& backend, IdentifyLimits limits) {
     const auto now = backend.now ? backend.now() : unix_time::now();
     const auto stop = [&] { return cancelled && cancelled(); };
-    if (key.empty() || catalog.rawg_pause > now || stop()) return;
+    if (stop()) return;
     const auto wait = [&](std::chrono::milliseconds duration) {
         if (backend.wait) return backend.wait(duration) && !stop();
         const auto until = std::chrono::steady_clock::now() + duration;
@@ -235,71 +488,46 @@ void identify(Catalog& catalog, const std::wstring& key, const IdentifyPaths& pa
     const auto pace = [&] {
         if (requested && !wait(limits.spacing)) return false;
         requested = true;
-        return true;
+        return !stop();
     };
-    const auto pause = [&] { catalog.rawg_pause = now + limits.pause; if (changed) changed(catalog); };
-    const auto get = backend.get ? backend.get : rawg::Get(httpGetPrivate);
+    // RAWG refused or failed a while ago: the stores alone until the pause ends.
+    auto rawg_key = catalog.rawg_pause > now ? std::wstring{} : key;
+    const auto rawg_waits = [&] { return !key.empty() && rawg_key.empty(); }; // RAWG would be asked, but is paused.
     size_t used = 0;
     for (size_t index = 0; index < catalog.games.size(); ++index) {
         if (used >= limits.games || stop()) return;
         if (!needsIdentity(catalog.games[index], now, limits)) continue;
         ++used;
-        const Title query{catalog.games[index].title, catalog.games[index].year};
-        if (!pace()) return;
-        auto search = rawg::search(query.text, key, get);
-        if (!search.error.empty()) { pause(); return; }
-        std::optional<rawg::Candidate> pick;
-        int pick_score = INT_MIN;
-        if (const auto best = bestMatch(query, search.games)) { pick = search.games[*best]; pick_score = matchScore(query, *pick, *best); }
-        const auto product = catalog.games[index].product;
-        if (pick_score < 1000 && !product.empty() && ratings::normalizedTitle(product) != ratings::normalizedTitle(query.text)) {
-            if (!pace()) return;
-            const auto second = rawg::search(product, key, get);
-            if (!second.error.empty()) { pause(); return; }
-            const Title product_query{product, query.year};
-            if (const auto best = bestMatch(product_query, second.games)) {
-                const int score = matchScore(product_query, second.games[*best], *best);
-                if (score > pick_score) { pick = second.games[*best]; pick_score = score; }
-            }
+        const auto& waiting = catalog.games[index];
+        const Lookup lookup{{waiting.title, waiting.year}, waiting.product, waiting.steam_app_id, waiting.gog_id};
+        auto identity = lookUp(lookup, rawg_key, backend, pace);
+        if (identity.rawg_refused) {
+            // RAWG refused (a key, a limit) or failed: paused; this game is asked again of the stores alone.
+            catalog.rawg_pause = now + limits.pause;
+            rawg_key.clear();
+            if (changed) changed(catalog);
+            if (!identity.failed && identity.source == Identity::Source::none && !stop()) identity = lookUp(lookup, rawg_key, backend, pace);
         }
-        catalog.games[index].checked = now;
-        if (!pick) { if (changed) changed(catalog); continue; }
-        if (!pace()) return;
-        auto details = rawg::fetch(pick->id, key, get);
-        if (!details.data) { pause(); return; }
-        uint32_t steam = catalog.games[index].steam_app_id;
-        if (!steam) {
-            if (!pace()) return;
-            const auto links = rawg::stores(pick->id, key, get);
-            if (!links.valid) { pause(); return; }
-            steam = links.steam_app_id;
-        }
-        if (stop()) return;
+        if (identity.failed || stop()) return; // Not marked: asked again next time.
         auto& entry = catalog.games[index];
-        details.data->steam_app_id = steam;
+        entry.checked = now;
+        if (identity.source == Identity::Source::none) {
+            if (rawg_waits()) { entry.checked = 0; continue; } // The stores alone did not know it: RAWG is asked once it answers again.
+            if (changed) changed(catalog);
+            continue;
+        }
         const auto game = makeGame(entry);
-        if (!rawg::save(game, details, paths.metadata)) continue; // Disk trouble: asked again after a week.
-        ratings::saveIdentified(paths.ratings, game, details.data->rating);
-        auto name = trim(details.data->name);
+        const bool source_changed = applyIdentity(game, identity, paths, backend, cancelled);
+        auto name = identity.name;
         if (name.size() > max_name) name.resize(max_name);
         if (name.empty()) name = entry.title;
-        bool source_changed = false;
-        if (!selectedArtworkSource(game, paths.covers).id) {
-            if (steam) source_changed = selectArtworkSource(game, {steam, true}, paths.covers);
-            else if (!backend.sgdb_key.empty() && !stop()) {
-                // Several games share a title ("Revenant"): RAWG's year picks the right artwork.
-                const auto& released = details.data->details.release_date;
-                const int year = released.size() >= 4 ? _wtoi(released.substr(0, 4).c_str()) : 0;
-                const auto found = searchGridGames(name, backend.sgdb_key, backend.sgdb_get ? backend.sgdb_get : rawg::Get(httpGet));
-                if (const auto source = matchIdentifiedArtwork(name, found.games, year); source.id)
-                    source_changed = selectArtworkSource(game, source, paths.covers);
-            }
-        }
         // Automatic artwork followed the folder title; the identified game gets its own.
         if (source_changed || ratings::normalizedTitle(name) != ratings::normalizedTitle(entry.name)) removeGameArtwork(game, paths.covers, false);
-        entry.rawg_id = pick->id;
+        entry.rawg_id = identity.rawg_id;
+        entry.store_identity = identity.source != Identity::Source::rawg;
         entry.name = name;
-        entry.steam_app_id = steam;
+        if (identity.steam_app_id) entry.steam_app_id = identity.steam_app_id;
+        if (identity.gog_id) entry.gog_id = identity.gog_id;
         if (changed) changed(catalog);
     }
 }

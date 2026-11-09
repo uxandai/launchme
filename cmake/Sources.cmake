@@ -196,6 +196,7 @@ set(LAUNCHME_APP_SOURCES
     src/store/xbox_account.cpp
     src/app/gog_install.cpp
     src/app/my_games.cpp
+    src/app/my_games_identify.cpp
     src/app/file_browser.cpp
     src/app/add_game.cpp
     src/app/drm_free.cpp

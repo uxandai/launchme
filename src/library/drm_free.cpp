@@ -328,6 +328,18 @@ uint32_t steamAppId(const std::filesystem::path& file) {
     return id && id <= UINT32_MAX ? static_cast<uint32_t>(id) : 0;
 }
 
+// steam_appid.txt (or a Steam API emulator's steam_settings\steam_appid.txt) in `folder` or one of its
+// parents up to `top`: a game's program deeper than the scan looks (Binaries\Win64 below a skipped folder).
+uint32_t nearbySteamAppId(std::filesystem::path folder, const std::filesystem::path& top) {
+    for (int level = 0; level < 5 && !folder.empty(); ++level) {
+        for (const auto& file : {folder / L"steam_appid.txt", folder / L"steam_settings" / L"steam_appid.txt"})
+            if (fileExists(file)) if (const auto id = steamAppId(file)) return id;
+        if (folderKey(folder) == folderKey(top) || folder == folder.parent_path()) break;
+        folder = folder.parent_path();
+    }
+    return 0;
+}
+
 // GOG offline/Galaxy installs describe their own primary executable.
 std::optional<Detection> gogInfo(const std::filesystem::path& folder, const std::vector<std::wstring>& files) {
     for (const auto& name : files) {
@@ -356,6 +368,10 @@ std::optional<Detection> gogInfo(const std::filesystem::path& folder, const std:
                 if (resolved == folder.lexically_normal() || inside(resolved, folder)) result.working_directory = resolved;
             }
             result.title = trim(text(*root, "name", max_name));
+            if (game) {
+                const auto id = game->type == json::Value::Type::number ? std::to_string(static_cast<uint64_t>(game->numeric)) : game->stringOr();
+                if (!id.empty() && id.size() <= 19 && id.find_first_not_of("0123456789") == std::string::npos) result.gog_id = std::stoull(id);
+            }
             return result;
         }
     }
@@ -518,6 +534,8 @@ Loaded parse(std::string_view bytes) {
         entry.name = trim(text(item, "name", max_name));
         entry.year = static_cast<int>(number(item, "year", 2200));
         entry.steam_app_id = static_cast<uint32_t>(number(item, "steam", UINT32_MAX));
+        entry.gog_id = number(item, "gog", 1ULL << 52);
+        entry.store_identity = flag(item, "store");
         entry.rawg_id = static_cast<uint32_t>(number(item, "rawg", UINT32_MAX));
         entry.checked = number(item, "checked");
         entry.found = number(item, "found");
@@ -558,7 +576,9 @@ std::string format(const Catalog& catalog) {
         output += ", \"name\": "; appendString(output, entry.name);
         if (entry.year) output += ", \"year\": " + std::to_string(entry.year);
         if (entry.steam_app_id) output += ", \"steam\": " + std::to_string(entry.steam_app_id);
+        if (entry.gog_id) output += ", \"gog\": " + std::to_string(entry.gog_id);
         if (entry.rawg_id) output += ", \"rawg\": " + std::to_string(entry.rawg_id);
+        if (entry.store_identity) output += ", \"store\": true";
         output += ", \"checked\": " + std::to_string(entry.checked) + ", \"found\": " + std::to_string(entry.found) +
                   ", \"time\": " + std::to_string(entry.folder_time);
         if (entry.manual_executable) output += ", \"manual_exe\": true";
@@ -711,19 +731,22 @@ Detection detect(const std::filesystem::path& folder, const Cancelled& cancelled
             } else if (current.depth == 0 && key.starts_with(L"goggame-") && hasSuffix(key, L".info")) gog_files.push_back(name);
             return visited < visit_limit;
         });
+        // Steam's app id beside the game's program: at the top, in Unreal's Binaries\Win64, a Steam API
+        // emulator's steam_settings folder. The first one found, nearest the top, names the game.
+        if (!result.steam_app_id && names.contains(L"steam_appid.txt")) result.steam_app_id = steamAppId(current.folder / L"steam_appid.txt");
+        if (!result.steam_app_id && names.contains(L"steam_settings")) result.steam_app_id = steamAppId(current.folder / L"steam_settings" / L"steam_appid.txt");
         if (current.depth == 0) {
             if (names.contains(L".egstore") || names.contains(L"microsoftgame.config") || names.contains(L"appxmanifest.xml")) {
                 result.store_owned = true;
                 return result;
             }
-            if (names.contains(L"steam_appid.txt")) result.steam_app_id = steamAppId(current.folder / L"steam_appid.txt");
 #ifndef _WIN32
             if (names.contains(L"gameinfo")) result.title = gameInfoTitle(current.folder / L"gameinfo");
 #endif
             if (!gog_files.empty()) {
                 std::sort(gog_files.begin(), gog_files.end());
                 if (auto gog = gogInfo(current.folder, gog_files)) {
-                    gog->steam_app_id = result.steam_app_id;
+                    gog->steam_app_id = result.steam_app_id ? result.steam_app_id : nearbySteamAppId(gog->executable.parent_path(), folder);
                     gog->product = versionString(gog->executable);
                     if (ratings::normalizedTitle(gog->product) == ratings::normalizedTitle(gog->title)) gog->product.clear();
                     return *gog;
@@ -798,10 +821,62 @@ Detection detect(const std::filesystem::path& folder, const Cancelled& cancelled
     }
     result.executable = best->path;
     result.product = versionString(best->path);
+    if (!result.steam_app_id) result.steam_app_id = nearbySteamAppId(best->path.parent_path(), folder);
     if (result.product.empty()) {
         // "RCG\RiverCityGirls.exe": the file name is the better second query.
         const auto stem = cleanTitle(best->path.stem().wstring()).text;
         if (stem.size() >= 4 && !genericProduct(stem) && ratings::normalizedTitle(stem) != ratings::normalizedTitle(title)) result.product = stem;
+    }
+    return result;
+}
+
+Lookup describeExecutable(const std::filesystem::path& executable) {
+    Lookup result;
+    if (executable.empty()) return result;
+    // The game's own folder: out of the folders engines put their programs in ("Game\Binaries\Win64",
+    // "bind"), and above Unreal's project folder when its stub program is beside it.
+    auto game_folder = executable.parent_path();
+    for (int level = 0; level < 4; ++level) {
+        const auto parent = game_folder.parent_path();
+        if (parent.empty() || parent == game_folder) break;
+        if (genericChild(game_folder.filename().wstring())) { game_folder = parent; continue; }
+        if (fileExists(parent / (game_folder.filename().wstring() + L".exe")) && directoryExists(game_folder / L"Binaries")) game_folder = parent;
+        break;
+    }
+    std::vector<std::wstring> gog_files;
+    listFolder(game_folder, [&](const Found& item) {
+        const auto key = lower(item.name);
+        if (!item.folder && key.starts_with(L"goggame-") && hasSuffix(key, L".info")) gog_files.push_back(item.name);
+        return gog_files.size() < 16;
+    });
+    std::sort(gog_files.begin(), gog_files.end());
+    if (const auto gog = gog_files.empty() ? std::nullopt : gogInfo(game_folder, gog_files)) {
+        result.title.text = gog->title;
+        result.gog_id = gog->gog_id;
+    }
+    result.steam_app_id = nearbySteamAppId(executable.parent_path(), game_folder);
+    result.product = versionString(executable);
+    if (result.title.text.empty()) {
+        // The folder is the game's own when it says so: the program sits deeper in it (bin, Binaries\Win64), it holds
+        // what an installed game leaves (installedGameMarks), or its name shares a word with the program's. A folder
+        // of many programs ("D:\Games", "Downloads") does not name one: the product name, else the file's.
+        const auto folder_name = game_folder.filename().wstring();
+        const auto folder_words = words(cleanTitle(folder_name).text);
+        const auto shares = [&](std::wstring_view other) {
+            const auto list = words(cleanTitle(other).text);
+            return std::any_of(list.begin(), list.end(), [&](const std::wstring& word) {
+                return word.size() >= 3 && std::find(folder_words.begin(), folder_words.end(), word) != folder_words.end();
+            }) || (!folder_words.empty() && ratings::normalizedTitle(cleanTitle(other).text) == ratings::normalizedTitle(cleanTitle(folder_name).text));
+        };
+        const bool own = !folder_name.empty() && game_folder != game_folder.root_path() &&
+                         (game_folder != executable.parent_path() || installedGameMarks(game_folder, executable) ||
+                          shares(executable.stem().wstring()) || (!result.product.empty() && shares(result.product)));
+        result.title = own ? cleanTitle(folder_name) : !result.product.empty() ? Title{result.product, 0} : cleanTitle(executable.stem().wstring());
+    }
+    if (ratings::normalizedTitle(result.product) == ratings::normalizedTitle(result.title.text)) result.product.clear();
+    if (result.product.empty()) {
+        const auto stem = cleanTitle(executable.stem().wstring()).text;
+        if (stem.size() >= 4 && !genericProduct(stem) && ratings::normalizedTitle(stem) != ratings::normalizedTitle(result.title.text)) result.product = stem;
     }
     return result;
 }
@@ -881,11 +956,12 @@ Catalog scan(const Catalog& previous, const ScanOptions& options, const Cancelle
                 entry.working_directory = detection.working_directory;
             }
             if (!old) { entry.found = options.now; entry.name = title; }
-            else if (old->title != title && !old->manual_identity && !old->rawg_id) { entry.name = title; entry.checked = 0; }
+            else if (old->title != title && !old->manual_identity && !old->rawg_id && !old->store_identity) { entry.name = title; entry.checked = 0; }
             entry.title = title;
             entry.year = cleaned.year;
             if (!detection.product.empty()) entry.product = detection.product;
             if (detection.steam_app_id) entry.steam_app_id = detection.steam_app_id;
+            if (detection.gog_id) entry.gog_id = detection.gog_id;
             entry.folder_time = folder_time;
             entry.missing = entry.executable.empty();
             placed.insert(entry.id);

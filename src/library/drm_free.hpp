@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../model/game.hpp"
+#include "../model/game_details.hpp"
 #include "rawg.hpp"
 
 #include <atomic>
@@ -34,8 +35,10 @@ struct Entry {
     std::wstring product;                    // Executable's ProductName, a second query when the title fails.
     std::wstring name;                       // Displayed: RAWG's name once identified, else the title.
     int year = 0;                            // A year written in the folder name, a matching hint.
-    uint32_t steam_app_id = 0;               // steam_appid.txt or RAWG's Steam store link: artwork only.
+    uint32_t steam_app_id = 0;               // steam_appid.txt, RAWG's Steam link or the store's match: artwork and details.
+    uint64_t gog_id = 0;                     // goggame-<id>.info: GOG's product, a sure identity.
     uint32_t rawg_id = 0;
+    bool store_identity = false;             // Named by the Steam store or GOG (lookUp): identified like a RAWG match.
     uint64_t checked = 0;                    // Last RAWG attempt (Unix seconds); 0 = not asked yet.
     uint64_t found = 0;                      // First seen (Unix seconds).
     uint64_t folder_time = 0;                // Folder's last write time when it was last examined.
@@ -101,7 +104,8 @@ struct Detection {
     std::filesystem::path working_directory;
     std::wstring title;      // goggame-*.info name; empty = take it from the folder.
     std::wstring product;    // Version resource ProductName (non-generic only).
-    uint32_t steam_app_id = 0;
+    uint32_t steam_app_id = 0; // steam_appid.txt anywhere the executables are looked for (Unreal's Binaries\Win64, steam_settings).
+    uint64_t gog_id = 0;       // goggame-<id>.info's gameId.
     bool container = false;  // No game here, but several game folders below: scan those instead.
     bool store_owned = false; // Epic/Xbox package or similar: another source owns it.
 };
@@ -126,8 +130,11 @@ Catalog scan(const Catalog& previous, const ScanOptions& options, const Cancelle
 // choices (executable, ignore, identity) made in the meantime and dropping removed roots.
 Catalog merge(const Catalog& current, Catalog scanned);
 
-// --- RAWG matching -----------------------------------------------------------
-// Higher is better; candidates with no shared word score below zero.
+// --- Matching by title ------------------------------------------------------
+// Higher is better. Below zero: not this game (no shared word, most of the title's words missing,
+// another number in the name: "Portal" for "Portal 2"). bestMatch takes only a match of at least
+// min_match: a few shared words of a long title are no identification.
+inline constexpr int min_match = 450;
 int matchScore(const Title& query, const rawg::Candidate& candidate, size_t rank);
 std::optional<size_t> bestMatch(const Title& query, const std::vector<rawg::Candidate>& candidates);
 
@@ -138,7 +145,47 @@ struct IdentifyBackend {
     // Without a Steam page, artwork comes from the SteamGridDB game of that name and year.
     std::wstring sgdb_key;
     rawg::Get sgdb_get = httpGet;
+    // The Steam store and GOG (no key): a known AppID or GOG product, and titles RAWG does not know.
+    rawg::Get store_get = httpGet;
 };
+
+// What is known about a game before it is identified.
+struct Lookup {
+    Title title;            // The cleaned folder name (or GOG's name), with a year when one was written.
+    std::wstring product;   // The executable's ProductName or name: a second query.
+    uint32_t steam_app_id = 0;
+    uint64_t gog_id = 0;
+};
+// A program added by hand: its folders up to the game's own (out of bin, x64, Binaries\Win64...) are
+// read for GOG's info file and steam_appid.txt, the file for its ProductName; the title is GOG's name,
+// else the game folder's cleaned name, else the file's.
+Lookup describeExecutable(const std::filesystem::path& executable);
+
+struct Identity {
+    enum class Source { none, steam, gog, rawg } source = Source::none;
+    std::wstring name;
+    uint32_t steam_app_id = 0, rawg_id = 0;
+    uint64_t gog_id = 0;
+    int year = 0;
+    GameDetails details;    // The store's text (Steam, GOG); RAWG's are in `rawg`.
+    rawg::Details rawg;
+    bool failed = false;      // A request failed: nothing is known, ask again later.
+    bool rawg_refused = false; // RAWG refused or failed: no RAWG requests for a while.
+};
+// Network. A known Steam AppID or GOG product is the game (the store's own page); else the title and the
+// product name are searched in RAWG (with a key) and the Steam store, and the best match of all wins
+// (RAWG's on a tie). `pace` is called before every request; false stops (Identity::failed).
+Identity lookUp(const Lookup& lookup, const std::wstring& rawg_key, const IdentifyBackend& backend, const std::function<bool()>& pace);
+
+// Store-identified games' text details (metadata/<game>.store.json); RAWG's keep their own file.
+struct StoreDetails { Identity::Source source = Identity::Source::none; std::string id; std::wstring name; GameDetails details; };
+std::optional<StoreDetails> loadStoreDetails(const Game& game, const std::filesystem::path& metadata);
+bool saveStoreDetails(const Game& game, const StoreDetails& value, const std::filesystem::path& metadata);
+// Saves what lookUp found for `game` (RAWG's answer and rating, or the store's details) and picks its
+// artwork: the Steam page, else the SteamGridDB game of that name and year. A chosen source stays.
+// True when the artwork source changed (the automatic artwork found by the old title should go).
+struct IdentifyPaths;
+bool applyIdentity(const Game& game, const Identity& identity, const IdentifyPaths& paths, const IdentifyBackend& backend, const Cancelled& cancelled);
 struct IdentifyPaths { std::filesystem::path metadata, ratings, covers; };
 struct IdentifyLimits {
     size_t games = 40;                         // RAWG lookups per run (each 2-3 requests).
@@ -146,11 +193,11 @@ struct IdentifyLimits {
     uint64_t retry_unmatched = 7 * 24 * 3600;  // A title without results is asked again after a week.
     uint64_t pause = 30 * 60;                  // After an error: no RAWG requests for this long.
 };
-// Entries that RAWG matching would ask about now (not ignored, not identified, not recently tried).
+// Entries that matching would ask about now (not ignored, not identified, not recently tried).
 bool needsIdentity(const Entry& entry, uint64_t now, const IdentifyLimits& limits = {});
-// Network. Picks the best RAWG result for every waiting entry (the user's "always the best
-// match" choice), saves its metadata/rating under the game's key and selects Steam artwork
-// when RAWG links a Steam page. `changed` is called after every identified game.
+// Network. Identifies every waiting entry (lookUp: its Steam AppID or GOG product, else the best match of
+// its title), saves the details under the game's key, picks its artwork source and names it.
+// Without a RAWG key the stores alone answer. `changed` is called after every identified game.
 void identify(Catalog& catalog, const std::wstring& key, const IdentifyPaths& paths, const Cancelled& cancelled,
               const std::function<void(const Catalog&)>& changed, const IdentifyBackend& backend = {}, IdentifyLimits limits = {});
 

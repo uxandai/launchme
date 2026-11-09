@@ -130,6 +130,10 @@ int main() {
     // A cryptic folder name: the executable's name is the second RAWG query.
     executable(root / L"RCG" / L"Epic-588cec64" / L"RiverCityGirls.exe", 900 * 1024);
     executable(root / L"SteamLibrary" / L"steamapps" / L"common" / L"X" / L"x.exe", 300 * 1024);
+    // An Unreal game: its app id beside the shipping program in Binaries\Win64.
+    executable(root / L"Deep Game" / L"DeepGame.exe", 250 * 1024);
+    executable(root / L"Deep Game" / L"DeepGame" / L"Binaries" / L"Win64" / L"DeepGame-Win64-Shipping.exe", 4 * 1024 * 1024);
+    text(root / L"Deep Game" / L"DeepGame" / L"Binaries" / L"Win64" / L"steam_appid.txt", "4242\n");
 
     Catalog catalog; catalog.roots = {root};
     ScanOptions options; options.full = true; options.now = 1000;
@@ -150,8 +154,10 @@ int main() {
         !expect(root / L"Fixture GOG", root / L"Fixture GOG" / L"bin" / L"game.exe") ||
         !expect(root / L"Server Kit", root / L"Server Kit" / L"Server Kit.exe") ||
         !expect(root / L"Dolphin Olympics", root / L"Dolphin Olympics" / L"Dolphin Olympics.exe") ||
-        !expect(root / L"RCG", root / L"RCG" / L"Epic-588cec64" / L"RiverCityGirls.exe")) return 10;
-    if (scanned.games.size() != 9 || byFolder(scanned, root / L"Docs") || byFolder(scanned, root / L"EpicGame") || byFolder(scanned, root / L"PS4") ||
+        !expect(root / L"RCG", root / L"RCG" / L"Epic-588cec64" / L"RiverCityGirls.exe") ||
+        !expect(root / L"Deep Game", root / L"Deep Game" / L"DeepGame.exe")) return 10;
+    if (byFolder(scanned, root / L"Deep Game")->steam_app_id != 4242 || byFolder(scanned, root / L"Fixture GOG")->gog_id != 1207) return 18;
+    if (scanned.games.size() != 10 || byFolder(scanned, root / L"Docs") || byFolder(scanned, root / L"EpicGame") || byFolder(scanned, root / L"PS4") ||
         byFolder(scanned, root / L"Known") || byFolder(scanned, root / L"Indie") || byFolder(scanned, root / L"SteamLibrary")) return 11;
     if (byFolder(scanned, root / L"RCG")->title != L"RCG" || byFolder(scanned, root / L"RCG")->product != L"River City Girls" ||
         !byFolder(scanned, root / L"Celeste")->product.empty()) return 14;
@@ -208,7 +214,7 @@ int main() {
     options.full = false; options.now = 2000;
     auto again = scan(edited, options);
     const auto* manual = byFolder(again, root / L"Server Kit");
-    if (again.games.size() != 9 || !manual || !manual->manual_executable || manual->executable.filename() != L"server.exe" ||
+    if (again.games.size() != 10 || !manual || !manual->manual_executable || manual->executable.filename() != L"server.exe" ||
         !byFolder(again, root / L"Celeste")->ignored || byFolder(again, root / L"SpaceGame")->name != L"Space Game Deluxe" ||
         byFolder(again, root / L"Celeste")->found != 1000) return 30;
     // A new game appears, a removed one disappears.
@@ -245,6 +251,11 @@ int main() {
     if (bestMatch({L"The Witcher 3 Wild Hunt", 0}, {{7, L"The Witcher 3: Wild Hunt", L"2015-05-18", L"PC"}, {8, L"The Witcher", L"2007-10-24", L"PC"}}) != 0u) return 53;
     if (bestMatch({L"Something Completely Different", 0}, {{9, L"Unrelated Title", L"", L"PC"}})) return 54;
     if (bestMatch({L"Doom 2", 0}, {{10, L"DOOM II", L"1994-09-30", L"PC"}, {11, L"DOOM", L"1993-12-10", L"PC"}}) != 0u) return 55;
+    // Another number is another game; "&" is "and"; one word names only that very title; most words must be there.
+    if (bestMatch({L"Portal 2", 0}, {{12, L"Portal", L"2007-10-10", L"PC"}})) return 56;
+    if (bestMatch({L"Tom and Jerry Chase", 0}, {{13, L"Tom & Jerry Chase", L"", L"PC"}}) != 0u) return 57;
+    if (bestMatch({L"Alpha", 0}, {{14, L"Alpha Protocol", L"2010-05-27", L"PC"}}) || bestMatch({L"Alpha", 2010}, {{14, L"Alpha Protocol", L"2010-05-27", L"PC"}}) != 0u) return 58;
+    if (bestMatch({L"Lost Ember Island Story", 0}, {{15, L"Lost Island", L"", L"PC"}})) return 59;
 
     // (7) Identification with a fake RAWG: metadata, rating, artwork source and the new name.
     auto waiting = scanned;
@@ -272,16 +283,40 @@ int main() {
             return response(200, R"({"results":[{"id":80,"name":"GOG Fixture: Remastered","released":"2020-01-01","platforms":[{"platform":{"id":4,"name":"PC"}}]}]})");
         return response(200, R"({"results":[]})");
     };
+    backend.store_get = [&](const std::wstring& url, const std::wstring&, size_t) {
+        requests.push_back(url);
+        if (url.find(L"appdetails") != std::wstring::npos && url.find(L"appids=620") != std::wstring::npos)
+            return response(200, R"({"620":{"success":true,"data":{"name":"GOG Fixture","short_description":"Steam text","developers":["Fixture Dev"],)"
+                                 R"("release_date":{"coming_soon":false,"date":"18 Apr, 2011"}}}})");
+        if (url.find(L"appdetails") != std::wstring::npos && url.find(L"appids=367520") != std::wstring::npos)
+            return response(200, R"({"367520":{"success":true,"data":{"name":"Hollow Knight","short_description":"Bugs"}}})");
+        if (url.find(L"storesearch") != std::wstring::npos && url.find(L"term=Hollow") != std::wstring::npos)
+            return response(200, R"({"total":2,"items":[{"type":"app","name":"Hollow Knight: Silksong","id":1030300},{"type":"app","name":"Hollow Knight","id":367520}]})");
+        if (url.find(L"storesearch") != std::wstring::npos && url.find(L"term=Alpha") != std::wstring::npos)
+            return response(200, R"({"total":1,"items":[{"type":"app","name":"Alpha Protocol","id":34010}]})");
+        if (url.find(L"storesearch") != std::wstring::npos && url.find(L"term=GOG") != std::wstring::npos)
+            return response(200, R"({"total":1,"items":[{"type":"app","name":"GOG Fixture","id":620}]})");
+        if (url.find(L"api.gog.com/products/1207") != std::wstring::npos)
+            return response(200, R"({"id":1207,"title":"GOG Fixture","release_date":"2011-04-18T00:00:00+0300","description":{"lead":"<p>GOG <b>text</b></p>"}})");
+        if (url.find(L"storesearch") != std::wstring::npos) return response(200, R"({"total":0,"items":[]})");
+        return response(404, "{}");
+    };
     const IdentifyPaths paths{base / L"cache" / L"metadata", base / L"cache" / L"ratings", base / L"cache" / L"covers"};
     size_t notifications = 0;
     identify(waiting, L"fixture-key", paths, {}, [&](const Catalog&) { ++notifications; }, backend);
     const auto* identified = byFolder(waiting, root / L"Celeste");
     if (!identified || identified->rawg_id != 73 || identified->name != L"Celeste" || identified->steam_app_id != 504230 ||
         identified->checked != 1790000000 || !notifications) return 60;
-    // "Always the best result": a subtitled edition is still taken, under RAWG's name.
+    // steam_appid.txt names the game: the Steam store's page is it (no RAWG search); its details are kept.
+    // "Alpha" is no "Alpha Protocol": asked, not matched.
     const auto* gog_identified = byFolder(waiting, root / L"Fixture GOG");
-    if (gog_identified->rawg_id != 80 || gog_identified->name != L"GOG Fixture: Remastered" || gog_identified->steam_app_id != 620 ||
-        byFolder(waiting, root / L"Indie" / L"Alpha")->checked != 1790000000 || byFolder(waiting, root / L"Indie" / L"Alpha")->rawg_id) return 61;
+    if (gog_identified->rawg_id || !gog_identified->store_identity || gog_identified->name != L"GOG Fixture" || gog_identified->steam_app_id != 620 ||
+        gog_identified->gog_id != 1207 || byFolder(waiting, root / L"Indie" / L"Alpha")->checked != 1790000000 ||
+        byFolder(waiting, root / L"Indie" / L"Alpha")->rawg_id || byFolder(waiting, root / L"Indie" / L"Alpha")->store_identity) return 61;
+    const auto gog_details = loadStoreDetails(makeGame(*gog_identified), paths.metadata);
+    if (!gog_details || gog_details->source != Identity::Source::steam || gog_details->id != "620" || gog_details->details.description != L"Steam text" ||
+        gog_details->details.developer != L"Fixture Dev" || selectedArtworkSource(makeGame(*gog_identified), paths.covers).id != 620) return 68;
+    if (std::any_of(requests.begin(), requests.end(), [](const auto& url) { return url.find(L"search=GOG") != std::wstring::npos; })) return 69;
     // "RCG" finds nothing; the executable's name does.
     if (byFolder(waiting, root / L"RCG")->rawg_id != 81 || byFolder(waiting, root / L"RCG")->name != L"River City Girls") return 67;
     const auto identified_game = makeGame(*identified);
@@ -298,13 +333,30 @@ int main() {
     auto refused = scanned;
     backend.get = [&](const std::wstring&, const std::wstring&, size_t) { return response(429, "{}"); };
     identify(refused, L"fixture-key", paths, {}, {}, backend);
-    if (refused.rawg_pause != 1790000000 + IdentifyLimits{}.pause ||
-        std::any_of(refused.games.begin(), refused.games.end(), [](const Entry& e) { return e.checked || e.rawg_id; })) return 65;
-    // No key: nothing is asked.
+    if (refused.rawg_pause != 1790000000 + IdentifyLimits{}.pause || !byFolder(refused, root / L"Fixture GOG")->store_identity ||
+        std::any_of(refused.games.begin(), refused.games.end(), [](const Entry& e) { return e.rawg_id || (!e.store_identity && e.checked); })) return 65;
+    // No RAWG key: the stores alone. "Hollow Knight" is Steam's Hollow Knight (not Silksong), with its details and artwork.
     requests.clear();
     auto keyless = scanned;
     identify(keyless, L"", paths, {}, {}, backend);
-    if (keyless != scanned) return 66;
+    const auto* knight = byFolder(keyless, root / L"Hollow_Knight_v1.5.78");
+    if (!knight || !knight->store_identity || knight->steam_app_id != 367520 || knight->name != L"Hollow Knight" ||
+        std::any_of(requests.begin(), requests.end(), [](const auto& url) { return url.find(L"api.rawg.io") != std::wstring::npos; })) return 66;
+    const auto knight_game = makeGame(*knight);
+    if (!loadStoreDetails(knight_game, paths.metadata) || loadStoreDetails(knight_game, paths.metadata)->details.description != L"Bugs" ||
+        selectedArtworkSource(knight_game, paths.covers).id != 367520 || rawg::load(knight_game, paths.metadata)) return 80;
+    // GOG's product id alone: GOG's name and text, Steam's page of that very name for the artwork.
+    Lookup gog_only; gog_only.title = {L"something", 0}; gog_only.gog_id = 1207;
+    const auto by_gog = lookUp(gog_only, L"", backend, [] { return true; });
+    if (by_gog.source != Identity::Source::gog || by_gog.name != L"GOG Fixture" || by_gog.steam_app_id != 620 || by_gog.gog_id != 1207 ||
+        by_gog.details.description.find(L"GOG text") == std::wstring::npos || by_gog.details.release_date != L"2011-04-18") return 81;
+    // A program added by hand: its game folder (out of bin) names it, GOG's info and steam_appid.txt are found.
+    const auto described = describeExecutable(root / L"Fixture GOG" / L"bin" / L"game.exe");
+    if (described.title.text != L"GOG Fixture" || described.gog_id != 1207 || described.steam_app_id != 620) return 82;
+    executable(root / L"Hand" / L"Space_Rangers_HD_v2.1" / L"Binaries" / L"Win64" / L"Rangers-Win64-Shipping.exe", 900 * 1024);
+    text(root / L"Hand" / L"Space_Rangers_HD_v2.1" / L"Binaries" / L"Win64" / L"steam_appid.txt", "214730");
+    const auto unreal = describeExecutable(root / L"Hand" / L"Space_Rangers_HD_v2.1" / L"Binaries" / L"Win64" / L"Rangers-Win64-Shipping.exe");
+    if (unreal.title.text != L"Space Rangers HD" || unreal.steam_app_id != 214730) { std::wcerr << unreal.title.text << L'\n'; return 83; }
 
 #ifndef _WIN32
     // (8) Native Linux games: ELF executables and launcher scripts, ahead of a Windows build beside them.
