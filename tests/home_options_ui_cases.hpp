@@ -97,6 +97,38 @@ int LauncherUiTest::homeOptions(HWND window) {
     if (!capture(L"home-options-metro-icons.png")) return 7917;
     app.settings_.home_tab_icons = false;
 
+    // ---- Biblioteka → Ekran główny i kolekcje → the order: a collection first, Platformy PC after it.
+    // Every layout draws categories_ in that order (Metro's pages too).
+    app.settings_.home_row_order = {"user-collections.favorite", "pc-platforms", "emulation"};
+    const auto collection = [&](size_t i) {
+        return i < app.categories_.size() && std::any_of(app.settings_collections_.begin(), app.settings_collections_.end(),
+                                                         [&](const auto& c) { return c.id == app.categories_[i].id; });
+    };
+    for (const auto layout : {AppSettings::HomeLayout::metro, AppSettings::HomeLayout::xmb, AppSettings::HomeLayout::psfive}) {
+        app.settings_.home_layout = layout;
+        app.buildShelves(); app.showCategory(0); settle();
+        // Weekend, not in the saved order, keeps following Ulubione (its row before it).
+        const auto index = [&](const char* id) {
+            for (size_t i = 0; i < app.categories_.size(); ++i) if (app.categories_[i].id == id) return i;
+            return app.categories_.size();
+        };
+        if (app.categories_.size() < 5 || app.categories_[0].id != "recent" || app.categories_[1].id != "user-collections.favorite" ||
+            !collection(2) || index("pc-platforms") != 3 || index("emulation") != 4) return 7952;
+        if (layout == AppSettings::HomeLayout::metro) {
+            // Metro's pages follow the rows (its start page's shortcut cells stay where they are).
+            std::vector<size_t> pages;
+            for (const auto& page : app.metro_pages_) pages.push_back(page.category);
+            if (!std::is_sorted(pages.begin(), pages.end()) || std::find(pages.begin(), pages.end(), size_t{1}) == pages.end() ||
+                std::find(pages.begin(), pages.end(), size_t{1}) > std::find(pages.begin(), pages.end(), size_t{3})) return 7953;
+        }
+        const auto name = layout == AppSettings::HomeLayout::metro ? L"home-options-order-metro.png"
+                        : layout == AppSettings::HomeLayout::xmb ? L"home-options-order-xmb.png" : L"home-options-order-psfive.png";
+        if (!capture(name)) return 7954;
+    }
+    app.settings_.home_row_order.clear();
+    app.settings_.home_layout = AppSettings::HomeLayout::shelves; app.buildShelves();
+    if (collection(1)) return 7955;
+
     // ---- Ulubione switched off (hidden like a collection): no shelf, no desktop section, no star.
     app.settings_.home_layout = AppSettings::HomeLayout::shelves;
     app.buildShelves(); app.showCategory(0);

@@ -291,7 +291,7 @@ struct AppSettings {
     bool show_companies = false;
     int studio_min_games = 3;
     std::unordered_set<std::string> hidden_studios;
-    // Biblioteka → Sekcje: home rows (category ids: "pc-platforms", "emulation", a collection's id...) kept off
+    // Biblioteka → Ekran główny i kolekcje: home rows (category ids: "pc-platforms", "emulation", a collection's id...) kept off
     // the home screen (still tabs of Wszystkie gry), and the tabs left out of Wszystkie gry ("recent"...).
     std::unordered_set<std::string> hidden_home_sections, hidden_library_tabs;
     bool home_rows_migrated = false; // hidden_collections (once: home and tabs) carried into hidden_library_tabs.

@@ -340,11 +340,6 @@ SheetHit Launcher::desktopSettingsHit(float x, float y) const {
     case Control::action: case Control::count: case Control::page:
         return {L.action(index, s).contains(x, y) ? K::action : K::row, index};
     case Control::fold: return {K::row, index}; // The whole heading opens or closes its section.
-    case Control::collection:
-        if (item.removable && L.trash(index, s).contains(x, y)) return {K::trash, index};
-        if (L.reorder(index, s, false).contains(x, y)) return {K::up, index};
-        if (L.reorder(index, s, true).contains(x, y)) return {K::down, index};
-        break;
     case Control::platform:
         if (settings_ui::hasOptionsButton(item.id)) { if (L.cog(index, s).contains(x, y)) return {K::cog, index}; }
         else if (L.action(index, s).contains(x, y)) return {K::action, index};
@@ -359,7 +354,7 @@ SheetHit Launcher::desktopSettingsHit(float x, float y) const {
 void Launcher::desktopSettingsClick(float mouse_x, float mouse_y, bool double_click) {
     const float scale = desktopScale(), x = mouse_x / scale, y = mouse_y / scale;
     desktop_sheet_keyboard_ = false;
-    if (screen_ == ScreenMode::settings && homeRowMoving()) { stopHomeRowMove(); return; } // A click puts the lifted collection down.
+    if (screen_ == ScreenMode::settings && homeRowMoving()) { stopHomeRowMove(); return; } // A click puts the lifted row down.
     if (screen_ != ScreenMode::settings) {
         const auto hit = desktopHotspotHit(x, y);
         // A click beside the artwork's "Z dysku" panel closes it.
@@ -405,6 +400,11 @@ void Launcher::desktopSettingsClick(float mouse_x, float mouse_y, bool double_cl
         return;
     default:
         desktop_sheet_pressed_ = hit;
+        desktop_row_drag_ = {};
+        if ((hit.kind == K::row || hit.kind == K::action) && settings_state_.at(settings_ui::Page::home_rows) && hit.index >= 0 &&
+            hit.index < static_cast<int>(settings_rows_.size()) && settings_rows_[static_cast<size_t>(hit.index)].id == Id::home_row &&
+            homeRowMovable(settings_rows_[static_cast<size_t>(hit.index)].key))
+            desktop_row_drag_ = {true, y, settings_rows_[static_cast<size_t>(hit.index)].key};
         SetCapture(hwnd_);
         InvalidateRect(hwnd_, nullptr, FALSE);
         return;
@@ -412,6 +412,8 @@ void Launcher::desktopSettingsClick(float mouse_x, float mouse_y, bool double_cl
 }
 
 void Launcher::desktopSettingsRelease(float mouse_x, float mouse_y) {
+    const auto drag = std::exchange(desktop_row_drag_, {});
+    if (drag.armed && home_row_moving_ == drag.key) { desktop_sheet_pressed_ = {}; stopHomeRowMove(); return; } // Dragged: put down.
     const auto pressed = std::exchange(desktop_sheet_pressed_, {});
     if (pressed.kind == K::none || !desktopSheet()) return;
     const float scale = desktopScale();
@@ -478,9 +480,6 @@ void Launcher::desktopSettingsActivate(const SheetHit& hit) {
         return;
     }
     case K::tile: case K::tile_action: settings_state_.tile = hit.sub; settingsActivate(); return;
-    case K::up: settings_state_.subcontrol = 1; settingsActivate(); return;
-    case K::down: settings_state_.subcontrol = 2; settingsActivate(); return;
-    case K::trash: settings_state_.subcontrol = 3; settingsActivate(); return;
     case K::cog: case K::action:
         if (item.control == Control::platform) settings_state_.editing = true;
         settingsActivate();
@@ -516,6 +515,24 @@ void Launcher::desktopSettingsMove(float mouse_x, float mouse_y) {
     if (settings_dragging_ && !settings_rows_.empty()) {
         const auto track = L.track(settings_state_.row(), desktop_sheet_scroll_);
         settingsSetLevel((x - track.left) / std::max(1.0f, track.right - track.left));
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        return;
+    }
+    if (desktop_row_drag_.armed && settings_state_.at(settings_ui::Page::home_rows)) {
+        // A home row dragged: lifted once the pointer has moved, then it moves to the row under the pointer.
+        const auto& key = desktop_row_drag_.key;
+        if (home_row_moving_ != key && std::abs(y - desktop_row_drag_.y) < 6) return;
+        if (home_row_moving_ != key) liftHomeRow(key);
+        const auto under = desktopSettingsHit(x, y);
+        const auto at = [&] {
+            for (size_t i = 0; i < settings_rows_.size(); ++i) if (settings_rows_[i].id == Id::home_row && settings_rows_[i].key == key) return static_cast<int>(i);
+            return -1;
+        };
+        if ((under.kind == K::row || under.kind == K::action) && under.index >= 0 && under.index < static_cast<int>(settings_rows_.size()) &&
+            settings_rows_[static_cast<size_t>(under.index)].id == Id::home_row && settings_rows_[static_cast<size_t>(under.index)].key != "recent") {
+            for (int steps = under.index - at(); steps != 0 && moveHomeRow(key, steps > 0 ? 1 : -1); steps += steps > 0 ? -1 : 1) {}
+        }
+        if (const int row = at(); row >= 0) { settings_state_.options = true; settings_state_.selected[settings_state_.category] = row; }
         InvalidateRect(hwnd_, nullptr, FALSE);
         return;
     }

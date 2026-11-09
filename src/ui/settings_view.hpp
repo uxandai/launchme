@@ -21,7 +21,7 @@ enum class Category { appearance, library, media, audio, controllers, plugins, c
 // Linux: Zgodność (compat) after Biblioteka: Proton and Wine, their prefixes and Windows games' options.
 enum class Category { appearance, library, compat, media, audio, controllers, plugins, companion, system };
 #endif
-enum class Id { font, home_layout, ui_accent, accent, uninstalled, emulation, collection, music, music_theme, ui_sound, toast_sound, boot_sound, opacity, fade, pc_platform, gog_callback, gog_refresh, gog_logout, quick_resume, guide_menu, guide_overlay, overlay_key, overlay_pad, game_fps, game_fps_low, language, custom_add, custom_game,
+enum class Id { font, home_layout, ui_accent, accent, uninstalled, emulation, music, music_theme, ui_sound, toast_sound, boot_sound, opacity, fade, pc_platform, gog_callback, gog_refresh, gog_logout, quick_resume, guide_menu, guide_overlay, overlay_key, overlay_pad, game_fps, game_fps_low, language, custom_add, custom_game,
                 screensaver, screensaver_style, screensaver_minutes, screensaver_start, steam_key, sgdb_key, epic_callback, epic_refresh, epic_logout, tile_shape, rawg_key, show_categories, xmb_posters, xmb_size,
                 ea_callback, ea_refresh, ea_remove, battlenet_import, battlenet_callback, battlenet_remove, steam_controller, focus_spring, flix_size,
                 plugin_install, plugin_enabled, plugin_setting, plugin_remove, pc_connect, pc_client, pc_refresh, pc_excluded, steam_sync,
@@ -71,7 +71,7 @@ enum class Id { font, home_layout, ui_accent, accent, uninstalled, emulation, co
                    // Platformy PC → MultiMC / Prism: the launcher picked by hand (portable MultiMC).
                    multimc_path, studio_publishers, studio_developers, studio_companies, studio_min_games, studio_hidden, studio_hidden_entry, studio_show_all,
                    updated_row, discovery_row, home_section, library_tab, home_row, home_row_new, home_row_games, home_row_rename, home_row_move,
-                   home_row_steam, home_row_delete, home_row_reset, home_row_options, home_tab_icons, flix_rail, excluded_games, excluded_game, excluded_restore_all,
+                   home_row_steam, home_row_delete, home_row_default_order, home_row_reset, home_row_options, home_tab_icons, flix_rail, excluded_games, excluded_game, excluded_restore_all,
                    // System → Wydajność: the low memory mode (AppSettings::low_memory) and Kompresja grafik
                    // (AppSettings::texture_compression).
                    low_memory, texture_compression,
@@ -96,7 +96,7 @@ enum class Id { font, home_layout, ui_accent, accent, uninstalled, emulation, co
                    launch_scope, launch_fold, launch_option, launch_dll, launch_env, launch_env_add, launch_env_preset, launch_edit_game,
                    // Zgodność: a game from a Windows installer; a game's shortcuts in Steam, on the desktop, in the menu.
                    compat_install_game, launch_steam, launch_shortcut_desktop, launch_shortcut_menu, launch_log,
-                   // Biblioteka → Widoczność: not installed games in Ostatnio grane.
+                   // Biblioteka → Co pokazywać: not installed games in Ostatnio grane.
                    recent_uninstalled,
                    // A Windows game's page: its ProtonDB and Steam Deck rating.
                    launch_protondb,
@@ -151,11 +151,11 @@ inline bool hasOptionsButton(Id id) { return id == Id::plugin_enabled || id == I
 // page: a tile opening its page of settings (Row::page): Row::value as a short summary and a chevron.
 // fold: an accordion section's heading: Row::checked open (the rows after it, Row::indent 1, are its
 // contents), Row::value a short summary; activating opens or closes it.
-enum class Control { choice, toggle, collection, slider, secret, platform, action, layout, text, count, sources, pads, avatar, page, fold };
+enum class Control { choice, toggle, slider, secret, platform, action, layout, text, count, sources, pads, avatar, page, fold };
 // Drill-down pages: a row opens a page whose rows replace its category's list; Back returns to the
 // row it was opened from. Pages nest (a DRM-free catalogue → its found games).
 enum class Page {
-    plugin, platform, drm_games, screenscraper, custom_games, collections,
+    plugin, platform, drm_games, screenscraper, custom_games,
     // Settings grouped behind one tile (Control::page).
     layout_options, cover_focus, backdrop, videos, service_keys, sounds, screensaver,
     companion_model, companion_voice, companion_remote,
@@ -169,7 +169,7 @@ enum class Page {
     emulation, emulation_system,
     fps_limiter, // Funkcje -> FPS i limiter: the widget, its graph, the frame limiter and the limits of single games.
     hidden_studios, // Biblioteka → Ukryci wydawcy i developerzy: each one with a switch to show it again.
-    excluded_games, // Biblioteka → Widoczność → Wykluczone gry: each title with Przywróć.
+    excluded_games, // Biblioteka → Co pokazywać → Wykluczone gry: each title with Przywróć.
     // Biblioteka → Ekran główny i kolekcje: every home row (key: its id on Page::home_row) with where it shows.
     home_rows, home_row,
     // Biblioteka's other pages: what the libraries list, their default views, starting games, saves, shortcuts.
@@ -335,8 +335,9 @@ struct Row {
     int choice = 0;
     GameSource source = GameSource::steam;
     std::string key; // Id::custom_game / drm_game: the game's ID; Id::drm_root: the folder (UTF-8).
-    bool locked = false; // Shown in its current state; the switch does not change (Id::collection from SRM).
+    bool locked = false; // Shown in its current state; the switch does not change.
     bool lifted = false; // Picked up to be moved (Ekran główny i kolekcje): a thick accent frame, the reorder mark.
+    bool faded = false;  // Shown nowhere (a hidden home row): its title dimmed, still focused and opened as any row.
     std::string plugin_setting; // Plugin setting/contribution ID; key identifies its owner.
     std::vector<std::wstring> tags;
     // Nonempty: a section heading drawn above this row (Layout::section_gap). Headings are never
@@ -356,8 +357,6 @@ struct Row {
     // (what goes back to the default) it is a button: a click, Delete or the pad's X.
     std::wstring badge;
     std::string reset;
-    // Id::collection: an own collection, its trash (after ↑ ↓) deletes it after a question.
-    bool removable = false;
     // The list a picker shows for this row: its choices, or those of the focused source tile.
     const std::vector<Choice>& pickList(int tile) const {
         if (control == Control::sources && !tiles.empty()) return tiles[std::clamp(tile, 0, static_cast<int>(tiles.size()) - 1)].choices;
@@ -660,7 +659,6 @@ struct Layout {
         switch (control) {
         case Control::slider: return right - 400;     // Value readout, then − track +.
         case Control::toggle: return right - 206;     // State label, then the switch.
-        case Control::collection: return right - 392; // State label, switch, ↑ ↓, the trash.
         case Control::platform: return right - 440;   // State label, switch, then the connect button.
         case Control::layout: case Control::avatar: return contentLeft() + 24;
         case Control::count: return right - 220;      // The number, then a chevron.
@@ -684,16 +682,6 @@ struct Layout {
     Rect sliderValue(int index, float scroll) const {
         const auto m = minus(index, scroll);
         return {m.left - 84, m.top, m.left - 12, m.bottom};
-    }
-    Rect reorder(int index, float scroll, bool down) const {
-        const auto r = row(index, scroll); const float y = middle(r);
-        const float x = r.right - (down ? 120 : 172);
-        return {x, y - 22, x + 44, y + 22};
-    }
-    // A collection row's trash, last (Row::removable; the place stays empty for a Steam collection).
-    Rect trash(int index, float scroll) const {
-        const auto r = row(index, scroll); const float y = middle(r);
-        return {r.right - 68, y - 22, r.right - 24, y + 22};
     }
     // Preview tile of a Control::layout row; option 0 is left. The large row (Interfejs) is a slider of
     // layout_visible tiles; `first` is its leftmost slot (layoutFirstOf, gliding in the renderer).
@@ -740,13 +728,6 @@ struct Layout {
     }
     Rect connect(int index, float scroll) const {
         return actionButton(index, scroll);
-    }
-    // 0 the switch, 1 ↑, 2 ↓, 3 the trash.
-    Rect collectionControl(int index, float scroll, int control) const {
-        if (control == 3) return trash(index, scroll);
-        if (control) return reorder(index, scroll, control == 2);
-        const auto r = row(index, scroll); const float y = middle(r);
-        return {r.right - 244, y - 22, r.right - 192, y + 22};
     }
     int hitRail(float x, float y) const {
         for (int i = 0; i < static_cast<int>(categories.size()); ++i) if (categoryRail(i).contains(x, y)) return i;

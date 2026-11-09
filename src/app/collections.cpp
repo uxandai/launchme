@@ -137,7 +137,7 @@ void Launcher::excludeGame(const Game& original) {
     if (screen_ == ScreenMode::details) back();
     refreshRecentGames();
     audio_.context();
-    showNotification(NotificationKind::launch, tr(L"Gra wykluczona"), tr(L"Przywrócisz ją w Biblioteka → Widoczność → Wykluczone gry."));
+    showNotification(NotificationKind::launch, tr(L"Gra wykluczona"), tr(L"Przywrócisz ją w Biblioteka → Co pokazywać → Wykluczone gry."));
 }
 void Launcher::restoreExcludedGame(const std::string& key) {
     if (!library_state_.excluded_games.erase(key)) return;

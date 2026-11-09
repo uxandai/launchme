@@ -42,8 +42,7 @@ struct SheetHit {
     enum class Kind {
         none, close, back, nav, row, field, toggle, track, action, cog, up, down, layout, avatar, tile, tile_action,
         dropdown, dropdown_item, dialog, dialog_field, dialog_save, dialog_cancel, dialog_browse, color_track, save_status,
-        badge, // A row's badge with Row::reset: back to the default.
-        trash  // An own collection's trash (Row::removable): its question.
+        badge // A row's badge with Row::reset: back to the default.
     } kind = Kind::none;
     int index = -1, sub = -1;
     bool operator==(const SheetHit&) const = default;
@@ -237,15 +236,8 @@ struct Layout : Sheet {
     Rect toggle(int i, float s, float right_edge) const { const float y = controlY(i, s); return {right_edge - 40, y - 11, right_edge, y + 11}; }
     Rect track(int i, float s) const { const float y = controlY(i, s); return {right() - 64 - 200, y - 10, right() - 64, y + 10}; }
     Rect cog(int i, float s) const { const float y = controlY(i, s); return {right() - 34, y - 17, right(), y + 17}; }
-    Rect reorder(int i, float s, bool down) const {
-        const float y = controlY(i, s), x = right() - (down ? 66.0f : 102.0f);
-        return {x, y - 15, x + 30, y + 15};
-    }
-    // A collection row's trash, last (Row::removable; the place stays empty for a Steam collection).
-    Rect trash(int i, float s) const { const float y = controlY(i, s); return {right() - 30, y - 15, right(), y + 15}; }
     // The switch of each kind of row, at its right edge.
     float toggleRight(const Row& item) const {
-        if (item.control == Control::collection) return reorder(0, 0, false).left - 14;
         if (item.control == Control::platform) return settings_ui::hasOptionsButton(item.id) ? cog(0, 0).left - 14 : action(0, 0).left - 16;
         return right();
     }
@@ -256,7 +248,7 @@ struct Layout : Sheet {
         case Control::action: case Control::count: return action(i, s).left;
         case Control::page: case Control::fold: return action(i, s).left - 60;
         case Control::slider: return track(i, s).left - 16;
-        case Control::toggle: case Control::collection: case Control::platform: return toggleRight(item) - 40;
+        case Control::toggle: case Control::platform: return toggleRight(item) - 40;
         default: return right() - 16;
         }
     }

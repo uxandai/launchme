@@ -100,13 +100,13 @@ std::vector<Launcher::LibraryTab> Launcher::libraryTabs() const {
     const auto all = grouped_library_.empty() ? static_cast<size_t>(std::count_if(public_library_.begin(), public_library_.end(),
         [](const Game& game) { return isGame(game); })) : grouped_library_.size();
     tabs.push_back({{}, tr(L"Wszystkie gry"), all});
-    // The home rows, those kept off the home screen among them; Biblioteka → Sekcje leaves some out (the open one stays).
+    // The home rows, those kept off the home screen among them; Ekran główny i kolekcje leaves some out.
     for (const auto& id : category_order_) {
         const auto* found = findCategory(id);
         if (!found) continue;
         const auto& category = *found;
         if (category.id == "pc-platforms" || category.id == "emulation") continue;
-        if (settings_.hidden_library_tabs.contains(category.id) && category.id != library_category_) continue;
+        if (!homeRowTab(category.id) && category.id != library_category_) continue; // Left out (home_rows.cpp); the open one stays.
         const auto games = static_cast<size_t>(std::count_if(category.games.begin(), category.games.end(), [](const Game& game) { return isGame(game); }));
         if (games) tabs.push_back({category.id, category.title, games});
     }

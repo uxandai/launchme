@@ -238,8 +238,8 @@ struct ViewContext {
     std::wstring settings_title;
     std::wstring settings_parent; // A page opened from a page: that page's title (its way back); empty: the category.
     int settings_hover_row = -1, settings_preview_option = -1;
+    float settings_hold = 0; // 0..1 while A / Enter is held on a home row (Ekran główny i kolekcje): its lift charging.
     int settings_hover_badge = -1; // The row whose badge button (Row::reset) the pointer is over.
-    int settings_hover_trash = -1; // The collection row whose trash (Row::removable) the pointer is over.
     float settings_preview_seconds = 0;
     bool settings_save_failed = false;
     size_t secret_length = 0;

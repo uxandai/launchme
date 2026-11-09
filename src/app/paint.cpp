@@ -226,8 +226,9 @@ void Launcher::paint(bool overlay) {
         context.settings_picker_choice = settings_picker_choice_;
     }
     context.settings_hover_row = settings_hover_row_;
+    if (settings_hold_)
+        context.settings_hold = std::clamp(std::chrono::duration<float>(std::chrono::steady_clock::now() - settings_hold_started_).count() / enter_hold_seconds, 0.0f, 1.0f);
     context.settings_hover_badge = settings_hover_badge_;
-    context.settings_hover_trash = settings_hover_trash_;
     context.settings_preview_option = settings_preview_.option;
     context.settings_preview_seconds = settings_preview_.seconds(GetTickCount64());
     context.settings_title = settingsPageTitle();
@@ -358,7 +359,7 @@ void Launcher::paint(bool overlay) {
     if (exit_prompt_ && prompt_kind_ == PromptKind::exclude) {
         context.prompt_question = std::wstring(tr(L"Wykluczyć grę?")) + L" " + exclude_game_.name;
         context.prompt_labels = {std::wstring(tr(L"Wyklucz")), std::wstring(tr(L"Ukryj")), std::wstring(tr(L"Anuluj"))};
-        context.prompt_body = std::wstring(tr(L"Zniknie z biblioteki, kolekcji i wyszukiwania. Trafi do Biblioteka → Widoczność → Wykluczone gry")) +
+        context.prompt_body = std::wstring(tr(L"Zniknie z biblioteki, kolekcji i wyszukiwania. Trafi do Biblioteka → Co pokazywać → Wykluczone gry")) +
                               L" (" + std::to_wstring(library_state_.excluded_games.size() + 1) + L"), " + tr(L"skąd ją przywrócisz.");
         context.prompt_danger = true;
     }

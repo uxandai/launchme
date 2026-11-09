@@ -221,13 +221,20 @@ void Renderer::drawDesktopSettings() {
         desktopStroke(r, 10, gray(1, fold ? 0.07f : 0.045f));
         if (selected && view.keyboard && !picking && item.control != Control::avatar) desktopFocusRing(r, 10);
         if (selected && state.editing && item.control == Control::slider) desktopStroke(r, 10, uiAccent(0.8f), 1.5f);
-        if (item.lifted) { desktopFill(r, 10, uiAccent(0.12f)); desktopStroke(r, 10, uiAccent(), 3.0f); } // Being moved.
+        if (item.lifted) { // Being moved: a soft glow, then the accent frame.
+            for (int ring = 3; ring >= 1; --ring) {
+                const float spread = 2.5f * static_cast<float>(ring);
+                desktopStroke({r.left - spread, r.top - spread, r.right + spread, r.bottom + spread}, 10 + spread, uiAccent(0.09f * (4 - ring) / 3.0f), 4.0f);
+            }
+            desktopFill(r, 10, uiAccent(0.10f)); desktopStroke(r, 10, uiAccent(), 2.5f);
+        } else if (selected && context_->settings_hold > 0) // Enter held: the frame charges up to the lift.
+            desktopStroke(r, 10, uiAccent(context_->settings_hold), 1.0f + 1.5f * context_->settings_hold);
         const float text_left = r.left + 16;
         const float cy = L.controlY(i, s);
         // The text ends before the row's controls (and its badge).
         const float controls_left = L.controlsLeft(item, i, s);
         const float text_width = (tall ? right - 16 : controls_left - 20 - (item.badge.empty() ? 0.0f : L_t::badge_width + 14)) - text_left;
-        const auto title_ink = item.locked ? gray(0.55f) : gray(0.94f);
+        const auto title_ink = item.locked || item.faded ? gray(0.55f) : gray(0.94f);
         if (!item.badge.empty()) {
             const auto b = L.badge(item, i, s);
             const bool resettable = !item.reset.empty();
@@ -258,29 +265,9 @@ void Renderer::drawDesktopSettings() {
         const float toggle_on = i < static_cast<int>(context_->settings_toggles.size()) ?
                                 context_->settings_toggles[static_cast<size_t>(i)] : (item.checked ? 1.0f : 0.0f);
         switch (item.control) {
-        case Control::toggle: case Control::collection: {
+        case Control::toggle: {
             const float toggle_right = L.toggleRight(item);
             desktopSwitch({toggle_right - 40, cy - 11, toggle_right, cy + 11}, toggle_on, item.locked, hover_row ? 1.0f : 0.0f);
-            if (item.control == Control::collection) {
-                for (const bool down : {false, true}) {
-                    const auto b = L.reorder(i, s, down);
-                    const bool enabled = down ? i + 1 < static_cast<int>(rows.size()) && rows[static_cast<size_t>(i) + 1].control == Control::collection :
-                                                i > 0 && rows[static_cast<size_t>(i) - 1].control == Control::collection;
-                    const float h = hovered(down ? Kind::down : Kind::up);
-                    if (h > 0 && enabled) desktopFill(b, 7, gray(1, 0.08f));
-                    desktopGlyph(down ? glyph::chevron_down : 0xE70E, (b.left + b.right) * 0.5f, middle(b), 10, gray(enabled ? 0.82f : 0.35f));
-                    if (view.keyboard && selected && state.subcontrol == (down ? 2 : 1)) desktopFocusRing(b, 7);
-                }
-                if (item.removable) {
-                    // The trash of an own collection: red under the pointer or with the keyboard's focus; its question follows.
-                    const auto b = L.trash(i, s);
-                    const bool focused = view.keyboard && selected && state.subcontrol == 3;
-                    const bool hot = hovered(Kind::trash) > 0 || focused;
-                    if (hot) desktopFill(b, 7, palette::danger(0.16f));
-                    desktopGlyph(glyph::remove, (b.left + b.right) * 0.5f, middle(b), 12, hot ? palette::danger() : gray(0.72f));
-                    if (focused) desktopFocusRing(b, 7);
-                }
-            }
             break;
         }
         case Control::platform: {

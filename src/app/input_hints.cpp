@@ -120,7 +120,7 @@ void Launcher::inputHints(ViewContext& context) const {
             return;
         }
         if (!row) add(HintButton::accept, tr(L"Otwórz"));
-        else if (row->control == settings_ui::Control::toggle || row->control == settings_ui::Control::collection) add(HintButton::accept, tr(L"Przełącz"));
+        else if (row->control == settings_ui::Control::toggle) add(HintButton::accept, tr(L"Przełącz"));
         else if (row->control == settings_ui::Control::slider) add(HintButton::accept, settings_state_.editing ? tr(L"Gotowe") : tr(L"Zmień"));
         else if (row->control == settings_ui::Control::page || row->control == settings_ui::Control::count) add(HintButton::accept, tr(L"Otwórz"));
         else if (row->control == settings_ui::Control::fold) add(HintButton::accept, row->checked ? tr(L"Zwiń") : tr(L"Rozwiń"));
@@ -128,7 +128,6 @@ void Launcher::inputHints(ViewContext& context) const {
         if (settings_state_.at(settings_ui::Page::home_rows) && row && row->id == settings_ui::Id::home_row && homeRowMovable(row->key))
             add(HintButton::accept, tr(L"Przytrzymaj: przesuń")); // A or Enter held lifts the row (home_rows.cpp).
         if (row && !row->reset.empty()) hints.push_back({HintButton::search, tr(L"Przywróć domyślne"), L"Del"}); // A game's own value.
-        if (row && row->removable) hints.push_back({HintButton::search, tr(L"Usuń kolekcję"), L"Del"}); // An own collection's question.
         if (row && row->control == settings_ui::Control::sources && !row->tiles.empty() &&
             row->tiles[std::clamp(settings_state_.tile, 0, static_cast<int>(row->tiles.size()) - 1)].level >= 0)
             add(HintButton::shoulders, tr(L"Głośność")); // The focused source's volume, LB/RB or PgUp/PgDn.

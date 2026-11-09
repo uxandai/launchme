@@ -7,6 +7,10 @@
 // when it has one (show_emulation, show_publishers, show_developers, show_updated_row,
 // show_discovery_row: on while the row is anywhere), hidden_collections (a collection off the home
 // screen), hidden_home_sections (any other row off it) and hidden_library_tabs (a tab left out).
+//
+// The order of the rows (home_row_order) is the home screen's and the tabs' of Wszystkie gry in every TV
+// layout. The desktop window's sidebar keeps its fixed groups (stores, consoles, collections): it is a
+// menu of places, not a copy of the home screen.
 #include "launcher.hpp"
 #include "launcher_internal.hpp"
 #include "../library/custom_games.hpp"
@@ -152,17 +156,28 @@ void Launcher::beginSettingsHold() {
 }
 
 void Launcher::tickSettingsHold(std::chrono::steady_clock::time_point now) {
+    // The charging frame and the lifted row's glow move every frame.
+    if (settings_hold_ || (!home_row_moving_.empty() && settingsOpen())) InvalidateRect(hwnd_, nullptr, FALSE);
     if (!settings_hold_ || std::chrono::duration<float>(now - settings_hold_started_).count() < enter_hold_seconds) return;
     settings_hold_ = false;
     if (!homeRowHoldable()) return;
-    home_row_moving_ = settings_rows_[static_cast<size_t>(settings_state_.row())].key;
-    buildSettingsRows(); audio_.context();
-    InvalidateRect(hwnd_, nullptr, FALSE);
+    liftHomeRow(settings_rows_[static_cast<size_t>(settings_state_.row())].key);
 }
 
-void Launcher::stopHomeRowMove() {
-    home_row_moving_.clear();
+void Launcher::stopHomeRowMove() { liftHomeRow({}); }
+
+// Lifts a row of the list (an empty key puts the lifted one down). The focus stays on that row while
+// "Domyślna kolejność" above it goes (it is not offered while a row is carried) and comes back.
+void Launcher::liftHomeRow(std::string key) {
+    const auto focused = key.empty() ? home_row_moving_ : key;
+    home_row_moving_ = std::move(key);
     buildSettingsRows(); audio_.context();
+    for (size_t i = 0; i < settings_rows_.size(); ++i)
+        if (settings_rows_[i].id == Id::home_row && settings_rows_[i].key == focused) {
+            settings_state_.selected[settings_state_.category] = static_cast<int>(i);
+            ensureSettingVisible();
+            break;
+        }
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
@@ -180,8 +195,19 @@ bool Launcher::moveHomeRow(const std::string& id, int amount) {
     const auto position = at - entries.begin(), next = position + amount;
     if (next < 1 || next >= static_cast<std::ptrdiff_t>(entries.size())) { navigationBoundary(); return false; }
     std::swap(entries[static_cast<size_t>(position)], entries[static_cast<size_t>(next)]);
-    settings_.home_row_order.clear();
-    for (size_t i = 1; i < entries.size(); ++i) settings_.home_row_order.push_back(entries[i].id);
+    // The new order, with the saved places of rows not listed now kept (another Steam account's collections,
+    // Emulacja without ROMs): each after the row it followed.
+    std::vector<std::string> order;
+    for (size_t i = 1; i < entries.size(); ++i) order.push_back(entries[i].id);
+    const auto& saved = settings_.home_row_order;
+    for (size_t i = 0; i < saved.size(); ++i) {
+        if (std::find(order.begin(), order.end(), saved[i]) != order.end()) continue;
+        auto place = order.begin();
+        for (size_t j = i; j-- > 0;)
+            if (const auto found = std::find(order.begin(), order.end(), saved[j]); found != order.end()) { place = found + 1; break; }
+        order.insert(place, saved[i]);
+    }
+    settings_.home_row_order = std::move(order);
     // The collections' own order follows (the desktop window's menus and the tabs read it); SRM's keep theirs.
     std::vector<std::string> keys;
     for (const auto& entry : entries) if (entry.collection) keys.push_back(collectionKey(account_, *entry.collection));
@@ -190,6 +216,19 @@ bool Launcher::moveHomeRow(const std::string& id, int amount) {
     for (const auto& key : keys) std::erase(settings_.collection_order, key);
     settings_.collection_order.insert(settings_.collection_order.end(), keys.begin(), keys.end());
     settingsChanged(true);
+    // Every row back in its built-in place (or collections only swapped among themselves, which their own
+    // order keeps): no custom order is left, so no "Domyślna kolejność" with nothing to do.
+    const auto listed = [&](const std::string& row) {
+        return std::any_of(entries.begin(), entries.end(), [&](const HomeRowEntry& entry) { return entry.id == row; });
+    };
+    if (std::all_of(settings_.home_row_order.begin(), settings_.home_row_order.end(), listed)) {
+        auto custom = std::exchange(settings_.home_row_order, {});
+        const auto plain = homeRowEntries();
+        const bool built_in = std::equal(plain.begin(), plain.end(), entries.begin(), entries.end(),
+                                         [](const HomeRowEntry& a, const HomeRowEntry& b) { return a.id == b.id; });
+        if (built_in) settingsChanged(true);
+        else settings_.home_row_order = std::move(custom);
+    }
     audio_.navigate();
     return true;
 }
@@ -215,11 +254,16 @@ void Launcher::homeRowsSettingsRows(const std::function<void(Row)>& add) {
     };
     // A new collection first, then every row in the home screen's order (hold A, Shift+↑↓ or LB/RB move one).
     add({Id::home_row_new, Control::action, tr(L"Nowa kolekcja"), tr(L"Kolekcja Steam albo własna; jej gry wybierzesz od razu."), tr(L"Utwórz")});
+    if (!settings_.home_row_order.empty() && home_row_moving_.empty())
+        add({Id::home_row_default_order, Control::action, tr(L"Domyślna kolejność"),
+             tr(L"Rzędy wracają na swoje miejsca; kolekcje zostają w swojej kolejności."),
+             home_row_confirm_ == "order" ? tr(L"Potwierdź") : tr(L"Przywróć")});
     bool first = true;
     for (const auto& entry : homeRowEntries()) {
         Row row{Id::home_row, Control::page, entry.title, description(entry), homeRowPlace(entry.id)};
         row.page = Page::home_row;
         row.key = entry.id;
+        row.faded = !homeRowOnHome(entry.id) && !homeRowTab(entry.id); // Ukryty.
         if (!home_row_moving_.empty() && entry.id == home_row_moving_) { // Lifted: says how to carry and put it down.
             row.description = tr(L"Strzałki ↑↓ przesuwają rząd; Enter albo Wstecz go odkłada.");
             row.value = tr(L"Przesuwasz");
@@ -309,8 +353,16 @@ void Launcher::homeRowSettingsRows(const std::string& id, const std::function<vo
 }
 
 bool Launcher::homeRowActivate(const Row& row) {
-    if (row.id != Id::home_row_reset) home_row_confirm_.clear();
+    if (row.id != Id::home_row_reset && row.id != Id::home_row_default_order) home_row_confirm_.clear();
     switch (row.id) {
+    case Id::home_row_default_order:
+        // Twice: the first press asks (Potwierdź), the second puts every row back.
+        if (home_row_confirm_ != "order") { home_row_confirm_ = "order"; buildSettingsRows(); audio_.context(); InvalidateRect(hwnd_, nullptr, FALSE); return true; }
+        home_row_confirm_.clear();
+        settings_.home_row_order.clear();
+        settingsChanged(true); audio_.context();
+        settings_state_.selected[settings_state_.category] = 0; // Its row is gone: Nowa kolekcja.
+        return true;
     case Id::home_row_new:
         openCollectionManager();
         if (library_dialog_.open) {
@@ -327,10 +379,11 @@ bool Launcher::homeRowActivate(const Row& row) {
     case Id::home_row_move:
         if (row.locked) { navigationBoundary(); return true; }
         // Back on the list with the collection lifted: ↑↓ carry it, Enter or Back put it down.
-        closeSettingsPage();
-        home_row_moving_ = row.key;
-        buildSettingsRows(); audio_.context();
-        InvalidateRect(hwnd_, nullptr, FALSE);
+        {
+            auto key = row.key; // closeSettingsPage() builds the rows again: row goes with them.
+            closeSettingsPage();
+            liftHomeRow(std::move(key));
+        }
         return true;
     case Id::home_row_steam: {
         const auto* c = homeRowCollection(row.key);

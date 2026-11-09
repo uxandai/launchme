@@ -488,6 +488,7 @@ void Launcher::tick() {
     pollGameFocus();
     pollTray();
     pollReturnFocus();
+    pollStartupForeground(GetTickCount64());
     pollOverlayReturn();
     startRatings();
     pollLibrarySave();
@@ -658,7 +659,7 @@ void Launcher::tick() {
         const auto page = settingsPage();
         if (page != settings_toggles_page_) { settings_toggles_page_ = page; settings_toggles_.clear(); }
         for (const auto& item : settings_rows_) {
-            if (item.control != settings_ui::Control::toggle && item.control != settings_ui::Control::collection &&
+            if (item.control != settings_ui::Control::toggle &&
                 item.control != settings_ui::Control::platform) continue;
             const auto key = std::to_string(static_cast<int>(item.id)) + '|' + item.key + '|' + item.plugin_setting + '|' +
                              std::to_string(static_cast<int>(item.source)) + '|' + std::to_string(item.choice);

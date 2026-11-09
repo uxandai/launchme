@@ -612,12 +612,15 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show_command) {
         const DWM_WINDOW_CORNER_PREFERENCE corner = DWMWCP_DONOTROUND;
         DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &corner, sizeof(corner));
     }
-    // A shortcut set to "Run: Minimized", or --minimized (Uruchamiaj z systemem Windows): on the
-    // taskbar, ready, without taking the screen.
-    const bool minimized = start_minimized || show_command == SW_SHOWMINNOACTIVE || show_command == SW_MINIMIZE ||
+    // A shortcut set to "Run: Minimized", or --minimized (Uruchamiaj z systemem Windows) for the desktop
+    // window: on the taskbar, ready, without taking the screen. Tryb TV started with Windows takes the
+    // screen, as a console does after power-on.
+    const bool tv_startup = start_minimized && launcher && !launcher->desktopMode();
+    const bool minimized = (start_minimized && !tv_startup) || show_command == SW_SHOWMINNOACTIVE || show_command == SW_MINIMIZE ||
                            show_command == SW_SHOWMINIMIZED || show_command == SW_FORCEMINIMIZE;
     ShowWindow(hwnd, minimized ? SW_SHOWMINNOACTIVE : launcher && launcher->startMaximized() ? SW_SHOWMAXIMIZED : SW_SHOW);
     UpdateWindow(hwnd);
+    if (auto* app = reinterpret_cast<Launcher*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA)); app && tv_startup && !minimized) app->claimStartupForeground();
     if (auto* app = reinterpret_cast<Launcher*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA)); app && !jump.empty()) app->jumpCommand(jump);
     MSG message{};
     FrameClock frame_clock;
@@ -906,9 +909,12 @@ int main(int argc, char** argv) {
     const auto* launcher = reinterpret_cast<Launcher*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
     // The desktop window (Launcher::applyWindowMode set its style and place): its own top bar.
     if (launcher && launcher->desktopMode()) SetWindowPos(hwnd, nullptr, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
-    // --minimized (autostart, Uruchamiaj z systemem): ready, without taking the screen.
-    ShowWindow(hwnd, start_minimized ? SW_SHOWMINNOACTIVE : launcher && launcher->startMaximized() ? SW_SHOWMAXIMIZED : SW_SHOW);
+    // --minimized (autostart, Uruchamiaj z systemem): the desktop window ready, without taking the
+    // screen; Tryb TV takes it, as a console does after power-on.
+    const bool tv_startup = start_minimized && launcher && !launcher->desktopMode();
+    ShowWindow(hwnd, start_minimized && !tv_startup ? SW_SHOWMINNOACTIVE : launcher && launcher->startMaximized() ? SW_SHOWMAXIMIZED : SW_SHOW);
     UpdateWindow(hwnd);
+    if (auto* app = reinterpret_cast<Launcher*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA)); app && tv_startup) app->claimStartupForeground();
     if (auto* app = reinterpret_cast<Launcher*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA)); app && !jump.empty()) app->jumpCommand(jump);
     // Started by Launchme's shortcut in Steam (--jump=play:): it ends with its game, as Steam expects.
     const std::string own_play = jump.starts_with(L"play:") ? text_encoding::utf8Lenient(jump) : std::string{};

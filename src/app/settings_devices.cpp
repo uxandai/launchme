@@ -111,7 +111,7 @@ void Launcher::settingsPickSource(const Row& row, int choice) {
 
 void Launcher::settingsShoulder(int amount) {
     if (!settingsOpen() || settings_state_.editing || color_editor_.open || !amount) return;
-    if (settings_state_.at(Page::collections) || settings_state_.at(Page::home_rows)) { settingsReorder(amount); return; }
+    if (settings_state_.at(Page::home_rows)) { settingsReorder(amount); return; }
     if (!settings_state_.options || settings_rows_.empty()) return;
     const auto& row = settings_rows_[settings_state_.row()];
     if (row.control != Control::sources || row.tiles.empty()) return;

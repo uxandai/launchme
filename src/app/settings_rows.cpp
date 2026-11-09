@@ -57,7 +57,6 @@ std::wstring Launcher::settingsPageTitle(const settings_ui::PageFrame* frame) co
     case Page::drm_games: return tr(L"Znalezione gry");
     case Page::screenscraper: return L"ScreenScraper";
     case Page::custom_games: return tr(L"Gry dodane ręcznie");
-    case Page::collections: return tr(L"Kolekcje");
     case Page::hidden_studios: return tr(L"Ukryci wydawcy i developerzy");
     case Page::excluded_games: return tr(L"Wykluczone gry");
     case Page::home_rows: return tr(L"Ekran główny i kolekcje");
@@ -983,7 +982,7 @@ void Launcher::buildSettingsRows() {
             add(std::move(language));
         }
         add({Id::autostart, Control::toggle, tr(L"Uruchamiaj z systemem Windows"),
-            tr(L"Po zalogowaniu, zminimalizowany na pasku zadań."), {}, settings_.autostart});
+            tr(L"Po zalogowaniu. Tryb TV zajmuje ekran, okno desktopowe czeka zminimalizowane na pasku zadań."), {}, settings_.autostart});
         section(tr(L"Funkcje"));
         add({Id::glance, Control::toggle, L"Glance",
             tr(L"Nowości, premiery i artykuły. Kafel na ekranie głównym (w Flix pasek u góry): kliknięcie, G lub R2/RT."), {}, settings_.glance});

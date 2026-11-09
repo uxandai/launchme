@@ -14,8 +14,8 @@ namespace {
 // Rows that are content, not settings: games, folders, collections and the like would drown the real ones.
 bool content(Id id) {
     switch (id) {
-    case Id::collection: case Id::home_section: case Id::library_tab: case Id::home_row: case Id::home_row_games: case Id::home_row_rename:
-    case Id::home_row_move: case Id::home_row_steam: case Id::home_row_delete: case Id::home_row_reset: case Id::custom_game: case Id::drm_game: case Id::drm_root: case Id::excluded_game:
+    case Id::home_section: case Id::library_tab: case Id::home_row: case Id::home_row_games: case Id::home_row_rename:
+    case Id::home_row_move: case Id::home_row_default_order: case Id::home_row_steam: case Id::home_row_delete: case Id::home_row_reset: case Id::custom_game: case Id::drm_game: case Id::drm_root: case Id::excluded_game:
     case Id::studio_hidden_entry: case Id::prefix_entry: case Id::launch_env: case Id::launch_dll: case Id::launch_option:
     case Id::launch_fold: case Id::artwork_source: case Id::settings_search: case Id::settings_hit:
         return true;
@@ -35,7 +35,9 @@ void Launcher::buildSettingsSearchIndex() {
         for (size_t i = 0; i < rows.size(); ++i) {
             const Row& row = rows[i];
             if (!row.section.empty()) section = row.section;
-            if (row.title.empty() || content(row.id)) continue;
+            // The home screen's own rows (Wydawcy, Emulacja…) are found by name; the collections are content.
+            const bool fixed_row = row.id == Id::home_row && !homeRowCollection(row.key);
+            if (row.title.empty() || (content(row.id) && !fixed_row)) continue;
             const bool tile = row.control == Control::page && row.id == Id::page && row.key == std::to_string(static_cast<int>(row.page));
             if (row.control != Control::fold) {
                 SettingsHit hit;

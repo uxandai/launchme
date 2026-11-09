@@ -2,7 +2,7 @@
 // and store accounts, service keys and how to get them, a ROM folder, a first game, Tryb TV) and a progress
 // bar. A click opens the list; a step takes the player to the place that does it. Steps count as done when the
 // player has taken them or the library already shows it (a ROM folder is set, a game was added by hand).
-// Ustawienia → System → "Jak zacząć" brings the card back and resets the progress.
+// Ustawienia → System → Przewodnik (in the desktop window) brings the card back and resets the progress.
 #include "launcher.hpp"
 
 using namespace desktop_ui;
@@ -94,7 +94,7 @@ void Launcher::desktopStartPick(int step) {
     }
 }
 
-// Ustawienia → System → Jak zacząć: the card again, from the first step.
+// Ustawienia → System → Przewodnik: the card again, from the first step.
 void Launcher::startReset() {
     settings_.start_done = 0;
     settings_.start_hidden = false;

@@ -39,7 +39,7 @@ struct LibraryState {
     // Key: steam_sync::unsyncedKey. Row: steam-unsynced "<key>" <0|1>.
     std::map<std::string, bool> steam_unsynced;
     // Wyklucz grę (any store, scanned DRM-free and emulated games, Steam shortcuts): never joins Ctrl+H.
-    // Titles are kept for restoring even offline (Biblioteka → Widoczność → Wykluczone gry).
+    // Titles are kept for restoring even offline (Biblioteka → Co pokazywać → Wykluczone gry).
     std::map<std::string, std::wstring> excluded_games;
     // Emulator per gra: a game's own emulator by gameKey, a catalogue id ("ryujinx") or its own program.
     // Row: game-emulator "<key>" "<id>" "<program>" (one of them empty).

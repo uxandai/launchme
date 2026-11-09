@@ -11,6 +11,38 @@
 
 int LauncherUiTest::trayAndBackgroundCrop(HWND window) {
     {
+        // Started with Windows in Tryb TV: the launcher takes the front back from what logon brings forward
+        // (retried, recorded here), until it has held it a few seconds; never over a game, never later.
+        Launcher app; app.hwnd_ = window; app.execute_ = fakeExecute;
+        HWND front = reinterpret_cast<HWND>(static_cast<UINT_PTR>(0x4321)); // Explorer, say.
+        int attempts = 0;
+        app.foreground_window_ = [&] { return front; };
+        app.take_foreground_ = [&](HWND) { ++attempts; return false; };
+        ShowWindow(window, SW_SHOWNOACTIVATE);
+        app.claimStartupForeground();
+        const auto start = app.startup_claim_until_ - Launcher::startup_claim_ms;
+        if (!app.startup_claim_until_ || attempts != 1) return 1940;
+        app.pollStartupForeground(start + 100); // Not yet: one try every half second.
+        if (attempts != 1) return 1941;
+        app.pollStartupForeground(start + Launcher::startup_claim_retry_ms);
+        if (attempts != 2) return 1942;
+        // In front, then taken away before it settled: taken back.
+        front = window; app.pollStartupForeground(start + 1000);
+        front = reinterpret_cast<HWND>(static_cast<UINT_PTR>(0x4322)); app.pollStartupForeground(start + 2000);
+        if (attempts != 3 || !app.startup_claim_until_) return 1943;
+        // Held long enough: done; what comes forward later is the user's.
+        front = window; app.pollStartupForeground(start + 3000); app.pollStartupForeground(start + 3000 + Launcher::startup_front_held_ms);
+        if (app.startup_claim_until_) return 1944;
+        front = reinterpret_cast<HWND>(static_cast<UINT_PTR>(0x4323)); app.pollStartupForeground(start + 9000);
+        if (attempts != 3) return 1945;
+        // Never past startup_claim_ms, and never in the desktop window.
+        app.claimStartupForeground(); attempts = 0;
+        app.pollStartupForeground(app.startup_claim_until_);
+        if (app.startup_claim_until_ || attempts != 0) return 1946;
+        app.desktop_mode_ = true; app.claimStartupForeground();
+        if (app.startup_claim_until_ || attempts != 0) return 1947;
+    }
+    {
         Launcher app; app.hwnd_ = window; app.execute_ = fakeExecute;
         app.settings_.launch_animation = false;
         std::vector<DWORD> calls;

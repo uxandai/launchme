@@ -383,10 +383,8 @@ void Launcher::buildShelves() {
         settings_.home_rows_migrated = true; // Saved with the next change (the migration is idempotent until then).
     }
     std::vector<SteamCollection> shown; // One call indexes the library once for every shelf.
-    std::unordered_set<std::string> off_home; // Collections hidden on the home screen: still libraries (tabs).
     for (const auto& collection : settings_collections_) {
         if (srmCollectionsHidden() && srmCollection(collection)) continue; // Emulacja (or the ROM folder) lists them by platform.
-        if (settings_.hidden_collections.contains(collectionKey(account_, collection))) off_home.insert(collection.id);
         shown.push_back(collection);
     }
     for (auto& shelf : managedShelves(account_, shown, library_state_.collections, public_library_, private_shelf_))
@@ -430,17 +428,18 @@ void Launcher::buildShelves() {
             return of(a) < of(b);
         });
     }
-    // Biblioteka → Sekcje: rows kept off the home screen stay libraries (tabs of Wszystkie gry, their tiles').
+    // Biblioteka → Ekran główny i kolekcje: rows kept off the home screen stay libraries (tabs of Wszystkie gry, their tiles').
     // Ostatnio grane (the first row: the home layouts' own) and Ctrl+H's hidden games always stay.
     library_categories_.clear();
     category_order_.clear();
     for (const auto& category : categories_) category_order_.push_back(category.id);
-    if (!settings_.hidden_home_sections.empty() || !off_home.empty()) {
+    {
+        // Where each row shows is read in one place (homeRowOnHome, home_rows.cpp); Ctrl+H's row always stays.
         std::vector<Category> home;
         home.reserve(categories_.size());
         for (size_t i = 0; i < categories_.size(); ++i) {
             const auto& id = categories_[i].id;
-            const bool off = i && id != "private" && (settings_.hidden_home_sections.contains(id) || off_home.contains(id));
+            const bool off = i && id != "private" && !homeRowOnHome(id);
             (off ? library_categories_ : home).push_back(std::move(categories_[i]));
         }
         categories_ = std::move(home);

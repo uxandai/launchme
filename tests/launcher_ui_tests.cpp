@@ -635,19 +635,33 @@ public:
                 const auto below = app.settings_rows_[static_cast<size_t>(publishers + 1)].key;
                 app.settings_state_.selected[app.settings_state_.category] = publishers;
                 app.settingsReorder(1);
-                if (app.settings_rows_[static_cast<size_t>(publishers)].key != below || rowOf(Id::home_row, "publishers") != publishers + 1 ||
-                    app.settings_.home_row_order.empty() || app.settings_state_.row() != publishers + 1) return 7586;
-                // Held A lifts the row: the arrows carry it, A puts it down.
+                // A custom order: "Domyślna kolejność" joins the list under Nowa kolekcja.
+                const int moved = rowOf(Id::home_row, "publishers");
+                if (moved < 1 || app.settings_rows_[static_cast<size_t>(moved - 1)].key != below || app.settings_.home_row_order.empty() ||
+                    app.settings_state_.row() != moved || rowOf(Id::home_row_default_order) != 1) return 7586;
+                // Held A lifts the row: the frame charges, then the arrows carry it and A puts it down.
                 app.enterDown(false);
                 if (!app.settings_hold_) return 7587;
+                app.settings_hold_started_ = std::chrono::steady_clock::now() - std::chrono::milliseconds(240);
+                if (!capture(L"settings-home-row-charging.png")) return 7593;
                 app.tickSettingsHold(std::chrono::steady_clock::now() + std::chrono::seconds(1));
-                if (app.home_row_moving_ != "publishers" || !app.settings_rows_[static_cast<size_t>(publishers + 1)].lifted) return 7588;
+                // Lifted, the list has no "Domyślna kolejność" (the rows under a dragging pointer stay put); the focus stays on the row.
+                const int lifted = rowOf(Id::home_row, "publishers");
+                if (app.home_row_moving_ != "publishers" || lifted != moved - 1 || !app.settings_rows_[static_cast<size_t>(lifted)].lifted ||
+                    app.settings_state_.row() != lifted || rowOf(Id::home_row_default_order) >= 0) return 7588;
                 if (!capture(L"settings-home-row-lifted.png")) return 7589;
+                // Up once: its own place again, so no custom order is left; down again: a custom order again.
                 app.settingsMove(-1);
-                if (rowOf(Id::home_row, "publishers") != publishers || app.settings_state_.row() != publishers) return 7590;
+                if (rowOf(Id::home_row, "publishers") != lifted - 1 || app.settings_state_.row() != lifted - 1 || !app.settings_.home_row_order.empty()) return 7590;
+                app.settingsMove(1);
                 app.enterUp(); app.settingsActivate();
-                if (!app.home_row_moving_.empty() || !app.settings_state_.at(Page::home_rows)) return 7591;
-                app.settings_.home_row_order.clear(); app.buildSettingsRows();
+                if (!app.home_row_moving_.empty() || !app.settings_state_.at(Page::home_rows) || rowOf(Id::home_row_default_order) != 1 ||
+                    app.settings_state_.row() != rowOf(Id::home_row, "publishers") || rowOf(Id::home_row, "publishers") != moved) return 7591;
+                // Domyślna kolejność: twice (Potwierdź), then the built-in order and no such row.
+                press(rowOf(Id::home_row_default_order));
+                if (app.settings_.home_row_order.empty() || app.settings_rows_[static_cast<size_t>(rowOf(Id::home_row_default_order))].value != tr(L"Potwierdź")) return 7594;
+                press(rowOf(Id::home_row_default_order));
+                if (!app.settings_.home_row_order.empty() || rowOf(Id::home_row_default_order) >= 0 || rowOf(Id::home_row, "publishers") != publishers) return 7595;
             }
             // Steam ROM Manager collections: while Emulacja lists their games by platform they are no home
             // row and not on this list; with Emulacja off they are ordinary.
@@ -679,6 +693,45 @@ public:
                 app.desktop_sheet_scroll_ = app.desktop_sheet_scroll_target_ = std::clamp(L.tops[static_cast<size_t>(index)] - 60.0f, 0.0f, L.maxScroll());
                 app.desktop_sheet_page_ = app.desktopSettingsPage(); app.desktop_sheet_row_ = index;
             };
+            // The desktop window: a home row pressed and dragged lifts after a few pixels and follows the pointer;
+            // letting go puts it down. A click puts a row lifted with the keyboard down.
+            {
+                const int publishers = rowOf(Id::home_row, "publishers");
+                if (publishers < 2 || publishers + 2 >= static_cast<int>(app.settings_rows_.size()) ||
+                    app.settings_rows_[static_cast<size_t>(publishers + 2)].id != Id::home_row || !app.settings_.home_row_order.empty()) return 7500;
+                const auto below = app.settings_rows_[static_cast<size_t>(publishers + 2)].key; // Two rows down.
+                app.desktop_mode_ = true; app.desktop_sheet_keyboard_ = false; desktopScroll(publishers);
+                const float scale = app.desktopScale();
+                const auto L = app.desktopSettingsLayout();
+                const auto point = [&](int index) {
+                    const auto r = L.row(index, app.desktop_sheet_scroll_);
+                    return std::pair{(r.left + 40) * scale, (r.top + r.bottom) * 0.5f * scale};
+                };
+                const auto [x, y] = point(publishers);
+                const auto [to_x, to_y] = point(publishers + 2);
+                app.desktopSettingsClick(x, y, false);
+                if (!app.desktop_row_drag_.armed || !app.home_row_moving_.empty()) return 7501;
+                app.desktopSettingsMove(x, y + 3 * scale); // A click that wobbles is no drag.
+                if (!app.home_row_moving_.empty()) return 7502;
+                app.desktopSettingsMove(to_x, to_y);
+                if (app.home_row_moving_ != "publishers" || rowOf(Id::home_row, "publishers") != publishers + 2 ||
+                    rowOf(Id::home_row, below) != publishers + 1 || app.settings_state_.row() != publishers + 2) return 7503;
+                app.desktopSettingsMove(to_x, to_y + 1); // Under the pointer already: it stays.
+                if (rowOf(Id::home_row, "publishers") != publishers + 2) return 7504;
+                const bool dragged = capture(L"settings-home-row-drag-desktop.png");
+                app.desktopSettingsRelease(to_x, to_y);
+                // Down: "Domyślna kolejność" is back above it, the focus still on the row, no page opened.
+                if (!dragged || !app.home_row_moving_.empty() || app.desktop_row_drag_.armed || !app.settings_state_.at(Page::home_rows) ||
+                    rowOf(Id::home_row_default_order) != 1 || app.settings_state_.row() != rowOf(Id::home_row, "publishers") ||
+                    rowOf(Id::home_row, "publishers") != publishers + 3) return 7505;
+                app.liftHomeRow("publishers");
+                const auto [lx, ly] = point(rowOf(Id::home_row, "publishers"));
+                app.desktopSettingsClick(lx, ly, false);
+                if (!app.home_row_moving_.empty() || !app.settings_state_.at(Page::home_rows)) return 7506;
+                app.desktop_mode_ = false;
+                app.settings_.home_row_order.clear(); app.settingsChanged(true);
+                if (rowOf(Id::home_row, "publishers") != publishers) return 7507;
+            }
             {
                 press(rowOf(Id::home_row, first));
                 if (rowOf(Id::home_row_delete) >= 0 || rowOf(Id::home_row_reset) < 0) return 244;
@@ -939,6 +992,19 @@ public:
             const int focus = app.settings_state_.row();
             if (fold == app.settings_rows_.end() || app.settings_rows_[static_cast<size_t>(focus)].source != GameSource::gog ||
                 focus > static_cast<int>(fold - app.settings_rows_.begin())) return 7592;
+        }
+        {
+            // Switched off while "Więcej platform" is closed: GOG goes into it and the focus onto the fold.
+            app.platforms_all_ = false; app.buildSettingsRows();
+            select(GameSource::gog); app.settingsActivate();
+            const int focus = app.settings_state_.row();
+            if (app.settings_.enabled_pc_sources.contains(sourceSlug(GameSource::gog)) || focus < 0 ||
+                app.settings_rows_[static_cast<size_t>(focus)].id != settings_ui::Id::platforms_more ||
+                std::any_of(app.settings_rows_.begin(), app.settings_rows_.end(), [](const auto& r) { return r.source == GameSource::gog; })) return 7508;
+            if (app.settings_rows_[static_cast<size_t>(focus)].description.find(L" · ") == std::wstring::npos) return 7509; // A few of their names.
+            app.platforms_all_ = true; app.buildSettingsRows();
+            select(GameSource::gog); app.settingsActivate(); // On again.
+            if (!app.settings_.enabled_pc_sources.contains(sourceSlug(GameSource::gog))) return 7510;
         }
         select(GameSource::epic); app.settingsActivate(); // Enable Epic.
         if (app.categories_[1].title != L"Platformy PC" || app.categories_[2].title != L"Emulacja" || app.categories_[1].games.size() != 3) return 41;

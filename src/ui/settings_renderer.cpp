@@ -178,8 +178,23 @@ void Renderer::drawSettings() {
         const float shown = 1.0f - solid;
         // A lighter card, no outline; the accent frame only while the row's value is being edited.
         fill(highlight, gray(1, 0.10f * shown), 16);
-        if (rows[state.row()].lifted) { fill(highlight, uiAccent(0.12f * shown), 16); outline(highlight, accent, 3.5f, 16); } // Being moved.
-        else if (state.editing && rows[state.row()].control != Control::collection) outline(highlight, accent, 1.5f, 16);
+        if (rows[state.row()].lifted) {
+            // Being moved: a glow around the row (it breathes slowly), then the accent frame.
+            const float breath = 0.75f + 0.25f * std::sin(elapsed_ * 3.0f);
+            for (int ring = 4; ring >= 1; --ring) {
+                const float spread = 3.0f * static_cast<float>(ring);
+                outline({highlight.left - spread, highlight.top - spread, highlight.right + spread, highlight.bottom + spread},
+                        uiAccent(0.10f * breath * shown * (5 - ring) / 4.0f), 5.0f, 16 + spread);
+            }
+            fill(highlight, uiAccent(0.10f * shown), 16);
+            outline(highlight, accent, 3.0f, 16);
+        } else if (context_->settings_hold > 0 && state.options) {
+            // A / Enter held: the frame charges up to the lift, a bar fills along the bottom.
+            const float charge = context_->settings_hold;
+            outline(highlight, uiAccent(charge), 1.0f + 2.0f * charge, 16);
+            fill({highlight.left + 16, highlight.bottom - 5, highlight.left + 16 + (highlight.right - highlight.left - 32) * charge, highlight.bottom - 2},
+                 accent, 1.5f);
+        } else if (state.editing) outline(highlight, accent, 1.5f, 16);
     }
     for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
         const auto& item = rows[i];
@@ -222,7 +237,7 @@ void Renderer::drawSettings() {
         const int description_lines = layout.compact || dense ? 1 : !item.tags.empty() ? (item.lines > 2 ? item.lines - 1 : 1) : std::max(2, item.lines);
         const float badge_room = item.badge.empty() ? 0.0f : Layout::badge_space;
         textGroup(item.title, dense ? item.detail : item.description, text_left, y - (item.tags.empty() ? 0 : 12),
-                  controls_left - (stepped_size ? 72 : 24) - badge_room - text_left, category_font_.Get(), gray(item.locked ? 0.56f : 0.93f), body,
+                  controls_left - (stepped_size ? 72 : 24) - badge_room - text_left, category_font_.Get(), gray(item.locked || item.faded ? 0.56f : 0.93f), body,
                   gray(dense ? 0.46f : 0.52f), description_lines);
         // The badge: the game's own value; a button back to the default (the pad's X, Delete).
         if (!item.badge.empty()) {
@@ -317,39 +332,10 @@ void Renderer::drawSettings() {
         } else {
             const float toggle_on = i < static_cast<int>(context_->settings_toggles.size()) ?
                                     context_->settings_toggles[static_cast<size_t>(i)] : (item.checked ? 1.0f : 0.0f);
-            const bool collection = item.control == Control::collection;
-            const float toggle_right = r.right - (collection ? 192.0f : 28.0f);
+            const float toggle_right = r.right - 28.0f;
             // State label right-aligned next to its switch.
             stateLabel(item.checked, item.locked, toggle_right - 66, y);
             toggle(toggle_right, y, toggle_on, item.locked);
-            if (collection) {
-                const auto up = layout.reorder(i, scroll, false), down = layout.reorder(i, scroll, true);
-                const bool earlier = i > 0 && rows[i - 1].control == Control::collection;
-                const bool later = i + 1 < static_cast<int>(rows.size()) && rows[i + 1].control == Control::collection;
-                arrow(up, false, button(up, selected && state.subcontrol == 1, hovered, earlier));
-                arrow(down, true, button(down, selected && state.subcontrol == 2, hovered, later));
-                if (item.removable) {
-                    // The trash of an own collection: red with the focus or the pointer on it; its question follows.
-                    const auto bin = layout.trash(i, scroll);
-                    const bool hot = (selected && state.subcontrol == 3) || context_->settings_hover_trash == i;
-                    const float radius = (bin.bottom - bin.top) * 0.5f;
-                    if (hot) { fill(bin, faint(palette::danger(), 0.18f), radius); outline(bin, palette::danger(), 1.5f, radius); }
-                    else button(bin, false, hovered);
-                    const auto ink = hot ? palette::danger() : gray(0.78f);
-                    const float cx = (bin.left + bin.right) * 0.5f;
-                    line(cx - 8, y - 6, cx + 8, y - 6, ink, 1.8f);          // The lid,
-                    line(cx - 3, y - 9, cx + 3, y - 9, ink, 1.8f);          // its handle,
-                    line(cx - 6, y - 4, cx - 5, y + 9, ink, 1.8f);          // the can's sides
-                    line(cx + 6, y - 4, cx + 5, y + 9, ink, 1.8f);
-                    line(cx - 5, y + 9, cx + 5, y + 9, ink, 1.8f);          // and bottom,
-                    line(cx - 2, y - 1, cx - 2, y + 6, ink, 1.4f);          // its ribs.
-                    line(cx + 2, y - 1, cx + 2, y + 6, ink, 1.4f);
-                }
-                if (selected && state.subcontrol == 0) {
-                    const auto control = layout.collectionControl(i, scroll, 0);
-                    outline(control, accent, 1.5f, (control.bottom - control.top) * 0.5f);
-                }
-            }
         }
     }
     if (rows.empty()) {

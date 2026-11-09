@@ -858,6 +858,7 @@ public:
     bool desktopActive() const { return desktop_mode_ && screen_ == ScreenMode::shelves; }
     void setDesktopMode(bool desktop);
     bool startMaximized() const { return desktop_mode_ && settings_.desktop_maximized; }
+    void claimStartupForeground(); // Tryb TV started with Windows: takes the screen (game_sessions.cpp).
     // The taskbar's Jump List (src/app/jump_list.cpp): a picked entry's command ("launch:<hex key>",
     // "settings", "tv"), from this process's arguments or a second one (WM_COPYDATA).
     // "play:<hex key>" (Linux: Launchme's shortcut in Steam) launches it too, and the process that
@@ -1239,7 +1240,7 @@ private:
     bool hiddenInLauncher(const Game& game) const;
     void toggleHidden(const Game& game);
     // Wyklucz grę (any store, a scanned DRM-free or ROM copy; not a game added by hand, which is removed
-    // instead): gone from every view until restored in Biblioteka → Widoczność → Wykluczone.
+    // instead): gone from every view until restored in Biblioteka → Co pokazywać → Wykluczone.
     bool canExclude(const Game& game) const;
     bool excludedGame(const Game& game) const;
     void askExcludeGame(const Game& game); // The question first (PromptKind::exclude).
@@ -1521,6 +1522,13 @@ private:
     uint64_t return_focus_until_ = 0, return_focus_next_ = 0;
     HWND return_focus_from_ = nullptr; // What held the front when the return began.
     void pollReturnFocus();
+    // Started with Windows in Tryb TV: the screen is the launcher's, as a console's after power-on.
+    // At logon Explorer and other startup programs come forward; the launcher takes the front back
+    // until it has held it for startup_front_held_ms, for at most startup_claim_ms, never once a game runs
+    // (claimStartupForeground, public: main starts it).
+    void pollStartupForeground(uint64_t now);
+    static constexpr uint64_t startup_claim_ms = 30000, startup_front_held_ms = 4000, startup_claim_retry_ms = 500;
+    uint64_t startup_claim_until_ = 0, startup_claim_next_ = 0, startup_held_since_ = 0;
     bool takeForeground(); // take_foreground_(hwnd_); true once the launcher holds the foreground.
     // Tests record the attempts; empty = takeForegroundWindow (game_sessions.cpp), which UI test
     // builds never run: they never take the user's real foreground.
@@ -2091,6 +2099,7 @@ private:
     void beginSettingsHold();
     void tickSettingsHold(std::chrono::steady_clock::time_point now);
     void stopHomeRowMove();
+    void liftHomeRow(std::string key);
     bool steam_rows_available_ = false; // buildShelves: Ostatnio zaktualizowane and Jeszcze niegrane can be rows.
     void settingsSearchEdited(); // The typed words changed: the list follows.
     void settingsSearchJump(size_t hit);
@@ -2373,6 +2382,13 @@ private:
     std::shared_ptr<std::atomic_uint32_t> friends_token_ = std::make_shared<std::atomic_uint32_t>(0);
     std::function<std::vector<uint8_t>(const SteamFriend&)> fetch_friend_avatar_; // Tests: no network.
     std::function<std::string(uint64_t)> fetch_friend_profile_; // Tests: a profile's ?xml=1 page without the network.
+    // The public profiles' presence read for Aurelia's silent roster, kept two minutes: opening the friends
+    // again asks Steam only for the friends not read lately (the workers share it, hence the lock).
+    struct FriendPresenceCache {
+        std::mutex lock;
+        std::unordered_map<uint64_t, std::pair<std::chrono::steady_clock::time_point, ProfilePresence>> entries;
+    };
+    std::shared_ptr<FriendPresenceCache> friend_presence_cache_ = std::make_shared<FriendPresenceCache>();
     std::shared_ptr<std::atomic_uint32_t> metadata_token_ = std::make_shared<std::atomic_uint32_t>(0);
     std::shared_ptr<std::atomic_uint32_t> pc_token_ = std::make_shared<std::atomic_uint32_t>(0);
     std::shared_ptr<JobQueue> jobs_ = std::make_shared<JobQueue>();
@@ -2443,7 +2459,7 @@ private:
     // delete_collection: an own collection's trash (Ustawienia → Biblioteka → Kolekcje); its key.
     enum class PromptKind { exit, move_videos, uninstall, remove, restore_saves, delete_collection, exclude };
     Game remove_game_;
-    Game exclude_game_; // PromptKind::exclude: Wyklucz grę, asked first (Biblioteka → Widoczność → Wykluczone).
+    Game exclude_game_; // PromptKind::exclude: Wyklucz grę, asked first (Biblioteka → Co pokazywać → Wykluczone).
     std::string delete_collection_key_;
     Game uninstall_game_; // PromptKind::uninstall: the game Launchme itself would remove (Legendary, GOG silently).
     GameAction uninstall_silent_; // ...and for a GOG game, its Inno uninstaller with the silent switches.
@@ -2546,10 +2562,10 @@ private:
     AddRequests add_requests_;
     ULONGLONG next_install_poll_ = 0;
     std::vector<Category> categories_;
-    // Rows the player keeps off the home screen (Biblioteka → Sekcje, hidden_home_sections): still the
+    // Rows the player keeps off the home screen (Biblioteka → Ekran główny i kolekcje, hidden_home_sections): still the
     // tabs of Wszystkie gry and the libraries their tiles open, in their home order.
     std::vector<Category> library_categories_;
-    std::vector<std::string> category_order_; // The ids of both, in the home order (Sekcje lists them so).
+    std::vector<std::string> category_order_; // The ids of both, in the home order (that page lists them so).
     const Category* findCategory(const std::string& id) const; // categories_, then library_categories_.
     std::vector<Game> public_library_;
     std::vector<Game> installed_library_, uninstalled_library_;
@@ -2763,7 +2779,6 @@ private:
     settings_ui::LayoutPreview settings_preview_;
     int settings_hover_row_ = -1;
     int settings_hover_badge_ = -1; // The row whose badge button (Row::reset) the pointer is over.
-    int settings_hover_trash_ = -1; // The collection row whose trash (Row::removable) the pointer is over.
     using TourState = launcher_state::TourState; // tour_state.hpp
     TourState tour_;
     std::chrono::steady_clock::time_point settings_edited_{};
@@ -3257,6 +3272,9 @@ private:
     Spring desktop_sheet_nav_;
     int desktop_sheet_nav_screen_ = -1;
     desktop_ui::SheetHit desktop_sheet_hover_, desktop_sheet_pressed_;
+    // Ekran główny i kolekcje in the desktop window: a home row pressed with the mouse; dragged past a few
+    // pixels it is lifted and follows the pointer, let go it is put down (a plain click opens its page).
+    struct { bool armed = false; float y = 0; std::string key; } desktop_row_drag_;
     bool desktop_sheet_keyboard_ = false;
     std::string desktop_sheet_page_;
     int desktop_sheet_row_ = -1;

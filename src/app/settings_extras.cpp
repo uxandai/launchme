@@ -98,7 +98,7 @@ bool Launcher::settingsExtraChoose(const Row& row) {
 // The action rows: the wallpaper picker and "Bez tapety"; false: not one of them.
 bool Launcher::settingsExtraActivate(const Row& row) {
     if (emulationSettingsActivate(row)) return true; // Folder ROM-ów (emulation_library.cpp).
-    // Biblioteka → Widoczność → Wykluczone gry (collections.cpp): back to the library, one or all.
+    // Biblioteka → Co pokazywać → Wykluczone gry (collections.cpp): back to the library, one or all.
     if (row.id == Id::excluded_games) { openSettingsPage(Page::excluded_games); return true; }
     if (row.id == Id::excluded_game || row.id == Id::excluded_restore_all) {
         if (row.id == Id::excluded_game) restoreExcludedGame(row.key);

@@ -518,6 +518,34 @@ void Launcher::pollReturnFocus() {
     }
 }
 
+void Launcher::claimStartupForeground() {
+    if (closing_ || !hwnd_ || desktop_mode_) return;
+    const auto now = GetTickCount64();
+    startup_claim_until_ = now + startup_claim_ms;
+    startup_claim_next_ = now + startup_claim_retry_ms;
+    startup_held_since_ = 0;
+    bringToFront();
+}
+
+void Launcher::pollStartupForeground(uint64_t now) {
+    if (!startup_claim_until_) return;
+    if (closing_ || !hwnd_ || desktop_mode_ || now >= startup_claim_until_ || pending_launch_ || anyActiveSession()) {
+        startup_claim_until_ = 0;
+        return;
+    }
+    if (frontWindow() == hwnd_ && !IsIconic(hwnd_)) {
+        if (!startup_held_since_) startup_held_since_ = now;
+        if (now - startup_held_since_ >= startup_front_held_ms) startup_claim_until_ = 0; // Settled: the user's from here.
+        return;
+    }
+    startup_held_since_ = 0;
+    if (now < startup_claim_next_) return;
+    startup_claim_next_ = now + startup_claim_retry_ms;
+    if (IsIconic(hwnd_)) ShowWindow(hwnd_, SW_RESTORE);
+    takeForeground();
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
 // Czas gry as shown everywhere: Steam's own count for Steam games (unknown until read), else the
 // larger of Launchme's count and the store's (a launcher like Prism counts every session too);
 // "Edytuj metadane" sets a value counted on from there.

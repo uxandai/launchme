@@ -89,7 +89,11 @@ void Launcher::pcSettingsRows() {
             platformRow(source, 0);
         }
         if (off.empty()) return;
-        Row fold{Id::platforms_more, Control::fold, tr(L"Więcej platform"), tr(L"Wyłączone sklepy i launchery. Włącz, żeby dodać ich gry."),
+        // What is inside, by name (three, then how many more).
+        std::wstring names;
+        for (size_t i = 0; i < off.size() && i < 3; ++i) names += (i ? L", " : L"") + std::wstring(sourceName(off[i]));
+        if (off.size() > 3) names += L" +" + std::to_wstring(off.size() - 3);
+        Row fold{Id::platforms_more, Control::fold, tr(L"Więcej platform"), names + L" · " + tr(L"Włącz, żeby dodać ich gry."),
                  std::to_wstring(off.size()), platforms_all_};
         settings_rows_.push_back(std::move(fold));
         if (platforms_all_) for (const auto source : off) platformRow(source, 1);

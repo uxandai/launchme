@@ -65,8 +65,7 @@ int main() {
             std::abs((minus.top + minus.bottom) * 0.5f - (row0.top + Layout::row_center)) > 0.01f ||
             scaled.sliderValue(0, 0).left < scaled.controlsLeft(Control::slider) ||
             scaled.layoutOption(0, 0, 0).left < scaled.controlsLeft(Control::layout) ||
-            scaled.connect(0, 0).left < scaled.controlsLeft(Control::platform) ||
-            scaled.collectionControl(0, 0, 0).left < scaled.controlsLeft(Control::collection)) return 6;
+            scaled.connect(0, 0).left < scaled.controlsLeft(Control::platform)) return 6;
         auto last = scaled.choice(8, 9);
         if (scaled.hitChoice(last.left + 5, last.top + 5, 9) != 8 || last.bottom > scaled.picker(9).bottom) return 7;
     }

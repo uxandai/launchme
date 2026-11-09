@@ -113,25 +113,45 @@ void Launcher::loadFriendAvatars(std::vector<SteamFriend> people, uint32_t gener
 }
 
 void Launcher::loadFriendPresence(std::vector<SteamFriend> people, uint32_t generation) {
-    work_.start([alive = alive_, token = friends_token_, hwnd = hwnd_, generation, people = std::move(people), fetch = fetch_friend_profile_]() mutable {
+    work_.start([alive = alive_, token = friends_token_, hwnd = hwnd_, generation, people = std::move(people), fetch = fetch_friend_profile_,
+                 cache = friend_presence_cache_]() mutable {
         const auto current = [&] { return alive->load() && token->load() == generation; };
         const auto page = [&fetch](uint64_t id) -> std::string {
             if (fetch) return fetch(id);
             const auto reply = httpGet(L"https://steamcommunity.com/profiles/" + std::to_wstring(id) + L"/?xml=1", L"Accept: text/xml\r\n", 256 * 1024);
             return reply.status == 200 ? std::string(reinterpret_cast<const char*>(reply.body.data()), reply.body.size()) : std::string{};
         };
+        // Read in the last two minutes: no request (a private profile too, it stays offline until then).
+        std::vector<std::optional<ProfilePresence>> known(people.size());
+        std::vector<size_t> asked;
+        {
+            const std::lock_guard guard(cache->lock);
+            const auto now = std::chrono::steady_clock::now();
+            for (size_t i = 0; i < people.size(); ++i) {
+                const auto found = cache->entries.find(people[i].id);
+                if (found != cache->entries.end() && now - found->second.first < std::chrono::minutes(2)) known[i] = found->second.second;
+                else asked.push_back(i);
+            }
+        }
         // A few profiles at a time: a roster of a hundred in seconds, without a burst of a hundred requests.
         constexpr size_t batch = 6;
-        bool found = false;
-        for (size_t first = 0; first < people.size() && current(); first += batch) {
+        for (size_t first = 0; first < asked.size() && current(); first += batch) {
             std::vector<std::future<std::string>> pages;
-            for (size_t i = first; i < std::min(people.size(), first + batch); ++i) pages.push_back(std::async(std::launch::async, page, people[i].id));
+            for (size_t i = first; i < std::min(asked.size(), first + batch); ++i) pages.push_back(std::async(std::launch::async, page, people[asked[i]].id));
             for (size_t i = 0; i < pages.size(); ++i) {
-                const auto presence = profilePresence(pages[i].get());
-                auto& person = people[first + i];
-                if (presence.known) { person.status = presence.status; person.game = presence.game; found |= presence.status > 0; }
-                if (person.avatar_url.empty()) person.avatar_url = presence.avatar_url; // The avatars need no second request.
+                const auto index = asked[first + i];
+                known[index] = profilePresence(pages[i].get());
+                const std::lock_guard guard(cache->lock);
+                cache->entries[people[index].id] = {std::chrono::steady_clock::now(), *known[index]};
             }
+        }
+        bool found = false;
+        for (size_t i = 0; i < people.size(); ++i) {
+            if (!known[i]) continue;
+            const auto& presence = *known[i];
+            auto& person = people[i];
+            if (presence.known) { person.status = presence.status; person.game = presence.game; found |= presence.status > 0; }
+            if (person.avatar_url.empty()) person.avatar_url = presence.avatar_url; // The avatars need no second request.
         }
         if (!current()) return;
         auto message = std::make_unique<RemoteMessage>();

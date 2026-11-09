@@ -136,8 +136,6 @@ void Launcher::settingsMove(int amount) {
             navigationBoundary(); return;
         }
         if (settings_state_.category != previous) buildSettingsRows();
-        // The trash's column keeps to a collection that has one (a Steam collection's ends at ↓).
-        if (settings_state_.subcontrol == 3 && !settings_rows_.empty() && !settings_rows_[settings_state_.row()].removable) settings_state_.subcontrol = 2;
         ensureSettingVisible();
     }
     audio_.navigate();
@@ -179,37 +177,15 @@ void Launcher::saveSettings() {
 
 void Launcher::settingsReorder(int amount) {
     if (!settingsOpen() || !settings_state_.options || settings_state_.editing) return;
-    if (settings_state_.at(Page::home_rows)) {
-        // Ekran główny i kolekcje: a collection one place up or down, its row keeping the focus.
-        const int index = settings_state_.row();
-        if (index < 0 || index >= static_cast<int>(settings_rows_.size()) || settings_rows_[index].id != Id::home_row) return;
-        const auto key = settings_rows_[index].key;
-        if (!homeRowMovable(key) || !moveHomeRow(key, amount)) return;
-        for (size_t i = 0; i < settings_rows_.size(); ++i)
-            if (settings_rows_[i].id == Id::home_row && settings_rows_[i].key == key) settings_state_.selected[settings_state_.category] = static_cast<int>(i);
-        InvalidateRect(hwnd_, nullptr, FALSE);
-        return;
-    }
-    if (!settings_state_.at(Page::collections)) return;
-    // The page starts with "Zarządzaj kolekcjami": a collection is found by its row's key.
-    const int row = settings_state_.row(), next_row = row + amount;
-    if (row < 0 || row >= static_cast<int>(settings_rows_.size()) || settings_rows_[row].id != Id::collection ||
-        next_row < 0 || next_row >= static_cast<int>(settings_rows_.size()) || settings_rows_[next_row].id != Id::collection) return;
-    const auto found = std::find_if(settings_collections_.begin(), settings_collections_.end(), [&](const auto& collection) {
-        return collectionKey(account_, collection) == settings_rows_[row].key;
-    });
-    if (found == settings_collections_.end()) return;
-    const int current = static_cast<int>(found - settings_collections_.begin()), next = current + amount;
-    if (next < 0 || next >= static_cast<int>(settings_collections_.size())) return;
-    std::swap(settings_collections_[current], settings_collections_[next]);
-    // The rows follow at once: the rebuild below keeps the focus on the moved collection's row.
-    std::swap(settings_rows_[row], settings_rows_[next_row]);
-    for (const auto& collection : settings_collections_) std::erase(settings_.collection_order, collectionKey(account_, collection));
-    for (const auto& collection : settings_collections_)
-        settings_.collection_order.push_back(collectionKey(account_, collection));
-    settings_state_.selected[settings_state_.category] = next_row;
-    settingsChanged(true);
-    audio_.navigate();
+    // Ekran główny i kolekcje: the focused row one place up or down, keeping the focus.
+    if (!settings_state_.at(Page::home_rows)) return;
+    const int index = settings_state_.row();
+    if (index < 0 || index >= static_cast<int>(settings_rows_.size()) || settings_rows_[index].id != Id::home_row) return;
+    const auto key = settings_rows_[index].key;
+    if (!homeRowMovable(key) || !moveHomeRow(key, amount)) return;
+    for (size_t i = 0; i < settings_rows_.size(); ++i)
+        if (settings_rows_[i].id == Id::home_row && settings_rows_[i].key == key) settings_state_.selected[settings_state_.category] = static_cast<int>(i);
+    InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
 void Launcher::settingsSetLevel(float level) {
@@ -270,9 +246,6 @@ void Launcher::settingsAdjust(int amount) {
     if (!settings_state_.options) {
         if (settings_state_.backFocused()) return; // Back has no row to the right of it.
         if (amount > 0) settings_state_.enter(static_cast<int>(settings_rows_.size()));
-    } else if (!settings_rows_.empty() && settings_rows_[settings_state_.row()].control == Control::collection) {
-        if (amount < 0 && settings_state_.subcontrol == 0) settings_state_.options = false;
-        else settings_state_.subcontrol = std::clamp(settings_state_.subcontrol + amount, 0, settings_rows_[settings_state_.row()].removable ? 3 : 2);
     } else if (!settings_rows_.empty() && settings_rows_[settings_state_.row()].control == Control::layout) {
         // Left/Right pick the preview directly; Left on the first one returns to the category rail.
         const int current = settings_rows_[settings_state_.row()].choice;
@@ -507,14 +480,6 @@ void Launcher::settingsActivate() {
         }
         settingsChanged(); audio_.context(); return;
     }
-    if (row.control == Control::collection && settings_state_.subcontrol == 3) {
-        if (row.removable) askDeleteCollection(row.key);
-        return;
-    }
-    if (row.control == Control::collection && settings_state_.subcontrol != 0) {
-        settingsReorder(settings_state_.subcontrol == 1 ? -1 : 1);
-        return;
-    }
     if (row.id == Id::screenscraper) {
         const auto* field = screenscraper::findField(row.key);
         if (!field) return;
@@ -694,10 +659,7 @@ bool Launcher::settingsResetRow(const Row& row) {
 // Delete and the pad's X on the focused row.
 bool Launcher::settingsResetFocused() {
     if (!settingsOpen() || !settings_state_.options || settings_state_.editing || editingSecret() || settings_rows_.empty()) return false;
-    const auto row = settings_rows_[static_cast<size_t>(settings_state_.row())];
-    // An own collection: Delete and X ask whether to delete it (its trash).
-    if (row.id == Id::collection && row.removable) { askDeleteCollection(row.key); return true; }
-    return settingsResetRow(row);
+    return settingsResetRow(settings_rows_[static_cast<size_t>(settings_state_.row())]);
 }
 
 // A switch (or a collection's visibility). Most rebuild the shelves; visual-only switches and
@@ -871,11 +833,6 @@ void Launcher::settingsToggle(const Row& row) {
         applyLowMemory();
         settingsChanged(); audio_.context(); return;
     }
-    else if (row.id == Id::collection && !row.key.empty()) {
-        if (row.locked) { navigationBoundary(); return; } // SRM collection covered by Emulacja.
-        // The row's key is the collection's (the page starts with "Zarządzaj kolekcjami").
-        if (!settings_.hidden_collections.erase(row.key)) settings_.hidden_collections.insert(row.key);
-    }
     else return;
     settingsChanged(true);
     audio_.context();
@@ -944,11 +901,6 @@ void Launcher::settingsClick(float x, float y) {
             SetCapture(hwnd_);
             mouseMove(x * view.scale, y * view.scale);
         }
-    } else if (row.control == Control::collection) {
-        settings_state_.subcontrol = row.removable && layout.trash(index, settings_state_.offset()).contains(x, y) ? 3 :
-                                     layout.reorder(index, settings_state_.offset(), false).contains(x, y) ? 1 :
-                                     layout.reorder(index, settings_state_.offset(), true).contains(x, y) ? 2 : 0;
-        settingsActivate();
     } else if (row.control == Control::avatar) {
         const int count = companion::lookCount();
         const int first = settings_ui::Layout::avatarFirst(row.choice, count);
