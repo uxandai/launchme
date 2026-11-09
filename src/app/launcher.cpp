@@ -645,6 +645,7 @@ void Launcher::tick() {
     }
     const bool desktop = desktopActive(); // Its grid moves on its own (tickDesktop).
     if (desktop) needs_paint |= tickDesktop(dt);
+    else if (desktopPageDocked()) needs_paint |= tickDesktopChrome(dt); // The sidebar beside a page.
     needs_paint |= tickDesktopSheet(dt); // Ustawienia as a desktop dialog: its scroll and caret.
     tickDownloadBars(dt, needs_paint);   // Pobierania: the bars glide to the stores' samples.
     needs_paint |= themeAnimate(dt);     // Dostosuj wygląd: its motion, and its return from the wallpaper picker.

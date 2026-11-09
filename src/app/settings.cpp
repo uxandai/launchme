@@ -56,6 +56,16 @@ void Launcher::openSettings() {
 // A page opened from the focused row of the current category: that row and the list's scroll are
 // kept for Back, the page starts at its first row.
 void Launcher::openSettingsPage(Page page, std::string key, int value) {
+    if (page == Page::emulation) { // Emulacja: a category of its own now, its rows focused.
+        if (!settingsOpen()) { settings_state_.category = static_cast<int>(settings_ui::Category::emulation); openSettings(); }
+        else settings_state_.selectCategory(static_cast<int>(settings_ui::Category::emulation));
+        settings_state_.options = true; settings_state_.editing = settings_state_.back_focused = false;
+        clearSecretInput();
+        settings_motion_.valid = false;
+        buildSettingsRows(); settingsPreviewFocus(); audio_.context();
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        return;
+    }
     std::optional<RowRef> opener;
     if (settings_state_.row() >= 0 && settings_state_.row() < static_cast<int>(settings_rows_.size()))
         opener = RowRef::of(settings_rows_[settings_state_.row()]);

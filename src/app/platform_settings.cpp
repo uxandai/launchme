@@ -59,16 +59,8 @@ void Launcher::pcSettingsRows() {
         settings_rows_.push_back(std::move(row));
     };
     if (!settings_state_.platform()) {
-        // The DRM-free catalogue first (the user's own library: its folders and the games added by
-        // hand), Emulacja under it, then Steam and the stores by name.
-        {
-            auto summary = drmSummary();
-            if (!custom_games_.empty()) summary += L" · " + (tr(L"Dodane ręcznie: ") + std::to_wstring(custom_games_.size()));
-            Row drm{Id::pc_platform, Control::platform, tr(L"Katalog DRM-free"), std::move(summary), tr(L"Opcje"),
-                    settings_.enabled_pc_sources.contains(sourceSlug(GameSource::drmfree))};
-            drm.source = GameSource::drmfree; settings_rows_.push_back(std::move(drm));
-        }
-        settings_rows_.push_back(emulationTileRow());
+        // Platformy PC: Steam, the DRM-free catalogue (the user's own library: its folders and the games
+        // added by hand), then the stores by name. Emulacja is a category of its own.
         {
             const auto steam_installed = std::count_if(installed_library_.begin(), installed_library_.end(), [](const auto& game) {
                 return game.source == GameSource::steam && game.kind == GameKind::steam && game.installed;
@@ -77,8 +69,15 @@ void Launcher::pcSettingsRows() {
             if (aurelia_active_) summary += L" · Aurelia";
             Row steam{Id::pc_platform, Control::platform, L"Steam", std::move(summary), tr(L"Opcje"), settings_.steam_enabled};
             steam.source = GameSource::steam;
-            steam.section = tr(L"Sklepy"); // A gap after the user's own library (DRM-free, Emulacja).
+            steam.section = tr(L"Platformy PC");
             settings_rows_.push_back(std::move(steam));
+        }
+        {
+            auto summary = drmSummary();
+            if (!custom_games_.empty()) summary += L" · " + (tr(L"Dodane ręcznie: ") + std::to_wstring(custom_games_.size()));
+            Row drm{Id::pc_platform, Control::platform, tr(L"Katalog DRM-free"), std::move(summary), tr(L"Opcje"),
+                    settings_.enabled_pc_sources.contains(sourceSlug(GameSource::drmfree))};
+            drm.source = GameSource::drmfree; settings_rows_.push_back(std::move(drm));
         }
         // The stores that are on, then the others in a fold: most players use two or three of them. A store
         // switched on or off moves at once (pcSettingsActivate keeps the focus on it).

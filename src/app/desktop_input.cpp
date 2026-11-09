@@ -443,7 +443,7 @@ void Launcher::desktopScrollBy(float amount) {
 LPCWSTR Launcher::desktopCursor(float mouse_x, float mouse_y) const {
     if (const auto shape = desktopModalCursor(mouse_x, mouse_y)) return shape;
     // Ustawienia or Profil in the library's place: the sidebar and top bar around them.
-    if ((desktopSettingsDocked() && topModal() == Modal::none && !friends_open_) || (profileDocked() && profile_.open && topModal() == Modal::profile)) {
+    if ((desktopPageDocked() && topModal() == Modal::none && !friends_open_) || (profileDocked() && profile_.open && topModal() == Modal::profile)) {
         const float scale = desktopScale(), x = mouse_x / scale, y = mouse_y / scale;
         if (y < title_h || x < desktopLayout().sidebarRight()) {
             const auto hit = desktopHit(x, y);

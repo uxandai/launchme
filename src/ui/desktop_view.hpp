@@ -47,8 +47,12 @@ inline bool foldedByDefault(Group group) { return group != Group::library && gro
 inline bool settingsGroup(Group group) { return group == Group::library || group == Group::platforms || group == Group::emulation; }
 // friends, profile: Znajomi (the drawer's list) and Profil (a page in the library's place); game: a
 // recent game's shortcut. These three are not sections: a click acts, the grid stays as it is.
-enum class EntryKind { all, favorites, hidden, friends, profile, source, console, collection, studio, game };
-inline bool actionEntry(EntryKind kind) { return kind == EntryKind::friends || kind == EntryKind::profile || kind == EntryKind::game; }
+// friends … store: Biblioteka's entries that act (a drawer, a page in the library's place) instead of listing games.
+enum class EntryKind { all, favorites, hidden, friends, profile, downloads, settings, store, source, console, collection, studio, game };
+inline bool actionEntry(EntryKind kind) {
+    return kind == EntryKind::friends || kind == EntryKind::profile || kind == EntryKind::downloads || kind == EntryKind::settings ||
+           kind == EntryKind::store || kind == EntryKind::game;
+}
 struct Entry {
     EntryKind kind = EntryKind::all;
     Group group = Group::library;
@@ -251,6 +255,8 @@ struct ContinueTile {
     int image = -1;            // Its landscape picture's slot (Renderer::desktop_recent_).
     int cover = -1;            // Its square cover's slot: stands in until the picture arrives.
     bool installed = true;
+    float hover = 0;   // The pointer over it, eased: it lifts and shows Graj.
+    float opacity = 1; // Fading in with the grid.
 };
 struct EmptyState {
     wchar_t icon = 0;
@@ -424,6 +430,9 @@ struct View {
     std::wstring drag_label;
     bool scanning = false;
     bool pane_open = true;
+    float pane_t = 1; // The pane sliding in or out (Layout::pane_t).
+    // Cards gliding from where they were before the columns changed (x, y offsets, as cards_).
+    const std::vector<std::pair<float, float>>* card_shift = nullptr;
     bool library_empty = false; // No games at all: the pane says so instead of "Wybierz grę".
     EmptyState empty;
     float launch = 0;
@@ -476,6 +485,7 @@ struct Layout {
     bool pane_open = true; // No game selected (or its ✕ pressed): no pane, the grid takes its room.
     bool list = false;     // Widok → Lista: one game per row (a small cover, its name and columns).
     int continue_count = 0; // Kontynuuj grę's tiles above the grid (0: none), scrolling with it.
+    float pane_t = 1;      // The pane sliding in (0 … 1): the grid narrows with it; its content keeps its width.
 
     float sidebarWide() const { return std::clamp(std::round(width * 0.17f), 228.0f, 272.0f); }
     float sidebarRight() const { return std::round(sidebarWide() + (sidebar_narrow - sidebarWide()) * std::clamp(narrow, 0.0f, 1.0f)); }
@@ -485,17 +495,18 @@ struct Layout {
         if (pane_width <= 0) return automatic;
         return std::clamp(std::round(pane_width), pane_min, std::max(pane_min, width - sidebarRight() - main_min));
     }
-    float paneLeft() const { return width - paneWidth(); }
+    float paneLeft() const { return std::round(width - paneWidth() * std::clamp(pane_t, 0.0f, 1.0f)); }
+    float paneRight() const { return paneLeft() + paneWidth(); }
     // The grab zone of the pane's left edge (the pointer turns into ↔).
     Rect paneEdge() const { return pane_open ? Rect{paneLeft() - 4, title_h, paneLeft() + 4, height} : Rect{}; }
-    Rect paneClose() const { return pane_open ? Rect{width - 46, title_h + 10, width - 14, title_h + 42} : Rect{}; } // ✕ over the picture.
+    Rect paneClose() const { return pane_open ? Rect{paneRight() - 46, title_h + 10, paneRight() - 14, title_h + 42} : Rect{}; } // ✕ over the picture.
     // The sidebar's toggle, then the logo: whole while it is wide, its mark alone when narrow.
     Rect sidebarToggle() const { const float top = (title_h - toggle_size) * 0.5f; return {12, top, 12 + toggle_size, top + toggle_size}; }
     float logoLeft() const { return sidebarToggle().right + 12; }
     Rect titlebar() const { return {0, 0, width, title_h}; }
     Rect sidebar() const { return {0, title_h, sidebarRight(), height}; }
     Rect main() const { return {sidebarRight(), title_h, paneLeft(), height}; }
-    Rect pane() const { return {paneLeft(), title_h, width, height}; }
+    Rect pane() const { return {paneLeft(), title_h, paneRight(), height}; }
 
     // Minimize, maximize/restore, close: the full height of the top bar.
     Rect windowButton(int i) const {
@@ -550,8 +561,9 @@ struct Layout {
     float rowStep() const { return posterHeight() + captionHeight() + gapY(); }
     // Kontynuuj grę: its label, then up to three wide tiles above the first row (in the grid's scroll).
     static constexpr float continue_label = 34, continue_gap = 30;
-    float continueTileWidth() const { return (gridRight() - gridLeft() - 2 * gap_x) / 3; }
-    float continueTileHeight() const { return std::min(190.0f, std::round(continueTileWidth() * 0.5f)); }
+    // The tiles share the grid's width (its first and last columns' outer edges), however many there are.
+    float continueTileWidth() const { const float n = static_cast<float>(std::max(1, continue_count)); return (gridRight() - gridLeft() - gap_x * (n - 1)) / n; }
+    float continueTileHeight() const { return std::clamp(std::round((gridRight() - gridLeft() - 2 * gap_x) / 3 * 0.5f), 120.0f, 190.0f); }
     float continueHeight() const { return continue_count > 0 ? continue_label + continueTileHeight() + continue_gap : 0.0f; }
     float continueLabelY(float scroll) const { return gridTop() + 8 + 14 - scroll; }
     Rect continueTile(int i, float scroll) const {
@@ -670,26 +682,26 @@ struct Layout {
     // have fixed places; collections, description and facts follow (measured while drawing).
     float bannerHeight() const { return std::clamp(std::round(paneWidth() * 0.52f), 170.0f, 220.0f); }
     float paneTop(float scroll) const { return title_h - scroll; }
-    Rect banner(float scroll) const { const float t = paneTop(scroll); return {paneLeft(), t, width, t + bannerHeight()}; }
+    Rect banner(float scroll) const { const float t = paneTop(scroll); return {paneLeft(), t, paneRight(), t + bannerHeight()}; }
     float paneY(float offset, float scroll) const { return paneTop(scroll) + bannerHeight() + offset; }
     // Graj at most 320 wide (a dragged-wide pane stretched it over 600), the star and "…" beside it.
     Rect panePrimary(float scroll) const {
         const float y = paneY(74, scroll), left = paneLeft() + 20;
-        return {left, y, left + std::min(320.0f, width - 20 - 2 * 48 - left), y + 42};
+        return {left, y, left + std::min(320.0f, paneRight() - 20 - 2 * 48 - left), y + 42};
     }
     Rect paneFavorite(float scroll) const { const auto p = panePrimary(scroll); return {p.right + 6, p.top, p.right + 48, p.bottom}; }
     Rect paneMore(float scroll) const { const auto f = favorite ? paneFavorite(scroll) : panePrimary(scroll); return {f.right + 6, f.top, f.right + 48, f.bottom}; }
-    Rect paneStats(float scroll) const { const float y = paneY(132, scroll); return {paneLeft() + 20, y, width - 20, y + 66}; }
+    Rect paneStats(float scroll) const { const float y = paneY(132, scroll); return {paneLeft() + 20, y, paneRight() - 20, y + 66}; }
     static constexpr int quick_count = 4; // Szczegóły, Grafika, Folder, Ukryj.
     Rect paneQuick(int i, float scroll) const {
-        const float y = paneY(214, scroll), left = paneLeft() + 20, w = (width - 20 - left - 3 * 8) / quick_count;
+        const float y = paneY(214, scroll), left = paneLeft() + 20, w = (paneRight() - 20 - left - 3 * 8) / quick_count;
         const float x = left + static_cast<float>(i) * (w + 8);
         return {x, y, x + w, y + 54};
     }
     float paneContentTop(float scroll) const { return paneY(288, scroll); }
     // Several games marked: their actions in a column.
     static constexpr int bulk_count = 5; // Dodaj do kolekcji, Ulubione, Pobierz grafiki ponownie, Ukryj, Wyczyść zaznaczenie.
-    Rect paneBulk(int i) const { const float y = title_h + 132 + static_cast<float>(i) * 50; return {paneLeft() + 20, y, width - 20, y + 42}; }
+    Rect paneBulk(int i) const { const float y = title_h + 132 + static_cast<float>(i) * 50; return {paneLeft() + 20, y, paneRight() - 20, y + 42}; }
 
     // Pobierania under its shortcut.
     Rect popover(int rows, Rect anchor) const {

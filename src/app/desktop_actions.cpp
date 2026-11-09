@@ -81,7 +81,7 @@ void Launcher::desktopActivate(const desktop_ui::Hit& hit) {
     case Target::pane_favorite: if (!cards_.empty()) toggleFavorite(cards_[selected_].game); return;
     case Target::pane_more: {
         const auto r = desktopLayout().paneMore(desktop_pane_scroll_);
-        desktopOpenGameMenu(r.right, r.bottom + 6, false);
+        desktopOpenGameMenu(r.right, r.bottom + 6, false, true);
         if (desktop_menu_) desktop_menu_->align_right = true;
         return;
     }
@@ -216,13 +216,13 @@ void Launcher::desktopToolPick(desktop_ui::Tool tool) {
 }
 
 
+// Ctrl+J: Pobierania in the library's place (the sidebar's entry), or back to the library.
 void Launcher::desktopToggleDownloads() {
-    desktop_downloads_open_ = !desktop_downloads_open_;
-    if (desktop_downloads_open_) {
-        plugin_download_poll_at_ = 0; pollPluginDownloads();
-        desktopRefreshDownloads();
-        desktop_downloads_at_ = GetTickCount64();
-    }
+    desktop_downloads_open_ = false;
+    if (screen_ == ScreenMode::downloads) { desktopLeavePage(); return; }
+    if (profile_.open) closeProfile();
+    if (desktopSheet()) desktopLeavePage();
+    openDownloads();
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 

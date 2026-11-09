@@ -29,7 +29,7 @@ const D2D1_COLOR_F card_bg = rgb(1, 1, 1, 0.035f);
 void Renderer::drawDesktopDetails() {
     const auto& view = *context_->desktop_sheet;
     desktop_hotspots_.clear();
-    const auto sheet = detailsSheet(viewport_.width, viewport_.height);
+    const auto sheet = detailsSheet(viewport_.width, viewport_.height, sheetDock());
     const auto* achievements = context_->achievements;
     drawDesktopSheetFrame(sheet, view, achievements ? std::wstring(tr(L"Osiągnięcia")) : std::wstring(tr(L"Szczegóły")), achievements != nullptr);
     desktopHot({Kind::close}, sheet.close());
@@ -277,7 +277,7 @@ void Renderer::drawDesktopAchievements(const achievements_ui::State& list, float
         return;
     }
     const float item_h = 60;
-    const auto sheet = detailsSheet(viewport_.width, viewport_.height);
+    const auto sheet = detailsSheet(viewport_.width, viewport_.height, sheetDock());
     const auto p = sheet.panel();
     const float visible_top = sheet.header().bottom;
     for (size_t i = 0; i < list.items.size(); ++i) {
@@ -312,7 +312,7 @@ void Renderer::drawDesktopAchievements(const achievements_ui::State& list, float
 // the list; Left/Right show the neighbours (as in Tryb TV).
 void Renderer::drawDesktopAchievementCard(const achievements_ui::State& state) {
     const auto& view = *context_->desktop_sheet;
-    const auto sheet = detailsSheet(viewport_.width, viewport_.height);
+    const auto sheet = detailsSheet(viewport_.width, viewport_.height, sheetDock());
     const auto p = sheet.panel();
     const Rect area{p.left + 1, sheet.header().bottom, p.right - 1, p.bottom - 1};
     const auto index = static_cast<size_t>(state.selected);
@@ -374,7 +374,7 @@ void Renderer::drawDesktopArtwork() {
     const auto& view = *context_->desktop_sheet;
     desktop_hotspots_.clear();
     const auto* state = context_->artwork_browser;
-    const auto sheet = artworkSheet(viewport_.width, viewport_.height);
+    const auto sheet = artworkSheet(viewport_.width, viewport_.height, sheetDock());
     drawDesktopSheetFrame(sheet, view, std::wstring(tr(L"Zmień grafikę")) + (state ? L"  ·  " + state->game.name : L""), false);
     desktopHot({Kind::close}, sheet.close());
     if (!state) return;

@@ -174,11 +174,15 @@ void Renderer::drawDesktopContinue(const Layout& layout, const View& view) {
     for (int i = 0; i < layout.continue_count && i < static_cast<int>(view.continue_tiles.size()); ++i) {
         const auto& tile = view.continue_tiles[static_cast<size_t>(i)];
         const auto r = layout.continueTile(i, view.scroll);
-        if (r.bottom < layout.gridTop() || r.top > layout.height) continue;
+        if (r.bottom < layout.gridTop() || r.top > layout.height || tile.opacity < 0.01f) continue;
         const bool over = (view.hover.target == Target::continue_tile || view.hover.target == Target::continue_play) && view.hover.index == i;
-        const float lift = over ? 3.0f : 0.0f;
-        const Rect card{r.left, r.top - lift, r.right, r.bottom - lift};
-        desktopShadow(card, 12, over ? 1.0f : 0.45f);
+        const float eased = smoothFade(tile.hover);
+        const float dy = 10.0f * (1.0f - tile.opacity) - 4.0f * eased; // Rises into place as it fades in; lifts under the pointer.
+        const Rect card{r.left, r.top + dy, r.right, r.bottom + dy};
+        ComPtr<ID2D1Layer> entrance;
+        const bool faded = tile.opacity < 0.995f && SUCCEEDED(target_->CreateLayer(nullptr, entrance.GetAddressOf()));
+        if (faded) target_->PushLayer(D2D1::LayerParameters(D2D1::InfiniteRect(), nullptr, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE, D2D1::IdentityMatrix(), tile.opacity), entrance.Get());
+        desktopShadow(card, 12, 0.45f + 0.55f * eased);
         desktopFill(card, 12, card_bg);
         const auto picture = box(card);
         if (!drawDesktopRecentImage(tile.image, picture, 12, 1)) {
@@ -186,6 +190,7 @@ void Renderer::drawDesktopContinue(const Layout& layout, const View& view) {
             if (drawDesktopRecentImage(tile.cover, picture, 12, 0.55f)) desktopFill(card, 12, gray(0, 0.25f));
         }
         if (!tile.installed) desktopFill(card, 12, gray(0, 0.3f));
+        if (eased > 0.01f) desktopFill(card, 12, gray(1, 0.05f * eased)); // A touch brighter under the pointer.
         // The name over a dark fade at the bottom.
         if (auto* fade = desktopGradient(desktop_continue_fade_, gray(0, 0), gray(0, 0.78f), card.bottom - 74, card.bottom - 4)) {
             target_->PushAxisAlignedClip(D2D1::RectF(card.left, card.bottom - 74, card.right, card.bottom), D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
@@ -193,19 +198,21 @@ void Renderer::drawDesktopContinue(const Layout& layout, const View& view) {
             target_->PopAxisAlignedClip();
         }
         const auto play = Layout::playButton(card);
-        const float text_right = (over ? play.left - 10 : card.right - 14);
+        const float text_right = card.right - 14 - (play.right - play.left + 10) * eased;
         textLine(tile.name, card.left + 14, card.bottom - 34, std::max(1.0f, text_right - card.left - 14), desktop_strong_font_.Get(), gray(0.98f));
         textLine(tile.detail, card.left + 14, card.bottom - 15, std::max(1.0f, text_right - card.left - 14), desktop_small_font_.Get(), gray(0.8f));
-        desktopStroke(card, 12, over ? uiAccent(0.85f) : gray(1, 0.08f), over ? 1.5f : 1.0f);
-        if (over) {
-            const bool on_play = view.hover.target == Target::continue_play;
-            const float cx = (play.left + play.right) * 0.5f, cy = (play.top + play.bottom) * 0.5f, radius = (play.right - play.left) * 0.5f;
-            brush(on_play ? uiAccent() : gray(0, 0.62f));
+        desktopStroke(card, 12, eased > 0.01f ? uiAccent(0.85f * eased) : gray(1, 0.08f), 1.0f + 0.5f * eased);
+        if (eased > 0.01f) { // Graj grows in from the corner.
+            const bool on_play = over && view.hover.target == Target::continue_play;
+            const float cx = (play.left + play.right) * 0.5f, cy = (play.top + play.bottom) * 0.5f, radius = (play.right - play.left) * 0.5f * (0.6f + 0.4f * eased);
+            brush(on_play ? uiAccent(eased) : gray(0, 0.62f * eased));
             target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), radius, radius), solid_.Get());
             const auto accent = uiAccent();
             const bool light = 0.2126f * accent.r + 0.7152f * accent.g + 0.0722f * accent.b > 0.6f;
-            desktopGlyph(tile.installed ? glyph::play : glyph::download, cx + (tile.installed ? 1.0f : 0.0f), cy, 15, on_play && light ? gray(0.06f) : gray(0.98f));
+            desktopGlyph(tile.installed ? glyph::play : glyph::download, cx + (tile.installed ? 1.0f : 0.0f), cy, 15 * (0.6f + 0.4f * eased),
+                         on_play && light ? gray(0.06f, eased) : gray(0.98f, eased));
         }
+        if (faded) target_->PopLayer();
     }
 }
 
@@ -291,7 +298,11 @@ void Renderer::drawDesktopListRow(const Layout& layout, const View& view, size_t
 void Renderer::drawDesktopPoster(const Layout& layout, const View& view, size_t index) {
     const auto& card = (*cards_)[index];
     const auto& game = card.game;
-    const auto cell = layout.poster(index, view.scroll);
+    auto cell = layout.poster(index, view.scroll);
+    if (view.card_shift && index < view.card_shift->size()) { // Gliding to a new column.
+        const auto [dx, dy] = (*view.card_shift)[index];
+        cell = {cell.left + dx, cell.top + dy, cell.right + dx, cell.bottom + dy};
+    }
     if (cell.bottom + caption_h < layout.gridTop() || cell.top > layout.height || card.opacity < 0.01f) return;
     const float hover = index < view.card_hover.size() ? view.card_hover[index] : 0.0f;
     const bool selected = index == selected_;

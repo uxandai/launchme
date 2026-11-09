@@ -76,8 +76,9 @@ struct SheetView {
 struct SheetHotspot { SheetHit hit; Rect rect; };
 
 // Szczegóły's and Zmień grafikę's sheets (their content is measured while drawn).
-inline Sheet detailsSheet(float width, float height) { Sheet sheet; sheet.width = width; sheet.height = height; sheet.max_width = 1040; sheet.max_height = 860; return sheet; }
-inline Sheet artworkSheet(float width, float height) { Sheet sheet; sheet.width = width; sheet.height = height; sheet.max_width = 1160; sheet.max_height = 880; return sheet; }
+// dock: in the library's place beside the sidebar (Sheet::dock), as every desktop page now is.
+inline Sheet detailsSheet(float width, float height, float dock = 0) { Sheet sheet; sheet.width = width; sheet.height = height; sheet.max_width = 1040; sheet.max_height = 860; sheet.dock = dock; return sheet; }
+inline Sheet artworkSheet(float width, float height, float dock = 0) { Sheet sheet; sheet.width = width; sheet.height = height; sheet.max_width = 1160; sheet.max_height = 880; sheet.dock = dock; return sheet; }
 
 // Sklep (the store's search, in Zmień grafikę's sheet): the field and its state line, then the
 // results as posters with their names, scrolling below them.
@@ -129,6 +130,7 @@ inline wchar_t categoryGlyph(int category) {
     switch (static_cast<Category>(category)) {
     case Category::appearance: return 0xE771;
     case Category::library: return 0xE8F1;
+    case Category::emulation: return 0xE7FC; // A pad (Renderer::drawDesktopSettings draws RetroArch's mark instead).
 #ifndef _WIN32
     case Category::compat: return 0xE923; // Windows on top of each other: Windows programs here.
 #endif

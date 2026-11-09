@@ -43,7 +43,7 @@ bool Launcher::desktopOwnInstall(const Game& game) const {
 // the field, then leaves.
 bool Launcher::desktopStoreKey(WPARAM key) {
     const auto viewport = renderer_.desktopViewport();
-    const auto grid = storeGrid(artworkSheet(viewport.width, viewport.height));
+    const auto grid = storeGrid(artworkSheet(viewport.width, viewport.height, desktopSheetDock()));
     const auto columns = static_cast<size_t>(grid.columns);
     const size_t count = cards_.size();
     switch (key) {
@@ -100,18 +100,18 @@ SheetHit Launcher::desktopHotspotHit(float x, float y) const {
 float Launcher::desktopSheetViewHeight() const {
     const auto view = renderer_.desktopViewport();
     if (screen_ == ScreenMode::artwork) {
-        const auto p = artworkSheet(view.width, view.height).panel();
+        const auto p = artworkSheet(view.width, view.height, desktopSheetDock()).panel();
         return std::max(0.0f, p.bottom - 60 - (p.top + sheet_header + 76));
     }
     if (screen_ == ScreenMode::store || screen_ == ScreenMode::plugin_page) { // Below its field and state line.
-        const auto sheet = artworkSheet(view.width, view.height);
+        const auto sheet = artworkSheet(view.width, view.height, desktopSheetDock());
         return std::max(0.0f, sheet.panel().bottom - 12 - storeGrid(sheet).top);
     }
     if (screen_ == ScreenMode::glance) { // Below its tabs (desktop_pages_renderer.cpp).
-        const auto p = artworkSheet(view.width, view.height).panel();
+        const auto p = artworkSheet(view.width, view.height, desktopSheetDock()).panel();
         return std::max(0.0f, p.bottom - 12 - (p.top + sheet_header + 60));
     }
-    const auto p = detailsSheet(view.width, view.height).panel();
+    const auto p = detailsSheet(view.width, view.height, desktopSheetDock()).panel();
     return std::max(0.0f, p.bottom - 1 - (p.top + sheet_header));
 }
 
@@ -259,7 +259,7 @@ void Launcher::desktopPageActivate(const SheetHit& hit, bool double_click) {
 
 settings_sheet::Layout Launcher::desktopSettingsLayout() const {
     const auto view = renderer_.desktopViewport();
-    return settings_sheet::Layout::of(view.width, view.height, settings_state_, settings_rows_, desktopSettingsDocked() ? desktopLayout().sidebarRight() : 0.0f);
+    return settings_sheet::Layout::of(view.width, view.height, settings_state_, settings_rows_, desktopSheetDock());
 }
 
 // The control a picker's list opens from: the row's field, or the source tile being changed.
@@ -714,7 +714,7 @@ void Launcher::desktopSheetView(SheetView& view) const {
     view.active_window = desktop_window_active_;
     view.window_hover = desktop_strip_hover_;
     view.max_hover = desktop_max_hover_;
-    if (desktopSettingsDocked()) view.dock = desktopLayout().sidebarRight();
+    view.dock = desktopSheetDock();
     if (screen_ == ScreenMode::store) view.store_loading = store_loading_;
     if (screen_ == ScreenMode::downloads) {
         for (size_t i = 0; i < downloads_state_.rows.size(); ++i) {

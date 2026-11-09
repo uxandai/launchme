@@ -452,8 +452,9 @@ void Launcher::buildSettingsRows() {
 #ifndef _WIN32
     case settings_ui::Category::compat: compatSettingsRows(); break; // Proton i Wine, its pages, a game's options.
 #endif
+    case settings_ui::Category::emulation: emulationSettingsRows(); break; // Emulacja and its systems (emulation_settings.cpp).
     case settings_ui::Category::library:
-        if (settings_state_.in(Page::emulation)) { emulationSettingsRows(); break; } // Emulacja and its systems (emulation_settings.cpp).
+        if (settings_state_.in(Page::emulation)) { emulationSettingsRows(); break; } // Opened before it was a category (kept for old links).
         if (settings_state_.at(Page::custom_games)) { customGamesSettingsRows(); break; } // Under DRM-free: the games added by hand.
         if (settings_state_.platform()) { pcSettingsRows(); break; } // A platform's page (DRM-free: its folders and games).
         if (settings_state_.at(Page::game_shortcuts)) { // One game's shortcuts (its menu → Skróty in Tryb TV).
@@ -544,9 +545,8 @@ void Launcher::buildSettingsRows() {
             break;
         }
         {
-            // Overview: the platforms first (the DRM-free catalogue with the games added by hand,
-            // Emulacja, Steam, then the others by name, each with its page behind the cog).
-            section(tr(L"Platformy"));
+            // Overview: the platforms first (Platformy PC: Steam, the DRM-free catalogue with the games
+            // added by hand, then the others by name, each with its page behind the cog).
             const size_t first_platform = settings_rows_.size();
             pcSettingsRows();
             if (settings_rows_.size() > first_platform && !next_section.empty()) {

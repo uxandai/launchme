@@ -25,7 +25,7 @@ float middle(Rect r) { return (r.top + r.bottom) * 0.5f; }
 void Renderer::drawDesktopDownloadsPage() {
     const auto& view = *context_->desktop_sheet;
     desktop_hotspots_.clear();
-    const auto sheet = detailsSheet(viewport_.width, viewport_.height);
+    const auto sheet = detailsSheet(viewport_.width, viewport_.height, sheetDock());
     drawDesktopSheetFrame(sheet, view, tr(L"Pobierania"), false);
     desktopHot({Kind::close}, sheet.close());
     const auto p = sheet.panel(), h = sheet.header();
@@ -114,7 +114,7 @@ void Renderer::drawDesktopDownloadsPage() {
 void Renderer::drawDesktopGlance() {
     const auto& view = *context_->desktop_sheet;
     desktop_hotspots_.clear();
-    const auto sheet = artworkSheet(viewport_.width, viewport_.height);
+    const auto sheet = artworkSheet(viewport_.width, viewport_.height, sheetDock());
     drawDesktopSheetFrame(sheet, view, L"Glance", false);
     desktopHot({Kind::close}, sheet.close());
     const auto* state = context_->glance;
@@ -327,7 +327,7 @@ void Renderer::drawDesktopStoreChrome(const desktop_ui::Sheet& sheet, const desk
 void Renderer::drawDesktopStorePage() {
     const auto& view = *context_->desktop_sheet;
     desktop_hotspots_.clear();
-    const auto sheet = artworkSheet(viewport_.width, viewport_.height);
+    const auto sheet = artworkSheet(viewport_.width, viewport_.height, sheetDock());
     const auto& page = *context_->plugin_page;
     const bool search = !page.rows.empty() && page.rows.front().input;
     drawDesktopStoreChrome(sheet, view, page.query, page.query.size(), search ? page.rows.front().title : std::wstring{}, page.status, search);
@@ -372,7 +372,7 @@ void Renderer::drawDesktopStorePage() {
 void Renderer::drawDesktopStore() {
     const auto& view = *context_->desktop_sheet;
     desktop_hotspots_.clear();
-    const auto sheet = artworkSheet(viewport_.width, viewport_.height);
+    const auto sheet = artworkSheet(viewport_.width, viewport_.height, sheetDock());
     const auto p = sheet.panel();
     const auto& query = context_->search_query;
     const size_t count = cards_ ? cards_->size() : 0;

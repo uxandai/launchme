@@ -25,9 +25,21 @@ void Launcher::desktopPickEntry(const desktop_ui::Entry& entry, bool double_clic
     case EntryKind::friends: desktopOpenFriends(); return;
     case EntryKind::profile:
         if (profile_.open) return;
-        if (settingsOpen()) desktopLeaveSettings();
+        if (desktopSheet()) desktopLeavePage();
         openProfile();
         return;
+    case EntryKind::downloads: case EntryKind::settings: case EntryKind::store: { // Pages in the library's place.
+        const bool here = (entry.kind == EntryKind::downloads && screen_ == ScreenMode::downloads) ||
+                          (entry.kind == EntryKind::settings && screen_ == ScreenMode::settings) ||
+                          (entry.kind == EntryKind::store && (screen_ == ScreenMode::store || desktopStorePage()));
+        if (here) return;
+        if (profile_.open) closeProfile();
+        if (desktopSheet()) desktopLeavePage();
+        if (entry.kind == EntryKind::downloads) openDownloads();
+        else if (entry.kind == EntryKind::settings) openSettings();
+        else openStores();
+        return;
+    }
     case EntryKind::game:
         desktopRevealGame(entry.game);
         if (double_click && !cards_.empty() && selected_ < desktop_keys_.size() && desktop_keys_[selected_] == entry.game) desktopPickSelected();
@@ -58,15 +70,15 @@ void Launcher::desktopRevealGame(const std::string& key) {
 // Znajomi: the drawer straight on its list of friends.
 void Launcher::desktopOpenFriends() {
     if (profile_.open) closeProfile();
-    if (settingsOpen()) desktopLeaveSettings();
+    if (desktopSheet()) desktopLeavePage();
     if (!friends_open_) toggleFriendsDrawer();
     if (friends_open_ && !friends_list_) dashboardActivate(static_cast<int>(friends_layout::dashboard::Tile::steam));
 }
 
-// A heading's cog: Biblioteka's category, at its stores for Platformy, its Emulacja page for Emulacja.
+// A heading's cog: Biblioteka's category (at its platforms for Platformy), Emulacja's for Emulacja.
 void Launcher::desktopGroupSettings(desktop_ui::Group group) {
     if (profile_.open) closeProfile();
-    const int library = static_cast<int>(settings_ui::Category::library);
+    const int library = static_cast<int>(group == Group::emulation ? settings_ui::Category::emulation : settings_ui::Category::library);
     if (!settingsOpen()) { settings_state_.category = library; openSettings(); }
     else {
         settings_state_.closeAll();
@@ -77,7 +89,6 @@ void Launcher::desktopGroupSettings(desktop_ui::Group group) {
     }
     desktop_sheet_scroll_ = desktop_sheet_scroll_target_ = 0;
     if (group == Group::platforms) revealSetting(settings_ui::Id::pc_platform);
-    else if (group == Group::emulation) openSettingsPage(settings_ui::Page::emulation);
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
@@ -137,7 +148,9 @@ void Launcher::desktopListLabels() {
 
 // ---- Ustawienia and Profil in the library's place ---------------------------------------------------
 
-bool Launcher::desktopSettingsDocked() const { return desktop_mode_ && screen_ == ScreenMode::settings && !launchAnimationActive(); }
+// Every desktop page (Ustawienia, Pobierania, Sklep, a game's Szczegóły, Zmień grafikę, Glance) sits there.
+bool Launcher::desktopPageDocked() const { return desktop_mode_ && desktopSheet() && !launchAnimationActive(); }
+float Launcher::desktopSheetDock() const { return desktopPageDocked() ? desktopLayout().sidebarRight() : 0.0f; }
 bool Launcher::profileDocked() const { return desktop_mode_ && screen_ == ScreenMode::shelves && !launchAnimationActive(); }
 
 desktop_ui::Rect Launcher::desktopDock() const {
@@ -145,15 +158,15 @@ desktop_ui::Rect Launcher::desktopDock() const {
     return {L.sidebarRight(), title_h, L.width, L.height};
 }
 
-// Out of Ustawienia as Back would leave it (sign-ins cancelled, edits closed, saved), page by page.
-void Launcher::desktopLeaveSettings() {
-    for (int step = 0; step < 16 && settingsOpen(); ++step) back();
+// Out of the page as Back would leave it (sign-ins cancelled, edits closed, saved), page by page.
+void Launcher::desktopLeavePage() {
+    for (int step = 0; step < 16 && desktopSheet(); ++step) back();
 }
 
 // A click on the sidebar or the top bar's tools over Ustawienia or Profil: a heading folds, the
 // toggle and a cog act in place; anything else leaves the page for the library and acts there.
 bool Launcher::desktopChromeClick(float mouse_x, float mouse_y, bool double_click) {
-    const bool settings = desktopSettingsDocked() && topModal() == Modal::none && !friends_open_ && !menu_open_ && !color_editor_.open;
+    const bool settings = desktopPageDocked() && topModal() == Modal::none && !friends_open_ && !menu_open_ && !color_editor_.open;
     const bool profile = profileDocked() && profile_.open && topModal() == Modal::profile;
     if (!settings && !profile) return false;
     const float scale = desktopScale(), x = mouse_x / scale, y = mouse_y / scale;
@@ -173,8 +186,8 @@ bool Launcher::desktopChromeClick(float mouse_x, float mouse_y, bool double_clic
         if (!double_click) desktopActivate(hit);
         return true;
     }
-    if (row && profile && rows[static_cast<size_t>(hit.index)].entry == desktopEntryIndex("profile")) return true; // Already there.
-    if (settings) desktopLeaveSettings();
+    if (row && rows[static_cast<size_t>(hit.index)].entry >= 0 && rows[static_cast<size_t>(hit.index)].entry == desktopActiveEntry()) return true; // Already there.
+    if (settings) desktopLeavePage();
     else closeProfile();
     if (!desktopActive()) return true;
     desktop_hover_ = {};
@@ -184,7 +197,7 @@ bool Launcher::desktopChromeClick(float mouse_x, float mouse_y, bool double_clic
 
 // The pointer over them: their hover, as in the library.
 bool Launcher::desktopChromeMove(float mouse_x, float mouse_y) {
-    const bool settings = desktopSettingsDocked() && topModal() == Modal::none && !friends_open_;
+    const bool settings = desktopPageDocked() && topModal() == Modal::none && !friends_open_;
     const bool profile = profileDocked() && profile_.open && topModal() == Modal::profile;
     if (!settings && !profile) return false;
     const float scale = desktopScale(), x = mouse_x / scale, y = mouse_y / scale;

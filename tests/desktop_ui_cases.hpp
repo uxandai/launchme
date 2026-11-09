@@ -44,7 +44,7 @@ int LauncherUiTest::desktop(HWND window) {
 
     // Sidebar: the library's sections, a store and the collection; every game in the grid.
     const auto entry = [&](const std::string& id) { return app.desktopEntryIndex(id); };
-    if (entry("all") < 0 || entry("recent") < 0 || entry("favorites") < 0 || entry("source:steam") < 0 || entry("collection:desktop-shooters") < 0) return 7602;
+    if (entry("all") < 0 || entry("profile") < 0 || entry("favorites") < 0 || entry("source:steam") < 0 || entry("collection:desktop-shooters") < 0) return 7602;
     if (app.cards_.size() != 18 || app.desktop_entries_[static_cast<size_t>(entry("favorites"))].count != 2) return 7603;
     if (!capture(L"desktop-library.png")) return 7604;
     {

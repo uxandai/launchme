@@ -765,7 +765,7 @@ void Launcher::paint(bool overlay) {
         desktopSheetView(sheet_view);
         context.desktop_sheet = &sheet_view;
         context.hints.clear();
-        if (desktopSettingsDocked()) { desktopChromeView(chrome_view); context.desktop_chrome = &chrome_view; }
+        if (desktopPageDocked()) { desktopChromeView(chrome_view); context.desktop_chrome = &chrome_view; }
     }
     if (embed) {
         desktopSheetView(sheet_view);

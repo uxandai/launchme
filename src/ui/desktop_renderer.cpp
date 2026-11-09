@@ -226,6 +226,7 @@ Layout Renderer::desktopLayoutOf(const View& view) const {
     layout.start_card = view.start_card;
     layout.narrow = view.sidebar_narrow; layout.pane_width = view.pane_width;
     layout.pane_open = view.pane_open;
+    layout.pane_t = view.pane_t;
     layout.cell_aspect = view.cell_view == 1 ? 1.0f : view.cell_view == 2 ? 0.5625f : 1.5f;
     layout.list = view.cell_view == 3;
     layout.continue_count = static_cast<int>(std::min<size_t>(3, view.continue_tiles.size()));

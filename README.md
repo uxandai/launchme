@@ -3,355 +3,86 @@
 **[Website](https://uxandai.github.io/launchme-website/)** · **[Changelog](changelog/)** · **[Download](../../releases/latest)** ·
 **[Discord](https://discord.gg/jhdrzy522)** · **[Architecture](docs/ARCHITECTURE.md)**
 
-A full-screen, console-style game launcher for Windows 10/11, built for a gamepad.
-It merges Steam (collections and non-Steam shortcuts), GOG, Battle.net, EA app, Ubisoft Connect,
-Epic Games, Amazon Games, Xbox (PC) and your own programs into one library, with artwork from SteamGridDB (and Epic's
-own store art for an Epic account's games).
+A console-style game launcher for Windows 10/11, made for a gamepad: Steam, GOG, Epic, EA, Battle.net, Ubisoft,
+Amazon, Xbox, DRM-free folders, emulators and your own programs in one library. Native C++20 (Win32, Direct2D),
+no HTML UI. English, Polish, Brazilian Portuguese and Spanish.
 
-> **Linux: highly experimental (WIP).** Since 0.4.0 the same launcher also builds and runs natively on Linux,
-> with Proton/Wine for Windows games (umu-launcher, GE-Proton, prefixes, per-game options). It is a work in
-> progress: expect bugs and missing pieces, and keep Windows as the supported platform for now.
+> **Linux: highly experimental (WIP)**, built from the same sources, with Proton/Wine for Windows games.
 > See [Linux](#linux-highly-experimental-wip).
-
-Native C++20: Win32, Direct2D/DirectWrite/WIC, WinHTTP, XAudio2 and Media Foundation — no HTML UI.
-The interface is available in English, Polish, Brazilian Portuguese and Spanish (Settings → System → Language).
-The AI companion and Tarot speak English or Polish.
 
 ![PSfive home layout](docs/screenshots/psfive.jpg)
 
-## Screenshots
-
 | | |
 | --- | --- |
-| ![Desktop window](docs/screenshots/desktop.jpg) **Desktop window** | ![Settings in the desktop window](docs/screenshots/desktop-settings.jpg) **Settings (desktop window)** |
+| ![Desktop window](docs/screenshots/desktop.jpg) **Desktop window** | ![Settings in the desktop window](docs/screenshots/desktop-settings.jpg) **Settings** |
 | ![XMB home layout](docs/screenshots/xmb.jpg) **XMB** | ![Metro home layout](docs/screenshots/metro.jpg) **Metro** |
 | ![Game details](docs/screenshots/game-details.jpg) **Game details** | ![TV mode layouts](docs/screenshots/layouts.jpg) **TV mode layouts** |
-| ![List+ library view](docs/screenshots/list-plus.jpg) **List+ library view** | ![Coverflow library view](docs/screenshots/coverflow.jpg) **Coverflow** |
-| ![Search anywhere](docs/screenshots/search.jpg) **Search** | ![Widgets drawer](docs/screenshots/widgets.jpg) **Widgets drawer** |
+| ![List+ library view](docs/screenshots/list-plus.jpg) **List+** | ![Coverflow library view](docs/screenshots/coverflow.jpg) **Coverflow** |
+| ![Search anywhere](docs/screenshots/search.jpg) **Search** | ![Widgets drawer](docs/screenshots/widgets.jpg) **Widgets** |
 | ![Glance news hub](docs/screenshots/glance.jpg) **Glance** | ![AI companion](docs/screenshots/companion.jpg) **AI companion** |
-
-## Download
-
-Grab `launchme-<version>-win64-setup.exe` from [Releases](../../releases) and run it: by default it installs for
-your account only (no administrator prompt) into `%LOCALAPPDATA%\Programs\Launchme`, adds a Start menu entry and an
-uninstaller in Settings → Apps, and keeps updating itself from there. Choose **Install for all users** at the start
-(or pass `/ALLUSERS`) to install into `Program Files` instead; that copy updates by downloading the next installer
-and asking for administrator approval. Settings stay per user either way. Silent install: `/VERYSILENT /SUPPRESSMSGBOXES`.
-Prefer no installer? Unpack `launchme-<version>-win64.zip` anywhere and run `launchme.exe`; both update the same way.
-No Visual C++ Redistributable is needed (the WebView2 Evergreen Runtime that Windows 10/11 ship is used for
-Glance's pages). The bundled plugins (`plugin-packages/`) install themselves on first start; manage plugins in
-Settings → Plugins. Uninstalling keeps your settings unless you choose to remove them too.
-
-Building the installer: `tools\build-installer.ps1` (Inno Setup 6.6 or newer; `-SkipBuild` packs an existing
-`build\vs`, `-Sign` signs Setup and its uninstaller).
-
-Linux (highly experimental): `launchme-<version>-x86_64.AppImage` from the same release; make it executable and
-run it.
-
-Questions, ideas and news: the [Discord server](https://discord.gg/jhdrzy522).
-
-## Where settings and cache are stored
-
-Everything launchme writes goes to **`%LOCALAPPDATA%\Launchme`** (e.g. `C:\Users\<you>\AppData\Local\Launchme`),
-never next to the EXE. On Linux the folder is `$XDG_DATA_HOME/launchme` (usually `~/.local/share/launchme`).
-
-| What | Where |
-| --- | --- |
-| Settings | `settings.ini` |
-| API keys | `*_api_key.txt` (plain text) or `*.dat` (encrypted: Windows DPAPI for your account; on Linux AES-256-GCM with the key in the desktop keyring, else in a `0600` file) |
-| Store accounts (GOG, Epic, EA, Battle.net imports) | `accounts\` (encrypted as above) |
-| Optional Aurelia binary / isolated session | `helpers\aurelia\` / `aurelia\` |
-| Optional Nile binary / Amazon Games session | `tools\nile-1.2.0.exe` (Linux: `tools/nile-1.2.0`) / `amazon\` |
-| Optional Xbox helper / Xbox account session | `tools\launchme-xbox-0.1.0.exe` (Linux: next to the launcher or `$LAUNCHME_XBOX_HELPER`) / `xbox\` |
-| Optional Ludusavi (save backups) | `tools\ludusavi\` |
-| Installed plugins | `plugins\` |
-| Artwork cache | `covers`, `heroes`, `logos`, `posters`, `landscapes`, `stores`, `artwork` |
-| Metadata and ratings cache | `metadata`, `ratings`, `knowledge`, `glance` |
-| Downloaded game videos | `media\` (folder can be changed in Settings → Media & data) |
-| Glance browser profile | `browser\` |
-| Play journal and achievement history (Profile) | `play-journal.tsv`, `achievement-history.json` |
-| Logs and crash dumps | `launchme.log`, `crashes\` |
-| Linux: Proton/Wine tools, options and logs | `compatibilitytools/`, `linux/`, `logs/wine/` |
-
-Cache folders can be deleted — they are rebuilt from disk or the network — except your manual choices
-(`artwork\selections`, `*.manual-focus` crops, `metadata\*.rawg.json`). Set `LAUNCHME_CONFIG_DIR`
-to an absolute path to use a different data folder (e.g. a portable or test profile).
-Settings → System → Help → **Open folder** (the version row) opens it.
 
 ## Features
 
-- **Home layouts**: shelves (default), XMB, Flix, Metro, PSfive and snitch, with a PS5-like tile
-  entrance, frosted glass, button colour themes and several focus-outline styles. In Flix, resting
-  on a game for a few seconds unfolds its poster into a wide card with its background, logo and facts,
-  pushing the neighbouring tiles aside. In PSfive, Down from Play scrolls to the game's description, facts,
-  Steam screenshots and similar games from your library, and starting on PSfive plays its start-up entrance.
-  Metro and Flix can show the library's category bar at the top (LB/RB); PSfive's and Metro's own tabs can show
-  icons for PC platforms, Emulation, Publishers, Developers and Favorites, and Flix can keep a side bar of icons
-  at the left (home, those categories, search, all games; profile, menu and widgets at the bottom). All games, Glance, Tarot, the companion and an
-  *Add game* tile can lead or close the first row of every layout; Metro has a light theme, and the game menu
-  can be a large dialog with an icon for each option.
-- **Wallpaper** (Settings → Interface → *Wallpaper*): a picture from Wallhaven or Danbooru (safe content only) or
-  an animated background from MotionBGs or Steam's animated profile backgrounds, with a moving preview before it
-  is downloaded, or your own picture or video; it shows on snitch, behind Settings and the menu screens, in
-  *Change artwork* and behind home tiles without a picture (XMB categories, All games). Without one, the
-  launcher's own backdrop of lights orbiting along lines fills those places.
-- **Made for a pad**: XInput, DualSense, DualShock 4, Nintendo (Switch Pro, Joy-Con), Steam Controller and generic
-  HID pads, an on-screen keyboard, and a bottom
-  bar with Search, All games, plugins, Downloads, Controllers, Sound, Widgets, Settings and Power. Keyboard and
-  mouse work everywhere too. Paired Bluetooth pads stay listed, greyed, while Bluetooth is off.
-- **Launch screen**: starting a game shows its background, slowly zooming in, with its logo until the game's
-  window shows, then fades away behind it.
-- **Desktop window mode** with a sidebar, search and a details pane; switch between it and full screen from
-  the power menu. The sidebar folds to its icons (the button by the logo) and the details pane is as wide as
-  you drag its edge (double-click it for the default); the ✕ (or a click on an empty place in the grid) closes the
-  panel until you choose a game. A dropdown next to the sort button shows posters, squares or landscape cells, and
-  the title bar keeps downloads, TV mode, settings and "…" (Widgets, Glance, Tarot, Store). A **Getting started**
-  card above the companion lists the first steps (platforms and accounts, service keys, the ROM folder, a first
-  game, TV mode) with a progress bar; Settings → System → *Getting started* brings it back.
-  **Identify game** (the game's menu → *Data and artwork*) starts at once: ScreenScraper for emulated games, RAWG,
-  then the stores' descriptions, the best match is taken; *Match by hand* offers the title and a provider dropdown
-  (every database and store).
-  Above the description a bar tells whether this PC meets a Steam or GOG game's requirements (green, yellow, red,
-  or grey without data); click it to compare your processor, graphics card and RAM with the minimum and recommended.
-- **Library views**: grid (squares, posters or landscape tiles), list, cinematic, detailed, poster,
-  coverflow with its variants: a shelf of game cases (each console's own case, size and front; Enter takes the case
-  off the shelf, opens it and slides out its disc, game card or diskette, with Play and Details beside it), Steelbook
-  and Burned CD; sorting, filters, search, *Recently added* by the store's acquisition date and
-  remembered positions. Consoles, collections and publishers each open in a default view of their own until one
-  gets its own (Settings → Interface → *Library views in TV mode*, with a reset for each). With game videos on, the video plays in List+'s picture, in Cinematic's focused tile
-  and in the desktop window's details pane; PC games from other stores play the Steam trailer of the same game.
-  Games you hide, and Steam's hidden and private games, stay out of sight until you show them. A game of any
-  store (or a DRM-free folder found twice) can be excluded from its menu, after a question; excluded games are
-  listed in Settings → Library → What to show → *Excluded games*, where they can be restored.
-- **Home screen and collections** (Settings → Library → *Home screen and collections*): one list of every home row
-  (Recently played, PC platforms, Emulation, publishers, developers, the Steam rows and the collections). Each row is
-  on the home screen, a tab of All Games, both or neither, and moves anywhere below Recently played: hold A / Enter
-  on it, then the arrows (or Shift+↑↓, LB/RB). The View button on a home row opens its tab. Collections are Steam's
-  (synced with the running client) and your own (create them here, from a game's menu or the desktop window's
-  sidebar, drag games onto them); their page has the games, the name, Move to Steam and Delete. Hiding Favorites
-  everywhere switches them off: no stars and no Favorites shelf or section until it is shown again.
-- **Playing**: Play on a game installed by another remembered Steam account switches Steam to that account
-  first, and a Steam game can be tied to one account (game menu → *Steam account*); Install picks the Steam
-  library (with its free space) in Launchme's own dialog. While a game runs, *Close game* sits next to Play.
-  Account switching and the install dialog can be turned off in Settings → Library → Launching.
-- **Downloads**: Steam, GOG, Epic, Battle.net, Amazon Games, Xbox (through Launchme) and Aurelia installs show their phase and percent on
-  the game's Play button and in one *Downloads* list; a game preloaded ahead of its release waits there as
-  *Preloaded* until the release day.
-- **Stores**: local installs of every store above, Steam collections synced with the running client,
-  GOG and Epic account libraries (Epic installs through Legendary, no Epic launcher needed), Amazon Games
-  through the optional, separately downloaded Nile helper ([guide](docs/AMAZON_GAMES.md)), the Xbox account (bought,
-  Play Anywhere and PC Game Pass games) through Launchme's optional Xodus-based helper ([guide](docs/XBOX.md)),
-  EA and Battle.net libraries imported from their store pages (no EA app needed: sign in on ea.com,
-  paste the token page), Ubisoft from the signed-in client, DRM-free folders, and MultiMC / Prism Launcher
-  instances as games. Every platform, Steam included, can be switched off.
-- **Emulated games from the ROM folder** (Settings → Library → *Emulation*): an EmuDeck / ES-DE ROM folder
-  read with launchme's own parsers (the systems, file types and emulators of EmuDeck's Steam ROM Manager parsers,
-  built in: no Steam ROM Manager or Steam shortcuts needed). The folder is found by itself or chosen; playlists and
-  cue sheets hide their discs, Steam ROM Manager's exclusions and ES-DE's hidden games apply when they exist. The
-  Emulation row has tiles for about 30 consoles, from NES and Game Boy to PS Vita, Dreamcast, Xbox 360, Arcade and
-  DOS. *Steam shortcuts (Steam ROM Manager)* keeps the shortcut-based library instead.
-- **Emulators visible and set by hand** (Settings → Library → *Emulation* → a system): each system shows the
-  emulator that starts it and how it was found: EmuDeck's launcher script (with the program it runs), EmuDeck's
-  Emulators folder, ES-DE's find rules, the Windows registry, the usual install folders, `PATH`, or on Linux a
-  flatpak or an AppImage, so EmuDeck is optional. Pick another emulator (PS1, PSP, DS, GameCube and Wii can also
-  run on RetroArch), point at its program by hand and replace its launch arguments (`%ROM%`, `%CORE%`); the
-  command a game starts with is shown below, and a RetroArch system without its core says so. PS4 (shadPS4),
-  PS Vita (Vita3K) and ScummVM are among them; PS5 and Switch 2 start with a program you choose. Each system can
-  also have its own ROM folder in place of its subfolder of the main one, and **Look for games again** reads it anew
-  (new games, updates, removed ones). Switch 2 dumps kept unpacked are one game per folder, started from the newest
-  update's `exefs\main`; `.nup` packages are games too (loose, or inside a game's folder). A game can also have an emulator of its own (its details' "…" → *Emulator*): another
-  emulator of the system, or any program.
-- **Games added by hand** (Settings → Library → *DRM-free folders* → **Add game** → **Choose file** or **Choose
-  folder**, the "+" tile, or a file or folder dropped on the desktop window): a program, shortcut or script is a PC
-  game; a disc image or ROM is an emulated game with its console guessed and changeable (*Platform*), started by
-  the system's emulator or by an *Emulator command* of its own (`%ROM%` for the file); a folder is a PS3 or Wii U
-  game, one game's ROM folder or a PC game's folder with its program found; a whole ROM folder becomes the emulated
-  games' ROM folder, and a folder of many games joins the DRM-free folders. PC games added by hand are DRM-free
-  games: they share its tile, library and desktop section with the scanned ones; their list is under
-  *DRM-free folders* → *Manually added games*. A Switch 2 dump kept unpacked can be added by its folder or its
-  `exefs\main`. A game can also have no file at all, for one to play next or played
-  elsewhere; its button reads **Choose file** and opens its editor at the file. The editor shows the poster its name
-  finds as you type, with **Identify game** under it; **Remove from library** (the game's menu, in red, after a
-  question) removes the entry, never the game's files.
-- **Shortcuts** (the desktop window's game menu → *Shortcuts*; TV mode: the game's details → … → *Shortcuts*): a
-  desktop shortcut, a Start menu entry (on Linux the applications menu) and a Steam shortcut with the game's artwork
-  for any game, starting it through Launchme with its launch options; Settings → Library → *Game shortcuts* adds
-  every installed game at once.
-- **Save backups through Ludusavi** (Settings → Library → *Save backups*): a game's saves backed up after it ends
-  (off by default) or by hand from its menu → *Saves*, and restored from there.
-- **Recently played** can also list games not installed, by the date they were added (Settings → Library →
-  Visibility → *Not installed in Recently played*).
-- **Extended Aurelia integration** (Windows and Linux, optional, off by default): install/update the latest helper
-  from Settings → Library → Steam → *Manage Aurelia*, and sign in there with a QR code from the Steam Mobile app or
-  the account name and password. It manages only the games you choose (or all, by default)
-  and adds managed Steam downloads, cloud saves synced before and after playing, cloud-save status and conflict
-  resolution, Steam Family Sharing games, DLC, manifest pinning/downgrades, beta branches, Workshop and native
-  live friends chat in both desktop and TV modes. *Aurelia as a Steam replacement* (or no Steam client here) makes
-  it the library too: the account, owned and installed games, collections, hidden games and play time come from
-  Aurelia. Primarily for single-player/offline games; some games, especially multiplayer,
-  DRM and Steamworks titles, may require the Steam client (Family Sharing games on Windows always do). See the
-  [Aurelia guide](docs/AURELIA.md).
-- **Artwork**: SteamGridDB covers, heroes (the sharp 3840 px ones first), logos and posters with OCR-assisted cropping,
-  a variant browser (*Change artwork*: *From disk…* keeps your own files as the *Local* source and marks the types already set; its *Source* list adds the Steam store, GOG, Xbox / Microsoft Store,
-  Nintendo eShop, GameTDB, TitleDB, TheGamesDB and Wikimedia Commons, each switched on or off in Settings → Media &
-  data → *Artwork sources*) and *Adjust crop* for covers and backgrounds; where SteamGridDB has nothing, the store's own
-  art (Epic, Ubisoft Connect, GOG, EA, Battle.net, Amazon Games). Epic account games use Epic's box art as their poster.
-  Games added by hand (and DRM-free folders) fall back to the same game's Steam store art; Settings → Library →
-  *DRM-free folders* → **Covers** fetches all their missing covers at once. Missing art downloads in the background, covers and
-  posters first. To fetch it now: Settings → Media & data → *Download missing covers*, or in the desktop
-  window select several games and pick *Download artwork again* or *Download missing covers…*.
-- **Details**: Steam metadata, playtime (also for non-Steam games, Epic's and Prism's counts, or your own value from
-  *Edit metadata*, in both modes; its *Find…* button looks the game up in the Nintendo eShop (Switch and Switch 2, by the
-  title ID in the file name), Steam, GOG, the Microsoft Store and TitleDB, and copies the description, developer,
-  publisher, release date and genres you tick into the dialog), achievements, Steam and RAWG ratings,
-  versions of the same game across stores, uninstall from the game menu (Steam's own dialog, GOG games
-  silently after Launchme asks, other stores through the uninstaller they registered). Achievements of games outside
-  Steam come from the Achievements plugin: GOG and Epic (with their accounts connected),
-  RetroAchievements for emulated games (user name and Web API key in the plugin's settings), RPCS3 and
-  shadPS4 trophies. An achievement opens its card: a larger icon, the description, when it was earned and
-  how rare it is.
-- **Glance**: a news hub (your games' Steam announcements, new and upcoming releases, articles) with a
-  built-in WebView2 browser window driven by the pad.
-- **Tarot** (optional, off by default): a short card reading — 5 to 8 questions drawn as tarot cards (buy something
-  new or play what you own, genre, era, mood, company, length…) — that ends with up to three games, from your
-  library or to buy on Steam.
-- **AI companion** (optional): a chat character that knows your library, with an optional voice and photo feed,
-  a local semantic memory (a small multilingual model on the CPU, no service) and a relationship that grows with
-  your conversations — see [AI companion](#ai-companion).
-- **Publishers and developers**: rows of their logos on the TV home (a board of all of them, then a studio's games),
-  folded sections in the desktop window, links in the details pane, and search by studio. Each row has its own
-  switch, a studio needs a minimum number of games (3 by default) and the studios with the most games come first;
-  a logo's menu moves or hides it, and hidden ones come back one by one in Settings → Library.
-  Games with every achievement unlocked have a gold border.
-- **Widgets drawer**: clock, Steam friends, Discord, CPU/GPU temperatures, controllers, audio and Bluetooth.
-- **Controllers** (TV mode and Settings → *Controllers*): every pad with its picture and battery, a green or red
-  dot and a moving border saying whether it is connected; pairing and connecting from the same tiles.
-- **Profile** (the drawer's *Profile* widget): this week's play time, games and launches with a chart, the latest
-  achievements, a year of achievement history, the games closest to 100 % and every platform with its hours.
-- **In-game overlay** (experimental; Settings → Interface → *In-game overlay*, with its keyboard shortcut: Shift+Tab,
-  Ctrl+Tab, Shift+F1 or Ctrl+Shift+O, and its controller shortcut: Guide / PS, View + Menu or L3 + R3): back to the dashboard, close the game, optional FPS and frame-time graph from PresentMon, a widget over the game (list or one-line strip, coloured labels, size; CPU temperature from MSI Afterburner when it runs), and an opt-in frame limiter (loads a small DLL into the game; skipped for games with an anti-cheat). Steam's small "Launching…" window is hidden when a game starts from Launchme (Settings → Steam).
-- **Plugins** (ZIP + native DLL): HowLongToBeat (completion times in game details) and Achievements
-  (after [SuccessStory](https://github.com/Lacro59/playnite-successstory-plugin), MIT) ship with the Windows build;
-  write your own with the [Plugin SDK](docs/plugins/README.md) (Windows DLLs; the host also loads Linux `.so` plugins).
-- **Updates**: Launchme looks for a new release on GitHub, says so, and updates itself with one click
-  (Settings → System → Updates, or the icon on the desktop window's top bar), then shows what is new.
-- **Low memory mode** (Settings → System → Performance, on by default): artwork decoded at its size on
-  screen, fewer images kept in memory, and while a game runs in front of the launcher it gives its graphics
-  and artwork back (GPU memory to zero).
-- **Artwork compression (BC1)** (Settings → System → Performance, on by default): covers and posters take 8×
-  less graphics memory, logos 4× (BC3); compressed once and kept on disk.
-- **Out of the game's way**: with a game in front the launcher drops to below-normal priority with EcoQoS,
-  10 frames a second and nothing drawn; a still screen ticks at 60, then 30 Hz. Flip-model presentation
-  (Windows) and game videos decoded on the GPU.
-- **Hide to tray while playing** (Settings → Library → Launching, off by default): while a game started here runs,
-  the launcher leaves the taskbar and Alt+Tab and comes back when the game closes.
-- **Music and sound**: background music with two themes (Horizons and Exploratory Silence) or none, and
-  interface sounds that can come from your own sound folder.
-- Screensaver, start with Windows, single instance, crash dumps; the computer stays awake while a game runs.
+- **Two faces**: TV mode (shelves, XMB, Flix, Metro, PSfive, snitch) and a desktop window with a sidebar and a game pane.
+- **Every store**: local installs, GOG and Epic accounts, Amazon ([guide](docs/AMAZON_GAMES.md)), Xbox and Game Pass ([guide](docs/XBOX.md)), EA, Battle.net, Ubisoft, Prism Launcher.
+- **Emulation**: an EmuDeck / ES-DE ROM folder, about 30 systems, emulators found or chosen by hand.
+- **Your own games**: DRM-free folders and anything added by hand or dropped on the window.
+- **Artwork**: SteamGridDB and a dozen other sources, a variant browser and crop editor.
+- **Library**: grid, list, coverflow, game-case shelf and more; collections synced with Steam; Recently played.
+- **Playing**: Steam account switching, installs and downloads in one list, an in-game overlay (experimental).
+- **Details**: metadata, playtime, achievements (also GOG, Epic, RetroAchievements), ratings, system requirements.
+- **Aurelia** (optional): Steam games without the Steam client ([guide](docs/AURELIA.md)).
+- **Extras**: Glance news hub, Tarot game picker, an AI companion, widgets, profile with play stats, save backups (Ludusavi).
+- **Plugins**: HowLongToBeat and Achievements built in; write your own with the [Plugin SDK](docs/plugins/README.md).
+- **Light on the PC**: drops to low priority and almost no drawing while a game runs; updates itself.
 
-## API keys (all optional, all free)
+## Download
 
-Nothing is needed to start; without a key only the related feature is off. Paste keys in
-**Settings → Media & data → Service keys** (or set the environment variable, which wins over the file).
+[Releases](../../releases): `launchme-<version>-win64-setup.exe` installs for your account (no admin prompt; `/ALLUSERS`
+for Program Files, `/VERYSILENT` for silent), or unpack `launchme-<version>-win64.zip` anywhere. Linux:
+`launchme-<version>-x86_64.AppImage`. Settings, keys and caches live in `%LOCALAPPDATA%\Launchme`
+(Linux: `~/.local/share/launchme`; any folder with `LAUNCHME_CONFIG_DIR`).
 
-| Service | How to get the key | Used for |
+## API keys (optional, free)
+
+Nothing is needed to start; paste keys in **Settings → Media & data → Service keys** (or set the variable).
+
+| Service | Key | For |
 | --- | --- | --- |
-| **SteamGridDB** (recommended) | Sign in at [steamgriddb.com](https://www.steamgriddb.com) → Preferences → API → *Generate API Key* | covers, heroes, logos, posters, the artwork browser |
-| **Steam Web API** | Sign in at [steamcommunity.com/dev/apikey](https://steamcommunity.com/dev/apikey), enter any domain (e.g. `localhost`) | Steam friends, names of uninstalled games, full achievement lists |
-| **RAWG** | Create an account at [rawg.io/apidocs](https://rawg.io/apidocs) → *Get API key* | ratings and metadata for non-Steam games |
-| **ScreenScraper** | Create an account at [screenscraper.fr](https://www.screenscraper.fr); API developer credentials (*devid* / *devpassword*) are requested from ScreenScraper on their forum | emulated games: ROM identification, descriptions, artwork, videos |
-| **TheGamesDB** | Request a free public API key on the [TheGamesDB forum](https://forums.thegamesdb.net) | box art, fanart, banners, clear logos in *Change artwork* |
+| [SteamGridDB](https://www.steamgriddb.com) (recommended) | Preferences → API | artwork |
+| [Steam Web API](https://steamcommunity.com/dev/apikey) | any domain, e.g. `localhost` | friends, uninstalled games, achievements |
+| [RAWG](https://rawg.io/apidocs) | *Get API key* | ratings and metadata outside Steam |
+| [ScreenScraper](https://www.screenscraper.fr) | account + developer credentials | emulated games |
+| [TheGamesDB](https://forums.thegamesdb.net) | public key from the forum | more artwork |
 
-The other artwork sources (Steam store, GOG, Xbox / Microsoft Store, Nintendo eShop, GameTDB, TitleDB, Wikimedia
-Commons) and the wallpaper sources (Wallhaven, Danbooru, MotionBGs, Steam) need no key.
-
-Files and variables: `steamgriddb_api_key.txt` / `STEAMGRIDDB_API_KEY`, `steam_web_api_key.txt` /
-`STEAM_WEB_API_KEY`, `rawg_api_key.txt` / `RAWG_API_KEY`, `thegamesdb_api_key.txt` / `THEGAMESDB_API_KEY`. ScreenScraper has its own page with the
-developer and user login (**Settings → Media & data → ScreenScraper**, variables `SCREENSCRAPER_DEV_ID`,
-`SCREENSCRAPER_DEV_PASSWORD`, `SCREENSCRAPER_SSID`, `SCREENSCRAPER_SSPASSWORD`); passwords are stored with DPAPI.
-
-Store accounts (GOG, Epic, EA) connect in **Settings → Library → Platforms → ⚙** and are stored with DPAPI.
-Steam collection sync needs the Steam client started with `-cef-enable-debugging`.
-
-## AI companion
-
-The companion is an optional chat character on the home screen (**Settings → Assistant**) that knows
-your library and playtime. It needs a language model — the easiest is a **free Gemini API key**:
-
-1. Open [aistudio.google.com/apikey](https://aistudio.google.com/apikey), sign in with a Google account
-   and click *Create API key* (the free tier is enough for chatting).
-2. In launchme: **Settings → Assistant** — Gemini is the default model provider — paste the key into
-   **Gemini API key** (or set `GEMINI_API_KEY`).
-
-Other providers: Claude (`ANTHROPIC_API_KEY`), Grok (`XAI_API_KEY`) or a local [Ollama](https://ollama.com)
-server with no key. Optional voice uses an [ElevenLabs](https://elevenlabs.io) key (`ELEVENLABS_API_KEY`).
-Keys typed in Settings are encrypted with DPAPI for your Windows account.
-
-The companions live in real cities (Europe and Tokyo) and keep their own clocks, so they sleep at night there.
-Far from those time zones, **Settings → Assistant → Where they live** moves them all to one of 27 cities
-from Honolulu to Auckland (*Shared city*), or one of them on her own (*City: …*); the city's time zone
-sets when she sleeps, and she makes up her neighbourhood there herself.
+The AI companion needs a model: a free [Gemini key](https://aistudio.google.com/apikey) (**Settings → Assistant**),
+or Claude, Grok or a local Ollama. Keys are stored encrypted (DPAPI).
 
 ## Building
 
-Requirements: Windows 10/11 x64, Visual Studio 2026 (18) Community with the C++ workload and Windows SDK
-(`tools\build.ps1` looks for the Community edition's bundled CMake), Git and network access on the first
-configure: miniz, PresentMon, the WebView2 SDK, QR Code generator, ONNX Runtime, SentencePiece, SQLite and the
-companion's MiniLM embedding model (about 118 MB) are fetched. Node.js is optional (one Steam bridge test).
+Windows 10/11 x64, Visual Studio 2026 with the C++ workload, Git and network on the first configure.
 
 ```powershell
-.\tools\build.ps1          # Release build, runtime published to build\vs
-.\tools\build.ps1 -Test    # also builds and runs every CTest test
-.\build\vs\launchme.exe
+.\tools\build.ps1          # Release, runtime in build\vs
+.\tools\build.ps1 -Test    # also runs every test
 ```
 
-Close a running launcher before rebuilding. The C++ runtime is linked statically. Tests never launch
-games, store clients, installers or change system settings; `*_live_test.exe` and `tools/` probes are
-manual (network, real accounts). How the code is organised, the threading rules and how to add a setting,
-a screen or a test: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Installer: `tools\build-installer.ps1` (Inno Setup 6.6+). Code layout and conventions: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ### Linux (highly experimental, WIP)
 
-**Highly experimental, work in progress.** The full launcher (TV mode and the desktop window) builds and runs
-natively on Linux from the same sources: SDL3 for the window, input and sound, Impeller on the GPU (Vulkan, else
-OpenGL) in place of Direct2D/DirectWrite. It reads Steam (native, Flatpak, Snap), Heroic (Epic and GOG), Lutris,
-Prism Launcher and your own games, and runs Windows games through umu-launcher, Proton or Wine with a prefix
-manager and per-game options (Settings → *Compatibility*, [docs/LINUX_WINE.md](docs/LINUX_WINE.md)): a game keeps
-only its own values on top of the defaults, CachyOS and GE-Proton extras and lsfg-vk are one click, launch options
-can be pasted as Steam writes them, Protontricks works for every game, ProtonDB and Steam Deck ratings are shown,
-and store launchers (Battle.net, EA app, Epic, Ubisoft, Rockstar, GOG Galaxy) install in a prefix of their own.
-It has been tested far less than the Windows build: expect crashes, missing features (no FPS reading; the in-game
-Guide opens in the launcher's window; web pages need WebKitGTK) and changes between versions. Bug reports are welcome.
-
-Status, building (the Impeller SDK is built from source by `tools/linux/build-impeller.sh`) and conventions:
-[docs/linux-port.md](docs/linux-port.md).
+SDL3 and Impeller (Vulkan/OpenGL) in place of Win32 and Direct2D; Steam, Heroic, Lutris and Prism; Windows games
+through umu-launcher, Proton or Wine ([docs/LINUX_WINE.md](docs/LINUX_WINE.md)). Expect bugs. Details: [docs/linux-port.md](docs/linux-port.md).
 
 ```sh
-tools/linux/build-impeller.sh              # once: the Impeller SDK into ~/launchme-impeller (or -DLAUNCHME_IMPELLER_DIR=<sdk>)
-cmake -S . -B build/linux -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build build/linux
-ctest --test-dir build/linux               # optional
+tools/linux/build-impeller.sh   # once
+cmake -S . -B build/linux -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build build/linux
 ./build/linux/launchme
 ```
 
-`tools/linux/make-appimage.sh` packs a build into the release's AppImage.
-
 ## License
 
-Copyright © 2026 uxandai.
-
-launchme is free software: you can redistribute it and/or modify it under the terms of the
-[GNU General Public License](LICENSE) as published by the Free Software Foundation, either version 3 of
-the License, or (at your option) any later version. It is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
-PURPOSE. The license text ships next to `launchme.exe` as `LICENSE.txt`. Releases up to 0.3.2 were
-published under the MIT License.
-
-Third-party licenses (miniz, PresentMon, WebView2 SDK, QR Code generator, SuccessStory for the Achievements
-plugin, see [its notice](plugins/achievements/NOTICE.md)) ship in `plugin-packages/licenses/`; those of ONNX
-Runtime and SentencePiece, used with the MiniLM model by the companion's memory, in `assets/companion-embeddings/`
-(SQLite is public domain). The publisher and developer logos
-are from HVR88's [Monochrome Gaming Logos](https://github.com/HVR88/Monochrome-Gaming-Logos) (their note:
-`res/studios/LICENSE.txt`, installed as `assets/studios/LICENSE.txt`); the console case fronts on Półka are
-from Twicethedad's [Game Cases](https://github.com/Twicethedad/Game-Cases) (MIT: `res/cases/LICENSE.txt`,
-installed as `assets/cases/LICENSE.txt`); the trademarks belong to their owners.
+Copyright © 2026 uxandai. [GNU GPL v3 or later](LICENSE) (releases up to 0.3.2: MIT). Third-party notices ship in
+`plugin-packages/licenses/` and `assets/companion-embeddings/`; studio logos from HVR88's
+[Monochrome Gaming Logos](https://github.com/HVR88/Monochrome-Gaming-Logos), case fronts from Twicethedad's
+[Game Cases](https://github.com/Twicethedad/Game-Cases) (MIT). Trademarks belong to their owners.

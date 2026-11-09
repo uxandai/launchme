@@ -3087,6 +3087,10 @@ private:
     bool desktop_collapse_valid_ = false;
     float desktop_narrow_anim_ = 0;   // The sidebar 0 wide … 1 narrow, easing to settings_.desktop_narrow.
     bool desktop_narrow_valid_ = false;
+    float desktop_pane_anim_ = 1;     // The pane 0 out … 1 in, easing to desktopPaneOpen().
+    bool desktop_pane_valid_ = false;
+    std::vector<std::pair<float, float>> desktop_card_shift_; // Cards gliding to their new column (FLIP), decaying to 0.
+    std::array<float, 3> desktop_continue_hover_{};
     int desktop_columns_ = 0;         // The grid's columns last laid out: a change asks for the new posters' art.
     Spring desktop_active_y_;
     bool desktop_active_y_valid_ = false;
@@ -3146,6 +3150,7 @@ private:
     void desktopOpenViewMenu();
     void desktopSetView(int view);
     bool desktopPaneOpen() const { return !cards_.empty() && !desktop_pane_closed_; }
+    bool desktopPaneShown() const { return !cards_.empty() && (!desktop_pane_closed_ || desktop_pane_anim_ > 0.01f); } // Also while it slides out.
     void desktopOpenToolsMenu();
     // "Jak zacząć" (src/app/getting_started.cpp).
     static int desktopStartCount();
@@ -3181,13 +3186,15 @@ private:
     std::vector<std::string> desktop_recent_keys_;    // The games of Renderer::desktop_recent_'s slots.
     std::vector<std::wstring> desktop_list_played_, desktop_list_playtime_; // The list view's columns (as cards_).
     void desktopListLabels();
-    bool desktopSettingsDocked() const;  // Ustawienia in the library's place (not a dialog).
+    bool desktopPageDocked() const;  // A desktop page in the library's place (not a dialog).
+    bool tickDesktopChrome(float dt); // The sidebar's motion (also beside a page).
+    float desktopSheetDock() const;  // Its left edge (the sidebar's right), or 0 (Sheet::dock).
     bool profileDocked() const;          // Profil likewise, over the library beside the sidebar.
     desktop_ui::Rect desktopDock() const; // That place, in desktop DIPs.
     void desktopChromeView(desktop_ui::View& view);  // The sidebar and top bar only.
     bool desktopChromeClick(float mouse_x, float mouse_y, bool double_click); // A click on them over Ustawienia or Profil.
     bool desktopChromeMove(float mouse_x, float mouse_y);
-    void desktopLeaveSettings();
+    void desktopLeavePage();
     Viewport profileViewport() const;
     std::pair<float, float> profilePoint(float mouse_x, float mouse_y) const;
     void desktopFocus(size_t index, bool reveal = true);
@@ -3223,7 +3230,8 @@ private:
     std::vector<Game> desktopGamesOf(const std::vector<std::string>& keys) const;
     std::pair<bool, bool> desktopEmptyButtons() const; // The empty grid's primary and secondary buttons.
     void desktopOpenSubmenu(int index);
-    void desktopOpenGameMenu(float x, float y, bool keyboard);
+    // pane: from the pane's "…" beside Graj, so Szczegóły leads instead of Graj.
+    void desktopOpenGameMenu(float x, float y, bool keyboard, bool pane = false);
     void desktopOpenSectionMenu(int entry, float x, float y);
     void desktopOpenSortMenu();
     void desktopOpenCollectionsMenu(float x, float y);

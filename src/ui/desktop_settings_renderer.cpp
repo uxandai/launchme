@@ -4,6 +4,7 @@
 // sources, controllers and companions as tiles, then the open list and the key or colour dialog.
 #include "renderer.hpp"
 #include "renderer_internal.hpp"
+#include "brand_icons.hpp"
 #include "../net/companion_characters.hpp"
 
 #include <algorithm>
@@ -213,7 +214,8 @@ void Renderer::drawDesktopSettings() {
         const bool active = category == i, hover = view.hover == SheetHit{Kind::nav, i};
         if (!active && hover) desktopFill(r, 8, gray(1, 0.045f));
         const float cy = middle(r);
-        desktopGlyph(settings_sheet::categoryGlyph(i), r.left + 20, cy, 15, active ? palette::text() : gray(0.62f));
+        if (i != static_cast<int>(settings_ui::Category::emulation) || !desktopBrand("retroarch", r.left + 20, cy, 16, active ? palette::text() : gray(0.62f)))
+            desktopGlyph(settings_sheet::categoryGlyph(i), r.left + 20, cy, 15, active ? palette::text() : gray(0.62f));
         textLine(tr(settings_ui::categories[i].title), r.left + 42, cy, r.right - r.left - 50,
                  active ? desktop_strong_font_.Get() : desktop_font_.Get(), active ? palette::text() : gray(0.8f));
         if (view.keyboard && !state.options && active) desktopFocusRing(r, 8);
@@ -256,8 +258,17 @@ void Renderer::drawDesktopSettings() {
             desktopFill(r, 10, uiAccent(0.10f)); desktopStroke(r, 10, uiAccent(), 2.5f);
         } else if (selected && context_->settings_hold > 0) // Enter held: the frame charges up to the lift.
             desktopStroke(r, 10, uiAccent(context_->settings_hold), 1.0f + 1.5f * context_->settings_hold);
-        const float text_left = r.left + 16;
+        float text_left = r.left + 16;
         const float cy = L.controlY(i, s);
+        // Platforms: the store's mark in a fixed-width column (as Tryb TV), so every name starts at one line.
+        if (item.control == Control::platform && item.id == settings_ui::Id::pc_platform) {
+            if (!desktopBrand(brand_icons::sourceKey(item.source), text_left + 14, cy, 24, gray(item.locked ? 0.5f : 0.9f)))
+                desktopGlyph(glyph::game, text_left + 14, cy, 16, gray(0.6f));
+            text_left += 40;
+        } else if (settings_ui::optionsTile(item)) {
+            desktopBrand("retroarch", text_left + 14, cy, 24, gray(0.9f));
+            text_left += 40;
+        }
         // The text ends before the row's controls (and its badge).
         const float controls_left = L.controlsLeft(item, i, s);
         const float text_width = (tall ? right - 16 : controls_left - 20 - (item.badge.empty() ? 0.0f : L_t::badge_width + 14)) - text_left;

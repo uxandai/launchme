@@ -12,14 +12,15 @@
 #include "../i18n/i18n.hpp"
 
 namespace settings_ui {
-// Settings 2.0: eight categories, each split into titled sections (Row::section).
+// Settings 2.0: nine categories, each split into titled sections (Row::section).
 // Biblioteka holds the PC platforms (their pages behind the cog), "Moje gry" and the
-// collections page; Media i dane the background videos, emulation data and API keys.
+// collections page; Emulacja the ROM folders, emulators and systems (Page::emulation opens it);
+// Media i dane the background videos, emulation data and API keys.
 #ifdef _WIN32
-enum class Category { appearance, library, media, audio, controllers, plugins, companion, system };
+enum class Category { appearance, library, emulation, media, audio, controllers, plugins, companion, system };
 #else
-// Linux: Zgodność (compat) after Biblioteka: Proton and Wine, their prefixes and Windows games' options.
-enum class Category { appearance, library, compat, media, audio, controllers, plugins, companion, system };
+// Linux: Zgodność (compat) after Emulacja: Proton and Wine, their prefixes and Windows games' options.
+enum class Category { appearance, library, emulation, compat, media, audio, controllers, plugins, companion, system };
 #endif
 enum class Id { font, home_layout, ui_accent, accent, uninstalled, emulation, music, music_theme, ui_sound, toast_sound, boot_sound, opacity, fade, pc_platform, gog_callback, gog_refresh, gog_logout, quick_resume, guide_menu, guide_overlay, overlay_key, overlay_pad, game_fps, game_fps_low, language, custom_add, custom_game,
                 screensaver, screensaver_style, screensaver_minutes, screensaver_start, steam_key, sgdb_key, epic_callback, epic_refresh, epic_logout, tile_shape, rawg_key, show_categories, xmb_posters, xmb_size,
@@ -215,6 +216,7 @@ struct CategoryInfo { const wchar_t* title; const wchar_t* description; };
 inline constexpr auto categories = std::to_array<CategoryInfo>({
     {trKey(L"Interfejs"), trKey(L"Układ ekranu, wygląd, kolory i animacje.")},
     {trKey(L"Biblioteka"), trKey(L"Platformy, gry spoza sklepów i kolekcje.")},
+    {trKey(L"Emulacja"), trKey(L"Folder ROM-ów, emulatory i systemy.")},
 #ifndef _WIN32
     {trKey(L"Zgodność"), trKey(L"Proton, Wine, prefiksy i domyślne opcje gier Windows.")},
 #endif

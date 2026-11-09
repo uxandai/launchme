@@ -198,7 +198,7 @@ LRESULT Launcher::desktopNonClientHit(int x, int y) const {
         const auto scaled = [&](Rect r) { return Rect{r.left * scale, r.top * scale, r.right * scale, r.bottom * scale}; };
         if (scaled(layout.windowButton(1)).contains(px, py)) return HTMAXBUTTON;
         if (scaled(layout.windowButton(0)).contains(px, py) || scaled(layout.windowButton(2)).contains(px, py)) return HTCLIENT;
-        if (desktopSettingsDocked()) { // The library's top bar: its search and tools stay clickable.
+        if (desktopPageDocked()) { // The library's top bar: its search and tools stay clickable.
             if (topModal() != Modal::none || friends_open_ || keyboard_.open) return HTCLIENT;
             return desktopHit(px / scale, py / scale).target == Target::caption ? HTCAPTION : HTCLIENT;
         }

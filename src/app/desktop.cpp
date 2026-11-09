@@ -67,7 +67,8 @@ desktop_ui::Layout Launcher::desktopLayout() const {
     layout.narrow = desktop_narrow_anim_;
     layout.pane_width = static_cast<float>(settings_.desktop_pane);
     layout.favorite = favoritesShown();
-    layout.pane_open = desktopPaneOpen();
+    layout.pane_open = desktopPaneShown();
+    layout.pane_t = desktop_pane_anim_;
     layout.cell_aspect = settings_.desktop_view == 1 ? 1.0f : settings_.desktop_view == 2 ? 0.5625f : 1.5f;
     layout.list = settings_.desktop_view == 3;
     layout.continue_count = desktopContinueShown() ? static_cast<int>(std::min<size_t>(3, desktop_recent_games_.size())) : 0;
@@ -77,20 +78,17 @@ desktop_ui::Layout Launcher::desktopLayout() const {
 std::vector<desktop_ui::Tool> Launcher::desktopTools() const {
     std::vector<Tool> tools;
     if (updateAvailable()) tools.push_back(Tool::update); // A newer Launchme: first, in the accent colour.
-    tools.push_back(Tool::downloads);
-    tools.push_back(Tool::tv);
-    tools.push_back(Tool::settings);
+    tools.push_back(Tool::tv); // Pobierania, Ustawienia and Sklep are the sidebar's, under Profil.
     tools.push_back(Tool::more); // The rest is in its menu (desktopMoreTools).
     return tools;
 }
 
-// What the "…" menu lists: Widżety (the drawer: the profile, friends, sensors, plugins), Glance, Tarot, Sklep.
-// Znajomi and Profil are also the sidebar's, under Ulubione.
+// What the "…" menu lists: Widżety (the drawer: the profile, friends, sensors, plugins), Glance, Tarot.
+// Znajomi, Profil, Pobierania, Ustawienia and Sklep are the sidebar's, under Ulubione.
 std::vector<desktop_ui::Tool> Launcher::desktopMoreTools() const {
     std::vector<Tool> tools{Tool::friends};
     if (settings_.glance) tools.push_back(Tool::glance);
     if (settings_.tarot) tools.push_back(Tool::tarot);
-    tools.push_back(Tool::store); // Always there: with no store plugin it says so.
     return tools;
 }
 
@@ -129,6 +127,11 @@ void Launcher::buildDesktopSidebar() {
         const auto online = static_cast<size_t>(std::count_if(friends_.friends.begin(), friends_.friends.end(), [](const auto& person) { return person.status != 0; }));
         add(EntryKind::friends, Group::library, "friends", tr(L"Znajomi"), online, glyph::people).counted = online > 0;
         add(EntryKind::profile, Group::library, "profile", tr(L"Profil"), 0, glyph::profile).counted = false;
+        // Pobierania (with how many move now), Ustawienia and Sklep: pages in the library's place.
+        const auto moving = static_cast<size_t>(std::count_if(desktop_download_rows_.begin(), desktop_download_rows_.end(), [](const auto& row) { return row.moving; }));
+        add(EntryKind::downloads, Group::library, "downloads", tr(L"Pobierania"), moving, glyph::download).counted = moving > 0;
+        add(EntryKind::settings, Group::library, "settings", tr(L"Ustawienia"), 0, glyph::settings).counted = false;
+        add(EntryKind::store, Group::library, "store", tr(L"Sklep"), 0, glyph::shop).counted = false;
     }
     for (size_t i = 0; i < desktop_recent_games_.size(); ++i) {
         const auto& game = desktop_recent_games_[i];
@@ -236,7 +239,8 @@ std::vector<Game> Launcher::desktopSource() const {
     const auto kind = entry ? entry->kind : EntryKind::all;
     std::vector<Game> games;
     switch (kind) {
-    case EntryKind::all: case EntryKind::friends: case EntryKind::profile: case EntryKind::game: return grouped_library_;
+    case EntryKind::all: case EntryKind::friends: case EntryKind::profile: case EntryKind::downloads: case EntryKind::settings: case EntryKind::store:
+    case EntryKind::game: return grouped_library_;
     case EntryKind::favorites: return desktopFavoriteGames();
     case EntryKind::hidden:
         for (const auto& game : private_category_.games)
@@ -522,19 +526,10 @@ void Launcher::desktopRequestArt() {
 
 // ---- Motion ----------------------------------------------------------------------------------
 
-bool Launcher::tickDesktop(float dt) {
+// The sidebar's own motion, also while a page or Profil takes the library's place: the active bar
+// glides, group chevrons turn, the sidebar eases wide or narrow, Biblioteka's refresh arrows spin.
+bool Launcher::tickDesktopChrome(float dt) {
     bool paint = false;
-    const auto now = std::chrono::steady_clock::now();
-    const auto ms = GetTickCount64();
-    if (ms - desktop_install_sync_ >= 400) { desktop_install_sync_ = ms; desktopSyncInstallations(); }
-    if ((desktop_quick_.open || desktop_meta_.open) && ms / 530 != desktop_quick_blink_) { desktop_quick_blink_ = ms / 530; paint = true; } // Their caret.
-    // An installation without a known share sweeps (its poster and the pane's button).
-    if (std::any_of(cards_.begin(), cards_.end(), [](const auto& card) { return card.game.installation.active() && !card.game.installation.percent(); })) paint = true;
-    if (desktop_query_dirty_ && now - desktop_query_edited_ >= std::chrono::milliseconds(120)) desktopApplyQuery();
-    const auto layout = desktopLayout();
-    const size_t count = cards_.size();
-    // Sidebar: the active section's bar glides on a spring; group chevrons turn as sections fold;
-    // a drop flashes its target row; Biblioteka's refresh arrows spin while rescans run.
     {
         const auto rows = desktopRows();
         const int active_entry = desktopActiveEntry();
@@ -559,18 +554,70 @@ bool Launcher::tickDesktop(float dt) {
         if (!desktop_narrow_valid_) { desktop_narrow_anim_ = narrow; desktop_narrow_valid_ = true; }
         else if (std::abs(desktop_narrow_anim_ - narrow) > 0.003f) { desktop_narrow_anim_ += (narrow - desktop_narrow_anim_) * ease(dt, 14.0f); paint = true; }
         else if (desktop_narrow_anim_ != narrow) { desktop_narrow_anim_ = narrow; paint = true; }
-        if (const auto columns = desktopLayout().columns(); columns != desktop_columns_) {
-            if (desktop_columns_) desktopReflow(); else desktop_columns_ = columns; // The first frame only notes them.
-        }
-        if (desktop_drop_flash_ > 0.0f) {
-            desktop_drop_flash_ = std::max(0.0f, desktop_drop_flash_ - dt / 0.45f);
-            paint = true;
-        }
         const bool refreshing = scanning_ || pc_scanning_ || drm_scanning_ || steam_rescan_->load();
         if (refreshing && desktop_refresh_spin_ < 0.25f) desktop_refresh_spin_ = 0.25f;
         if (desktop_refresh_spin_ > 0.0f) {
             desktop_refresh_spin_ = refreshing ? std::max(desktop_refresh_spin_, 0.25f) : std::max(0.0f, desktop_refresh_spin_ - dt);
             desktop_refresh_angle_ = std::fmod(desktop_refresh_angle_ + dt * 6.5f, 2.0f * std::numbers::pi_v<float>);
+            paint = true;
+        }
+    }
+    return paint;
+}
+
+bool Launcher::tickDesktop(float dt) {
+    bool paint = false;
+    const auto now = std::chrono::steady_clock::now();
+    const auto ms = GetTickCount64();
+    if (ms - desktop_install_sync_ >= 400) { desktop_install_sync_ = ms; desktopSyncInstallations(); }
+    if ((desktop_quick_.open || desktop_meta_.open) && ms / 530 != desktop_quick_blink_) { desktop_quick_blink_ = ms / 530; paint = true; } // Their caret.
+    // An installation without a known share sweeps (its poster and the pane's button).
+    if (std::any_of(cards_.begin(), cards_.end(), [](const auto& card) { return card.game.installation.active() && !card.game.installation.percent(); })) paint = true;
+    if (desktop_query_dirty_ && now - desktop_query_edited_ >= std::chrono::milliseconds(120)) desktopApplyQuery();
+    const auto layout = desktopLayout();
+    const float scroll_before = desktop_scroll_;
+    const size_t count = cards_.size();
+    paint |= tickDesktopChrome(dt); // The sidebar's own motion; below, a drop flashes its target row.
+    {
+        // The pane slides in (a game chosen) or out (its ✕), the grid narrowing or widening with it.
+        const float pane = desktopPaneOpen() ? 1.0f : 0.0f;
+        if (!desktop_pane_valid_) { desktop_pane_anim_ = pane; desktop_pane_valid_ = true; }
+        else if (std::abs(desktop_pane_anim_ - pane) > 0.003f) { desktop_pane_anim_ += (pane - desktop_pane_anim_) * ease(dt, 13.0f); paint = true; }
+        else if (desktop_pane_anim_ != pane) { desktop_pane_anim_ = pane; paint = true; }
+        if (const auto columns = desktopLayout().columns(); columns != desktop_columns_) {
+            if (desktop_columns_) {
+                desktopReflow();
+                // Each card in view glides from its old place to its new column instead of jumping.
+                const auto fresh = desktopLayout();
+                desktop_card_shift_.resize(count);
+                const auto [from, to] = fresh.visibleRange(count, desktop_scroll_, 1);
+                const float limit = fresh.viewHeight();
+                for (size_t i = from; i < to; ++i) {
+                    const auto before = layout.poster(i, scroll_before), after = fresh.poster(i, desktop_scroll_);
+                    auto& [dx, dy] = desktop_card_shift_[i];
+                    dx = std::clamp(dx + before.left - after.left, -limit, limit);
+                    dy = std::clamp(dy + before.top - after.top, -limit, limit);
+                }
+                paint = true;
+            } else desktop_columns_ = columns; // The first frame only notes them.
+        }
+        if (desktop_card_shift_.size() != count) desktop_card_shift_.assign(count, {0.0f, 0.0f});
+        for (auto& [dx, dy] : desktop_card_shift_) {
+            if (dx == 0 && dy == 0) continue;
+            const float keep = 1 - ease(dt, 12.0f);
+            dx *= keep; dy *= keep;
+            if (std::abs(dx) < 0.3f && std::abs(dy) < 0.3f) dx = dy = 0;
+            paint = true;
+        }
+        // Kontynuuj grę: the tile under the pointer lifts.
+        for (int i = 0; i < 3; ++i) {
+            const bool over = (desktop_hover_.target == Target::continue_tile || desktop_hover_.target == Target::continue_play) && desktop_hover_.index == i;
+            auto& hover = desktop_continue_hover_[static_cast<size_t>(i)];
+            const float target = over ? 1.0f : 0.0f;
+            if (std::abs(hover - target) > 0.004f) { hover += (target - hover) * ease(dt, 18.0f); paint = true; } else hover = target;
+        }
+        if (desktop_drop_flash_ > 0.0f) {
+            desktop_drop_flash_ = std::max(0.0f, desktop_drop_flash_ - dt / 0.45f);
             paint = true;
         }
         for (auto it = desktop_mark_pulse_.begin(); it != desktop_mark_pulse_.end();) {
@@ -635,6 +682,12 @@ bool Launcher::tickDesktop(float dt) {
         const bool moving_before = std::any_of(desktop_download_rows_.begin(), desktop_download_rows_.end(), [](const auto& row) { return row.moving; });
         desktopRefreshDownloads();
         if (desktop_download_rows_.size() != previous || moving_before || desktop_downloads_open_) paint = true;
+        // The sidebar's Pobierania: how many move now.
+        if (const int at = desktopEntryIndex("downloads"); at >= 0) {
+            const auto moving = static_cast<size_t>(std::count_if(desktop_download_rows_.begin(), desktop_download_rows_.end(), [](const auto& row) { return row.moving; }));
+            auto& entry = desktop_entries_[static_cast<size_t>(at)];
+            if (entry.count != moving) { entry.count = moving; entry.counted = moving > 0; paint = true; }
+        }
     }
     if (std::any_of(desktop_download_rows_.begin(), desktop_download_rows_.end(), [](const auto& row) { return row.moving && !row.fraction; })) paint = true;
     return paint;
@@ -716,7 +769,8 @@ void Launcher::desktopChromeView(desktop_ui::View& view) {
     }
     view.sidebar_narrow = desktop_narrow_anim_;
     view.pane_width = static_cast<float>(settings_.desktop_pane);
-    view.pane_open = desktopPaneOpen();
+    view.pane_open = desktopPaneShown();
+    view.pane_t = desktop_pane_anim_;
     view.cell_view = settings_.desktop_view;
     view.companion_bubble = settings_.companion && companion_.bubble.alpha > 0.003f && (companion_.bubble.waiting || !companion_.bubble.text.empty());
     view.downloads_total = static_cast<int>(desktop_download_rows_.size());
@@ -729,10 +783,16 @@ void Launcher::desktopChromeView(desktop_ui::View& view) {
     view.update_progress = updateFraction();
 }
 
-// The highlighted entry of the sidebar: Profil while its page shows, none over Ustawienia, else the section.
+// The highlighted entry of the sidebar: Profil, Pobierania, Ustawienia or Sklep while their page shows
+// (none over the other pages: a game's Szczegóły, Zmień grafikę, Glance), else the section.
 int Launcher::desktopActiveEntry() const {
     if (desktop_mode_ && profile_.open) return desktopEntryIndex("profile");
-    if (desktopSettingsDocked()) return -1;
+    if (desktopPageDocked()) {
+        if (screen_ == ScreenMode::downloads) return desktopEntryIndex("downloads");
+        if (screen_ == ScreenMode::settings) return desktopEntryIndex("settings");
+        if (screen_ == ScreenMode::store || desktopStorePage()) return desktopEntryIndex("store");
+        return -1;
+    }
     const int active = desktopEntryIndex(desktop_section_);
     return active < 0 ? desktopEntryIndex("all") : active; // A section not listed yet shows every game meanwhile.
 }
@@ -750,6 +810,7 @@ void Launcher::desktopView(desktop_ui::View& view) {
     view.scroll = desktop_scroll_;
     view.scrollbar = desktop_scrollbar_;
     view.card_hover = desktop_card_hover_;
+    if (desktop_card_shift_.size() == cards_.size()) view.card_shift = &desktop_card_shift_;
     if (settings_.desktop_view == 3) { view.list_played = &desktop_list_played_; view.list_playtime = &desktop_list_playtime_; }
     if (desktopContinueShown())
         for (size_t i = 0; i < desktop_recent_games_.size() && i < 3; ++i) {
@@ -761,6 +822,8 @@ void Launcher::desktopView(desktop_ui::View& view) {
             tile.image = static_cast<int>(3 + i);
             tile.cover = static_cast<int>(i);
             tile.installed = game.installed || game.kind == GameKind::nonsteam;
+            tile.hover = desktop_continue_hover_[i];
+            tile.opacity = std::clamp((desktop_arrived_ - 0.02f * static_cast<float>(i)) / 0.18f, 0.0f, 1.0f);
             view.continue_tiles.push_back(std::move(tile));
         }
     view.quick = desktop_quick_;

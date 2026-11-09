@@ -969,6 +969,7 @@ private:
     void drawDesktopTitlebar(const desktop_ui::Layout& layout, const desktop_ui::View& view);
     void drawDesktopSidebar(const desktop_ui::Layout& layout, const desktop_ui::View& view);
     desktop_ui::Layout desktopLayoutOf(const desktop_ui::View& view) const; // The library's geometry for this view.
+    float sheetDock() const { return context_ && context_->desktop_sheet ? context_->desktop_sheet->dock : 0.0f; } // SheetView::dock.
     void drawDesktopStart(const desktop_ui::Layout& layout, const desktop_ui::View& view);
     void drawDesktopCompanion(const desktop_ui::Layout& layout, const desktop_ui::View& view);
     void drawDesktopGrid(const desktop_ui::Layout& layout, const desktop_ui::View& view);
