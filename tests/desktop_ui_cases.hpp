@@ -58,9 +58,8 @@ int LauncherUiTest::desktop(HWND window) {
         app.renderer_.clearVideo();
     }
 
-    // Sections: Ostatnio grane orders by last played; Ulubione keeps its two.
-    app.desktopShowSection("recent"); settle();
-    if (app.cards_.size() != 5 || app.cards_[0].game.app_id != 7604) return 7605;
+    // Ostatnio grane: the sidebar's three latest games (and Kontynuuj grę's); Ulubione keeps its two.
+    if (app.desktop_recent_games_.size() != 3 || app.desktop_recent_games_[0].app_id != 7604 || entry("game:" + library_view::selectionKey(app.desktop_recent_games_[0])) < 0) return 7605;
     app.desktopShowSection("favorites"); settle();
     if (app.cards_.size() != 2) return 7606;
     app.desktopShowSection("all"); settle();
@@ -135,7 +134,7 @@ int LauncherUiTest::desktop(HWND window) {
         app.desktopView(view);
         if (!view.refreshing || view.refresh_angle <= 0.0f) return 7615;
     }
-    app.desktopShowSection("recent");
+    app.desktopShowSection("favorites");
     {
         desktop_ui::View view;
         app.desktopView(view);

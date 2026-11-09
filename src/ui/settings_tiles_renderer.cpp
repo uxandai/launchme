@@ -188,8 +188,10 @@ void Renderer::drawSettingsIcon(int category, float cx, float cy, D2D1_COLOR_F i
             rounded(x, y, x + 8.5f, y + 8.5f, 2.2f, 1.7f);
         }
         break;
-    case Category::emulation: // RetroArch's mark, as the Emulacja tile and heading.
-        desktopBrand("retroarch", cx, cy, 22, ink);
+    case Category::emulation: // A cartridge: its label and contacts.
+        rounded(-9, -11, 9, 10, 2.5f);
+        rounded(-5, -7, 5, 1, 1.2f, 1.5f);
+        for (const float x : {-4.5f, -1.5f, 1.5f, 4.5f}) line(cx + x, cy + 5, cx + x, cy + 8, ink, 1.4f);
         break;
     case Category::media: { // A frame with a play triangle.
         rounded(-11, -8, 11, 8, 3);

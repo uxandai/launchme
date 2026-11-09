@@ -80,17 +80,16 @@ int LauncherUiTest::emulationSettings(HWND window) {
     app.startRomScan();
     if (!scanned() || app.emulation_setup_->paths.roms != roms || app.rom_library_.size() != 3) return 9951;
 
-    // Biblioteka → the Emulacja tile: games and emulators found; its page lists the systems with games.
-    app.openSettings(); app.settings_state_.selectCategory(static_cast<int>(Category::library));
-    app.pc_scanning_ = false; app.buildSettingsRows();
-    const auto* tile = std::find_if(app.settings_rows_.data(), app.settings_rows_.data() + app.settings_rows_.size(),
-                                    [](const Row& r) { return r.id == Id::page && r.page == Page::emulation; });
-    if (tile == app.settings_rows_.data() + app.settings_rows_.size() || tile->value.find(L"Gry: 3") == std::wstring::npos ||
-        tile->value.find(L"Emulatory: 3") == std::wstring::npos) return 9952;
-    app.settings_state_.selected[app.settings_state_.category] = static_cast<int>(tile - app.settings_rows_.data());
-    app.settings_state_.options = true; app.settings_state_.editing = false;
-    app.settingsActivate();
-    if (!app.settings_state_.at(Page::emulation) || !rowOf(Id::emulation) || !rowOf(Id::emulation_source) || !rowOf(Id::emulation_folder)) return 9953;
+    // Emulacja, a category of its own: its summary (games and emulators found, as the home row's
+    // Opcje emulacji tile says it); opened as the old page was, it lists the systems with games.
+    const auto onEmulation = [&] { return app.settings_state_.category == static_cast<int>(Category::emulation) && !app.settings_state_.subpage(); };
+    {
+        app.pc_scanning_ = false;
+        const auto tile = app.emulationTileRow();
+        if (tile.value.find(L"Gry: 3") == std::wstring::npos || tile.value.find(L"Emulatory: 3") == std::wstring::npos) return 9952;
+    }
+    app.openSettingsPage(Page::emulation);
+    if (!onEmulation() || !rowOf(Id::emulation) || !rowOf(Id::emulation_source) || !rowOf(Id::emulation_folder)) return 9953;
     const auto* ps2 = rowOf(Id::emulation_system, "ps2");
     const auto* snes = rowOf(Id::emulation_system, "snes");
     const auto* vita = rowOf(Id::emulation_system, "psvita");
@@ -129,7 +128,7 @@ int LauncherUiTest::emulationSettings(HWND window) {
     if (rowOf(Id::emulation_detected)->title.find(L"brak rdzenia") != std::wstring::npos ||
         rowOf(Id::emulation_detected)->description.find(L"Pobierz go") != std::wstring::npos) return 9962;
     app.back();
-    if (!app.settings_state_.at(Page::emulation) || app.settings_state_.at(Page::emulation_system) || rowOf(Id::emulation_system, "snes")->value != L"RetroArch") return 9963;
+    if (!onEmulation() || app.settings_state_.at(Page::emulation_system) || rowOf(Id::emulation_system, "snes")->value != L"RetroArch") return 9963;
 
     // PS2's page: the emulator, how it was found, Program, the arguments' help and the command.
     if (!select(Id::emulation_system, "ps2")) return 9964;
@@ -278,7 +277,7 @@ int LauncherUiTest::emulationSettings(HWND window) {
     app.openSettings(); app.settings_state_.selectCategory(static_cast<int>(Category::library));
     app.buildSettingsRows();
     app.openSettingsPage(Page::emulation, std::to_string(static_cast<int>(Page::emulation)));
-    if (!app.settings_state_.at(Page::emulation) || !rowOf(Id::emulation_system, "ps2")) return 9990;
+    if (!onEmulation() || !rowOf(Id::emulation_system, "ps2")) return 9990;
     settle();
     if (!capture(L"emulation-page-desktop.png")) return 9991;
     app.openSettingsPage(Page::emulation_system, "ps2");

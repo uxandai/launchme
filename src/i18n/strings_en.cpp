@@ -3017,6 +3017,7 @@ constexpr Entry entries[] = {
     {L"Ukryj ten panel", L"Hide this card"},
     {L"Ustawienia → Biblioteka: włącz sklepy i konsole, których gry mają być w bibliotece, i zaloguj się do nich.", L"Settings → Library: turn on the stores and consoles whose games belong in the library, and sign in to them."},
     {L"Widok: plakaty, kwadraty, poziome", L"View: posters, squares, landscape"},
+    {L"Widok:", L"View:"},
     {L"Widok: plakaty, kwadraty, poziome, lista", L"View: posters, squares, landscape, list"},
     {L"Znajomi", L"Friends"},
     {L"Kontynuuj grę", L"Continue playing"},

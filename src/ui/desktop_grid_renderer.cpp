@@ -57,6 +57,11 @@ void Renderer::drawDesktopHeader(const Layout& layout, const View& view) {
             const float w = view.cell_view == 2 ? 14.0f : view.cell_view == 1 ? 11.0f : 9.0f, h = view.cell_view == 2 ? 8.0f : view.cell_view == 1 ? 11.0f : 13.0f;
             desktopStroke({vx - w * 0.5f, vy - h * 0.5f, vx + w * 0.5f, vy + h * 0.5f}, 2, gray(0.78f), 1.6f); // The cell itself, drawn to its proportions.
         }
+        if (layout.viewLabel()) {
+            constexpr const wchar_t* names[] = {trKey(L"Plakaty"), trKey(L"Kwadraty"), trKey(L"Poziome"), trKey(L"Lista")};
+            const auto label = std::wstring(tr(L"Widok:")) + L" " + tr(names[std::clamp(view.cell_view, 0, 3)]);
+            textLine(label, shape.left + 32, vy, shape.right - shape.left - 56, desktop_font_.Get(), gray(0.9f));
+        }
         desktopGlyph(glyph::chevron_down, shape.right - 15, vy + 1, 9, gray(0.65f));
     }
     const auto chip = layout.installedChip();
@@ -66,6 +71,7 @@ void Renderer::drawDesktopHeader(const Layout& layout, const View& view) {
     const float cy = (chip.top + chip.bottom) * 0.5f;
     desktopGlyph(view.installed_only ? glyph::check : glyph::download, chip.left + 16, cy, 12, view.installed_only ? uiAccent() : gray(0.72f));
     textLine(tr(L"Zainstalowane"), chip.left + 30, cy, chip.right - chip.left - 38, desktop_font_.Get(), gray(0.9f));
+    if (layout.list) return; // The list's rows have one height: no size slider.
     const auto slider = layout.sizeSlider();
     const float y = (slider.top + slider.bottom) * 0.5f, left = slider.left + 7, right = slider.right - 7;
     const float level = levelFromPoster(view.poster), knob = left + (right - left) * level;
@@ -298,11 +304,7 @@ void Renderer::drawDesktopListRow(const Layout& layout, const View& view, size_t
 void Renderer::drawDesktopPoster(const Layout& layout, const View& view, size_t index) {
     const auto& card = (*cards_)[index];
     const auto& game = card.game;
-    auto cell = layout.poster(index, view.scroll);
-    if (view.card_shift && index < view.card_shift->size()) { // Gliding to a new column.
-        const auto [dx, dy] = (*view.card_shift)[index];
-        cell = {cell.left + dx, cell.top + dy, cell.right + dx, cell.bottom + dy};
-    }
+    const auto cell = layout.poster(index, view.scroll);
     if (cell.bottom + caption_h < layout.gridTop() || cell.top > layout.height || card.opacity < 0.01f) return;
     const float hover = index < view.card_hover.size() ? view.card_hover[index] : 0.0f;
     const bool selected = index == selected_;

@@ -814,11 +814,11 @@ public:
             if (!waitPlugins(app)) return 1000;
         }
         if (app.plugins_.plugins.size() != 1 || !app.plugins_.plugins[0].enabled) return 1000;
-        app.settings_state_.selectCategory(5);
+        app.settings_state_.selectCategory(static_cast<int>(settings_ui::Category::plugins));
         app.buildSettingsRows();
         app.settingsActivate();
         if (std::none_of(app.settings_rows_.begin(), app.settings_rows_.end(), [](const auto& row) {
-            return row.id == settings_ui::Id::plugin_enabled && row.key == "launchme.howlongtobeat"; })) return 10;
+            return row.id == settings_ui::Id::plugin_enabled && row.key == "launchme.howlongtobeat"; })) return 1007;
         if (!capture(L"settings-native-plugins.png")) return 1004;
         {
             // A long description: the row grows so its lines sit above the tags, never under them.

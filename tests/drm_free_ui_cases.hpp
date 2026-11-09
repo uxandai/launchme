@@ -38,22 +38,22 @@ int LauncherUiTest::drmFree(HWND window) {
     auto steam = std::make_unique<LibraryMessage>(); steam->account = 1; steam->games = {Game{620, L"Portal 2"}};
     app.onLibrary(std::move(steam));
 
-    // The overview starts with the DRM-free folders, then Emulacja's tile, Steam and the stores by name.
+    // Platformy PC: Steam, the DRM-free folders, then the stores by name (Emulacja is a category of its own).
     app.openSettings(); app.settings_state_.selectCategory(static_cast<int>(Category::library));
     app.pc_scanning_ = false; app.buildSettingsRows();
     const auto rowOf = [&](Id id) -> const Row* {
         const auto row = std::find_if(app.settings_rows_.begin(), app.settings_rows_.end(), [&](const Row& r) { return r.id == id; });
         return row == app.settings_rows_.end() ? nullptr : &*row;
     };
-    if (app.settings_rows_.size() < 4 || app.settings_rows_[0].id != Id::pc_platform ||
-        app.settings_rows_[0].source != GameSource::drmfree || app.settings_rows_[0].title != L"Katalog DRM-free" || app.settings_rows_[0].checked ||
-        !optionsTile(app.settings_rows_[1]) || app.settings_rows_[2].source != GameSource::steam ||
+    if (app.settings_rows_.size() < 3 || app.settings_rows_[0].source != GameSource::steam || app.settings_rows_[1].id != Id::pc_platform ||
+        app.settings_rows_[1].source != GameSource::drmfree || app.settings_rows_[1].title != L"Katalog DRM-free" || app.settings_rows_[1].checked ||
+        std::any_of(app.settings_rows_.begin(), app.settings_rows_.end(), optionsTile) ||
         // The stores that are on, then the others in "Więcej platform".
-        !(app.settings_rows_[3].id == Id::platforms_more || (app.settings_rows_[3].id == Id::pc_platform && app.settings_rows_[3].checked))) return 2101;
+        !(app.settings_rows_[2].id == Id::platforms_more || (app.settings_rows_[2].id == Id::pc_platform && app.settings_rows_[2].checked))) return 2101;
     if (!capture(L"drm-free-overview.png")) return 2102;
     const auto view = app.renderer_.viewport();
     const auto layout = Layout::of(view.width, view.height, app.settings_state_, app.settings_rows_);
-    const auto cog = layout.pluginCog(0, 0);
+    const auto cog = layout.pluginCog(1, 0);
     app.settingsClick((cog.left + cog.right) * 0.5f, (cog.top + cog.bottom) * 0.5f);
     // Its page: Dodaj grę, the scan and its background switch, the folders' tile and the games added by hand.
     if (app.settings_state_.platform() != GameSource::drmfree || app.settings_rows_.size() != 5 || app.settings_rows_[0].id != Id::custom_add ||
@@ -397,7 +397,7 @@ int LauncherUiTest::drmFree(HWND window) {
     const auto* emptied = pcs();
     if (emptied && std::any_of(emptied->games.begin(), emptied->games.end(), [](const Game& tile) { return tile.source == GameSource::drmfree; })) return 2130;
     app.back(); app.back();
-    if (app.settings_state_.platform() || app.settings_state_.row() != 0) return 2131; // Its row, the first.
+    if (app.settings_state_.platform() || app.settings_state_.row() != 1) return 2131; // Its row, after Steam.
     // Media i dane → "ScreenScraper" opens its own page of API settings; Back returns to that row.
     app.settings_state_.selectCategory(static_cast<int>(settings_ui::Category::media)); app.buildSettingsRows();
     // ScreenScraper is one level further, in "Klucze usług" (the services first on the page).

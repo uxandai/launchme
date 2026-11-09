@@ -31,9 +31,11 @@ void Renderer::drawDesktopDetails() {
     desktop_hotspots_.clear();
     const auto sheet = detailsSheet(viewport_.width, viewport_.height, sheetDock());
     const auto* achievements = context_->achievements;
-    drawDesktopSheetFrame(sheet, view, achievements ? std::wstring(tr(L"Osiągnięcia")) : std::wstring(tr(L"Szczegóły")), achievements != nullptr);
+    // In the library's place it is a page like any other: ← back to where it was opened from.
+    const bool back_arrow = achievements != nullptr || sheet.dock > 0;
+    drawDesktopSheetFrame(sheet, view, achievements ? std::wstring(tr(L"Osiągnięcia")) : std::wstring(tr(L"Szczegóły")), back_arrow);
     desktopHot({Kind::close}, sheet.close());
-    if (achievements) desktopHot({Kind::back}, sheet.back());
+    if (back_arrow) desktopHot({Kind::back}, sheet.back());
     const auto p = sheet.panel(), h = sheet.header();
     if (!cards_ || cards_->empty()) return;
     const auto& game = (*cards_)[0].game;
@@ -375,8 +377,9 @@ void Renderer::drawDesktopArtwork() {
     desktop_hotspots_.clear();
     const auto* state = context_->artwork_browser;
     const auto sheet = artworkSheet(viewport_.width, viewport_.height, sheetDock());
-    drawDesktopSheetFrame(sheet, view, std::wstring(tr(L"Zmień grafikę")) + (state ? L"  ·  " + state->game.name : L""), false);
+    drawDesktopSheetFrame(sheet, view, std::wstring(tr(L"Zmień grafikę")) + (state ? L"  ·  " + state->game.name : L""), sheet.dock > 0);
     desktopHot({Kind::close}, sheet.close());
+    if (sheet.dock > 0) desktopHot({Kind::back}, sheet.back());
     if (!state) return;
     const auto p = sheet.panel(), h = sheet.header();
     const auto hover = [&](SheetHit hit) { return view.hover == hit ? 1.0f : 0.0f; };

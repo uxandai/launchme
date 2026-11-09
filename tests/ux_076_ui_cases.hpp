@@ -35,15 +35,16 @@ int LauncherUiTest::ux076(HWND window) {
     if (!app.desktopPaneOpen() || app.desktopLayout().paneWidth() <= 0) return 12001;
     if (!capture(L"ux076-pane-open.png")) return 12002;
     app.desktopActivate({Target::pane_close, 0});
+    settle(); // It slides out first.
     if (app.desktopPaneOpen() || app.desktopLayout().paneWidth() != 0 || app.desktopLayout().paneClose().right != 0) return 12003;
     app.paint();
     if (!capture(L"ux076-pane-closed.png")) return 12004;
     app.desktopFocus(1);
     if (!app.desktopPaneOpen() || app.desktopLayout().paneWidth() <= 0) return 12005;
 
-    // ---- The cells: a dropdown of three shapes; squares are as high as wide.
+    // ---- The cells: a dropdown of three shapes and the list; squares are as high as wide.
     app.desktopOpenViewMenu();
-    if (!app.desktop_menu_ || app.desktop_menu_->kind != Menu::Kind::view || app.desktop_menu_->items.size() != 3) return 12010;
+    if (!app.desktop_menu_ || app.desktop_menu_->kind != Menu::Kind::view || app.desktop_menu_->items.size() != 4) return 12010;
     app.desktopMenuPick(app.desktop_menu_->items[1], false);
     if (app.settings_.desktop_view != 1 || std::abs(app.desktopLayout().cell_aspect - 1.0f) > 0.01f) return 12011;
     settle();

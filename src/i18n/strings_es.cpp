@@ -2807,6 +2807,7 @@ constexpr Entry entries[] = {
     {L"Ukryj ten panel", L"Ocultar este panel"},
     {L"Ustawienia → Biblioteka: włącz sklepy i konsole, których gry mają być w bibliotece, i zaloguj się do nich.", L"Ajustes → Biblioteca: activa las tiendas y consolas cuyos juegos quieres en la biblioteca e inicia sesión en ellas."},
     {L"Widok: plakaty, kwadraty, poziome", L"Vista: pósteres, cuadrados, horizontales"},
+    {L"Widok:", L"Vista:"},
     {L"Widok: plakaty, kwadraty, poziome, lista", L"Vista: pósteres, cuadrados, horizontales, lista"},
     {L"Znajomi", L"Amigos"},
     {L"Kontynuuj grę", L"Seguir jugando"},

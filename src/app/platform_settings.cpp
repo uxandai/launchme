@@ -257,7 +257,7 @@ std::vector<GameSource> Launcher::platformOrder() const {
     std::sort(stores.begin(), stores.end(), [](GameSource a, GameSource b) {
         return CompareStringEx(LOCALE_NAME_USER_DEFAULT, LINGUISTIC_IGNORECASE, sourceName(a), -1, sourceName(b), -1, nullptr, nullptr, 0) == CSTR_LESS_THAN;
     });
-    stores.insert(stores.begin(), {GameSource::drmfree, GameSource::steam});
+    stores.insert(stores.begin(), {GameSource::steam, GameSource::drmfree});
     return stores;
 }
 
@@ -265,7 +265,7 @@ void Launcher::openPlatformSettings(GameSource source) {
     const auto order = platformOrder();
     const auto found = std::find(order.begin(), order.end(), source);
     if (found == order.end()) return;
-    const int index = static_cast<int>(found - order.begin()) + (source == GameSource::drmfree ? 0 : 1); // Below Emulacja's tile.
+    const int index = static_cast<int>(found - order.begin()); // Platformy PC's rows (a folded store is found again by its row).
     if (settings_state_.category != static_cast<int>(settings_ui::Category::library))
         settings_state_.selectCategory(static_cast<int>(settings_ui::Category::library));
     settings_state_.closeAll(); // Another platform's page replaces this one; Back leads to the overview.

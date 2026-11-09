@@ -45,13 +45,14 @@ int LauncherUiTest::focusMotion(HWND window) {
 
     // Settings pill and row highlight glide; mid-move they are between items, then settle on target.
     app.settings_state_.selectCategory(0); app.buildSettingsRows(); settle();
-    const auto layout = settings_ui::Layout::of(view.width, view.height, 0);
+    // categoryRail: the rail tightens when the categories outgrow it (Emulacja made nine).
+    const auto layout = settings_ui::Layout::of(view.width, view.height, app.settings_state_, app.settings_rows_);
     app.changeCategory(1); frame(33);
     const float pill = app.settings_motion_.pill_top.value;
-    if (!(pill > layout.rail(0).top + 1 && pill < layout.rail(1).top - 1)) return 1608;
+    if (!(pill > layout.categoryRail(0).top + 1 && pill < layout.categoryRail(1).top - 1)) return 1608;
     if (!capture(L"settings-pill-glide.png")) return 1609;
     settle();
-    if (std::abs(app.settings_motion_.pill_top.value - layout.rail(1).top) > 0.5f) return 1610;
+    if (std::abs(app.settings_motion_.pill_top.value - layout.categoryRail(1).top) > 0.5f) return 1610;
     app.settingsAdjust(1); // Right: into the rows.
     if (!app.settings_state_.options || app.settings_rows_.size() < 2) return 1611;
     settle();

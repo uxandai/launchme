@@ -214,8 +214,13 @@ void Renderer::drawDesktopSettings() {
         const bool active = category == i, hover = view.hover == SheetHit{Kind::nav, i};
         if (!active && hover) desktopFill(r, 8, gray(1, 0.045f));
         const float cy = middle(r);
-        if (i != static_cast<int>(settings_ui::Category::emulation) || !desktopBrand("retroarch", r.left + 20, cy, 16, active ? palette::text() : gray(0.62f)))
-            desktopGlyph(settings_sheet::categoryGlyph(i), r.left + 20, cy, 15, active ? palette::text() : gray(0.62f));
+        if (i == static_cast<int>(settings_ui::Category::emulation)) { // Tryb TV's cartridge, at the glyphs' size.
+            D2D1_MATRIX_3X2_F base{};
+            target_->GetTransform(&base);
+            target_->SetTransform(D2D1::Matrix3x2F::Scale(0.68f, 0.68f, D2D1::Point2F(r.left + 20, cy)) * base);
+            drawSettingsIcon(i, r.left + 20, cy, active ? palette::text() : gray(0.62f));
+            target_->SetTransform(base);
+        } else desktopGlyph(settings_sheet::categoryGlyph(i), r.left + 20, cy, 15, active ? palette::text() : gray(0.62f));
         textLine(tr(settings_ui::categories[i].title), r.left + 42, cy, r.right - r.left - 50,
                  active ? desktop_strong_font_.Get() : desktop_font_.Get(), active ? palette::text() : gray(0.8f));
         if (view.keyboard && !state.options && active) desktopFocusRing(r, 8);

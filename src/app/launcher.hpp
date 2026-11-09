@@ -3089,7 +3089,6 @@ private:
     bool desktop_narrow_valid_ = false;
     float desktop_pane_anim_ = 1;     // The pane 0 out … 1 in, easing to desktopPaneOpen().
     bool desktop_pane_valid_ = false;
-    std::vector<std::pair<float, float>> desktop_card_shift_; // Cards gliding to their new column (FLIP), decaying to 0.
     std::array<float, 3> desktop_continue_hover_{};
     int desktop_columns_ = 0;         // The grid's columns last laid out: a change asks for the new posters' art.
     Spring desktop_active_y_;

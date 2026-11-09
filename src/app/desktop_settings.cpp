@@ -218,7 +218,7 @@ void Launcher::desktopPageActivate(const SheetHit& hit, bool double_click) {
     if (screen_ != ScreenMode::artwork) return;
     auto& state = artwork_state_;
     switch (hit.kind) {
-    case K::close: closeArtworkBrowser(); return;
+    case K::close: case K::back: closeArtworkBrowser(); return;
     case K::nav:
         state.gallery = state.search_focus = false;
         if (hit.index != state.category || state.results_mode) {

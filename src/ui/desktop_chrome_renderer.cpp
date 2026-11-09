@@ -179,11 +179,7 @@ void Renderer::drawDesktopSidebar(const Layout& layout, const View& view) {
         if (row.heading) {
             const bool collapsed = view.collapsed[static_cast<size_t>(row.group)];
             const float collapse_t = view.collapse_progress[static_cast<size_t>(row.group)];
-            float label_left = r.left + 10;
-            if (row.group == Group::emulation) { // RetroArch's mark in white, as Tryb TV's Emulacja tile.
-                desktopBrand("retroarch", r.left + 18, cy + 1, 15, gray(hover ? 0.95f : 0.82f));
-                label_left = r.left + 32;
-            }
+            const float label_left = r.left + 10;
             const float chevron_x = layout.headingChevronX(row, view.sidebar_scroll);
             textLine(upper(tr(row.group == Group::publishers && view.companies ? trKey(L"Firmy") : groups[static_cast<int>(row.group)])), label_left, cy + 2,
                      std::max(1.0f, chevron_x - 10 - label_left), desktop_label_font_.Get(), gray(hover ? 0.78f : 0.55f));

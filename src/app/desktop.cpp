@@ -69,7 +69,8 @@ desktop_ui::Layout Launcher::desktopLayout() const {
     layout.favorite = favoritesShown();
     layout.pane_open = desktopPaneShown();
     layout.pane_t = desktop_pane_anim_;
-    layout.cell_aspect = settings_.desktop_view == 1 ? 1.0f : settings_.desktop_view == 2 ? 0.5625f : 1.5f;
+    layout.pane_leaving = !desktopPaneOpen();
+    layout.cell_aspect = settings_.desktop_view == 1 ? 1.0f : settings_.desktop_view == 2 ? 430.0f / 920.0f : 1.5f; // Landscape: the 920x430 capsules, uncropped.
     layout.list = settings_.desktop_view == 3;
     layout.continue_count = desktopContinueShown() ? static_cast<int>(std::min<size_t>(3, desktop_recent_games_.size())) : 0;
     return layout;
@@ -575,39 +576,17 @@ bool Launcher::tickDesktop(float dt) {
     if (std::any_of(cards_.begin(), cards_.end(), [](const auto& card) { return card.game.installation.active() && !card.game.installation.percent(); })) paint = true;
     if (desktop_query_dirty_ && now - desktop_query_edited_ >= std::chrono::milliseconds(120)) desktopApplyQuery();
     const auto layout = desktopLayout();
-    const float scroll_before = desktop_scroll_;
     const size_t count = cards_.size();
     paint |= tickDesktopChrome(dt); // The sidebar's own motion; below, a drop flashes its target row.
     {
-        // The pane slides in (a game chosen) or out (its ✕), the grid narrowing or widening with it.
+        // The pane slides in (a game chosen) or out (its ✕) over the grid, which takes its new width at once.
         const float pane = desktopPaneOpen() ? 1.0f : 0.0f;
         if (!desktop_pane_valid_) { desktop_pane_anim_ = pane; desktop_pane_valid_ = true; }
         else if (std::abs(desktop_pane_anim_ - pane) > 0.003f) { desktop_pane_anim_ += (pane - desktop_pane_anim_) * ease(dt, 13.0f); paint = true; }
         else if (desktop_pane_anim_ != pane) { desktop_pane_anim_ = pane; paint = true; }
         if (const auto columns = desktopLayout().columns(); columns != desktop_columns_) {
-            if (desktop_columns_) {
-                desktopReflow();
-                // Each card in view glides from its old place to its new column instead of jumping.
-                const auto fresh = desktopLayout();
-                desktop_card_shift_.resize(count);
-                const auto [from, to] = fresh.visibleRange(count, desktop_scroll_, 1);
-                const float limit = fresh.viewHeight();
-                for (size_t i = from; i < to; ++i) {
-                    const auto before = layout.poster(i, scroll_before), after = fresh.poster(i, desktop_scroll_);
-                    auto& [dx, dy] = desktop_card_shift_[i];
-                    dx = std::clamp(dx + before.left - after.left, -limit, limit);
-                    dy = std::clamp(dy + before.top - after.top, -limit, limit);
-                }
-                paint = true;
-            } else desktop_columns_ = columns; // The first frame only notes them.
-        }
-        if (desktop_card_shift_.size() != count) desktop_card_shift_.assign(count, {0.0f, 0.0f});
-        for (auto& [dx, dy] : desktop_card_shift_) {
-            if (dx == 0 && dy == 0) continue;
-            const float keep = 1 - ease(dt, 12.0f);
-            dx *= keep; dy *= keep;
-            if (std::abs(dx) < 0.3f && std::abs(dy) < 0.3f) dx = dy = 0;
-            paint = true;
+            if (desktop_columns_) desktopReflow();
+            else desktop_columns_ = columns; // The first frame only notes them.
         }
         // Kontynuuj grę: the tile under the pointer lifts.
         for (int i = 0; i < 3; ++i) {
@@ -771,6 +750,7 @@ void Launcher::desktopChromeView(desktop_ui::View& view) {
     view.pane_width = static_cast<float>(settings_.desktop_pane);
     view.pane_open = desktopPaneShown();
     view.pane_t = desktop_pane_anim_;
+    view.pane_leaving = !desktopPaneOpen();
     view.cell_view = settings_.desktop_view;
     view.companion_bubble = settings_.companion && companion_.bubble.alpha > 0.003f && (companion_.bubble.waiting || !companion_.bubble.text.empty());
     view.downloads_total = static_cast<int>(desktop_download_rows_.size());
@@ -810,7 +790,6 @@ void Launcher::desktopView(desktop_ui::View& view) {
     view.scroll = desktop_scroll_;
     view.scrollbar = desktop_scrollbar_;
     view.card_hover = desktop_card_hover_;
-    if (desktop_card_shift_.size() == cards_.size()) view.card_shift = &desktop_card_shift_;
     if (settings_.desktop_view == 3) { view.list_played = &desktop_list_played_; view.list_playtime = &desktop_list_playtime_; }
     if (desktopContinueShown())
         for (size_t i = 0; i < desktop_recent_games_.size() && i < 3; ++i) {

@@ -46,6 +46,7 @@ void Launcher::desktopOpenGameMenu(float x, float y, bool keyboard, bool pane) {
             MenuItem play{Action::play, actionLabel(game), enter_details ? std::wstring{} : std::wstring(tr(L"Enter")), glyph::play};
             play.enabled = actionEnabled(game) && !pending_launch_;
             items.push_back(std::move(play));
+            items.push_back({Action::details, tr(L"Szczegóły"), enter_details ? std::wstring(tr(L"Enter")) : std::wstring{}, glyph::info}); // Second, under Graj.
         }
         const auto session = sessionState(game);
         if (settings_.quick_resume && session == SessionState::running) items.push_back({Action::suspend, tr(L"Wstrzymaj"), {}, glyph::pause});
@@ -58,7 +59,6 @@ void Launcher::desktopOpenGameMenu(float x, float y, bool keyboard, bool pane) {
         items.push_back(std::move(collections));
         if (const auto* group = versions_.find(game); group && group->size() > 1) items.push_back({Action::versions, tr(L"Wybierz wersję…"), {}, glyph::sync});
         separator();
-        if (!pane) items.push_back({Action::details, tr(L"Szczegóły"), enter_details ? std::wstring(tr(L"Enter")) : std::wstring{}, glyph::info});
         // The rest in three groups, each a submenu: the game's data and art, how it starts, and the extras.
         const wchar_t* submenu_names[] = {trKey(L"Dane i grafika"), trKey(L"Opcje gry"), trKey(L"Więcej")};
         const wchar_t group_icons[] = {glyph::picture, glyph::settings, glyph::more};

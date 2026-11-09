@@ -21,17 +21,15 @@ int LauncherUiTest::pcSettings(HWND window) {
     app.ubisoft_account_ = true;
     app.openSettings(); app.settings_state_.selectCategory(static_cast<int>(settings_ui::Category::library));
     app.pc_scanning_ = false; app.buildSettingsRows();
-    // Biblioteka opens with its "Platformy" section: DRM-free folders first, then the stores, then
-    // the library's other rows.
-    // The DRM-free folders, Emulacja's tile, Steam (its own section), then the stores by their names
-    // (Launcher::platformOrder; the tile stands after its first entry).
+    // Biblioteka opens with Platformy PC: Steam, the DRM-free folders, then the stores by their names
+    // (Launcher::platformOrder), then the library's other rows. Emulacja is a category of its own.
     const auto order = app.platformOrder();
-    const auto rowOf = [](size_t i) { return static_cast<int>(i == 0 ? 0 : i + 1); };
+    const auto rowOf = [](size_t i) { return static_cast<int>(i); };
     const auto position = [&](GameSource source) { return rowOf(static_cast<size_t>(std::find(order.begin(), order.end(), source) - order.begin())); };
     const auto overview = [&] {
-        if (app.settings_state_.platform() || app.settings_rows_.size() <= order.size() + 1 || order.size() != pc_sources.size() + 2 ||
-            order[0] != GameSource::drmfree || order[1] != GameSource::steam || !optionsTile(app.settings_rows_[1]) ||
-            app.settings_rows_[0].section.empty() || app.settings_rows_[2].section.empty() || app.settings_rows_[order.size() + 1].id == Id::pc_platform) return false;
+        if (app.settings_state_.platform() || app.settings_rows_.size() <= order.size() || order.size() != pc_sources.size() + 2 ||
+            order[0] != GameSource::steam || order[1] != GameSource::drmfree || std::any_of(app.settings_rows_.begin(), app.settings_rows_.end(), optionsTile) ||
+            app.settings_rows_[0].section.empty() || app.settings_rows_[order.size()].id == Id::pc_platform) return false;
         for (size_t i = 0; i < order.size(); ++i)
             if (app.settings_rows_[rowOf(i)].id != Id::pc_platform || app.settings_rows_[rowOf(i)].source != order[i]) return false;
         for (size_t i = 3; i < order.size(); ++i)

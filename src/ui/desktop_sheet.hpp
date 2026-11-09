@@ -130,7 +130,7 @@ inline wchar_t categoryGlyph(int category) {
     switch (static_cast<Category>(category)) {
     case Category::appearance: return 0xE771;
     case Category::library: return 0xE8F1;
-    case Category::emulation: return 0xE7FC; // A pad (Renderer::drawDesktopSettings draws RetroArch's mark instead).
+    case Category::emulation: return 0xE7FC; // Unused: Renderer::drawDesktopSettings draws Tryb TV's cartridge.
 #ifndef _WIN32
     case Category::compat: return 0xE923; // Windows on top of each other: Windows programs here.
 #endif

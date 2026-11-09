@@ -430,9 +430,8 @@ struct View {
     std::wstring drag_label;
     bool scanning = false;
     bool pane_open = true;
-    float pane_t = 1; // The pane sliding in or out (Layout::pane_t).
-    // Cards gliding from where they were before the columns changed (x, y offsets, as cards_).
-    const std::vector<std::pair<float, float>>* card_shift = nullptr;
+    float pane_t = 1; // The pane sliding in or out (Layout::pane_t, pane_leaving).
+    bool pane_leaving = false;
     bool library_empty = false; // No games at all: the pane says so instead of "Wybierz grę".
     EmptyState empty;
     float launch = 0;
@@ -481,11 +480,12 @@ struct Layout {
     float narrow = 0;     // 0 wide … 1 narrow sidebar, animated between them.
     float pane_width = 0; // Dragged by its left edge; 0: a quarter of the window.
     bool favorite = true; // The pane's star beside Graj (none while Ulubione is switched off).
-    float cell_aspect = 1.5f; // A cell's height over its width: 1.5 posters, 1 squares, 0.5625 landscape.
+    float cell_aspect = 1.5f; // A cell's height over its width: 1.5 posters, 1 squares, 430/920 landscape (the capsules' own).
     bool pane_open = true; // No game selected (or its ✕ pressed): no pane, the grid takes its room.
     bool list = false;     // Widok → Lista: one game per row (a small cover, its name and columns).
     int continue_count = 0; // Kontynuuj grę's tiles above the grid (0: none), scrolling with it.
-    float pane_t = 1;      // The pane sliding in (0 … 1): the grid narrows with it; its content keeps its width.
+    float pane_t = 1;      // The pane sliding in (0 … 1) over the grid, which takes its final width at once.
+    bool pane_leaving = false; // Its ✕: it slides out over a grid already as wide as without it.
 
     float sidebarWide() const { return std::clamp(std::round(width * 0.17f), 228.0f, 272.0f); }
     float sidebarRight() const { return std::round(sidebarWide() + (sidebar_narrow - sidebarWide()) * std::clamp(narrow, 0.0f, 1.0f)); }
@@ -505,7 +505,8 @@ struct Layout {
     float logoLeft() const { return sidebarToggle().right + 12; }
     Rect titlebar() const { return {0, 0, width, title_h}; }
     Rect sidebar() const { return {0, title_h, sidebarRight(), height}; }
-    Rect main() const { return {sidebarRight(), title_h, paneLeft(), height}; }
+    float gridEdge() const { return pane_leaving ? width : width - paneWidth(); } // The grid's right edge (not the sliding pane's).
+    Rect main() const { return {sidebarRight(), title_h, gridEdge(), height}; }
     Rect pane() const { return {paneLeft(), title_h, paneRight(), height}; }
 
     // Minimize, maximize/restore, close: the full height of the top bar.
@@ -532,15 +533,18 @@ struct Layout {
     Rect searchClear() const { const auto s = search(); return {s.right - 32, s.top + 4, s.right - 4, s.bottom - 4}; }
 
     // The section's heading with its controls; narrow, they move to a second line.
-    float mainWidth() const { return paneLeft() - sidebarRight(); }
+    float mainWidth() const { return gridEdge() - sidebarRight(); }
     bool compactHeader() const { return mainWidth() < 700; }
     float headerHeight() const { return compactHeader() ? 112 : 76; }
     float headerTitleY() const { return title_h + 38; }
     float controlsY() const { return compactHeader() ? title_h + 82 : headerTitleY(); }
-    Rect sizeSlider() const { const float r = main().right - grid_pad, y = controlsY(); return {r - 104, y - 14, r, y + 14}; }
+    // The poster size (none in the list: its rows have one height).
+    Rect sizeSlider() const { const float r = main().right - grid_pad, y = controlsY(); return list ? Rect{r + 18, y - 14, r + 18, y + 14} : Rect{r - 104, y - 14, r, y + 14}; }
     Rect installedChip() const { const auto s = sizeSlider(); return {s.left - 18 - 136, s.top - 2, s.left - 18, s.bottom + 2}; }
     Rect sortButton() const { const auto c = installedChip(); return {c.left - 8 - 176, c.top, c.left - 8, c.bottom}; }
-    Rect viewButton() const { const auto s = sortButton(); return {s.left - 8 - 52, s.top, s.left - 8, s.bottom}; } // The cells' shape: a glyph and its chevron.
+    // The cells' shape: a glyph and its chevron; with room, "Widok: Plakaty" between them.
+    bool viewLabel() const { return !compactHeader() && mainWidth() >= 980; }
+    Rect viewButton() const { const auto s = sortButton(); return {s.left - 8 - (viewLabel() ? 156.0f : 52.0f), s.top, s.left - 8, s.bottom}; }
     float titleRight() const { return compactHeader() ? main().right - grid_pad : viewButton().left - 16; }
 
     // The poster grid: columns around `poster` wide (down to 88% of it), stretched to the row; a
@@ -563,7 +567,7 @@ struct Layout {
     static constexpr float continue_label = 34, continue_gap = 30;
     // The tiles share the grid's width (its first and last columns' outer edges), however many there are.
     float continueTileWidth() const { const float n = static_cast<float>(std::max(1, continue_count)); return (gridRight() - gridLeft() - gap_x * (n - 1)) / n; }
-    float continueTileHeight() const { return std::clamp(std::round((gridRight() - gridLeft() - 2 * gap_x) / 3 * 0.5f), 120.0f, 190.0f); }
+    float continueTileHeight() const { return std::clamp(std::round((gridRight() - gridLeft() - 2 * gap_x) / 3 * (430.0f / 920.0f)), 110.0f, 190.0f); }
     float continueHeight() const { return continue_count > 0 ? continue_label + continueTileHeight() + continue_gap : 0.0f; }
     float continueLabelY(float scroll) const { return gridTop() + 8 + 14 - scroll; }
     Rect continueTile(int i, float scroll) const {
