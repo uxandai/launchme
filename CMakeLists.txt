@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(launchme VERSION 0.7.11 LANGUAGES C CXX)
+project(launchme VERSION 0.7.12 LANGUAGES C CXX)
 
 if(NOT WIN32)
     # Linux (highly experimental, docs/linux-port.md): the shared core, its tests and the launcher on SDL3 + Skia.
@@ -458,7 +458,9 @@ add_test(NAME low_memory_mode COMMAND launcher_ui_tests --low-memory)
     add_test(NAME snitch_home_layout COMMAND launcher_ui_tests --snitch)
     set_tests_properties(snitch_home_layout PROPERTIES TIMEOUT 60)
     add_test(NAME glance_shortcut_navigation_and_hints COMMAND launcher_ui_tests --glance)
+    add_test(NAME pad_cursor_toggle_and_buttons COMMAND launcher_ui_tests --pad-cursor)
     set_tests_properties(glance_shortcut_navigation_and_hints PROPERTIES TIMEOUT 60)
+    set_tests_properties(pad_cursor_toggle_and_buttons PROPERTIES TIMEOUT 60)
     add_test(NAME tarot_reading_cards_and_results COMMAND launcher_ui_tests --tarot)
     add_test(NAME profile_page_widget_week_achievements COMMAND launcher_ui_tests --profile)
     add_test(NAME publisher_developer_libraries_and_tv_metadata COMMAND launcher_ui_tests --studios)

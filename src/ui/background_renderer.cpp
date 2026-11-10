@@ -274,6 +274,8 @@ void Renderer::drawBackground() {
 // how soft an upscaled 480p trailer is. One cell per device pixel block, so
 // the dots stay crisp at any DPI; larger screens get larger cells (about 360 rows of dots).
 void Renderer::drawBackgroundGrid(float art) {
+    // The CRT filter has its own lines and mask: a grid under them would be doubled.
+    if (crt_.on && context_ && !context_->desktop_window) return;
     const float strength = background_grid_ * art;
     if (strength <= 0.003f) return;
     const float physical = viewport_.height * viewport_.scale;

@@ -39,6 +39,8 @@ set(LAUNCHME_APP_SOURCES
     src/app/dashboard.cpp
     src/app/paint.cpp
     src/app/input.cpp
+    src/app/pad_cursor.cpp
+    src/app/crt.cpp
     src/app/keyboard.cpp
     src/app/game_overlay.cpp
     src/app/hud_menu.cpp
@@ -233,6 +235,8 @@ set(LAUNCHME_APP_SOURCES
     src/store/steam_trailer.cpp
     src/store/steam_app_match.cpp
     src/ui/renderer.cpp
+    src/ui/crt_renderer.cpp
+    src/ui/crt_filter.cpp
     src/ui/renderer_resources.cpp
     src/ui/swap_chain.cpp
     src/ui/texture_cache.cpp

@@ -245,6 +245,7 @@ bool Launcher::initialize(HWND hwnd) {
     renderer_.setTileShape(settings_.tile_shape);
     renderer_.setPanelBorders(settings_.panel_borders);
     renderer_.setGlass(settings_.glass);
+    applyCrt();
     renderer_.setConsoleColors(settings_.console_colors);
     renderer_.setMetroLight(settings_.metro_light);
     applyWallpaper(); // Interfejs → Tapeta (src/app/wallpaper.cpp).
@@ -955,6 +956,8 @@ void Launcher::tick() {
     if (profiler_.enabled()) profiler_.tick(std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - now).count(),
         std::chrono::duration<double, std::milli>(input_finished - input_started).count(),
         std::chrono::duration<double, std::milli>(system_finished - input_finished).count());
+    // The CRT filter's phosphor still fading after the last change: its own frames, marked as only that.
+    if (!needs_paint && renderer_.crtGlowing() && !IsIconic(hwnd_)) { renderer_.crtGlowFrame(); needs_paint = true; }
     if (needs_paint) {
         if (gameOverlayOpen()) invalidateGameOverlay();
         else if (!IsIconic(hwnd_)) InvalidateRect(hwnd_, nullptr, FALSE);

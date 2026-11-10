@@ -169,6 +169,7 @@ void Launcher::settingsChanged(bool shelves) {
     renderer_.setTileShape(settings_.tile_shape);
     renderer_.setPanelBorders(settings_.panel_borders);
     renderer_.setGlass(settings_.glass);
+    applyCrt();
     renderer_.setConsoleColors(settings_.console_colors);
     renderer_.setMetroLight(settings_.metro_light);
     renderer_.setWallpaperPlaces(settings_.wallpaper_snitch, settings_.wallpaper_menus, settings_.wallpaper_artwork, settings_.wallpaper_tiles);
@@ -772,6 +773,14 @@ void Launcher::settingsToggle(const Row& row) {
                       row.id == Id::desktop_poster_glow ? settings_.desktop_poster_glow : settings_.desktop_gray_uninstalled;
         value = !value;
         settingsChanged(); audio_.context(); return; // Visual only: the posters redraw.
+    }
+    else if (row.id == Id::crt) { // Dostosuj wygląd → Inne: Tryb TV's CRT filter.
+        settings_.crt = !settings_.crt;
+        settingsChanged(); audio_.context(); return;
+    }
+    else if (row.id == Id::pad_cursor) {
+        settings_.pad_cursor = !settings_.pad_cursor;
+        if (!settings_.pad_cursor) padCursorOff();
     }
     else if (row.id == Id::launch_tv_mode) {
         settings_.launch_tv_mode = !settings_.launch_tv_mode;

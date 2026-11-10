@@ -357,6 +357,9 @@ void Launcher::buildSettingsRows() {
             add({Id::launch_tv_mode, Control::toggle, tr(L"Uruchamiaj w trybie TV"),
                 tr(L"Po starcie pełny ekran z układem powyżej zamiast okna desktopowego. Przełączysz też ikoną telewizora lub w menu zasilania."),
                 {}, settings_.launch_tv_mode});
+            add({Id::pad_cursor, Control::toggle, tr(L"Kursor na padzie (L3 + R3)"),
+                tr(L"W trybie TV L3 i R3 wciśnięte razem włączają i wyłączają kursor: lewa gałka go przesuwa, R2 klika, L2 cofa, prawa gałka przewija."),
+                {}, settings_.pad_cursor});
             // Guide (or the shortcuts below) over a game in a window or borderless: widgets, the menu, Settings.
             section(tr(L"Nakładka w grze"));
             add({Id::guide_overlay, Control::toggle, tr(L"Nakładka w grze"),

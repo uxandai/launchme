@@ -299,8 +299,9 @@ void Launcher::controller() {
     controller(controller_input_.read());
 }
 
-void Launcher::controller(const PadReading& state) {
+void Launcher::controller(const PadReading& reading) {
     if (closing_) return;
+    const PadReading state = padCursor(reading); // Tryb TV's pad cursor takes the sticks and triggers it uses.
     const bool held_direction = state.connected && ((state.buttons & (XINPUT_GAMEPAD_DPAD_UP | XINPUT_GAMEPAD_DPAD_DOWN | XINPUT_GAMEPAD_DPAD_LEFT |
         XINPUT_GAMEPAD_DPAD_RIGHT)) || std::abs(static_cast<int>(state.x)) > 16000 || std::abs(static_cast<int>(state.y)) > 16000);
     const int layer = static_cast<int>(topModal()) * 4096 + static_cast<int>(screen_) * 32 + (keyboard_.open ? 1 : 0) +
@@ -777,7 +778,7 @@ bool Launcher::modalPad(const PadReading& state, WORD buttons, ULONGLONG now) {
         gameCaseStick(state.rx, state.ry);
         if (pressed(XINPUT_GAMEPAD_LEFT_SHOULDER)) { noteUserInput(); gameCaseKey(VK_PRIOR, false); }
         if (pressed(XINPUT_GAMEPAD_RIGHT_SHOULDER)) { noteUserInput(); gameCaseKey(VK_NEXT, false); }
-        if (pressed(XINPUT_GAMEPAD_RIGHT_THUMB)) { noteUserInput(); gameCaseKey('O', false); } // R3: Pokaż środek.
+        if (pressed(XINPUT_GAMEPAD_RIGHT_THUMB) && !(buttons & XINPUT_GAMEPAD_LEFT_THUMB)) { noteUserInput(); gameCaseKey('O', false); } // R3: Pokaż środek (L3 + R3: the pad cursor).
         if (direction && (direction != controller_direction_ || now >= controller_repeat_)) {
             noteUserInput(); gameCaseKey(direction, direction == controller_direction_);
             controller_repeat_ = now + (direction != controller_direction_ ? 280 : 200);

@@ -363,6 +363,7 @@ void Renderer::discardTarget() {
 #ifdef _WIN32
     box3d_.reset();
 #endif
+    crtRelease();
     for (auto& thumbnail : artwork_thumbnails_) { thumbnail.bitmap.Reset(); thumbnail.brush.Reset(); }
     file_browser_preview_.bitmap.Reset(); file_browser_preview_.brush.Reset();
     notification_cover_.bitmap.Reset(); notification_cover_.brush.Reset();

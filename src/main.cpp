@@ -107,6 +107,13 @@ HANDLE singleInstance(const std::filesystem::path& data_folder, const std::wstri
 }
 #endif
 
+// A mouse message's client position as the launcher takes it: through the CRT filter's bend (Tryb TV).
+std::pair<float, float> pointerAt(const Launcher* app, LPARAM lparam) {
+    float x = static_cast<float>(GET_X_LPARAM(lparam)), y = static_cast<float>(GET_Y_LPARAM(lparam));
+    if (app) app->crtPoint(x, y);
+    return {x, y};
+}
+
 LRESULT CALLBACK windowProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam) {
     auto* app = reinterpret_cast<Launcher*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
     const bool closing = app && app->closing();
@@ -410,6 +417,11 @@ LRESULT CALLBACK windowProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lpara
             app->noteUserInput();
             POINT point{GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam)};
             ScreenToClient(hwnd, &point);
+            {   // Through the CRT filter's bend (Tryb TV): what the picture shows there.
+                float x = static_cast<float>(point.x), y = static_cast<float>(point.y);
+                app->crtPoint(x, y);
+                point = POINT{static_cast<LONG>(x), static_cast<LONG>(y)};
+            }
             if (app->desktopEmbedded()) { // Urządzenia, kadrowanie, plugin pages in a desktop sheet: their canvas.
                 float x = static_cast<float>(point.x), y = static_cast<float>(point.y);
                 app->desktopEmbedMap(x, y);
@@ -454,18 +466,18 @@ LRESULT CALLBACK windowProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lpara
     case WM_LBUTTONDOWN:
     case WM_LBUTTONDBLCLK:
         if (app) { app->noteUserInput(); app->noteDesktopInput(); }
-        if (app) app->click(static_cast<float>(GET_X_LPARAM(lparam)), static_cast<float>(GET_Y_LPARAM(lparam)),
-                             message == WM_LBUTTONDBLCLK);
+        if (app) { const auto [x, y] = pointerAt(app, lparam); app->click(x, y, message == WM_LBUTTONDBLCLK); }
         return 0;
     case WM_RBUTTONUP:
-        if (app) { app->noteUserInput(); app->noteDesktopInput(); app->contextClick(static_cast<float>(GET_X_LPARAM(lparam)), static_cast<float>(GET_Y_LPARAM(lparam))); }
+        if (app) { app->noteUserInput(); app->noteDesktopInput(); const auto [x, y] = pointerAt(app, lparam); app->contextClick(x, y); }
         return 0;
     case WM_MOUSEMOVE: {
         TRACKMOUSEEVENT tracking{sizeof(TRACKMOUSEEVENT), TME_LEAVE, hwnd, 0};
         TrackMouseEvent(&tracking);
         if (app) {
             app->desktopMaximizeHover(false); // Over the client area, not the maximize button.
-            app->mouseMove(static_cast<float>(GET_X_LPARAM(lparam)), static_cast<float>(GET_Y_LPARAM(lparam)));
+            const auto [x, y] = pointerAt(app, lparam);
+            app->mouseMove(x, y);
         }
         return 0;
     }
@@ -475,7 +487,7 @@ LRESULT CALLBACK windowProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lpara
     case WM_LBUTTONUP:
     case WM_CAPTURECHANGED:
         // Desktop buttons act on release over the same target; drags drop here.
-        if (app && message == WM_LBUTTONUP) app->desktopPointerUp(static_cast<float>(GET_X_LPARAM(lparam)), static_cast<float>(GET_Y_LPARAM(lparam)));
+        if (app && message == WM_LBUTTONUP) { const auto [x, y] = pointerAt(app, lparam); app->desktopPointerUp(x, y); }
         if (app) app->pointerUp(message == WM_CAPTURECHANGED);
         return 0;
     case WM_SETCURSOR:
@@ -484,6 +496,11 @@ LRESULT CALLBACK windowProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lpara
             POINT cursor{};
             GetCursorPos(&cursor);
             ScreenToClient(hwnd, &cursor);
+            {   // Through the CRT filter's bend (Tryb TV).
+                float x = static_cast<float>(cursor.x), y = static_cast<float>(cursor.y);
+                app->crtPoint(x, y);
+                cursor = POINT{static_cast<LONG>(x), static_cast<LONG>(y)};
+            }
             if (const auto shape = app->desktopCursor(static_cast<float>(cursor.x), static_cast<float>(cursor.y))) {
                 SetCursor(LoadCursorW(nullptr, shape)); // Text beam over the search, a hand over what acts.
                 return TRUE;

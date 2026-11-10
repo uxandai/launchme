@@ -6,6 +6,8 @@
 #include "image_decoder.hpp"
 #include "swap_chain.hpp"
 #include "box3d.hpp"
+#include "crt_view.hpp"
+#include "crt_filter.hpp"
 #include "view_context.hpp"
 #include "controller_art.hpp"
 #include "text_layout_cache.hpp"
@@ -72,6 +74,12 @@ public:
         background_grid_ = std::clamp(level, 0.0f, 1.0f); background_grid_style_ = style;
     }
     void setTileShape(AppSettings::TileShape shape) { tile_shape_ = shape; }
+    // Dostosuj wygląd → Inne → Filtr CRT (Tryb TV only): the whole frame through crt_filter.cpp.
+    void setCrt(const crt_view::Settings& crt) { crt_ = crt; }
+    // The phosphor still fading after the last change: the frame loop keeps painting; crtGlowFrame()
+    // marks the next frame as only that (it does not start the glow again).
+    bool crtGlowing() const;
+    void crtGlowFrame() { crt_glow_only_ = true; }
     void setPanelBorders(bool enabled) { panel_borders_ = enabled; }
     // Settings → Interfejs → Efekt szkła: 0 = solid panels, 1 = the strongest frosted glass.
     void setGlass(float level) { glass_level_ = std::clamp(level, 0.0f, 1.0f); }
@@ -993,6 +1001,7 @@ private:
     void drawDesktopDrag(const desktop_ui::Layout& layout, const desktop_ui::View& view);
     void drawDesktopTooltip(const desktop_ui::Layout& layout, const desktop_ui::View& view);
     void drawWindowStrip(); // Window buttons over a TV screen inside the desktop window.
+    void drawPadCursor();   // The pad cursor's mark at the pointer's bottom right (pad_cursor.cpp).
     // Desktop dialogs (src/ui/desktop_settings_renderer.cpp, desktop_sheet.hpp).
     void drawDesktopWindowBar(const desktop_ui::SheetView& view, bool background = true);
     void captureDesktopBackdrop();
@@ -1126,6 +1135,23 @@ private:
     bool glow_pulse_ = AppSettings{}.glow_pulse;
     bool glow_trace_ = AppSettings{}.glow_trace;
     float background_grid_ = AppSettings{}.background_grid;
+    // The CRT filter (crt_renderer.cpp): the frame is drawn into crt_scene_, then through the effect into
+    // the real target; with the phosphor, also into the history the next frame fades from.
+    crt_view::Settings crt_;
+    bool crt_frame_ = false, crt_glow_only_ = false, crt_history_valid_ = false;
+    std::chrono::steady_clock::time_point crt_glow_until_{}, crt_last_frame_{};
+    void crtBegin();
+    void crtFinish();
+    void crtRelease();
+#ifdef _WIN32
+    Microsoft::WRL::ComPtr<ID2D1Effect> crt_effect_;
+    crt_filter::Constants* crt_constants_ = nullptr;
+    crt_filter::Constants crt_sent_{}; // What the effect last uploaded.
+    UINT32 crt_generation_ = 0;
+    Microsoft::WRL::ComPtr<ID2D1Bitmap1> crt_scene_, crt_history_, crt_history_next_;
+    Microsoft::WRL::ComPtr<ID2D1Image> crt_output_;
+    ID2D1Factory* crt_registered_ = nullptr; // The factory the effect is registered with.
+#endif
     AppSettings::GridStyle background_grid_style_ = AppSettings{}.background_grid_style;
     // Focus outline of covers and tiles: the pulse phase (steady at its middle without pulsing),
     // the halo alpha scale and a halo stroke width (wider above 100%, never narrower than 60%).

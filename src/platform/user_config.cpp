@@ -412,6 +412,23 @@ AppSettings parseAppSettings(std::string_view text) {
             }
             continue;
         }
+        // Outside the chain below (it is as deep as the compiler allows).
+        if (key == "pad_cursor") { if (value == "0" || value == "1") settings.pad_cursor = value == "1"; continue; }
+        if (key.starts_with("crt")) {
+            if (key == "crt" && (value == "0" || value == "1")) settings.crt = value == "1";
+            else if (key == "crt_mask" && value.size() == 1 && value[0] >= '0' && value[0] <= '4') settings.crt_mask = value[0] - '0';
+            else if (key == "crt_warp_x" || key == "crt_warp_y" || key == "crt_mask_level" || key == "crt_scanlines" || key == "crt_glow" || key == "crt_phosphor") {
+                float level = 0;
+                const auto result = std::from_chars(value.data(), value.data() + value.size(), level);
+                if (result.ec == std::errc{} && result.ptr == value.data() + value.size() && std::isfinite(level)) {
+                    auto& field = key == "crt_warp_x" ? settings.crt_warp_x : key == "crt_warp_y" ? settings.crt_warp_y :
+                                  key == "crt_mask_level" ? settings.crt_mask_level : key == "crt_scanlines" ? settings.crt_scanlines :
+                                  key == "crt_glow" ? settings.crt_glow : settings.crt_phosphor;
+                    field = std::clamp(level, 0.0f, 1.0f);
+                }
+            }
+            continue;
+        }
         if (key == "show_uninstalled" && (value == "0" || value == "1")) settings.show_uninstalled = value == "1";
         else if (key == "windowed" && (value == "0" || value == "1")) settings.windowed = value == "1";
         else if (key == "launch_tv_mode" && (value == "0" || value == "1")) settings.launch_tv_mode = value == "1";
@@ -800,6 +817,7 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
     output << "drawer_opacity=" << settings.drawer.opacity << '\n'
            << "windowed=" << settings.windowed << '\n'
            << "launch_tv_mode=" << settings.launch_tv_mode << '\n'
+           << "pad_cursor=" << settings.pad_cursor << '\n'
            << "pc_sources_detected=" << settings.pc_sources_detected << '\n'
            << "autostart=" << settings.autostart << '\n'
            << "low_memory=" << settings.low_memory << '\n'
@@ -957,6 +975,10 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
     output << "panel_borders=" << settings.panel_borders << '\n';
     output << "screen_transitions=" << settings.screen_transitions << '\n';
     output << "glass=" << std::clamp(settings.glass, 0.0f, 1.0f) << '\n';
+    output << "crt=" << settings.crt << "\ncrt_mask=" << std::clamp(settings.crt_mask, 0, 4)
+           << "\ncrt_warp_x=" << settings.crt_warp_x << "\ncrt_warp_y=" << settings.crt_warp_y
+           << "\ncrt_mask_level=" << settings.crt_mask_level << "\ncrt_scanlines=" << settings.crt_scanlines
+           << "\ncrt_glow=" << settings.crt_glow << "\ncrt_phosphor=" << settings.crt_phosphor << '\n';
     output << "input_hints=" << settings.input_hints << '\n';
     output << "glance=" << settings.glance << '\n';
     output << "tarot=" << settings.tarot << '\n';

@@ -782,6 +782,9 @@ void Launcher::paint(bool overlay) {
                                       screen_ == ScreenMode::plugin_page ? plugin_page_.title : std::wstring(tr(L"Urządzenia"));
         context.hints.clear();
     }
+    context.pad_cursor = pad_cursor_.on;
+    context.pad_cursor_x = pad_cursor_.x; context.pad_cursor_y = pad_cursor_.y;
+    crtPoint(context.pad_cursor_x, context.pad_cursor_y); // Drawn where the CRT's bend shows it under the pointer.
     if (desktop_mode_) {
         context.desktop_window = true;
         context.desktop_dialog_hover = desktop_dialog_hover_;

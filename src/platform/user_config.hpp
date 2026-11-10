@@ -23,6 +23,7 @@ struct AppSettings {
     bool windowed = false; // Tryb TV in a window (F11) instead of full screen.
     // Start in Tryb TV (the console layouts below) instead of the desktop window (src/app/desktop*.cpp).
     bool launch_tv_mode = false;
+    bool pad_cursor = true; // Tryb TV: L3 + R3 turns the pad into a mouse (left stick moves, R2 clicks, L2 goes back).
     bool desktop_platform_badges = false;     // The desktop window's posters: the store's or console's mark top right.
     bool desktop_gray_uninstalled = false;    // ...and games not installed in black and white.
     // The selected poster: an outline in the cover's colour (Kolor akcentu okładek) and its art's glow behind it.
@@ -221,6 +222,11 @@ struct AppSettings {
     // Frosted glass of dialogs, menus, drawers and the Settings backdrop: 0 = solid panels, 1 = the
     // strongest blur and the most see-through tint.
     float glass = 0.7f;
+    // Tryb TV's CRT filter (Dostosuj wygląd → Inne; src/ui/crt_view.hpp): on, its mask (0 lines only, 1 TV,
+    // 2 Trinitron, 3 arcade, 4 VGA) and its sliders, 0..1 each.
+    bool crt = false;
+    int crt_mask = 3;
+    float crt_warp_x = 0.25f, crt_warp_y = 0.33f, crt_mask_level = 0.7f, crt_scanlines = 0.6f, crt_glow = 0.3f, crt_phosphor = 0.0f;
     // Button hints in the bottom-right corner: the pad's buttons after pad input, keys otherwise.
     bool input_hints = true;
     // Their symbols: from the active pad's family, or always one console's.

@@ -17,6 +17,16 @@ struct Row {
     // Its title is the placeholder.
     bool input = false;
     std::string download_id; // Artwork from this owner's download snapshot, not a library entry.
+    // A tile of a grid page (the built-in Stores tabs, src/app/store_hub.cpp): a 16:9 picture with a
+    // caption below it, laid out by Page::arrange.
+    bool tile = false;
+    int column = 0;
+    std::string id;          // The built-in item behind it (a launcher's id, a promotion's index).
+    std::string image;       // "https://…": its picture; "logo:<platform>": a white mark on `tone`.
+    uint32_t tone = 0;       // 0xRRGGBB behind a mark or a name; 0: the neutral card.
+    std::wstring badge;      // The pill in its corner: "-75%", "Za darmo", "Zainstalowany".
+    bool badge_strong = false; // On the accent colour (free, a discount) instead of dark glass.
+    bool busy = false;       // Something runs for it (an installation): its caption pulses.
     bool actionable() const { return enabled && (input || !uri.empty() || !command.empty()); }
     bool hasSubtitle() const { return !subtitle.empty() && subtitle != title; }
     float height() const { return extent ? extent : input ? 72.0f : heading ? 48.0f : !download_id.empty() ? 128.0f : !game_key.empty() ? 92.0f : hasSubtitle() ? 82.0f : 58.0f; }
@@ -33,6 +43,53 @@ struct Page {
     uint32_t refresh = 0;     // Seconds: the opening command repeats with refresh:true while shown.
     bool dialog = false;     // Centered decision panel; same command and input routing.
     bool typing() const { return focus >= 0 && focus < static_cast<int>(rows.size()) && rows[focus].input; }
+    // A grid page: tiles in `columns` columns under their section headings (arrange() places them).
+    static constexpr float tile_gap = 20, tile_caption = 64, tile_minimum = 280;
+    bool tiled = false;
+    int columns = 0;
+    float tile_width = 0, tile_height = 0, arranged_width = 0;
+    // Places every row for a content column `width` wide: tiles left to right, a heading starts a new line.
+    void arrange(float width, float minimum = tile_minimum) {
+        if (!tiled || width <= 0 || width == arranged_width) return;
+        arranged_width = width;
+        columns = std::max(2, static_cast<int>((width + tile_gap) / (minimum + tile_gap)));
+        tile_width = std::floor((width - tile_gap * static_cast<float>(columns - 1)) / static_cast<float>(columns));
+        tile_height = std::round(tile_width * 9.0f / 16.0f);
+        total = 0;
+        int column = 0;
+        float line = 0;
+        for (auto& row : rows) {
+            if (!row.tile) { column = 0; row.top = total; total += row.height(); continue; }
+            if (column == 0) { line = total; total += tile_height + tile_caption + tile_gap; }
+            row.top = line; row.column = column; row.extent = tile_height + tile_caption + tile_gap;
+            column = (column + 1) % columns;
+        }
+    }
+    // The row an arrow leads to on a grid page: beside it on its line, or the nearest column of the
+    // line above or below (headings are passed over). -1: the back button; `focus`: nowhere to go.
+    int step(int dx, int dy) const {
+        const int count = static_cast<int>(rows.size());
+        if (focus < 0 || focus >= count) return dx > 0 || dy > 0 ? next(1) : -1;
+        const auto& from = rows[static_cast<size_t>(focus)];
+        if (dx) {
+            const int beside = focus + (dx < 0 ? -1 : 1);
+            if (from.tile && beside >= 0 && beside < count && rows[static_cast<size_t>(beside)].tile &&
+                rows[static_cast<size_t>(beside)].top == from.top && rows[static_cast<size_t>(beside)].actionable()) return beside;
+            return dx < 0 && (!from.tile || from.column == 0) ? -1 : focus;
+        }
+        if (!dy) return focus;
+        const int direction = dy < 0 ? -1 : 1;
+        int line = -1;
+        for (int i = focus + direction; i >= 0 && i < count; i += direction)
+            if (rows[static_cast<size_t>(i)].actionable() && rows[static_cast<size_t>(i)].top != from.top) { line = i; break; }
+        if (line < 0) return direction < 0 ? -1 : focus;
+        if (!rows[static_cast<size_t>(line)].tile) return line;
+        int best = line;
+        for (int i = line; i >= 0 && i < count && rows[static_cast<size_t>(i)].tile && rows[static_cast<size_t>(i)].top == rows[static_cast<size_t>(line)].top; i += direction)
+            if (rows[static_cast<size_t>(i)].actionable() &&
+                std::abs(rows[static_cast<size_t>(i)].column - from.column) < std::abs(rows[static_cast<size_t>(best)].column - from.column)) best = i;
+        return best;
+    }
     void asDrawer() {
         total = 0;
         for (auto& row : rows) { row.extent = row.input ? 60.0f : row.heading ? 44.0f : (!row.game_key.empty() || !row.download_id.empty()) ? 80.0f : row.hasSubtitle() ? 78.0f : 54.0f; row.top = total; total += row.height(); }
@@ -72,9 +129,19 @@ struct Layout {
     int hit(const Page& page, float x, float y) const {
         if (framed() && !page.rows.empty() && page.rows.front().input && field().contains(x, y)) return 0;
         if (x < left || x >= width - left || y < top || y >= bottom()) return -2;
-        for (size_t i = 0; i < page.rows.size(); ++i) if (page.rows[i].actionable() && y >= rowTop(page, i) && y < rowTop(page, i) + page.rows[i].height() - 6) return static_cast<int>(i);
+        for (size_t i = 0; i < page.rows.size(); ++i) {
+            if (!page.rows[i].actionable()) continue;
+            if (page.rows[i].tile) { if (tile(page, i).contains(x, y)) return static_cast<int>(i); continue; }
+            if (y >= rowTop(page, i) && y < rowTop(page, i) + page.rows[i].height() - 6) return static_cast<int>(i);
+        }
         return -2;
     }
+    // A grid page's tile with its caption (the picture is its top Page::tile_height).
+    Box tile(const Page& page, size_t i) const {
+        const float x = left + static_cast<float>(page.rows[i].column) * (page.tile_width + Page::tile_gap), y = rowTop(page, i);
+        return {x, y, x + page.tile_width, y + page.tile_height + Page::tile_caption};
+    }
+    float contentWidth() const { return width - 2 * left; }
 };
 inline bool validCommand(std::string_view command) {
     return command.size() <= 64 && std::all_of(command.begin(), command.end(), [](unsigned char c) {

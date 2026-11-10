@@ -152,6 +152,7 @@ public:
     static int psfive(HWND window);
     static int snitch(HWND window);
     static int glanceHub(HWND window, bool live = false);
+    static int padCursor(HWND window);
     static int tarotReading(HWND window);
     static int profilePage(HWND window);
     static int aureliaIntegration(HWND window);
@@ -1588,6 +1589,7 @@ public:
 #include "psfive_ui_cases.hpp"
 #include "snitch_ui_cases.hpp"
 #include "glance_ui_cases.hpp"
+#include "pad_cursor_ui_cases.hpp"
 #include "tarot_ui_cases.hpp"
 #include "low_memory_ui_cases.hpp"
 #include "profile_ui_cases.hpp"
@@ -2340,6 +2342,15 @@ int main(int argc, char** argv) {
             for (const int key : {VK_SHIFT, VK_LSHIFT, VK_RSHIFT, VK_CONTROL, VK_LCONTROL, VK_RCONTROL, VK_MENU, VK_LMENU, VK_RMENU}) keys[key] = 0;
             SetKeyboardState(keys);
         }
+    }
+    if (argc == 2 && std::string_view(argv[1]) == "--pad-cursor") {
+        std::filesystem::create_directories(root);
+        const auto code = window ? LauncherUiTest::padCursor(window) : 99;
+        if (window) DestroyWindow(window);
+        CoUninitialize();
+        if (code) std::cerr << "Pad cursor regression failed at checkpoint " << code << '\n';
+        else std::cout << "Pad cursor: toggle, stick, R2 click, L2 back and its mark passed\n";
+        return code;
     }
     if (argc == 2 && (std::string_view(argv[1]) == "--glance" || std::string_view(argv[1]) == "--glance-live")) {
         std::filesystem::create_directories(root);

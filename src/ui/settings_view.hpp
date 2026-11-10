@@ -39,6 +39,9 @@ enum class Id { font, home_layout, ui_accent, accent, uninstalled, emulation, mu
                   companion_photos, companion_photo_folder, companion_guests, companion_gamification,
                   // Interfejs → Tryb TV: start in it instead of the desktop window.
                   launch_tv_mode,
+                  // Dostosuj wygląd → Inne: Tryb TV's CRT filter (src/ui/crt_view.hpp).
+                  crt, crt_mask, crt_warp_x, crt_warp_y, crt_mask_level, crt_scanlines, crt_glow, crt_phosphor,
+                  pad_cursor, // Interfejs → Tryb TV: L3 + R3 as a mouse.
                   // Interfejs  Okno desktopowe: posters' marks of their store; games not installed in black and white.
                   desktop_platform_badges, desktop_gray_uninstalled,
                   // Interfejs → Okno desktopowe: the window's colours; the selected poster's outline and glow.

@@ -1508,6 +1508,24 @@ private:
     ULONGLONG pad_direction_since_ = 0; // When the held direction began: repeats speed up after 1.5 s.
     // Pad buttons while a modal layer or the on-screen keyboard is open; false: the screen takes them.
     bool modalPad(const PadReading& state, WORD buttons, ULONGLONG now);
+    // Tryb TV's pad cursor (pad_cursor.cpp): L3 + R3 turns it on and off; the left stick moves the pointer,
+    // R2 clicks, L2 goes back, the right stick scrolls. Returns the reading left for the screens: without
+    // the sticks and triggers it took (and without L3 / R3 until the pair that toggled it is let go).
+    PadReading padCursor(const PadReading& state);
+    void padCursorOff();
+    // Tryb TV's CRT filter (crt.cpp): the settings to the renderer, and a window pixel to where the bent
+    // picture drawn there comes from (every pointer position goes through it while the filter is on).
+    void applyCrt();
+    crt_view::Settings crtSettings() const;
+public:
+    void crtPoint(float& x, float& y) const;
+private:
+    struct PadCursor {
+        bool on = false, sticks_latched = false, clicking = false, back_held = false;
+        float x = 0, y = 0, wheel = 0, click_x = 0, click_y = 0;
+        WORD buttons = 0;
+        ULONGLONG tick = 0, clicked_at = 0;
+    } pad_cursor_;
     void controllerNavigate(int direction); // ±1 horizontal, ±2 vertical, 0 releases the edge latch.
     void navigationBoundary() { navigation_edge_ = true; focusBoundary(); }
     // Focus motion (src/app/focus_motion.cpp): quick bar circle, Settings highlights and the

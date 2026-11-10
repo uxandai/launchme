@@ -214,6 +214,20 @@ void Launcher::themeBuildOptions() {
             toggle(Id::desktop_gray_uninstalled, L"Niezainstalowane w czerni i bieli", s.desktop_gray_uninstalled);
             toggle(Id::desktop_poster_glow, L"Kolorowy obrys i poświata", s.desktop_poster_glow);
         }
+#ifdef _WIN32
+        if (!desktop_mode_) { // Tryb TV's CRT filter, last; its own options only while it is on. Windows only for now.
+            toggle(Id::crt, L"Filtr CRT", s.crt);
+            if (s.crt) {
+                cards(Id::crt_mask, Look::text, L"Rodzaj filtra CRT", s.crt_mask, names(crt_view::mask_names, crt_view::mask_count));
+                slider(Id::crt_warp_x, L"Wygięcie ekranu w poziomie", s.crt_warp_x, percent(s.crt_warp_x));
+                slider(Id::crt_warp_y, L"Wygięcie ekranu w pionie", s.crt_warp_y, percent(s.crt_warp_y));
+                slider(Id::crt_scanlines, L"Linie skanowania", s.crt_scanlines, percent(s.crt_scanlines));
+                if (s.crt_mask != 0) slider(Id::crt_mask_level, L"Intensywność maski", s.crt_mask_level, percent(s.crt_mask_level));
+                slider(Id::crt_glow, L"Poświata ekranu", s.crt_glow, percent(s.crt_glow));
+                slider(Id::crt_phosphor, L"Fosfor (powidok)", s.crt_phosphor, percent(s.crt_phosphor));
+            }
+        }
+#endif
         break;
     }
     for (auto& o : options) { // What is drawn glides from where the same option stood.
@@ -278,6 +292,7 @@ void Launcher::themeChooseCard(int option, int card) {
     if (o.kind != theme_ui::Kind::cards || card < 0 || card >= static_cast<int>(o.cards.size()) || card == o.current) return;
     const Id id = o.id;
     if (id == Id::home_layout) setHomeLayout(card);
+    else if (id == Id::crt_mask) { settings_.crt_mask = std::clamp(card, 0, crt_view::mask_count - 1); settingsChanged(); }
     else if (id == Id::background_grid_style) { // Brak first: no grid; a pattern brings it back.
         if (card == 0) settings_.background_grid = 0;
         else {
@@ -335,6 +350,12 @@ void Launcher::themeSetLevel(int option, float level) {
     case Id::glow_level: settings_.glow_level = std::round(level * 20) / 10.0f; break;
     case Id::opacity: settings_.drawer.opacity = std::round(level * 98) / 100.0f; break;
     case Id::fade: settings_.drawer.fade_fraction = (6 + std::round(level * 69)) / 100.0f; break;
+    case Id::crt_warp_x: settings_.crt_warp_x = std::round(level * 20) / 20.0f; break;
+    case Id::crt_warp_y: settings_.crt_warp_y = std::round(level * 20) / 20.0f; break;
+    case Id::crt_scanlines: settings_.crt_scanlines = std::round(level * 20) / 20.0f; break;
+    case Id::crt_mask_level: settings_.crt_mask_level = std::round(level * 20) / 20.0f; break;
+    case Id::crt_glow: settings_.crt_glow = std::round(level * 20) / 20.0f; break;
+    case Id::crt_phosphor: settings_.crt_phosphor = std::round(level * 20) / 20.0f; break;
     default: return;
     }
     settingsChanged();

@@ -520,6 +520,7 @@ void Renderer::paint(const std::vector<GameCard>& cards, size_t selected, bool s
         detail_ = detail;
         beginFrame();
         target_->BeginDraw();
+        crtBegin(); // Tryb TV's CRT filter: the frame goes into its own bitmap first.
         const float scale = viewport_.scale;
         target_->SetTransform(D2D1::Matrix3x2F::Scale(scale, scale));
         target_->Clear(color(0.025f, 0.030f, 0.036f));
@@ -647,6 +648,7 @@ void Renderer::paint(const std::vector<GameCard>& cards, size_t selected, bool s
             drawVolumeIndicator();
             drawExitPrompt();
             drawWindowStrip();
+            drawPadCursor();
             if (!context.performance.empty()) {
                 brush(color(0.015f, 0.02f, 0.025f, 0.94f));
                 target_->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(viewport_.width - 676, 20, viewport_.width - 20, 144), 10, 10), solid_.Get());
@@ -658,6 +660,7 @@ void Renderer::paint(const std::vector<GameCard>& cards, size_t selected, bool s
             }
         }
         if (context.exit_progress >= 0) drawExitTransition(context.exit_progress);
+        crtFinish();
         const auto submitted = std::chrono::steady_clock::now();
         const auto result = finishFrame(target_->EndDraw());
 #ifdef LAUNCHME_UI_TEST
@@ -812,6 +815,10 @@ bool Renderer::animating() const {
            (desktop_viewport_ && std::chrono::steady_clock::now() - desktop_hero_changed_ < std::chrono::milliseconds(320)) ||
            std::chrono::steady_clock::now() - last_reveal_ < reveal_duration ||
            std::chrono::steady_clock::now() - skeleton_at_ < std::chrono::milliseconds(150);
+}
+
+bool Renderer::crtGlowing() const {
+    return crt_.on && crt_.phosphor > 0.001f && crt_history_valid_ && std::chrono::steady_clock::now() < crt_glow_until_;
 }
 
 void Renderer::drawSkeleton(D2D1_RECT_F area, int lines, float step, float alpha) {

@@ -217,6 +217,22 @@ void Renderer::drawDesktopTooltip(const Layout& layout, const View& view) {
 
 // ---- The window strip over the TV screens ----------------------------------------------------
 
+void Renderer::drawPadCursor() {
+    if (!context_ || !context_->pad_cursor) return;
+    D2D1_MATRIX_3X2_F base{};
+    target_->GetTransform(&base);
+    target_->SetTransform(D2D1::Matrix3x2F::Identity());
+    // A small dark disc with a white pad glyph, below and to the right of the arrow's tip.
+    const float s = std::max(1.0f, viewport_.scale);
+    const float cx = context_->pad_cursor_x + 26 * s, cy = context_->pad_cursor_y + 30 * s, r = 13 * s;
+    brush(D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.62f));
+    target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), r, r), solid_.Get());
+    brush(D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.55f));
+    target_->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), r, r), solid_.Get(), 1.2f * s);
+    desktopGlyph(0xE7FC, cx, cy, 15 * s, D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.96f)); // Segoe MDL2 "Game".
+    target_->SetTransform(base);
+}
+
 void Renderer::drawWindowStrip() {
     if (!context_ || !context_->window_strip) return;
     const float dpi = std::max(0.5f, context_->window_dpi);

@@ -205,6 +205,9 @@ struct ViewContext {
     bool desktop_window = false; // Desktop mode: every screen and dialog in its desktop style.
     desktop_ui::SheetHit desktop_dialog_hover; // The control under the pointer in a desktop dialog.
     bool toast_bottom = false;
+    // Tryb TV's pad cursor (src/app/pad_cursor.cpp): on, and the pointer in window pixels; a pad mark beside it.
+    bool pad_cursor = false;
+    float pad_cursor_x = 0, pad_cursor_y = 0;
     // A TV screen inside the desktop window: its window buttons (desktop_ui::stripButton).
     bool window_strip = false, window_max_hover = false, window_maximized = false;
     int window_strip_hover = -1;
