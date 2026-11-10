@@ -15,6 +15,7 @@ using namespace render_detail;
 void Renderer::drawFriends() {
     const float progress = smoothFade(context_->friends_progress);
     if (progress < 0.004f) return;
+    if (context_->friends_docked) { drawFriendsPage(progress); return; }
     const float width = friends_layout::drawer_width, height = viewport_.height;
     const float x = viewport_.width - width * progress;
     // The drawer has 90% black beneath it; a smooth fade reaches the clear
@@ -43,18 +44,71 @@ void Renderer::drawFriends() {
 
 // A friend's conversation (friend_chat_view.hpp): Back and the name as the list's header, the
 // messages as bubbles (theirs on the left, yours on the right) and the field with its Send button.
-void Renderer::drawFriendChat(float x) {
+// The desktop window's Znajomi page (ViewContext::friends_docked): in the library's place beside the
+// sidebar, the list on the left and the conversation (or what to do) beside it, in the window's theme.
+void Renderer::drawFriendsPage(float progress) {
+    const float dock_w = context_->friends_dock_right - context_->friends_dock_left, dock_h = context_->friends_dock_bottom - context_->friends_dock_top;
+    if (dock_w <= 0 || dock_h <= 0) return;
+    // As the docked Profil: the window's scale (a little smaller), at the dock's corner.
+    D2D1_MATRIX_3X2_F base{};
+    target_->GetTransform(&base);
+    const auto saved = viewport_;
+    const auto desk = desktopViewport();
+    constexpr float compact = friends_layout::docked_scale;
+    const float w = dock_w / compact, h = dock_h / compact;
+    viewport_.scale = desk.scale * compact; viewport_.width = w; viewport_.height = h;
+    target_->SetTransform(D2D1::Matrix3x2F::Scale(viewport_.scale, viewport_.scale) *
+                          D2D1::Matrix3x2F::Translation(context_->friends_dock_left * desk.scale, context_->friends_dock_top * desk.scale));
+    target_->PushAxisAlignedClip(D2D1::RectF(0, 0, w, h), D2D1_ANTIALIAS_MODE_ALIASED);
+    const auto bg = desktop_theme::current().app;
+    brush(D2D1::ColorF(bg.r, bg.g, bg.b, std::min(1.0f, progress * 1.6f)));
+    target_->FillRectangle(D2D1::RectF(0, 0, w, h), solid_.Get());
+    const float list = friends_layout::drawer_width;
+    const auto panel = desktop_theme::current().side;
+    brush(D2D1::ColorF(panel.r, panel.g, panel.b, progress));
+    target_->FillRectangle(D2D1::RectF(0, 0, list, h), solid_.Get());
+    brush(D2D1::ColorF(1, 1, 1, 0.07f * progress));
+    target_->FillRectangle(D2D1::RectF(list, 0, list + 1, h), solid_.Get());
+    drawFriendsList(0);
+    if (context_->friend_chat) drawFriendChat(list, std::max(360.0f, w - list));
+    else {
+        const bool chat = context_->friends_chat_here;
+        textLine(chat ? tr(L"Wybierz znajomego, aby porozmawiać") : tr(L"Wybierz znajomego, aby otworzyć czat w kliencie Steam"),
+                 list + 40, h * 0.45f, w - list - 80, desktop_title_font_ ? desktop_title_font_.Get() : category_font_.Get(), palette::muted(0.9f * progress),
+                 DWRITE_TEXT_ALIGNMENT_CENTER);
+        if (!chat) textLine(tr(L"Czat w Launchme działa z Aurelią: Ustawienia → Biblioteka → Steam."), list + 40, h * 0.45f + 36, w - list - 80,
+                            friend_status_font_.Get(), palette::muted(0.6f * progress), DWRITE_TEXT_ALIGNMENT_CENTER);
+    }
+    target_->PopAxisAlignedClip();
+    viewport_ = saved;
+    target_->SetTransform(base);
+}
+
+// Profil's Back (profile_renderer.cpp): a glass square with an arrow.
+void Renderer::pageBack(D2D1_RECT_F back, float focus, bool hovered) {
+    drawButtonGlass(back, 1, false, hovered);
+    drawButtonFocus(back, focus);
+    const auto ink = buttonInk(focus);
+    const float cx = (back.left + back.right) * 0.5f, cy = (back.top + back.bottom) * 0.5f;
+    line(cx - 7, cy, cx + 7, cy, ink, 2);
+    line(cx - 7, cy, cx - 1, cy - 6, ink, 2);
+    line(cx - 7, cy, cx - 1, cy + 6, ink, 2);
+}
+
+void Renderer::drawFriendChat(float x, float width) {
     auto& s = *context_->friend_chat;
-    const friend_chat::Layout layout{x, viewport_.height};
+    const friend_chat::Layout layout{x, viewport_.height, width, context_->friends_docked};
     const auto back = layout.back();
     const auto back_rect = D2D1::RectF(back.left, back.top, back.right, back.bottom);
-    brush(drawButton(back_rect, s.back_focus ? 1.0f : 0.0f, 1, false, s.hover == 1));
-    target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F((back.left + back.right) * 0.5f, (back.top + back.bottom) * 0.5f), 3, 3), solid_.Get());
-    const float title_left = back.right + 14, title_width = x + friend_chat::Layout::width - 24 - title_left;
+    if (!layout.page) { // The page needs none: the list stays beside the conversation.
+        brush(drawButton(back_rect, s.back_focus ? 1.0f : 0.0f, 1, false, s.hover == 1));
+        target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F((back.left + back.right) * 0.5f, (back.top + back.bottom) * 0.5f), 3, 3), solid_.Get());
+    }
+    const float title_left = layout.page ? x + 26 : back.right + 14, title_width = x + layout.width - 24 - title_left;
     textLine(s.name, title_left, (back.top + back.bottom) * 0.5f, title_width, category_font_.Get(), color(0.95f, 0.95f, 0.95f));
     // One quiet line under it: what is happening, else what the friend is doing.
     const bool problem = s.failed && !s.status.empty();
-    textLine(s.status.empty() ? s.presence : s.status, x + 26, 94, friend_chat::Layout::width - 50, friend_status_font_.Get(),
+    textLine(s.status.empty() ? s.presence : s.status, x + 26, 94, layout.width - 50, friend_status_font_.Get(),
              problem ? palette::danger() : color(0.62f, 0.62f, 0.62f));
     // Messages, measured first: the newest stay in view while the list follows them.
     const auto log = layout.log();
@@ -124,7 +178,8 @@ void Renderer::drawFriendChat(float x) {
 void Renderer::drawFriendsList(float x) {
     const float width = friends_layout::drawer_width, height = viewport_.height;
     // Back button: same shape as the grid screens' one; B/Esc do the same.
-    const auto back = friends_layout::listBack(x);
+    const bool page = context_->friends_docked;
+    const auto back = friends_layout::listBack(x, page);
     // Focus: one frame gliding between Back and the rows (ViewContext::drawer_glide, drawer-relative x).
     const auto& glide = context_->drawer_glide;
     const auto highlight = [&](float alpha) {
@@ -136,9 +191,15 @@ void Renderer::drawFriendsList(float x) {
     highlight(0.13f);
     // Back: a glass circle with the dot; the focus frame gliding onto it marks it as well.
     const bool back_focus = context_->friends_back || (context_->friends && context_->friends->friends.empty());
+    if (page) { // The docked Profil's Back and title.
+        pageBack(D2D1::RectF(back.left, back.top, back.right, back.bottom), back_focus ? 1.0f : 0.0f, false);
+        textLine(tr(L"Znajomi"), back.right + 18, (back.top + back.bottom) * 0.5f, width - (back.right - x) - 40,
+                 createProfileFonts() ? profile_title_font_.Get() : category_font_.Get(), palette::text());
+    } else {
     brush(drawButton(D2D1::RectF(back.left, back.top, back.right, back.bottom), back_focus ? 1.0f : 0.0f, 1, false));
     target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F((back.left + back.right) * 0.5f, (back.top + back.bottom) * 0.5f), 3, 3), solid_.Get());
     textLine(tr(L"ZNAJOMI"), back.right + 14, (back.top + back.bottom) * 0.5f, width - (back.right - x) - 40, category_font_.Get(), color(0.93f, 0.93f, 0.93f));
+    }
     if (context_->friends_loading) {
         text(tr(L"Pobieranie ze Steam…"), x + 26, 121, width - 50, 34,
              toast_sub_font_.Get(), color(0.71f, 0.71f, 0.71f));

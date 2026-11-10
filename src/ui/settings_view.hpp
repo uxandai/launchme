@@ -373,6 +373,7 @@ struct Row {
     // (what goes back to the default) it is a button: a click, Delete or the pad's X.
     std::wstring badge;
     std::string reset;
+    std::wstring logo; // Emulacja's systems: their logo's file in assets/systems (src/library/system_logos.hpp).
     // The list a picker shows for this row: its choices, or those of the focused source tile.
     const std::vector<Choice>& pickList(int tile) const {
         if (control == Control::sources && !tiles.empty()) return tiles[std::clamp(tile, 0, static_cast<int>(tiles.size()) - 1)].choices;

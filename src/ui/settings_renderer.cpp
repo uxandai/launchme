@@ -6,6 +6,8 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <filesystem>
+#include <fstream>
 #include <numbers>
 
 namespace {
@@ -15,6 +17,38 @@ D2D1_COLOR_F rgb(uint32_t color) {
     return D2D1::ColorF(((color >> 16) & 255) / 255.0f, ((color >> 8) & 255) / 255.0f, (color & 255) / 255.0f);
 }
 float middle(settings_ui::Rect r) { return (r.top + r.bottom) * 0.5f; }
+}
+
+bool Renderer::drawSystemLogo(const std::wstring& file, D2D1_RECT_F box, float alpha) {
+    const std::wstring key = L"system:" + file;
+    auto found = platform_badges_.find(key);
+    if (found == platform_badges_.end()) {
+        // Beside the program (or in ../share/launchme on Linux). An empty entry: none, not asked again.
+        wchar_t program[32768]{};
+        GetModuleFileNameW(nullptr, program, static_cast<DWORD>(std::size(program)));
+        const auto folder = std::filesystem::path(program).parent_path();
+        std::vector<uint8_t> bytes;
+        for (const auto& place : {folder / L"assets" / L"systems", folder / L".." / L"share" / L"launchme" / L"assets" / L"systems"}) {
+            std::ifstream input(place / file, std::ios::binary);
+            if (!input) continue;
+            bytes.assign(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
+            if (!bytes.empty()) break;
+        }
+        platform_badges_[key];
+        if (!bytes.empty()) setPlatformBadge(key, std::move(bytes));
+        found = platform_badges_.find(key); // Decoded at once: drawn this frame.
+    }
+    auto& cover = found->second;
+    if (!cover.bitmap && cover.loaded()) createBitmap(cover); // Picks up its decoded pixels.
+    if (!cover.bitmap) return false;
+    const auto size = cover.bitmap->GetSize();
+    if (size.width < 1 || size.height < 1) return false;
+    const float w = box.right - box.left, h = box.bottom - box.top;
+    const float scale = std::min(w / size.width, h / size.height);
+    const float dw = size.width * scale, dh = size.height * scale;
+    const float x = box.left + (w - dw) * 0.5f, y = box.top + (h - dh) * 0.5f;
+    target_->DrawBitmap(cover.bitmap.Get(), D2D1::RectF(x, y, x + dw, y + dh), alpha, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
+    return true;
 }
 
 // Type scale: heading (settings_heading_font_), row title (category_font_), value
@@ -212,6 +246,11 @@ void Renderer::drawSettings() {
         } else if (optionsTile(item)) {
             desktopBrand("retroarch", text_left + 18, y, 34, gray(0.9f)); // Emulacja among the platforms.
             text_left += 60;
+        } else if (!item.logo.empty()) {
+            // Emulacja's systems: the console's logo in a fixed-width column (RetroArch's mark while it loads).
+            if (!drawSystemLogo(item.logo, D2D1::RectF(text_left, y - 17, text_left + 124, y + 17), 0.92f))
+                desktopBrand("retroarch", text_left + 62, y, 34, gray(0.9f));
+            text_left += 144;
         }
         const int size_steps = sizeSteps(item.id);
         const bool stepped_size = size_steps > 1;

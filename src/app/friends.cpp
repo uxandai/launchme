@@ -240,6 +240,7 @@ void Launcher::closeFriends() {
     dashboardEdit(false);
     if (plugin_command_pending_) { ++plugin_command_generation_; plugin_command_pending_ = false; }
     friends_open_ = false;
+    friends_docked_ = false;
     friends_retry_at_ = {};
     friends_token_->store(++friends_generation_);
     if (!hud_polling_) stopDashboardPoll(); // Pinned temperatures keep their reader.
@@ -260,6 +261,7 @@ void Launcher::friendsBack() {
     }
     if (!friends_list_) { closeFriends(); return; }
     if (friend_chat_.open) { closeFriendChat(); audio_.navigate(); return; } // The conversation: the list again.
+    if (friendsDocked()) { closeFriends(); audio_.navigate(); return; } // The Znajomi page: the library again.
     friends_list_ = false;
     friends_back_ = false;
     clock_check_at_ = 0; // The clock may have changed while the list covered it.
@@ -276,7 +278,7 @@ void Launcher::scrollFriends(int amount) {
         invalidateGameOverlay(); InvalidateRect(hwnd_, nullptr, FALSE); return;
     }
     const int total = static_cast<int>(friends_layout::bottom(friends_.friends));
-    const int limit = std::max(0, total - static_cast<int>(drawerViewport().height) + 12);
+    const int limit = std::max(0, total - static_cast<int>(friendsFrame().height) + 12);
     friends_scroll_ = std::clamp(friends_scroll_ + amount * 70, 0, limit);
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
@@ -305,7 +307,7 @@ void Launcher::friendsMove(int amount) {
                                     0, static_cast<int>(friends_.friends.size()) - 1));
     if (before == friends_cursor_) { navigationBoundary(); return; }
     const float top = friends_layout::rowTop(friends_.friends, friends_cursor_);
-    const float height = drawerViewport().height;
+    const float height = friendsFrame().height;
     if (top < 104 + friends_scroll_) friends_scroll_ = std::max(0, static_cast<int>(top - 108));
     if (top + friends_layout::row_height - 5 > height - 12 + friends_scroll_)
         friends_scroll_ = static_cast<int>(top + friends_layout::row_height + 7 - height);
@@ -420,5 +422,6 @@ void Launcher::openDiscord() {
 
 bool Launcher::overFriends(float mouse_x) const {
     const auto view = renderer_.viewport();
+    if (friendsDocked()) return mouse_x >= desktopDock().left * desktopScale(); // The page beside the sidebar.
     return mouse_x / view.scale >= view.width - friends_layout::drawer_width - 10;
 }

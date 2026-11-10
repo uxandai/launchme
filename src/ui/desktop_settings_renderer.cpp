@@ -274,6 +274,11 @@ void Renderer::drawDesktopSettings() {
         } else if (settings_ui::optionsTile(item)) {
             desktopBrand("retroarch", text_left + 14, cy, 24, gray(0.9f));
             text_left += 40;
+        } else if (!item.logo.empty()) {
+            // Emulacja's systems: the console's logo in a fixed-width column (RetroArch's mark while it loads).
+            if (!drawSystemLogo(item.logo, D2D1::RectF(text_left, cy - 12, text_left + 88, cy + 12), 0.92f))
+                desktopBrand("retroarch", text_left + 44, cy, 24, gray(0.9f));
+            text_left += 104;
         }
         // The text ends before the row's controls (and its badge).
         const float controls_left = L.controlsLeft(item, i, s);

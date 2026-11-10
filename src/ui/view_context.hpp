@@ -517,6 +517,11 @@ struct ViewContext {
     bool volume_muted = false;
     const FriendsResult* friends = nullptr;
     float friends_progress = 0;
+    // The desktop window's Znajomi page: the list and the conversation in the library's place
+    // (desktop-viewport units), instead of the drawer.
+    bool friends_docked = false;
+    bool friends_chat_here = false; // Aurelia: the conversation opens in Launchme (else the Steam client).
+    float friends_dock_left = 0, friends_dock_top = 0, friends_dock_right = 0, friends_dock_bottom = 0;
     int friends_scroll = 0;
     size_t friends_cursor = 0;
     bool friends_loading = false;

@@ -84,11 +84,10 @@ std::vector<desktop_ui::Tool> Launcher::desktopTools() const {
     return tools;
 }
 
-// What the "…" menu lists: Widżety (the drawer: the profile, friends, sensors, plugins), Glance, Tarot.
-// Znajomi, Profil, Pobierania, Ustawienia and Sklep are the sidebar's, under Ulubione.
+// What the "…" menu lists: Widżety (the drawer: the profile, friends, sensors, plugins), Tarot.
+// Znajomi, Profil, Pobierania, Ustawienia, Sklep and Glance are the sidebar's, under Ulubione.
 std::vector<desktop_ui::Tool> Launcher::desktopMoreTools() const {
     std::vector<Tool> tools{Tool::friends};
-    if (settings_.glance) tools.push_back(Tool::glance);
     if (settings_.tarot) tools.push_back(Tool::tarot);
     return tools;
 }
@@ -133,6 +132,7 @@ void Launcher::buildDesktopSidebar() {
         add(EntryKind::downloads, Group::library, "downloads", tr(L"Pobierania"), moving, glyph::download).counted = moving > 0;
         add(EntryKind::settings, Group::library, "settings", tr(L"Ustawienia"), 0, glyph::settings).counted = false;
         add(EntryKind::store, Group::library, "store", tr(L"Sklep"), 0, glyph::shop).counted = false;
+        if (settings_.glance) add(EntryKind::glance, Group::library, "glance", L"Glance", 0, glyph::info).counted = false; // News and releases.
     }
     for (size_t i = 0; i < desktop_recent_games_.size(); ++i) {
         const auto& game = desktop_recent_games_[i];
@@ -241,6 +241,7 @@ std::vector<Game> Launcher::desktopSource() const {
     std::vector<Game> games;
     switch (kind) {
     case EntryKind::all: case EntryKind::friends: case EntryKind::profile: case EntryKind::downloads: case EntryKind::settings: case EntryKind::store:
+    case EntryKind::glance:
     case EntryKind::game: return grouped_library_;
     case EntryKind::favorites: return desktopFavoriteGames();
     case EntryKind::hidden:
@@ -764,13 +765,15 @@ void Launcher::desktopChromeView(desktop_ui::View& view) {
 }
 
 // The highlighted entry of the sidebar: Profil, Pobierania, Ustawienia or Sklep while their page shows
-// (none over the other pages: a game's Szczegóły, Zmień grafikę, Glance), else the section.
+// (Glance too; none over the other pages: a game's Szczegóły, Zmień grafikę), else the section.
 int Launcher::desktopActiveEntry() const {
     if (desktop_mode_ && profile_.open) return desktopEntryIndex("profile");
+    if (friendsDocked()) return desktopEntryIndex("friends");
     if (desktopPageDocked()) {
         if (screen_ == ScreenMode::downloads) return desktopEntryIndex("downloads");
         if (screen_ == ScreenMode::settings) return desktopEntryIndex("settings");
         if (screen_ == ScreenMode::store || desktopStorePage()) return desktopEntryIndex("store");
+        if (screen_ == ScreenMode::glance) return desktopEntryIndex("glance");
         return -1;
     }
     const int active = desktopEntryIndex(desktop_section_);

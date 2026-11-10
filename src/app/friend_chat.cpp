@@ -123,9 +123,7 @@ void Launcher::friendChatCharacter(wchar_t c) {
 
 void Launcher::friendChatScroll(float amount) {
     auto& s = friend_chat_; if (!s.open) return;
-    const auto view = drawerViewport();
-    const friend_chat::Layout layout{view.width - friend_chat::Layout::width, view.height};
-    const auto log = layout.log();
+    const auto log = friendsFrame().chat.log();
     const float maximum = std::max(0.0f, s.content - (log.bottom - log.top));
     s.scroll = std::clamp(s.scroll + amount, 0.0f, maximum);
     s.follow = s.scroll >= maximum - 1;
@@ -171,8 +169,8 @@ void Launcher::friendChatKey(WPARAM key, bool repeated) {
 
 void Launcher::friendChatClick(float x, float y) {
     auto& s = friend_chat_; if (!friendChatOpen()) return;
-    const auto view = drawerViewport();
-    const friend_chat::Layout layout{0, view.height};
+    auto layout = friendsFrame().chat; // x, y relative to the chat's left edge.
+    layout.left = 0;
     switch (layout.hit(x, y)) {
     case 1: closeFriendChat(); audio_.navigate(); return;
     case 2: s.back_focus = false; if (!desktop_mode_ && pad_input_ && !gameOverlayOpen()) openKeyboard(); break;

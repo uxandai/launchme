@@ -98,6 +98,11 @@ int LauncherUiTest::emulationSettings(HWND window) {
     // RetroArch without snes9x_libretro: the system says the core is missing.
     if (snes->value != L"Brak rdzenia" || snes->description.find(L"brak rdzenia snes9x_libretro") == std::wstring::npos) return 9955;
     if (rowOf(Id::emulation_folder)->description.find(roms.wstring()) == std::wstring::npos) return 9956;
+    // Each system its console's logo (assets/systems); a folder without one RetroArch's.
+    if (ps2->logo != L"ps2.png" || snes->logo != L"snes.png" || vita->logo != L"psvita.png") return 19976;
+    if (system_logos::file(L"genesis", L"Mega Drive") != L"genesis.png" || system_logos::file(L"megadrivejp", L"Mega Drive") != L"megadrive.png" ||
+        system_logos::file(L"PSX", L"PS1") != L"psx.png" || system_logos::file(L"xyz", L"Retro") != L"retroarch.png" ||
+        system_logos::file(L"fbneo", L"Arcade") != L"fbneo.png" || system_logos::file(L"mame", L"Arcade") != L"mame.png") return 19977;
     settle();
     if (!capture(L"emulation-page.png")) return 9957;
     if (!select(Id::emulation_system, "snes")) return 9957; // Down to the systems.

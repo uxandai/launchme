@@ -732,6 +732,18 @@ public:
     void friendsAccept();         // A/Enter/Space: activate the tile or chat with the friend.
     void friendsChat();
     bool overFriends(float mouse_x) const;
+    // Where the friends list and the conversation are: the drawer at the right edge, or the desktop
+    // window's Znajomi page in the library's place (origin: the page's corner; list at 0, chat beside).
+    struct FriendsFrame {
+        bool docked = false;
+        float origin_x = 0, origin_y = 0, height = 900, list_left = 0;
+        friend_chat::Layout chat;
+    };
+    FriendsFrame friendsFrame() const;
+    // The pointer in the friends layer's own units: the docked page's (origin at its corner) or the drawer's.
+    std::pair<float, float> friendsPoint(float mouse_x, float mouse_y) const;
+    bool friendsDocked() const; // The Znajomi page (desktop window, from the sidebar) rather than the drawer.
+    bool friends_docked_ = false;
     void enterDown(bool repeated);
     void enterUp();
     void cancelEnterHold();

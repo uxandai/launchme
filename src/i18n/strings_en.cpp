@@ -2959,6 +2959,9 @@ constexpr Entry entries[] = {
     {L"Pobierz go w RetroArch (Główne menu → Aktualizacje online → Pobieranie rdzeni).",
      L"Download it in RetroArch (Main Menu → Online Updater → Core Downloader)."},
     {L"Launcher i komputer", L"The launcher and the PC"},
+    {L"Wybierz znajomego, aby porozmawiać", L"Choose a friend to chat with"},
+    {L"Wybierz znajomego, aby otworzyć czat w kliencie Steam", L"Choose a friend to open the chat in the Steam client"},
+    {L"Czat w Launchme działa z Aurelią: Ustawienia → Biblioteka → Steam.", L"Chat in launchme works with Aurelia: Settings → Library → Steam."},
     // Entries of extras built only on this machine (local/i18n), when present.
 #if __has_include("strings_en_local.inc")
 #include "strings_en_local.inc"

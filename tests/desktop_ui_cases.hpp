@@ -343,6 +343,51 @@ int LauncherUiTest::desktop(HWND window) {
         if (!app.friendsOpen() || !capture(L"desktop-theme-widgets.png")) return 7686;
         app.toggleFriendsDrawer(); app.friends_progress_ = 0; settle();
         if (app.friendsOpen()) return 7686;
+        // Znajomi in the sidebar: a page in the library's place (as Ustawienia), its entry marked active.
+        app.desktopOpenFriends();
+        app.friends_progress_ = 1;
+        if (!app.friendsDocked() || app.desktopActiveEntry() != app.desktopEntryIndex("friends") || !app.friendsFrame().docked) return 27681;
+        settle();
+        if (!capture(L"desktop-friends-page.png")) return 27682;
+        {
+            // A conversation beside the list: no Back of its own, the field on the page's bottom edge.
+            app.friends_loading_ = false;
+            app.friends_.error.clear();
+            app.friends_.friends = {SteamFriend{7, L"Luna", L"Hades II", L"", 1}, SteamFriend{8, L"Kuba", L"", L"", 1}};
+            app.friend_chat_ = {};
+            app.friend_chat_.open = true; app.friend_chat_.id = 7; app.friend_chat_.name = L"Luna"; app.friend_chat_.presence = L"Hades II";
+            app.friend_chat_.messages = {{1, false, L"Grasz dziś?"}, {2, true, L"Za godzinę, kończę pracę."}};
+            const auto frame = app.friendsFrame();
+            const auto field = frame.chat.field();
+            if (!frame.chat.page || field.bottom != frame.height - friend_chat::Layout::margin || frame.chat.hit(frame.chat.back().left + 4, frame.chat.back().top + 4) == 1)
+                return 27688;
+            settle();
+            if (!capture(L"desktop-friends-chat.png")) return 27689;
+            app.friend_chat_ = {};
+        }
+        app.back();
+        if (app.friendsOpen() || app.friendsDocked()) return 27683;
+        app.friends_progress_ = 0; settle();
+        // Glance (on): its entry right under Sklep.
+        {
+            const bool glance = app.settings_.glance;
+            app.settings_.glance = true; app.buildDesktopSidebar();
+            const int store = app.desktopEntryIndex("store"), glance_entry = app.desktopEntryIndex("glance");
+            if (store < 0 || glance_entry != store + 1) return 27684;
+            app.settings_.glance = false; app.buildDesktopSidebar();
+            if (app.desktopEntryIndex("glance") >= 0) return 27685;
+            // Picked: Glance opens, its entry active; the section pills keep their whole names.
+            app.settings_.glance = true; app.buildDesktopSidebar();
+            const auto get = app.glance_get_;
+            app.glance_get_ = [](const std::wstring&, const auto&, size_t) { return HttpResponse{}; };
+            app.desktopPickEntry(app.desktop_entries_[static_cast<size_t>(app.desktopEntryIndex("glance"))]);
+            if (!app.glanceOpen() || app.desktopActiveEntry() != app.desktopEntryIndex("glance")) return 27686;
+            settle();
+            if (!capture(L"desktop-glance.png")) return 27687;
+            app.back(); settle();
+            app.glance_get_ = get;
+            app.settings_.glance = glance; app.buildDesktopSidebar();
+        }
         app.settings_.desktop_theme = 3; app.settings_.cover_accent_rgb = 0;
         app.renderer_.setDesktopTheme(app.settings_.desktop_theme);
         app.renderer_.setCoverAccent(0);

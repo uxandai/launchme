@@ -74,7 +74,7 @@ void Launcher::animateMenuFocus(float dt, bool& needs_paint) {
             const auto tile = dashboardLayout().tile(dashboard_tile_, 0, dashboard_scroll_);
             glideBox(drawer_glide_, true, 0, tile.left, tile.top, tile.right, tile.bottom);
         } else if (friends_back_ || friends_.friends.empty() || friends_cursor_ >= friends_.friends.size()) {
-            const auto back = listBack(0);
+            const auto back = listBack(0, friendsDocked());
             glideBox(drawer_glide_, true, 1, back.left, back.top, back.right, back.bottom);
         } else {
             const float top = rowTop(friends_.friends, friends_cursor_) - friends_scroll_glide_.value;

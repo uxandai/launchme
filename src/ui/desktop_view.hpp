@@ -48,10 +48,10 @@ inline bool settingsGroup(Group group) { return group == Group::library || group
 // friends, profile: Znajomi (the drawer's list) and Profil (a page in the library's place); game: a
 // recent game's shortcut. These three are not sections: a click acts, the grid stays as it is.
 // friends … store: Biblioteka's entries that act (a drawer, a page in the library's place) instead of listing games.
-enum class EntryKind { all, favorites, hidden, friends, profile, downloads, settings, store, source, console, collection, studio, game };
+enum class EntryKind { all, favorites, hidden, friends, profile, downloads, settings, store, glance, source, console, collection, studio, game };
 inline bool actionEntry(EntryKind kind) {
     return kind == EntryKind::friends || kind == EntryKind::profile || kind == EntryKind::downloads || kind == EntryKind::settings ||
-           kind == EntryKind::store || kind == EntryKind::game;
+           kind == EntryKind::store || kind == EntryKind::glance || kind == EntryKind::game;
 }
 struct Entry {
     EntryKind kind = EntryKind::all;

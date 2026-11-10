@@ -602,7 +602,9 @@ private:
     const ControllerArt* controllerArt(devices::Picture picture);
     void drawFriends();
     void drawFriendsList(float x);
-    void drawFriendChat(float x); // A friend's conversation in the drawer (friend_chat_view.hpp).
+    void drawFriendChat(float x, float width = 440.0f); // A friend's conversation (friend_chat_view.hpp): the drawer's width or the page's.
+    void drawFriendsPage(float progress);
+    void pageBack(D2D1_RECT_F back, float focus, bool hovered); // Profil's Back, also the Znajomi page's. // The desktop window's Znajomi page in the library's place.
     // Drawer dashboard (src/ui/dashboard_renderer.cpp): clock header and tiles.
     void drawDashboard(float x);
     // focus_frame: draw the focused tile's own highlight (false while the gliding frame is drawn).
@@ -848,6 +850,9 @@ private:
     // A console's real case front (assets/cases), read on first use and kept with the platform badges
     // ("case:<file>"); null while it decodes or when the program has none.
     Cover* packageFrame(const package_look::Frame& frame);
+    // Emulacja's system logo (assets/systems/<file>, src/library/system_logos.hpp) fitted and centred in the box;
+    // false while it loads or when the program has none.
+    bool drawSystemLogo(const std::wstring& file, D2D1_RECT_F box, float alpha);
     // Półka's open case (src/ui/game_case_renderer.cpp, ViewContext::game_case) and its media
     // (src/ui/game_media_renderer.cpp; Coverflow's printed disc too).
     void drawGameCase();

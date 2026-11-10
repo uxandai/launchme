@@ -173,17 +173,22 @@ void Launcher::click(float mouse_x, float mouse_y, bool double_click) {
         if (!overFriends(mouse_x)) { closeFriends(); return; }
         // The first click already acted; its double-click must not open what appeared beneath.
         if (double_click) return;
-        const float drawer_left = view.width - friends_layout::drawer_width;
+        const auto frame = friendsFrame();
+        const float drawer_left = frame.list_left;
         if (plugin_drawer_active_) { pluginPageClick(x - drawer_left, y); return; }
         if (!friends_list_) {
             dashboardPointerDown(x, y);
             return;
         }
-        if (friend_chat_.open) { friendChatClick(x - drawer_left, y); return; } // The conversation's Back, field and Send.
-        if (friends_layout::listBack(drawer_left).contains(x, y)) { friendsBack(); return; }
-        if (y < 104) return; // Rows scrolled under the header are hidden.
-        const auto index = friends_layout::hit(friends_.friends, y + friends_scroll_);
-        if (index) { friends_cursor_ = *index; friendsChat(); }
+        // The Znajomi page: its own corner; the list stays beside the conversation.
+        const auto [px, py] = friendsPoint(mouse_x, mouse_y);
+        const bool in_chat = frame.docked ? px >= frame.chat.left : true;
+        if (friend_chat_.open && in_chat) { friendChatClick(px - frame.chat.left, py); return; } // The conversation's Back, field and Send.
+        if (frame.docked && in_chat) return;
+        if (friends_layout::listBack(drawer_left, frame.docked).contains(px, py)) { friendsBack(); return; }
+        if (py < 104) return; // Rows scrolled under the header are hidden.
+        const auto index = friends_layout::hit(friends_.friends, py + friends_scroll_);
+        if (index) { friends_cursor_ = *index; friends_back_ = false; friendsChat(); }
         return;
     }
     if (gridScreen(screen_) && gridBackHit(x, y)) { back(); return; }
@@ -415,9 +420,11 @@ bool Launcher::hoverButton(float mouse_x, float mouse_y) const {
                 tile == static_cast<int>(Tile::steam) || tile == static_cast<int>(Tile::discord) || tile == static_cast<int>(Tile::profile) ||
                 (tile >= plugins && tile < plugins + static_cast<int>(plugin_widgets_.size()));
         }
-        if (friend_chat_.open) return friend_chat::Layout{drawer_left, view.height}.hit(x, y) != 0;
-        return friends_layout::listBack(drawer_left).contains(x, y) ||
-               (y >= 104 && friends_layout::hit(friends_.friends, y + friends_scroll_).has_value());
+        const auto frame = friendsFrame();
+        const auto [px, py] = friendsPoint(mouse_x, mouse_y);
+        if (friend_chat_.open && (!frame.docked || px >= frame.chat.left)) return frame.chat.hit(px, py) != 0;
+        return friends_layout::listBack(frame.list_left, frame.docked).contains(px, py) ||
+               (py >= 104 && px < frame.list_left + friends_layout::drawer_width && friends_layout::hit(friends_.friends, py + friends_scroll_).has_value());
     }
     if (category_menu_open_ && psfiveActive()) {
         return renderer_.psfiveMoreMenu(categories_.size(), psfiveVisibleTabs()).hit(x, y, psfiveMenuScroll(), category_menu_progress_) >= 0;
@@ -529,6 +536,7 @@ void Launcher::mouseMove(float mouse_x, float mouse_y) {
             desktopMouseMove(mouse_x, mouse_y);
             return;
         }
+        if (friendsDocked() && desktopChromeMove(mouse_x, mouse_y)) return; // Znajomi: the sidebar's hover beside the page.
         if (desktopActive() && !(desktop_hover_ == desktop_ui::Hit{})) { desktop_hover_ = {}; InvalidateRect(hwnd_, nullptr, FALSE); }
         if (desktopSheet() && topModal() == Modal::none && !friends_open_ && desktop_menu_) { desktopMouseMove(mouse_x, mouse_y); return; } // Szczegóły' "…" menu.
         if (desktopSheet() && topModal() == Modal::none && !friends_open_) { desktopChromeMove(mouse_x, mouse_y); desktopSettingsMove(mouse_x, mouse_y); return; }
@@ -582,8 +590,9 @@ void Launcher::mouseMove(float mouse_x, float mouse_y) {
     if (fileBrowserOpen()) { const auto view = renderer_.viewport(); fileBrowserHover(mouse_x / view.scale, mouse_y / view.scale); return; }
     if (color_editor_.open) { if (color_editor_.dragging) colorEditorDrag(mouse_x / renderer_.viewport().scale); return; }
     if (friendChatOpen()) { // The conversation's Back, field and Send under the pointer.
-        const auto view = renderer_.viewport();
-        const int hover = friend_chat::Layout{view.width - friends_layout::drawer_width, view.height}.hit(mouse_x / view.scale, mouse_y / view.scale);
+        const auto frame = friendsFrame();
+        const auto [px, py] = friendsPoint(mouse_x, mouse_y);
+        const int hover = frame.chat.hit(px, py);
         if (friend_chat_.hover != hover) { friend_chat_.hover = hover; InvalidateRect(hwnd_, nullptr, FALSE); }
     }
     if (dashboard_press_source_ == 3) { const auto view = drawerViewport(); dashboardPointerMove(mouse_x / view.scale, mouse_y / view.scale); return; }

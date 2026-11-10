@@ -6,6 +6,7 @@
 #include "launcher.hpp"
 #include "../library/emulation_scan.hpp"
 #include "../library/emulators.hpp"
+#include "../library/system_logos.hpp"
 #include "../platform/file_dialog.hpp"
 #include "../platform/text_encoding.hpp"
 #include "../ui/file_browser_view.hpp"
@@ -264,6 +265,7 @@ void Launcher::emulationSettingsRows() {
                 !found ? std::wstring(tr(L"Brak emulatora")) : emulation_scan::coreMissing(rule, setup) ? std::wstring(tr(L"Brak rdzenia")) : emulatorName(found->id)};
         row.page = Page::emulation_system;
         row.key = text_encoding::utf8(rule.system);
+        row.logo = system_logos::file(rule.system, rule.platform);
         row.indent = indent;
         add(std::move(row));
     };

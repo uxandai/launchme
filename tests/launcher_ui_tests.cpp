@@ -1,6 +1,7 @@
 #include "../src/app/launcher.hpp"
 #include "../src/app/launcher_internal.hpp"
 #include "../src/library/screenscraper_config.hpp"
+#include "../src/library/system_logos.hpp"
 #include "../src/ui/game_details_layout.hpp"
 #include "../src/ui/context_menu.hpp"
 #include "../src/ui/exit_prompt.hpp"

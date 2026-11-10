@@ -139,7 +139,9 @@ void Renderer::drawDesktopGlance() {
     for (int tab = 0; tab < glance::section_count; ++tab) {
         const int section = glance_ui::sectionAt(tab);
         tab_labels[static_cast<size_t>(tab)] = glance_ui::title(section);
-        const float w = textAdvance(tab_labels[static_cast<size_t>(tab)], desktop_font_.Get()) + 28;
+        // Wide enough for the label in bold too (the active one): never cut ("Your ga…").
+        const auto& label = tab_labels[static_cast<size_t>(tab)];
+        const float w = std::ceil(std::max(textAdvance(label, desktop_font_.Get()), textAdvance(label, desktop_strong_font_.Get()))) + 32;
         tab_rects[static_cast<size_t>(tab)] = {tx, ty, tx + w, ty + 34};
         if (state->section == section) active_tab = tab;
         tx += w + 6;
@@ -159,7 +161,7 @@ void Renderer::drawDesktopGlance() {
         const SheetHit hit{Kind::nav, section};
         const bool active = state->section == section;
         if (!active && hover(hit) > 0) desktopFill(r, 17, gray(1, 0.05f));
-        textLine(label, r.left + 14, middle(r), r.right - r.left - 28, active ? desktop_strong_font_.Get() : desktop_font_.Get(), active ? palette::text() : gray(0.72f));
+        textLine(label, r.left + 14, middle(r), r.right - r.left - 24, active ? desktop_strong_font_.Get() : desktop_font_.Get(), active ? palette::text() : gray(0.72f));
         if (view.keyboard && state->focus == -1 && active) desktopFocusRing(r, 17);
         desktopHot(hit, r);
     }

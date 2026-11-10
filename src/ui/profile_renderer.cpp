@@ -91,6 +91,9 @@ void Renderer::drawProfile() {
     const auto* state = context_ ? context_->profile : nullptr;
     if (!state || state->alpha <= 0.003f) return;
     const float dock_w = context_->profile_dock_right - context_->profile_dock_left, dock_h = context_->profile_dock_bottom - context_->profile_dock_top;
+    // The desktop window without its place (another page took it while the profile fades): nothing,
+    // never a flash of the whole window.
+    if (desktop_style_ && (dock_w <= 0 || dock_h <= 0)) return;
     if (!context_->desktop || dock_w <= 0 || dock_h <= 0) { drawProfilePage(); return; }
     constexpr float compact = 0.86f;
     const auto saved = viewport_;

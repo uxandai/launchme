@@ -25,7 +25,7 @@ no HTML UI. English, Polish, Brazilian Portuguese and Spanish.
 
 - **Two faces**: TV mode (shelves, XMB, Flix, Metro, PSfive, snitch) and a desktop window with a sidebar, a game pane and dark colour themes.
 - **Every store**: local installs, GOG and Epic accounts, Amazon ([guide](docs/AMAZON_GAMES.md)), Xbox and Game Pass ([guide](docs/XBOX.md)), EA, Battle.net, Ubisoft, Prism Launcher.
-- **Emulation**: an EmuDeck / ES-DE ROM folder, about 30 systems, emulators found or chosen by hand.
+- **Emulation**: an EmuDeck / ES-DE ROM folder, about 30 systems with their logos, emulators found or chosen by hand.
 - **Your own games**: DRM-free folders and anything added by hand or dropped on the window.
 - **Artwork**: SteamGridDB and a dozen other sources, a variant browser and crop editor.
 - **Library**: grid, list, coverflow, game-case shelf and more; collections synced with Steam; Recently played.

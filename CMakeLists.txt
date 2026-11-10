@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(launchme VERSION 0.7.10 LANGUAGES C CXX)
+project(launchme VERSION 0.7.11 LANGUAGES C CXX)
 
 if(NOT WIN32)
     # Linux (highly experimental, docs/linux-port.md): the shared core, its tests and the launcher on SDL3 + Skia.
@@ -181,6 +181,14 @@ add_custom_target(launchme_platform_logos ALL
     DEPENDS ${LAUNCHME_PLATFORM_LOGOS} VERBATIM)
 add_dependencies(launchme launchme_platform_logos)
 install(FILES ${LAUNCHME_PLATFORM_LOGOS} DESTINATION assets/platforms COMPONENT Runtime)
+# Emulacja's system logos (src/artwork/platform_logo.cpp: systemLogoFile; ordovice/es-theme-logos, see README.txt).
+file(GLOB LAUNCHME_SYSTEM_LOGOS CONFIGURE_DEPENDS "${LAUNCHME_RES_DIR}/systems/*.png")
+add_custom_target(launchme_system_logos ALL
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets/systems"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${LAUNCHME_SYSTEM_LOGOS} "${LAUNCHME_RES_DIR}/systems/README.txt" "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets/systems/"
+    DEPENDS ${LAUNCHME_SYSTEM_LOGOS} VERBATIM)
+add_dependencies(launchme launchme_system_logos)
+install(FILES ${LAUNCHME_SYSTEM_LOGOS} res/systems/README.txt DESTINATION assets/systems COMPONENT Runtime)
 # Półka's case fronts (src/ui/package_look.hpp: frameOf; Twicethedad's Game Cases, see its LICENSE.txt).
 file(GLOB LAUNCHME_CASE_FRONTS CONFIGURE_DEPENDS "${LAUNCHME_RES_DIR}/cases/*.png")
 add_custom_target(launchme_case_fronts ALL
@@ -457,6 +465,7 @@ add_test(NAME low_memory_mode COMMAND launcher_ui_tests --low-memory)
     add_test(NAME home_options_flix_rail_tab_icons_favorites COMMAND launcher_ui_tests --home-options)
     add_test(NAME logo_rows_metro_pages_and_studio_tiles COMMAND launcher_ui_tests --studio-tiles)
     add_dependencies(launcher_ui_tests launchme_studios) # The logos beside the test, as beside the program.
+    add_dependencies(launcher_ui_tests launchme_system_logos) # Emulacja's system logos (settings captures).
     add_test(NAME launchme_updates_and_whats_new COMMAND launcher_ui_tests --updates)
     add_test(NAME tray_while_playing_and_background_crop COMMAND launcher_ui_tests --tray)
     add_test(NAME drm_free_artwork_crop_controls COMMAND launcher_ui_tests --drm-free)

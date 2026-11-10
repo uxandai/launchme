@@ -760,6 +760,13 @@ void Launcher::paint(bool overlay) {
             context.profile_dock_left = dock.left; context.profile_dock_top = dock.top;
             context.profile_dock_right = dock.right; context.profile_dock_bottom = dock.bottom;
         }
+        if (friendsDocked()) {
+            const auto dock = desktopDock();
+            context.friends_docked = true;
+            context.friends_chat_here = aurelia_active_;
+            context.friends_dock_left = dock.left; context.friends_dock_top = dock.top;
+            context.friends_dock_right = dock.right; context.friends_dock_bottom = dock.bottom;
+        }
     }
     if (sheet) {
         desktopSheetView(sheet_view);

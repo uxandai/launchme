@@ -13,6 +13,8 @@
 namespace friends_layout {
 // Right drawer: the dashboard (clock + tiles) and, inside it, the Steam friends list.
 constexpr float drawer_width = 440.0f;
+// The desktop window's Znajomi page: drawn at the window's scale times this, as the docked Profil.
+constexpr float docked_scale = 0.86f;
 constexpr float section_height = 44.0f;
 constexpr float row_height = 80.0f;
 constexpr float row_padding = 5.0f;
@@ -52,7 +54,10 @@ struct Rect {
 };
 
 // Back button left of the list title (same shape as the grid screens' back button).
-inline Rect listBack(float drawer_left) { return {drawer_left + 24, 38, drawer_left + 60, 74}; }
+// page: the desktop window's Znajomi page, whose Back is the docked Profil's (a 48 px square, the title beside it).
+inline Rect listBack(float drawer_left, bool page = false) {
+    return page ? Rect{drawer_left + 24, 28, drawer_left + 72, 76} : Rect{drawer_left + 24, 38, drawer_left + 60, 74};
+}
 
 // Dashboard: clock header, then a 2-column grid of tiles in Tile order.
 namespace dashboard {

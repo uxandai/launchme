@@ -28,6 +28,12 @@ void Launcher::desktopPickEntry(const desktop_ui::Entry& entry, bool double_clic
         if (desktopSheet()) desktopLeavePage();
         openProfile();
         return;
+    case EntryKind::glance: // Glance (when on): its page in the library's place, under Sklep.
+        if (glanceOpen()) return;
+        if (profile_.open) closeProfile();
+        if (desktopSheet()) desktopLeavePage();
+        openGlance();
+        return;
     case EntryKind::downloads: case EntryKind::settings: case EntryKind::store: { // Pages in the library's place.
         const bool here = (entry.kind == EntryKind::downloads && screen_ == ScreenMode::downloads) ||
                           (entry.kind == EntryKind::settings && screen_ == ScreenMode::settings) ||
@@ -68,11 +74,48 @@ void Launcher::desktopRevealGame(const std::string& key) {
 }
 
 // Znajomi: the drawer straight on its list of friends.
+// Znajomi: a page in the library's place, as Pobierania and Ustawienia: the list on the left, the
+// conversation beside it (the drawer's state, drawn and hit docked: friendsFrame).
 void Launcher::desktopOpenFriends() {
     if (profile_.open) closeProfile();
     if (desktopSheet()) desktopLeavePage();
+    friends_docked_ = true;
     if (!friends_open_) toggleFriendsDrawer();
+    if (friends_open_ && plugin_drawer_active_) { plugin_drawer_active_ = false; renderer_.resetPluginThumbnails(0); }
     if (friends_open_ && !friends_list_) dashboardActivate(static_cast<int>(friends_layout::dashboard::Tile::steam));
+    if (!friends_open_) friends_docked_ = false;
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
+bool Launcher::friendsDocked() const { return friends_docked_ && friends_open_ && friends_list_ && profileDocked(); }
+
+Launcher::FriendsFrame Launcher::friendsFrame() const {
+    FriendsFrame frame;
+    if (friendsDocked()) {
+        // The page's own units (friends_layout::docked_scale), its origin at the dock's corner.
+        const auto dock = desktopDock();
+        frame.docked = true;
+        frame.height = (dock.bottom - dock.top) / friends_layout::docked_scale;
+        frame.list_left = 0;
+        frame.chat = {friends_layout::drawer_width, frame.height,
+                      std::max(360.0f, (dock.right - dock.left) / friends_layout::docked_scale - friends_layout::drawer_width), true};
+        return frame;
+    }
+    const auto view = drawerViewport();
+    frame.height = view.height;
+    frame.list_left = view.width - friends_layout::drawer_width;
+    frame.chat = {frame.list_left, view.height};
+    return frame;
+}
+
+std::pair<float, float> Launcher::friendsPoint(float mouse_x, float mouse_y) const {
+    if (friendsDocked()) {
+        const float scale = desktopScale(), page = scale * friends_layout::docked_scale;
+        const auto dock = desktopDock();
+        return {(mouse_x - dock.left * scale) / page, (mouse_y - dock.top * scale) / page};
+    }
+    const auto view = renderer_.viewport();
+    return {mouse_x / view.scale, mouse_y / view.scale};
 }
 
 // A heading's cog: Biblioteka's category (at its platforms for Platformy), Emulacja's for Emulacja.
@@ -170,12 +213,13 @@ void Launcher::desktopLeavePage() {
 bool Launcher::desktopChromeClick(float mouse_x, float mouse_y, bool double_click) {
     const bool settings = desktopPageDocked() && topModal() == Modal::none && !friends_open_ && !menu_open_ && !color_editor_.open;
     const bool profile = profileDocked() && profile_.open && topModal() == Modal::profile;
-    if (!settings && !profile) return false;
+    const bool friends = friendsDocked() && topModal() == Modal::none;
+    if (!settings && !profile && !friends) return false;
     const float scale = desktopScale(), x = mouse_x / scale, y = mouse_y / scale;
     const auto L = desktopLayout();
     const auto hit = desktopHit(x, y);
     if (y < title_h) {
-        if (profile && (hit.target == Target::minimize || hit.target == Target::maximize || hit.target == Target::close)) {
+        if ((profile || friends) && (hit.target == Target::minimize || hit.target == Target::maximize || hit.target == Target::close)) {
             if (!double_click) desktopActivate(hit);
             return true;
         }
@@ -190,6 +234,7 @@ bool Launcher::desktopChromeClick(float mouse_x, float mouse_y, bool double_clic
     }
     if (row && rows[static_cast<size_t>(hit.index)].entry >= 0 && rows[static_cast<size_t>(hit.index)].entry == desktopActiveEntry()) return true; // Already there.
     if (settings) desktopLeavePage();
+    else if (friends) closeFriends();
     else closeProfile();
     if (!desktopActive()) return true;
     desktop_hover_ = {};
@@ -201,7 +246,8 @@ bool Launcher::desktopChromeClick(float mouse_x, float mouse_y, bool double_clic
 bool Launcher::desktopChromeMove(float mouse_x, float mouse_y) {
     const bool settings = desktopPageDocked() && topModal() == Modal::none && !friends_open_;
     const bool profile = profileDocked() && profile_.open && topModal() == Modal::profile;
-    if (!settings && !profile) return false;
+    const bool friends = friendsDocked() && topModal() == Modal::none;
+    if (!settings && !profile && !friends) return false;
     const float scale = desktopScale(), x = mouse_x / scale, y = mouse_y / scale;
     const bool chrome = y < title_h || x < desktopLayout().sidebarRight();
     const auto hit = chrome ? desktopHit(x, y) : desktop_ui::Hit{};
