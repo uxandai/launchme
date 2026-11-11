@@ -144,6 +144,11 @@ inline std::wstring artworkTitle(const Game& game) {
 // Games launched straight from a file on disk (user-added or found in DRM-free folders):
 // not installed means the file is missing, never "install".
 inline bool localFileGame(GameSource source) { return source == GameSource::custom || source == GameSource::drmfree; }
+// A tile of the home screen's Launchery row (src/app/store_hub.cpp): an installed store client or front end,
+// not a game of the library. It opens its program; it has no editor, no removal and no play history.
+inline bool launcherTile(const Game& game) { return game.source == GameSource::custom && game.source_id.starts_with("launcher:"); }
+// Tiles that show a mark fitted inside a coloured square instead of a cover: consoles, PC platforms, launchers.
+inline bool logoTile(const Game& game) { return game.kind == GameKind::platform || game.kind == GameKind::pc_platform || launcherTile(game); }
 // The PC platform a game is listed under: games added by hand are DRM-free games too (one tile, library,
 // tab and desktop section; the scanned ones and those added by hand keep their own lists and editors).
 inline GameSource platformSource(GameSource source) { return source == GameSource::custom ? GameSource::drmfree : source; }
@@ -217,7 +222,7 @@ inline const wchar_t* primaryActionLabel(const Game& game) {
 
 inline std::wstring activePlatformName(const Game& game) {
     if (!game.version_group.empty()) return {};
-    if (uiTile(game)) return {};
+    if (uiTile(game) || launcherTile(game)) return {}; // A launcher is of no store.
     if (game.kind == GameKind::platform || game.kind == GameKind::nonsteam) return game.platform;
     return sourceName(platformSource(game.source));
 }

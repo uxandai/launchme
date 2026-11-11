@@ -508,6 +508,7 @@ void Launcher::tick() {
     }
     if (screen_ == ScreenMode::details && !details_loading_ && GetTickCount64() >= next_install_poll_) requestDetails();
     pollPluginPageRefresh();
+    pollStoreHub();
     pollPluginDownloads();
     aureliaPoll(GetTickCount64());
     pollDownloadArt();

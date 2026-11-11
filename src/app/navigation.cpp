@@ -28,6 +28,7 @@ void Launcher::navigate(int amount, bool edge_menu) {
         if (edge_menu && amount > 0) { closeCategoryMenu(); audio_.navigate(); }
         return; // Dismiss without selecting the highlighted category or moving a game card.
     }
+    if (screen_ == ScreenMode::plugin_page && plugin_page_.tiled) { pluginPageSide(amount); return; }
     if (screen_ == ScreenMode::plugin_page) { if (amount < 0) { plugin_page_.focus = -1; InvalidateRect(hwnd_, nullptr, FALSE); } else if (plugin_page_.focus < 0) pluginPageMove(1); return; }
     if (downloadsOpen()) { // Left: Back; Right from Back: the rows.
         if (amount < 0 && !downloads_state_.back) { downloads_state_.back = true; audio_.navigate(); InvalidateRect(hwnd_, nullptr, FALSE); }

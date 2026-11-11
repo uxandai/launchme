@@ -1009,6 +1009,9 @@ void Launcher::buildSettingsRows() {
         add({Id::tarot, Control::toggle, L"Tarot",
             tr(L"Kilka pytań w kartach i do trzech gier na koniec: z Twojej biblioteki albo do kupienia na Steam. T, przycisk View/Select albo ikona w oknie desktopowym."),
             {}, settings_.tarot});
+        add({Id::store_hub, Control::toggle, tr(L"Launchery i promocje w Sklepach"),
+            tr(L"Dwie zakładki w Sklepach: instalacja Steama, GOG Galaxy, Epic, RetroArch i innych jednym kliknięciem oraz darmowe gry i przeceny ze sklepów."),
+            {}, settings_.store_hub});
         pageRow(Page::screensaver, tr(L"Wygaszacz ekranu"), tr(L"Grafiki gier, gdy launcher jest bezczynny: styl, czas i podgląd."),
                 settings_.screensaver ? tr(L"Po ") + std::to_wstring(screensaver::normalizedMinutes(settings_.screensaver_minutes)) + tr(L" min") :
                                         std::wstring(tr(L"Wyłączony")));

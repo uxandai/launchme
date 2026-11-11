@@ -105,6 +105,12 @@ struct AppSettings {
     // Tarot (src/app/tarot.cpp): a short card reading that recommends up to three games, from the
     // library or to buy on Steam (T / View, the desktop window's top bar). Off by default.
     bool tarot = false;
+    // The Stores' built-in tabs (src/app/store_hub.cpp): Launchery (install a store client or a front
+    // end with one click) and Promocje (free games and discounts), before the store plugins' own.
+    bool store_hub = true;
+    // The home screen's Launchery row: the installed launchers of that tab as tiles. Off until the player
+    // turns it on (Biblioteka → Ekran główny i kolekcje), like every other row there.
+    bool show_launchers = false;
     // Companion (src/app/companion.cpp): an animated anime girl under Glance and her chat
     // (C / left trigger). Answers come from a Foundry-proxied Gemini model; offline she speaks
     // canned lines. The token is stored apart (DPAPI, companion_token.dat).
@@ -453,7 +459,10 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
 
 std::filesystem::path userConfigDirectory();
 // Environment variables take precedence over files in %LOCALAPPDATA%\Launchme.
+// The key files are encrypted for this user (protected_file.hpp); a plain one-line file (written by hand,
+// or by 0.7.12 and older) is read and then encrypted in place.
 std::wstring userSecret(const wchar_t* environment, const wchar_t* filename);
-// Settings → Library: writes the key file (one line); empty input removes it.
+std::wstring userSecretFile(const std::filesystem::path& file);
+// Settings → Library: writes the key file, encrypted; empty input removes it.
 bool saveUserSecret(const wchar_t* filename, std::wstring_view value);
 bool storedUserSecret(const wchar_t* filename);

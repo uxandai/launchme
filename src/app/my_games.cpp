@@ -284,6 +284,7 @@ void Launcher::customEditorIdentified(const std::string& key) {
 // through steam.exe -applaunch, see finishLaunch). Other stores start through their clients'
 // links, which take no options.
 bool Launcher::launchEditable(const Game& game) const {
+    if (launcherTile(game)) return false;
     if (game.source == GameSource::custom) return !game.source_id.empty(); // A user-added game, PC or emulated (not one from the ROM folder).
     if (game.source == GameSource::drmfree)
         return std::any_of(drm_catalog_.games.begin(), drm_catalog_.games.end(), [&](const auto& entry) { return entry.id == game.source_id; });
@@ -847,7 +848,7 @@ std::string Launcher::addCustomGame(custom_games::Entry entry) {
 // "Usuń z biblioteki" in the game's menu (Tryb TV, its Details' "…" and the desktop window): only the
 // entry goes, never the game's file; while it runs or is suspended it stays.
 bool Launcher::canRemoveFromLibrary(const Game& game) const {
-    return game.source == GameSource::custom && !game.source_id.empty() &&
+    return game.source == GameSource::custom && !game.source_id.empty() && !launcherTile(game) &&
            std::any_of(custom_games_.begin(), custom_games_.end(), [&](const auto& entry) { return entry.id == game.source_id; });
 }
 

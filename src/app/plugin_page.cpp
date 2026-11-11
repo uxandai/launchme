@@ -17,16 +17,15 @@ json::Value Launcher::pluginLibrary() const {
 // refreshed: the answer to F5 or the page's own periodic refresh. The same page (owner, place
 // and title) then keeps its focus, scroll and the text being typed into its search field.
 void Launcher::openPluginPage(const std::string& owner, const json::Value& input, bool drawer, bool refreshed) {
-    auto page = plugin_ui::parse(input, owner);
+    showPluginPage(owner, plugin_ui::parse(input, owner), drawer, refreshed);
+}
+void Launcher::showPluginPage(const std::string& owner, plugin_ui::Page page, bool drawer, bool refreshed) {
     // A page opened from outside the plugin pages through the Stores entry belongs to the Stores tabs; one reached
     // from inside them (a tab, a row, back) stays theirs.
     if (!drawer) {
         if (screen_ != ScreenMode::plugin_page && screen_ != ScreenMode::store) stores_open_ = stores_opening_;
         stores_opening_ = false;
-        if (stores_open_ && !owner.empty() && (store_tab_ < 0 || store_tab_ >= static_cast<int>(plugin_menu_.size()) || plugin_menu_[static_cast<size_t>(store_tab_)].plugin != owner)) {
-            const auto found = std::find_if(plugin_menu_.begin(), plugin_menu_.end(), [&](const auto& entry) { return entry.plugin == owner; });
-            store_tab_ = found == plugin_menu_.end() ? 0 : static_cast<int>(found - plugin_menu_.begin());
-        }
+        if (stores_open_ && !owner.empty() && storeTabOf(owner) != storeTabIndex()) store_tab_ = std::max(0, storeTabOf(owner));
     }
     if (drawer && !page.rows.empty() && page.rows.front().input) {
         // The drawer has no text entry: its pages list results only.
@@ -72,6 +71,7 @@ void Launcher::openPluginPage(const std::string& owner, const json::Value& input
     if (!keep) { dashboardEdit(false); closeQuick(); dismissMenu(); }
     plugin_page_ = std::move(page); plugin_page_games_ = std::move(games);
     plugin_drawer_active_ = drawer;
+    arrangeStoreHub(); // A grid page: its tiles placed for the room it has.
     plugin_page_refresh_at_ = plugin_page_.refresh ? GetTickCount64() + plugin_page_.refresh * 1000ull : 0;
     {
         const auto view = drawerViewport();
@@ -94,6 +94,15 @@ void Launcher::openPluginPage(const std::string& owner, const json::Value& input
 // The Stores entry of the quick bar and the desktop's toolbar: the first store plugin's page (the last tab
 // used), under the tabs of all of them; without a store plugin, a page saying so.
 void Launcher::openStores() {
+    if (storeHubTabs()) {
+        store_tab_ = std::clamp(store_tab_, 0, storeTabCount() - 1);
+        if (store_tab_ < storeHubTabs()) { // A built-in tab needs no plugin and never waits for one.
+            stores_opening_ = true;
+            openStoreHub(store_tab_);
+            stores_open_ = true;
+            return;
+        }
+    }
     if (plugins_busy_ || plugin_command_pending_) return;
     if (plugin_menu_.empty()) {
         using namespace plugins::wire;
@@ -111,7 +120,7 @@ void Launcher::openStores() {
         stores_open_ = true;
         return;
     }
-    store_tab_ = std::clamp(store_tab_, 0, static_cast<int>(plugin_menu_.size()) - 1);
+    store_tab_ = std::clamp(store_tab_, storeHubTabs(), storeTabCount() - 1);
     // The screen opens at once, tabs and all, with a placeholder; the plugin's page replaces it when it answers.
     if (screen_ != ScreenMode::plugin_page || !stores_open_) {
         using namespace plugins::wire;
@@ -127,25 +136,25 @@ void Launcher::openStores() {
         openPluginPage({}, page, false, false);
         stores_open_ = true;
     }
-    pluginAction(plugin_menu_[static_cast<size_t>(store_tab_)]);
+    pluginAction(plugin_menu_[static_cast<size_t>(store_tab_ - storeHubTabs())]);
 }
 // On a store plugin's own page or on the catalog screen (a plugin that opens its catalog), as long as the
 // Stores entry brought us there.
 bool Launcher::storeTabsShown() const {
-    if (!stores_open_ || friends_open_ || plugin_menu_.empty()) return false;
+    if (!stores_open_ || friends_open_ || !storeTabCount()) return false;
     if (screen_ == ScreenMode::store) return true;
     return screen_ == ScreenMode::plugin_page && !plugin_drawer_active_ && !plugin_page_.dialog;
 }
-int Launcher::storeTabIndex() const { return std::clamp(store_tab_, 0, std::max(0, static_cast<int>(plugin_menu_.size()) - 1)); }
+int Launcher::storeTabIndex() const { return std::clamp(store_tab_, 0, std::max(0, storeTabCount() - 1)); }
 void Launcher::switchStoreTab(int amount) {
     if (!storeTabsShown() || !amount || menu_open_ || pending_launch_) return;
-    const int current = storeTabIndex(), next = std::clamp(current + amount, 0, static_cast<int>(plugin_menu_.size()) - 1);
+    const int current = storeTabIndex(), next = std::clamp(current + amount, 0, storeTabCount() - 1);
     if (next == current) { navigationBoundary(); return; }
-    if (plugins_busy_ || plugin_command_pending_) return;
+    if (next >= storeHubTabs() && (plugins_busy_ || plugin_command_pending_)) return;
+    if (plugin_command_pending_) { ++plugin_command_generation_; plugin_command_pending_ = false; } // Leaving a plugin's tab drops its answer.
     closeKeyboard();
-    store_tab_ = next;
     audio_.navigate();
-    pluginAction(plugin_menu_[static_cast<size_t>(next)]);
+    openStoreTab(next);
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 // A neighbouring tab of the strip in the top bar (the library's geometry).
@@ -153,8 +162,8 @@ bool Launcher::storeTabClick(float x, float y) {
     if (!storeTabsShown()) return false;
     const float width = drawerViewport().width;
     std::optional<int> offset;
-    if (plugin_menu_.size() <= 3) { // A short strip takes only its own room, centred (Renderer::drawCategoryStrip, fit).
-        const float count = static_cast<float>(plugin_menu_.size()), slot = library_tabs::home::slot(width);
+    if (storeTabCount() <= 3) { // A short strip takes only its own room, centred (Renderer::drawCategoryStrip, fit).
+        const float count = static_cast<float>(storeTabCount()), slot = library_tabs::home::slot(width);
         if (y >= library_tabs::top + plugin_ui::Layout::tabs_drop && y < library_tabs::top + plugin_ui::Layout::tabs_drop + library_tabs::height) {
             const float index = (x - library_tabs::home::center(width)) / slot + (count - 1) * 0.5f;
             if (index > -0.5f && index < count - 0.5f) offset = static_cast<int>(std::lround(index)) - storeTabIndex();
@@ -166,7 +175,7 @@ bool Launcher::storeTabClick(float x, float y) {
 }
 void Launcher::pluginPageMove(int direction) {
     if (!direction) return;
-    const int next = plugin_page_.next(direction < 0 ? -1 : 1);
+    const int next = plugin_page_.tiled ? plugin_page_.step(0, direction) : plugin_page_.next(direction < 0 ? -1 : 1);
     if (next == plugin_page_.focus) { navigationBoundary(); return; }
     plugin_page_.focus = next;
     if (desktopStorePage()) desktop_sheet_keyboard_ = true; // Its focus ring shows from the first key.
@@ -191,8 +200,26 @@ void Launcher::pluginPageCommand(const std::string& command, const std::wstring*
     action.item.id = plugin_page_action_; action.item.command = command;
     pluginAction(action, plugin_page_game_, false, query);
 }
+// Left and right on a grid page (the Stores' built-in tabs): the tile beside, or the back button.
+void Launcher::pluginPageSide(int direction) {
+    const int next = plugin_page_.step(direction, 0);
+    if (next == plugin_page_.focus) { navigationBoundary(); return; }
+    plugin_page_.focus = next;
+    if (desktopStorePage()) desktop_sheet_keyboard_ = true;
+    if (next >= 0) selected_ = static_cast<size_t>(next);
+    const auto view = drawerViewport();
+    const plugin_ui::Layout layout{view.width, view.height, false, plugin_page_.dialog};
+    if (next >= 0) {
+        const auto& row = plugin_page_.rows[static_cast<size_t>(next)];
+        if (row.top < plugin_page_.scroll) plugin_page_.scroll = row.top;
+        if (row.top + row.height() > plugin_page_.scroll + layout.bottom() - layout.top) plugin_page_.scroll = row.top + row.height() - (layout.bottom() - layout.top);
+    }
+    plugin_page_.scroll = std::clamp(plugin_page_.scroll, 0.0f, layout.maxScroll(plugin_page_));
+    audio_.navigate(); InvalidateRect(hwnd_, nullptr, FALSE);
+}
 void Launcher::pluginPageAccept() {
     if (plugin_page_.focus < 0) { if (plugin_drawer_active_) friendsBack(); else back(); return; }
+    if (storeHubPage()) { storeHubAccept(); return; }
     const auto* owner = plugins_.find(plugin_page_.plugin);
     if (!owner || !owner->enabled || plugins_busy_) return;
     const auto& row = plugin_page_.rows.at(plugin_page_.focus);
@@ -205,6 +232,7 @@ void Launcher::pluginPageAccept() {
 // Esc/B, Back and Backspace in an empty search field: one level up when the page names a command.
 bool Launcher::pluginPageBack() {
     const bool shown = plugin_drawer_active_ ? friends_open_ : screen_ == ScreenMode::plugin_page && !friends_open_;
+    if (shown && storeHubPage() && plugin_page_.dialog) { openStoreHub(0); audio_.navigate(); return true; } // The question closes onto its tab.
     if (!shown || plugin_page_.back_command.empty()) return false;
     if (plugin_command_pending_) { ++plugin_command_generation_; plugin_command_pending_ = false; } // Leaving drops its answer.
     closeKeyboard();
@@ -235,6 +263,7 @@ void Launcher::pollPluginPageRefresh() {
 }
 bool Launcher::refreshPluginPage(bool background) {
     if (screen_ != ScreenMode::plugin_page && !(friends_open_ && plugin_drawer_active_)) return false;
+    if (storeHubPage()) { if (!background) storeHubReload(); return true; }
     if (const auto* plugin = plugins_.find(plugin_page_.plugin))
         for (const auto& c : plugin->manifest.contributions) if (c.id == plugin_page_action_) {
             auto action = plugins::Action{plugin_page_.plugin, c}; action.item.active_game = false;
@@ -257,6 +286,7 @@ void Launcher::pluginPageClick(float x, float y) {
     }
 }
 void Launcher::requestPluginPageArt() {
+    if (plugin_page_.tiled) { requestStoreHubArt(); return; }
     const auto view = drawerViewport();
     const plugin_ui::Layout layout{plugin_drawer_active_ ? friends_layout::drawer_width : view.width, view.height, plugin_drawer_active_, plugin_page_.dialog};
     for (size_t i = 0; i < plugin_page_games_.size() && i < plugin_page_.rows.size(); ++i) {

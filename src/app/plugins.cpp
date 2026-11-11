@@ -263,7 +263,7 @@ void Launcher::onPlugins(std::unique_ptr<PluginsMessage> message) {
             const auto* owner = plugins_.find(plugin_page_.plugin);
             if (!owner || !owner->enabled) { plugin_drawer_active_ = false; renderer_.resetPluginThumbnails(0); }
         }
-        if (screen_ == ScreenMode::plugin_page) {
+        if (screen_ == ScreenMode::plugin_page && !storeHubPage()) {
             const auto* owner = plugins_.find(plugin_page_.plugin);
             if (!owner || !owner->enabled) showCategory(category_);
         }

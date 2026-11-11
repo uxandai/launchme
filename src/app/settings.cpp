@@ -849,6 +849,11 @@ void Launcher::settingsToggle(const Row& row) {
         if (!settings_.tarot) closeTarot();
         settingsChanged(); audio_.context(); return; // The desktop top bar reads it on its next frame.
     }
+    else if (row.id == Id::store_hub) {
+        settings_.store_hub = !settings_.store_hub;
+        store_tab_ = 0;
+        settingsChanged(); audio_.context(); return;
+    }
     else if (row.id == Id::update_check) {
         settings_.update_check = !settings_.update_check;
         if (settings_.update_check) checkForUpdate(true);

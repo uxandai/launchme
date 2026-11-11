@@ -631,6 +631,10 @@ private:
     void drawGrid();
     void drawPluginPage(float left = 0, bool drawer = false);
     void drawStoreField(float left, float top, float right, float bottom, const std::wstring& query, const std::wstring& placeholder, bool typing, size_t caret);
+    // A grid page's tile (the Stores' built-in tabs): its 16:9 picture (or mark on its colour) in `picture`, the
+    // badge in its corner and the two caption lines below, in the given fonts.
+    void drawStoreTile(const plugin_ui::Row& row, size_t index, D2D1_RECT_F picture, bool focused, bool hovered, IDWriteTextFormat* word_font,
+                       IDWriteTextFormat* title_font, IDWriteTextFormat* note_font, float caption);
     void drawDownloads(); // Pobierania (src/ui/downloads_renderer.cpp).
     void drawGlance();
     void drawGlanceTimelineCard(size_t index, settings_ui::Rect rect, float alpha, float weight);

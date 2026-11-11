@@ -154,6 +154,8 @@ public:
     static int glanceHub(HWND window, bool live = false);
     static int padCursor(HWND window);
     static int tarotReading(HWND window);
+    static int storeHub(HWND window);
+    static int storeHubLive(HWND window);
     static int profilePage(HWND window);
     static int aureliaIntegration(HWND window);
     static int amazonGames(HWND window);
@@ -1591,6 +1593,7 @@ public:
 #include "glance_ui_cases.hpp"
 #include "pad_cursor_ui_cases.hpp"
 #include "tarot_ui_cases.hpp"
+#include "store_hub_ui_cases.hpp"
 #include "low_memory_ui_cases.hpp"
 #include "profile_ui_cases.hpp"
 #include "aurelia_ui_cases.hpp"
@@ -2383,6 +2386,23 @@ int main(int argc, char** argv) {
         CoUninitialize();
         if (code) std::cerr << "Game index regression failed at checkpoint " << code << '\n';
         else std::cout << "Game index: library, cached pages, Szczegóły, release order, genre search, her tool and memory passed\n";
+        return code;
+    }
+    if (argc == 2 && std::string_view(argv[1]) == "--store-hub-live") { // By hand: the real stores, read only.
+        std::filesystem::create_directories(root);
+        const auto code = window ? LauncherUiTest::storeHubLive(window) : 99;
+        if (window) DestroyWindow(window);
+        CoUninitialize();
+        if (code) std::cerr << "Store hub live check failed at checkpoint " << code << '\n';
+        return code;
+    }
+    if (argc == 2 && std::string_view(argv[1]) == "--store-hub") {
+        std::filesystem::create_directories(root);
+        const auto code = window ? LauncherUiTest::storeHub(window) : 99;
+        if (window) DestroyWindow(window);
+        CoUninitialize();
+        if (code) std::cerr << "Store hub regression failed at checkpoint " << code << '\n';
+        else std::cout << "Store hub: Launchery tiles, open, winget install, handed-over installer, Promocje feed and pages, desktop sheet, setting, Linux question and prefixes passed\n";
         return code;
     }
     if (argc == 2 && std::string_view(argv[1]) == "--tarot") {

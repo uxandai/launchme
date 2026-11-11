@@ -448,7 +448,10 @@ void Launcher::startArtworkWorkers(bool network) {
                     if (bytes.empty()) bytes = screenscraperArt(emulated, EmuArtKind::background, cache.parent_path());
                     return bytes;
                 };
-                if (job.kind == CoverMessage::Kind::disc) {
+                if (launcherTile(game)) { // The Launchery row: the mark its tile has in the Stores.
+                    if (const auto* entry = launchers::find(std::string_view(game.source_id).substr(9)); entry && job.kind == CoverMessage::Kind::cover)
+                        result->bytes = store_hub::tileImage(text_encoding::utf8Lenient(entry->image), cache.parent_path());
+                } else if (job.kind == CoverMessage::Kind::disc) {
                     auto disc = discArtwork(game, cache);
                     result->bytes = std::move(disc.bytes); disc_retryable = disc.retryable;
                 } else if (job.kind == CoverMessage::Kind::badge) {

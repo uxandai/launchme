@@ -142,6 +142,7 @@ void Launcher::paint(bool overlay) {
         if (library_tab_glide_.valid) context.library_tab_glide = library_tab_glide_.value.value;
     }
     if (storeTabsShown()) {
+        if (storeHubTabs()) { context.store_tabs.push_back({tr(L"Launchery"), 0, {}, true}); context.store_tabs.push_back({tr(L"Promocje"), 0, {}, true}); }
         for (const auto& entry : plugin_menu_) context.store_tabs.push_back({entry.item.title.localized(), 0, {}, true});
         context.store_tab = storeTabIndex();
         context.strip_hints = settings_.input_hints; context.hint_device = hintDevice(); // The LB/RB caps beside the strip, as in the library.
@@ -233,7 +234,7 @@ void Launcher::paint(bool overlay) {
     context.settings_preview_seconds = settings_preview_.seconds(GetTickCount64());
     context.settings_title = settingsPageTitle();
     context.settings_parent = settingsParentTitle();
-    if (screen_ == ScreenMode::plugin_page) context.plugin_page = &plugin_page_;
+    if (screen_ == ScreenMode::plugin_page) { arrangeStoreHub(); context.plugin_page = &plugin_page_; }
     if (plugin_drawer_active_) context.plugin_drawer = &plugin_page_;
     if (downloadsOpen()) context.downloads = &downloads_state_;
     if (quick_open_ || quick_progress_ > 0.003f || snitchActive()) context.downloads_moving = downloadsMoving(); // The bar's Pobierania count.

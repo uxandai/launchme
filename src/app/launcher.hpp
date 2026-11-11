@@ -95,6 +95,7 @@
 #include "../library/launch_options_store.hpp"
 #include "compat_state.hpp"
 #endif
+#include "store_hub_state.hpp"
 
 #include <Windows.h>
 #include <shellapi.h> // HDROP: files dropped on the desktop window.
@@ -699,6 +700,32 @@ public:
     int storeTabIndex() const;
     void switchStoreTab(int amount);
     bool storeTabClick(float x, float y);
+    // The two built-in tabs before the plugins' (src/app/store_hub.cpp): Launchery and Promocje.
+    int storeHubTabs() const;
+    int storeTabCount() const;
+    int storeTabOf(const std::string& owner) const;
+    void openStoreTab(int tab);
+    bool storeHubPage() const;
+    void openStoreHub(int tab, bool refreshed = false);
+    void storeHubRefresh();
+    void storeHubReload();
+    void storeHubDetect();
+    void storeHubLoadPromos(bool refresh);
+    void storeHubAccept();
+    // A launcher's card: the dialog a tile opens, with what can be done with it now (confirm: "Odinstalować?").
+    void openLauncherCard(const std::string& id, bool confirm = false);
+    void storeHubChoice(const std::string& choice);
+    void storeHubUninstall(const launchers::Entry& entry, launchers::Removal removal);
+    // The home screen's Launchery row (AppSettings::show_launchers): a tile per installed launcher.
+    std::vector<Game> launcherTiles() const;
+    void openLauncher(const std::string& id);
+    void storeHubInstall(const launchers::Entry& entry, std::vector<launchers::Method> methods, std::filesystem::path prefix, bool new_prefix);
+    void storeHubInstalled(const std::string& id, const launcher_install::Result& result);
+    void pollStoreHub();
+    void arrangeStoreHub();
+    void requestStoreHubArt();
+    plugin_ui::Page launchersPage() const;
+    plugin_ui::Page promosPage();
     bool gridBackHit(float x, float y) const;
     void settingsWheel(float mouse_x, int amount);
     void mouseMove(float mouse_x, float mouse_y);
@@ -1966,7 +1993,10 @@ private:
     void refreshPluginLibraries();
     void refreshPluginWidgets(bool active_only = false);
     void openPluginPage(const std::string& owner, const json::Value& page, bool drawer = false, bool refreshed = false);
+    // The same for a page already built (the Stores' built-in tabs).
+    void showPluginPage(const std::string& owner, plugin_ui::Page page, bool drawer, bool refreshed);
     void pluginPageMove(int direction);
+    void pluginPageSide(int direction);
     void pluginPageAccept();
     void pluginPageCommand(const std::string& command, const std::wstring* query = nullptr);
     bool pluginPageBack();
@@ -2148,7 +2178,7 @@ private:
     const SteamCollection* homeRowCollection(const std::string& id) const;
     // Shown at all ("Emulacja", the studios, the Steam rows): the switch the rest of the launcher reads.
     const bool* homeRowMaster(const std::string& id) const;
-    bool homeRowHasTab(const std::string& id) const { return id != "pc-platforms" && id != "emulation"; }
+    bool homeRowHasTab(const std::string& id) const { return id != "pc-platforms" && id != "emulation" && id != "launchers"; }
     bool homeRowOnHome(const std::string& id) const;
     bool homeRowTab(const std::string& id) const;
     std::wstring homeRowPlace(const std::string& id) const; // "Wszędzie", "Ekran główny", "Zakładka", "Ukryty".
@@ -2477,6 +2507,21 @@ private:
     std::string plugin_page_action_;
     bool stores_open_ = false, stores_opening_ = false; // The page was opened through the Stores entry / is being.
     int store_tab_ = 0;
+    launcher_state::StoreHub store_hub_;
+    // The Stores' built-in tabs' outside world; UI tests answer in its place (empty: the real one).
+    promos::Get promos_get_;
+    std::function<promos::Region()> promos_region_;
+    std::function<launchers::Machine()> launcher_machine_;
+    std::function<launchers::Probe()> launcher_probe_;
+    std::function<std::vector<std::filesystem::path>()> launcher_prefixes_;
+    std::function<launcher_install::Backend()> launcher_backend_;
+    std::function<std::filesystem::path(const std::wstring&)> launcher_new_prefix_;
+    std::function<std::vector<uint8_t>(const std::string&)> store_hub_image_;
+#ifdef _WIN32
+    bool launcher_windows_ = true;
+#else
+    bool launcher_windows_ = false;
+#endif
     std::vector<Game> plugin_page_games_;
     uint32_t plugin_epoch_ = 0;
     std::map<std::string, std::vector<plugins::Download>> plugin_downloads_;

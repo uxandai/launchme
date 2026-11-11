@@ -140,7 +140,7 @@ void Launcher::onCover(std::unique_ptr<CoverMessage> cover) {
         if (i != selected_ && cover->kind != CoverMessage::Kind::cover) continue;
         if (cover->kind == CoverMessage::Kind::cover) {
             cards_[i].cover_opacity = 0;
-            if (cards_[i].game.kind == GameKind::platform || cards_[i].game.kind == GameKind::pc_platform) renderer_.setPlatformCover(i, asset.cover);
+            if (logoTile(cards_[i].game)) renderer_.setPlatformCover(i, asset.cover);
             else renderer_.setCover(i, asset.cover, asset.focus, edge);
             if (cropOpen() && !crop_state_.loading && !crop_state_.background) renderer_.setCoverFocus(i, crop_state_.focus);
         }
@@ -321,6 +321,7 @@ bool Launcher::requestArt(const Game& game, CoverMessage::Kind kind, bool backgr
     if (game.kind == GameKind::pc_platform && kind != CoverMessage::Kind::cover && kind != CoverMessage::Kind::badge &&
         kind != CoverMessage::Kind::hero) return false;
     if (game.kind == GameKind::platform && kind == CoverMessage::Kind::logo) return false;
+    if (launcherTile(game) && kind != CoverMessage::Kind::cover) return false; // Its mark alone (store_hub::tileImage).
     if ((kind == CoverMessage::Kind::poster || kind == CoverMessage::Kind::landscape || kind == CoverMessage::Kind::disc) && !isGame(game)) return false;
     if (!game.installed && !metadata_ready_ && i18n::matches(game.name, loading_game_name)) return false;
     std::lock_guard lock(jobs_->mutex);
@@ -456,7 +457,7 @@ void Launcher::requestVisibleArt() {
         if (found && found->cover) {
             if (!renderer_.hasCover(i)) {
                 cards_[i].cover_opacity = 0;
-                if (cards_[i].game.kind == GameKind::platform || cards_[i].game.kind == GameKind::pc_platform) renderer_.setPlatformCover(i, found->cover);
+                if (logoTile(cards_[i].game)) renderer_.setPlatformCover(i, found->cover);
                 else renderer_.setCover(i, found->cover, found->focus);
             }
         } else if (!renderer_.hasCover(i)) requestArt(cards_[i].game, CoverMessage::Kind::cover); // Shown: its bytes may be let go (low memory).

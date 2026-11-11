@@ -225,6 +225,7 @@ int LauncherUiTest::uiRefresh(HWND window) {
         Launcher stores;
         stores.settings_.launch_animation = false;
         stores.settings_.glance = stores.settings_.companion = false;
+        stores.settings_.store_hub = false; // The plugins' tabs alone (the built-in ones: store_hub_ui_cases.hpp).
         stores.hwnd_ = window; stores.execute_ = fakeExecute;
         if (!stores.renderer_.initialize(window)) return 99301;
         if (quick_menu::count(quick_menu::store_slots) != 9 || quick_menu::action(2, quick_menu::store_slots) != quick_menu::Action::store) return 99302;

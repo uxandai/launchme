@@ -141,6 +141,7 @@ set(LAUNCHME_CORE_SOURCES
     src/store/gog_vault.cpp
     src/store/steam_app_match.cpp
     src/store/steam_trailer.cpp
+    src/store/launchers.cpp
     src/store/web_import.cpp)
 set(LAUNCHME_CORE_LIBS miniz launchme_qrcodegen Threads::Threads ICU::uc ICU::i18n OpenSSL::Crypto PkgConfig::LIBSECRET CURL::libcurl)
 
@@ -174,6 +175,7 @@ set(LAUNCHME_LINUX_IMAGE_SOURCES
     src/library/custom_games.cpp
     src/net/companion_feed.cpp
     src/net/glance.cpp
+    src/net/promos.cpp
 )
 # Codecs: libpng, libjpeg-turbo, libwebp. Feeds: expat (in place of XmlLite).
 pkg_check_modules(LAUNCHME_IMAGE_LIBS REQUIRED IMPORTED_TARGET libpng libwebp expat)

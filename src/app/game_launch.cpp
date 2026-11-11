@@ -174,6 +174,7 @@ void Launcher::launch() {
 void Launcher::launchGame(const Game& original, bool via_steam) {
     Game active = original; active.version_group.clear();
     if (pending_launch_ || launchAnimationActive() || !isGame(active)) return;
+    if (launcherTile(active)) { openLauncher(active.source_id.substr(9)); return; } // A client opens; it is not a played game.
     if (switchToGame(active)) { focusPlayedGame(gameKey(active)); return; }
     // A preload: downloaded, not released yet; Steam installs it on the release day by itself.
     if (active.preloaded) {

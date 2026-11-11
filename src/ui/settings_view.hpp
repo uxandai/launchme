@@ -70,6 +70,8 @@ enum class Id { font, home_layout, ui_accent, accent, uninstalled, emulation, mu
                    shelves_hero_facts,
                    // System → Funkcje: Tarot, the card reading (src/app/tarot.cpp).
                    tarot,
+                   // System → Funkcje: the Stores' built-in tabs, Launchery and Promocje (src/app/store_hub.cpp).
+                   store_hub,
                    // Towarzyszka → Gdzie mieszkają: one city for all of them, and the chosen one's own.
                    companion_city, companion_city_own,
                    // System → Aktualizacje: Launchme's own update (src/app/updates.cpp) and whether to look for one.

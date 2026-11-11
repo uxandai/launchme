@@ -1,6 +1,8 @@
 #include "../src/platform/user_config.hpp"
 
 #include <cmath>
+#include <fstream>
+#include <iterator>
 #include <iostream>
 #include <Windows.h>
 
@@ -494,6 +496,67 @@ int main() {
         if (!strange.hud_enabled || strange.hud_size != 100 || strange.hud_layout != 0 || strange.cpu_temp_source != 0) return 64;
         const auto odd = parseAppSettings("fps_limit=5\nfps_game_limit=7:x\nfps_game_limit=60\nfps_game_limit=abc:y\nfps_limit=99999\nfps_limiter=2\n");
         if (odd.fps_limit != 0 || !odd.fps_game_limits.empty() || odd.fps_limiter) return 61;
+    }
+    // Every on/off setting the file stores reads back flipped (the parser's flag table, user_config.cpp).
+    {
+        const auto file = std::filesystem::temp_directory_path() / L"launchme-flag-round-trip.ini";
+        const auto text = [&](const AppSettings& settings) {
+            if (!saveAppSettings(settings, file)) return std::string{};
+            std::ifstream input(file, std::ios::binary);
+            return std::string((std::istreambuf_iterator<char>(input)), {});
+        };
+        const auto saved = text(AppSettings{});
+        if (saved.empty()) return 108;
+        size_t flags = 0, at = 0, failed = 0;
+        while (at < saved.size()) {
+            const auto end = std::min(saved.find('\n', at), saved.size());
+            const std::string line = saved.substr(at, end - at);
+            at = end + 1;
+            const auto equal = line.find('=');
+            if (equal == std::string::npos || equal + 2 != line.size() || (line.back() != '0' && line.back() != '1')) continue;
+            const std::string key = line.substr(0, equal);
+            if (key == "desktop_view" || key == "hud_layout" || key == "cpu_temp_source" || key == "fps_limit_mode" ||
+                key == "desktop_sort" || key == "desktop_theme" || key == "video_volume" || key == "crt_mask" || key == "music_theme" ||
+                key == "studio_min_games" || key == "video_delay" || key == "start_done" || key == "desktop_pane" ||
+                key == "screensaver_minutes" || key == "ui_sound" || key == "toast_sound" || key == "boot_sound" || key == "fps_limit") continue; // Numbers, not switches.
+            const std::string flipped = key + '=' + (line.back() == '1' ? '0' : '1');
+            const auto again = text(parseAppSettings(saved + flipped + '\n'));
+            if (again.find('\n' + flipped + '\n') == std::string::npos && !again.starts_with(flipped + '\n')) {
+                std::cerr << "On/off setting not read back: " << key << '\n';
+                ++failed; continue;
+            }
+            ++flags;
+        }
+        if (failed) return 109;
+        if (flags < 90) return 110;
+        std::error_code ec; std::filesystem::remove(file, ec);
+    }
+    // API keys: saved encrypted for this user; a plain key file is read once and then encrypted in place.
+    {
+        const auto folder = std::filesystem::temp_directory_path() / L"launchme-secret-test";
+        std::error_code ec; std::filesystem::remove_all(folder, ec); std::filesystem::create_directories(folder, ec);
+        const auto contains = [](const std::filesystem::path& path, std::string_view text) {
+            std::ifstream input(path, std::ios::binary);
+            const std::string bytes((std::istreambuf_iterator<char>(input)), {});
+            return bytes.find(text) != std::string::npos;
+        };
+        const auto plain = folder / L"plain_api_key.txt";
+        { std::ofstream output(plain, std::ios::binary); output << "\xef\xbb\xbf" "synthetic-plain-key  \r\n"; }
+        if (userSecretFile(plain) != L"synthetic-plain-key" || contains(plain, "synthetic-plain-key")) return 101;
+        if (userSecretFile(plain) != L"synthetic-plain-key") return 102; // Read back from its encrypted form.
+        SetEnvironmentVariableW(L"LAUNCHME_CONFIG_DIR", folder.c_str());
+        SetEnvironmentVariableW(L"LAUNCHME_TEST_SECRET", nullptr);
+        if (!saveUserSecret(L"saved_api_key.txt", L"  synthetic-saved-key \n") || contains(folder / L"saved_api_key.txt", "synthetic-saved-key") ||
+            userSecret(L"LAUNCHME_TEST_SECRET", L"saved_api_key.txt") != L"synthetic-saved-key" || !storedUserSecret(L"saved_api_key.txt")) return 103;
+        if (saveUserSecret(L"saved_api_key.txt", L"two\nlines") || userSecret(L"LAUNCHME_TEST_SECRET", L"saved_api_key.txt") != L"synthetic-saved-key") return 104;
+        SetEnvironmentVariableW(L"LAUNCHME_TEST_SECRET", L"from-environment");
+        if (userSecret(L"LAUNCHME_TEST_SECRET", L"saved_api_key.txt") != L"from-environment") return 105;
+        if (!saveUserSecret(L"saved_api_key.txt", L"  ") || storedUserSecret(L"saved_api_key.txt")) return 106;
+        { std::ofstream output(folder / L"empty_api_key.txt", std::ios::binary); output << "\r\n"; }
+        if (!userSecretFile(folder / L"empty_api_key.txt").empty() || !userSecretFile(folder / L"missing.txt").empty()) return 107;
+        SetEnvironmentVariableW(L"LAUNCHME_TEST_SECRET", nullptr);
+        SetEnvironmentVariableW(L"LAUNCHME_CONFIG_DIR", nullptr);
+        std::filesystem::remove_all(folder, ec);
     }
     // Deny replacement while the old file is open: the failed save must preserve it.
     const auto locked = CreateFileW(file.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);

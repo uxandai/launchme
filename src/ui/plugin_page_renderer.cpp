@@ -10,6 +10,40 @@ void Renderer::drawStoreField(float left, float top, float right, float bottom, 
     else fieldText(query, std::min(caret, query.size()), typing && std::sin(elapsed_ * 4.0f) >= 0, x, y, room, 71, hero_font_.Get(), D2D1::ColorF(0.96f, 0.96f, 0.96f));
 }
 
+void Renderer::drawStoreTile(const plugin_ui::Row& row, size_t index, D2D1_RECT_F picture, bool focused, bool hovered, IDWriteTextFormat* word_font,
+                             IDWriteTextFormat* title_font, IDWriteTextFormat* note_font, float caption) {
+    const float width = picture.right - picture.left, height = picture.bottom - picture.top;
+    const float radius = std::min(16.0f, height * 0.1f);
+    const bool mark = row.image.empty() || row.image.starts_with("logo:") || row.image.starts_with("system:");
+    brush(row.tone ? D2D1::ColorF(row.tone, 1.0f) : D2D1::ColorF(0.11f, 0.12f, 0.14f));
+    target_->FillRoundedRectangle(D2D1::RoundedRect(picture, radius, radius), solid_.Get());
+    const bool loaded = index < covers_.size() && covers_[index].loaded();
+    if (loaded && mark) {
+        // A white mark, fitted and centred with room around it.
+        const auto inner = D2D1::RectF(picture.left + width * 0.24f, picture.top + height * 0.24f, picture.right - width * 0.24f, picture.bottom - height * 0.24f);
+        fillImage(covers_[index], inner, 0, reveal(covers_[index]), false, nullptr, true);
+    } else if (loaded) fillImage(covers_[index], picture, radius, reveal(covers_[index]), false);
+    else if (mark) textLine(row.title, picture.left + 16, (picture.top + picture.bottom) * 0.5f, width - 32, word_font, D2D1::ColorF(1, 1, 1, 0.92f), DWRITE_TEXT_ALIGNMENT_CENTER);
+    if (hovered && !focused) { brush(D2D1::ColorF(1, 1, 1, 0.06f)); target_->FillRoundedRectangle(D2D1::RoundedRect(picture, radius, radius), solid_.Get()); }
+    if (!row.badge.empty()) {
+        const float pad = 10, badge_height = std::max(22.0f, caption * 0.36f);
+        const float badge_width = std::min(width - 20, std::ceil(textAdvance(row.badge, note_font)) + 2 * pad);
+        const auto box = D2D1::RectF(picture.left + 10, picture.top + 10, picture.left + 10 + badge_width, picture.top + 10 + badge_height);
+        const float pulse = row.busy ? 0.75f + 0.25f * std::sin(elapsed_ * 4.0f) : 1.0f;
+        brush(row.badge_strong ? D2D1::ColorF(0.96f, 0.96f, 0.96f, 0.96f) : D2D1::ColorF(0.04f, 0.05f, 0.06f, 0.78f * pulse));
+        target_->FillRoundedRectangle(pill(box), solid_.Get());
+        textLine(row.badge, box.left + pad, (box.top + box.bottom) * 0.5f, badge_width - 2 * pad, note_font,
+                 row.badge_strong ? D2D1::ColorF(0.06f, 0.06f, 0.07f) : D2D1::ColorF(0.95f, 0.95f, 0.95f, pulse));
+    }
+    if (focused) {
+        brush(uiAccent());
+        const auto ring = D2D1::RectF(picture.left - 4, picture.top - 4, picture.right + 4, picture.bottom + 4);
+        target_->DrawRoundedRectangle(D2D1::RoundedRect(ring, radius + 4, radius + 4), solid_.Get(), 3.0f);
+    }
+    textLine(row.title, picture.left + 2, picture.bottom + caption * 0.30f, width - 4, title_font, row.enabled ? D2D1::ColorF(0.95f, 0.95f, 0.95f) : D2D1::ColorF(0.45f, 0.45f, 0.45f));
+    if (row.hasSubtitle()) textLine(row.subtitle, picture.left + 2, picture.bottom + caption * 0.68f, width - 4, note_font, D2D1::ColorF(0.62f, 0.62f, 0.62f));
+}
+
 void Renderer::drawPluginPage(float origin, bool drawer) {
     const auto* content = drawer ? context_->plugin_drawer : context_->plugin_page;
     if (!content) return;
@@ -38,7 +72,7 @@ void Renderer::drawPluginPage(float origin, bool drawer) {
         const auto box = layout.field();
         drawStoreField(origin + box.left, box.top, origin + box.right, box.bottom, page.query, tr(L"Wpisz tytuł gry…"), true, page.query.size()); // Typing anywhere reaches it: always the active look.
     }
-    target_->PushAxisAlignedClip(D2D1::RectF(origin + layout.left - 8, layout.top, origin + width - layout.left + 8, layout.bottom()), D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
+    target_->PushAxisAlignedClip(D2D1::RectF(origin + layout.left - 8, layout.top - (page.tiled ? 8.0f : 0.0f), origin + width - layout.left + 8, layout.bottom()), D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
     auto& images = drawer ? plugin_thumbnails_ : covers_;
     for (size_t i = 0; i < page.rows.size(); ++i) {
         const auto& row = page.rows[i]; const float y = layout.rowTop(page, i);
@@ -46,6 +80,12 @@ void Renderer::drawPluginPage(float origin, bool drawer) {
         if (row.heading) {
             text(row.title, origin + layout.left + 6, y + 10, width - 2 * layout.left - 12, 36,
                  drawer ? friend_section_font_.Get() : friend_name_font_.Get(), D2D1::ColorF(0.66f, 0.75f, 0.73f)); continue;
+        }
+        if (row.tile) {
+            const auto tile = layout.tile(page, i);
+            drawStoreTile(row, i, D2D1::RectF(origin + tile.left, tile.top, origin + tile.right, tile.top + page.tile_height), page.focus == static_cast<int>(i), false,
+                          category_font_.Get(), menu_font_.Get(), friend_status_font_.Get(), plugin_ui::Page::tile_caption);
+            continue;
         }
         if (row.input) {
             if (framed) continue; // Drawn once, in the frame, below.

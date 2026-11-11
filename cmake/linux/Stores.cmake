@@ -18,6 +18,9 @@ if(BUILD_TESTING)
     # A fake launchme-xbox as a shell script (LAUNCHME_XBOX_HELPER).
     launchme_executable(xbox_account_tests TEST xbox_account_contracts
         SOURCES tests/xbox_account_tests.cpp src/store/xbox_account.cpp src/platform/helper_process.cpp)
+    # The Stores' built-in tabs: every outside effect of an installation is the test's own backend.
+    launchme_executable(store_hub_tests TEST store_hub_launchers_promotions_and_grid
+        SOURCES tests/store_hub_tests.cpp src/store/launcher_install.cpp src/platform/helper_process.cpp)
 endif()
 
 # launchme-xbox (helpers/xbox, Rust) next to the launcher: not part of `all`, it needs cargo, protoc

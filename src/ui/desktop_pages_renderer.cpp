@@ -347,6 +347,14 @@ void Renderer::drawDesktopStorePage() {
             continue;
         }
         const SheetHit hit{Kind::tile, static_cast<int>(i)};
+        if (row.tile) { // A grid page: the Stores' built-in tabs.
+            const float x = left + static_cast<float>(row.column) * (page.tile_width + plugin_ui::Page::tile_gap);
+            const Rect cell{x, y + 4, x + page.tile_width, y + 4 + page.tile_height};
+            drawStoreTile(row, i, box(cell), view.keyboard && page.focus == static_cast<int>(i), row.actionable() && view.hover == hit,
+                          desktop_title_font_.Get(), desktop_font_.Get(), desktop_small_font_.Get(), 52);
+            if (row.actionable()) desktopHot(hit, {cell.left, cell.top, cell.right, cell.bottom + 52});
+            continue;
+        }
         const Rect r{left, y, right, y + h - 6};
         const bool focused = view.keyboard && page.focus == static_cast<int>(i);
         const bool hover = row.actionable() && view.hover == hit;

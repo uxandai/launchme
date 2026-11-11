@@ -355,6 +355,11 @@ void Launcher::buildShelves() {
         }
         categories_.push_back(std::move(emulation));
     }
+    // Launchery: the installed store clients and front ends (src/app/store_hub.cpp), off by default.
+    if (settings_.show_launchers && storeHubTabs()) {
+        if (!store_hub_.machine_known) storeHubDetect(); // Its answer builds the rows again.
+        if (auto tiles = launcherTiles(); !tiles.empty()) categories_.push_back(Category{tr(L"Launchery"), std::move(tiles), 0, "launchers"});
+    }
     // Wydawcy and Developerzy: a row of logos each (src/app/studio_libraries.cpp).
     refreshStudios();
     for (const auto role : {studios::Role::publisher, studios::Role::developer}) {
@@ -640,7 +645,7 @@ void Launcher::rebuildCards(bool preserve_background) {
         const auto& asset = *found;
         if (asset.cover) {
             cards_[i].cover_opacity = 1;
-            if (cards_[i].game.kind == GameKind::platform || cards_[i].game.kind == GameKind::pc_platform) renderer_.setPlatformCover(i, asset.cover);
+            if (logoTile(cards_[i].game)) renderer_.setPlatformCover(i, asset.cover);
             else renderer_.setCover(i, asset.cover, asset.focus);
         }
         if (i == selected_ && asset.logo && !libraryListPlus()) renderer_.setLogo(i, asset.logo);

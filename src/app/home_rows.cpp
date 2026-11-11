@@ -41,6 +41,7 @@ std::wstring Launcher::homeRowTitle(const std::string& id) const {
     if (id == "recent") return tr(L"Ostatnio grane");
     if (id == "pc-platforms") return tr(L"Platformy PC");
     if (id == "emulation") return tr(L"Emulacja");
+    if (id == "launchers") return tr(L"Launchery");
     if (id == "publishers") return settings_.show_companies ? tr(L"Firmy") : tr(L"Wydawcy");
     if (id == "developers") return tr(L"Developerzy");
     if (id == "updated") return tr(L"Ostatnio zaktualizowane");
@@ -59,6 +60,7 @@ std::vector<Launcher::HomeRowEntry> Launcher::homeRowEntries() const {
     add("recent");
     if (findCategory("pc-platforms")) add("pc-platforms");
     if (!platform_games_.empty()) add("emulation");
+    if (storeHubTabs()) add("launchers"); // Listed also while hidden or empty: this is where it is turned on.
     add("publishers");
     if (!settings_.show_companies) add("developers");
     for (const auto& collection : settings_collections_)
@@ -78,6 +80,7 @@ std::vector<Launcher::HomeRowEntry> Launcher::homeRowEntries() const {
 
 const bool* Launcher::homeRowMaster(const std::string& id) const {
     if (id == "emulation") return &settings_.show_emulation;
+    if (id == "launchers") return &settings_.show_launchers;
     if (id == "publishers") return settings_.show_companies ? nullptr : &settings_.show_publishers;
     if (id == "developers") return &settings_.show_developers;
     if (id == "updated") return &settings_.show_updated_row;
@@ -239,6 +242,7 @@ void Launcher::homeRowsSettingsRows(const std::function<void(Row)>& add) {
         if (entry.id == "recent") text = tr(L"Pierwszy rząd ekranu głównego: gry w toku i ostatnio grane.");
         else if (entry.id == "pc-platforms") text = tr(L"Kafle sklepów i katalogu DRM-free.");
         else if (entry.id == "emulation") text = tr(L"Kafle konsol z grami z emulatorów.");
+        else if (entry.id == "launchers") text = tr(L"Zainstalowane launchery: Steam, GOG Galaxy, Epic i inne.");
         else if (studioRow(entry.id)) text = entry.id == "developers" ? tr(L"Logo twórców gier z biblioteki.") : tr(L"Logo wydawców gier z biblioteki.");
         else if (entry.id == "updated") text = tr(L"Gry Steam zaktualizowane ostatnio.");
         else if (entry.id == "discovery") text = tr(L"Zainstalowane gry Steam, w które jeszcze nie grano.");
@@ -247,7 +251,7 @@ void Launcher::homeRowsSettingsRows(const std::function<void(Row)>& add) {
             if (library_state_.collections.creates.contains(collectionKey(account_, *entry.collection))) text += L" · " + std::wstring(tr(L"Oczekuje na synchronizację"));
         }
         if (!text.empty() && text.back() == L'.') text.pop_back(); // List lines read as labels: "… ostatnio grane · 8 gier".
-        if (entry.games && entry.id != "pc-platforms" && entry.id != "emulation") {
+        if (entry.games && entry.id != "pc-platforms" && entry.id != "emulation" && entry.id != "launchers") {
             text += L" · " + (studioRow(entry.id) ? std::to_wstring(entry.games) + L" logo" : gamesLabel(entry.games));
         }
         return text;

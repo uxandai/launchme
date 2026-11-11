@@ -56,7 +56,9 @@ Nothing is needed to start; paste keys in **Settings → Media & data → Servic
 | [TheGamesDB](https://forums.thegamesdb.net) | public key from the forum | more artwork |
 
 The AI companion needs a model: a free [Gemini key](https://aistudio.google.com/apikey) (**Settings → Assistant**),
-or Claude, Grok or a local Ollama. Keys are stored encrypted (DPAPI).
+or Claude, Grok or a local Ollama. All keys are stored encrypted for your Windows user (DPAPI; AES-GCM on Linux).
+A key can also come from an environment variable (e.g. `STEAMGRIDDB_API_KEY`), or from a one-line text file
+such as `%LOCALAPPDATA%\Launchme\steamgriddb_api_key.txt`, which launchme encrypts in place the first time it reads it.
 
 ## Building
 

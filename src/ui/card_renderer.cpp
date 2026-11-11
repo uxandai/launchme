@@ -5,6 +5,7 @@
 #include "renderer_internal.hpp"
 #include "carousel.hpp"
 #include "category_rail.hpp"
+#include "../store/launchers.hpp"
 
 #include <d2d1effects.h>
 
@@ -17,10 +18,16 @@ using namespace render_detail;
 
 D2D1_COLOR_F Renderer::platformTileFill(const Game& game, float alpha) const {
     if (game.kind == GameKind::platform && console_colors_ && !studioPlatform(game.platform)) return platformColor(game.platform, alpha);
+    if (launcherTile(game)) // The colour of its tile in the Stores' Launchery tab.
+        if (const auto* entry = launchers::find(std::string_view(game.source_id).substr(9)); entry && entry->tone) {
+            return D2D1::ColorF(entry->tone, alpha);
+        }
     return color(0.045f, 0.05f, 0.06f, alpha);
 }
 
 void Renderer::drawSquareShadow(float x, float y, float size, bool selected, float transparency) {
+    // Layers one pixel apart, so the edge fades smoothly: four wide steps showed as bands on bright
+    // backgrounds (issue #23). The same reach and darkness as before (16 px focused, 8 px otherwise).
     const auto base = canvasBase();
     const int layers = selected ? 16 : 8;
     const float alpha = (selected ? 0.012f : 0.014f) * transparency;
@@ -28,8 +35,6 @@ void Renderer::drawSquareShadow(float x, float y, float size, bool selected, flo
         const float spread = static_cast<float>(layer);
         target_->SetTransform(D2D1::Matrix3x2F::Scale(size + spread * 2, size + spread * 2) *
                               D2D1::Matrix3x2F::Translation(x - spread, y + 10.0f - spread) * base);
-    // Layers one pixel apart, so the edge fades smoothly: four wide steps showed as bands on bright
-    // backgrounds (issue #23). The same reach and darkness as before (16 px focused, 8 px otherwise).
         brush(color(0, 0, 0, alpha));
         fillSquircle(solid_.Get());
     }
@@ -63,7 +68,7 @@ void Renderer::drawCard(const GameCard& card, size_t index) {
     const bool selected = index == selected_ && context_->screen != ScreenMode::details && context_->screen != ScreenMode::crop &&
         !context_->category_rail_focus &&
         (!context_->library_controls || context_->library_controls->focus < 0);
-    const bool platform_tile = card.game.kind == GameKind::platform || card.game.kind == GameKind::pc_platform;
+    const bool platform_tile = logoTile(card.game);
     const float focus_zoom = selected ? 1.0f + 0.13f * smoothFade(context_->launch_progress) : 1.0f;
     const float size = card.size * focus_zoom;
     const float x = card.x - (size - card.size) * 0.5f;

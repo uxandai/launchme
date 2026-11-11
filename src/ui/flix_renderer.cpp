@@ -130,7 +130,7 @@ void Renderer::drawRectangularCard(const GameCard& card, size_t index, float alp
         const auto shadow = tileShape(D2D1::RectF(x - spread, y + 8 - spread, x + tile_w + spread, y + tile_h + 8 + spread), tile_shape_);
         if (shadow) target_->FillGeometry(shadow.Get(), solid_.Get());
     }
-    const bool platform_tile = game.kind == GameKind::platform || game.kind == GameKind::pc_platform;
+    const bool platform_tile = logoTile(game);
     constexpr float palette[4][3] = {{0.13f, 0.21f, 0.24f}, {0.20f, 0.20f, 0.30f}, {0.28f, 0.20f, 0.17f}, {0.15f, 0.24f, 0.20f}};
     const int tone = static_cast<int>(game.app_id % 4);
     if (inner > 0.05f) { // The empty band: almost black, under the picture.

@@ -65,11 +65,7 @@ void Launcher::openStore() {
     // Reached from the Stores tabs (or opened from a store plugin's page there), the catalog screen keeps them.
     if (screen_ != ScreenMode::plugin_page && screen_ != ScreenMode::store) stores_open_ = stores_opening_;
     stores_opening_ = false;
-    if (stores_open_) {
-        const auto found = std::find_if(plugin_menu_.begin(), plugin_menu_.end(), [&](const auto& entry) { return entry.plugin == catalog_plugin_; });
-        if (found != plugin_menu_.end() && !(store_tab_ >= 0 && store_tab_ < static_cast<int>(plugin_menu_.size()) && plugin_menu_[static_cast<size_t>(store_tab_)].plugin == catalog_plugin_))
-            store_tab_ = static_cast<int>(found - plugin_menu_.begin());
-    }
+    if (stores_open_ && storeTabOf(catalog_plugin_) >= 0) store_tab_ = storeTabOf(catalog_plugin_);
     desktopLeaveLibrary(); rememberPlace();
     if (!storeEnabled()) return;
     screen_ = ScreenMode::store;
@@ -156,6 +152,7 @@ Game Launcher::installedCatalogGame(const Game& game) const {
 // actionLabel/actionEnabled/gameFolder run on every painted frame and hover: only Store
 // catalog entries can resolve to another game, so the rest are used in place, not copied.
 std::wstring Launcher::actionLabel(const Game& game) const {
+    if (launcherTile(game)) return tr(L"Otwórz");
     const auto resolved = game.kind == GameKind::catalog ? std::optional<Game>(installedCatalogGame(game)) : std::nullopt;
     const Game& effective = resolved ? *resolved : game;
     const auto session = sessionState(effective);
@@ -252,6 +249,12 @@ void Launcher::catalogAction(const Game& original) {
 
 void Launcher::openDetails(const Game& game) {
     if (!isGame(game) || pending_launch_) return;
+    if (launcherTile(game)) { // A launcher's details are its card in the Stores: open, uninstall, the download page.
+        if (!storeHubTabs()) return;
+        const auto id = game.source_id.substr(9); // The game may be a card's, and the Stores replace the cards.
+        store_tab_ = 0; openStores(); openLauncherCard(id);
+        return;
+    }
     desktopLeaveLibrary(); rememberPlace();
     detail_return_ = screen_;
     detail_return_selected_ = selected_;

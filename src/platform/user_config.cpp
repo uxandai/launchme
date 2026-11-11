@@ -1,5 +1,6 @@
 #include "user_config.hpp"
 #include "atomic_file.hpp"
+#include "protected_file.hpp"
 #include "sound_cues.hpp"
 #include "music_themes.hpp"
 #include "text_encoding.hpp"
@@ -8,9 +9,8 @@
 
 #ifdef _WIN32
 #include <Windows.h>
-#ifdef _WIN32
 #include <ShlObj.h>
-#endif
+#pragma comment(lib, "crypt32.lib") // protected_file: DPAPI.
 #endif
 
 #include <fstream>
@@ -46,15 +46,34 @@ std::filesystem::path userConfigDirectory() {
     return std::filesystem::temp_directory_path() / L"Launchme";
 }
 
-std::wstring userSecret(const wchar_t* environment, const wchar_t* filename) {
-    if (auto value = system_info::environment(environment, 1023); value && !value->empty()) return *value;
-    std::ifstream input(userConfigDirectory() / filename, std::ios::binary);
-    std::string bytes;
-    std::getline(input, bytes);
-    if (bytes.empty() || bytes.size() > 1024) return {};
+namespace {
+// A key file's one line: no BOM, no line end, no trailing spaces; empty when it is not a key.
+std::string secretLine(std::string bytes) {
+    if (const auto end = bytes.find('\n'); end != std::string::npos) bytes.resize(end);
     if (bytes.size() >= 3 && bytes.substr(0, 3) == "\xef\xbb\xbf") bytes.erase(0, 3);
     while (!bytes.empty() && (bytes.back() == '\r' || bytes.back() == ' ')) bytes.pop_back();
-    return text_encoding::wide(bytes);
+    return bytes.size() > 1024 ? std::string{} : bytes;
+}
+}
+
+std::wstring userSecret(const wchar_t* environment, const wchar_t* filename) {
+    if (auto value = system_info::environment(environment, 1023); value && !value->empty()) return *value;
+    return userSecretFile(userConfigDirectory() / filename);
+}
+
+std::wstring userSecretFile(const std::filesystem::path& file) {
+    // Saved by launchme: readable only by this user (DPAPI; AES-GCM on Linux).
+    if (const auto stored = protected_file::read(file, 8192)) return text_encoding::wide(secretLine(*stored));
+    // A plain one-line file (written by hand, or by launchme up to 0.7.12): used, then encrypted in place.
+    std::ifstream input(file, std::ios::binary);
+    std::string bytes;
+    std::getline(input, bytes);
+    input.close();
+    bytes = secretLine(std::move(bytes));
+    if (bytes.empty()) return {};
+    auto value = text_encoding::wide(bytes);
+    if (!value.empty()) protected_file::write(file, bytes, L"Launchme key");
+    return value;
 }
 
 bool saveUserSecret(const wchar_t* filename, std::wstring_view value) {
@@ -68,7 +87,7 @@ bool saveUserSecret(const wchar_t* filename, std::wstring_view value) {
     value = value.substr(first, value.find_last_not_of(L" \t\r\n") - first + 1);
     if (value.size() > 1024 || value.find_first_of(L"\r\n") != std::wstring_view::npos) return false;
     const auto bytes = text_encoding::utf8(std::wstring(value));
-    return !bytes.empty() && atomic_file::write(file, bytes + '\n');
+    return !bytes.empty() && protected_file::write(file, bytes, L"Launchme key");
 }
 
 bool storedUserSecret(const wchar_t* filename) {
@@ -114,13 +133,118 @@ std::wstring companionUserName(std::wstring_view text) {
 }
 
 namespace {
+// Plain on/off settings ("0" / "1"): one table, so the parser's if/else chain stays short.
+struct FlagSetting { std::string_view key; bool AppSettings::* field; };
+constexpr FlagSetting flag_settings[] = {
+    {"show_emulation", &AppSettings::show_emulation}, {"home_rows_migrated", &AppSettings::home_rows_migrated},
+    {"tarot", &AppSettings::tarot}, {"store_hub", &AppSettings::store_hub}, {"show_launchers", &AppSettings::show_launchers},
+    {"hide_while_playing", &AppSettings::hide_while_playing},
+    {"shelves_hero_facts", &AppSettings::shelves_hero_facts},
+    {"wallpaper_snitch", &AppSettings::wallpaper_snitch},
+    {"wallpaper_menus", &AppSettings::wallpaper_menus},
+    {"wallpaper_artwork", &AppSettings::wallpaper_artwork},
+    {"wallpaper_tiles", &AppSettings::wallpaper_tiles},
+    {"add_game_tile", &AppSettings::add_game_tile},
+    {"psfive_details", &AppSettings::psfive_details},
+    {"menu_dialog", &AppSettings::menu_dialog},
+    {"metro_light", &AppSettings::metro_light},
+    {"snitch_colour_icons", &AppSettings::snitch_colour_icons},
+    {"metro_category_tabs", &AppSettings::metro_category_tabs},
+    {"flix_category_tabs", &AppSettings::flix_category_tabs},
+    {"psfive_category_tabs", &AppSettings::psfive_category_tabs},
+    {"show_publishers", &AppSettings::show_publishers},
+    {"show_developers", &AppSettings::show_developers},
+    {"show_companies", &AppSettings::show_companies},
+    {"show_updated_row", &AppSettings::show_updated_row},
+    {"show_discovery_row", &AppSettings::show_discovery_row},
+    {"home_tab_icons", &AppSettings::home_tab_icons},
+    {"flix_rail", &AppSettings::flix_rail},
+    {"start_hidden", &AppSettings::start_hidden},
+    {"hud_enabled", &AppSettings::hud_enabled},
+    {"hud_label_colors", &AppSettings::hud_label_colors},
+    {"fps_graph", &AppSettings::fps_graph},
+    {"fps_badges", &AppSettings::fps_badges},
+    {"fps_limiter", &AppSettings::fps_limiter},
+    {"fps_limit_precise", &AppSettings::fps_limit_precise},
+    {"xbox_own_install", &AppSettings::xbox_own_install},
+    {"texture_compression", &AppSettings::texture_compression},
+    {"aurelia", &AppSettings::aurelia},
+    {"aurelia_intro_done", &AppSettings::aurelia_intro_done},
+    {"steam_enabled", &AppSettings::steam_enabled},
+    {"aurelia_default", &AppSettings::aurelia_default},
+    {"aurelia_cloud", &AppSettings::aurelia_cloud},
+    {"recent_uninstalled", &AppSettings::recent_uninstalled},
+    {"save_backup_after_game", &AppSettings::save_backup_after_game},
+    {"desktop_poster_glow", &AppSettings::desktop_poster_glow},
+    {"pad_cursor", &AppSettings::pad_cursor},
+    {"crt", &AppSettings::crt},
+    {"show_uninstalled", &AppSettings::show_uninstalled},
+    {"windowed", &AppSettings::windowed},
+    {"launch_tv_mode", &AppSettings::launch_tv_mode},
+    {"pc_sources_detected", &AppSettings::pc_sources_detected},
+    {"autostart", &AppSettings::autostart},
+    {"low_memory", &AppSettings::low_memory},
+    {"desktop_platform_badges", &AppSettings::desktop_platform_badges},
+    {"desktop_gray_uninstalled", &AppSettings::desktop_gray_uninstalled},
+    {"desktop_maximized", &AppSettings::desktop_maximized},
+    {"desktop_installed", &AppSettings::desktop_installed},
+    {"desktop_narrow", &AppSettings::desktop_narrow},
+    {"show_private", &AppSettings::show_private},
+    {"show_store", &AppSettings::show_store},
+    {"show_categories", &AppSettings::show_categories},
+    {"xmb_posters", &AppSettings::xmb_posters},
+    {"shelves_posters", &AppSettings::shelves_posters},
+    {"shelves_category_all", &AppSettings::shelves_category_all},
+    {"panel_borders", &AppSettings::panel_borders},
+    {"screen_transitions", &AppSettings::screen_transitions},
+    {"input_hints", &AppSettings::input_hints},
+    {"glance", &AppSettings::glance},
+    {"companion", &AppSettings::companion},
+    {"companion_guests", &AppSettings::companion_guests},
+    {"companion_gamification", &AppSettings::companion_gamification},
+    {"companion_debug", &AppSettings::companion_debug},
+    {"companion_model_info", &AppSettings::companion_model_info},
+    {"companion_typing", &AppSettings::companion_typing},
+    {"companion_weather", &AppSettings::companion_weather},
+    {"companion_remote", &AppSettings::companion_remote},
+    {"companion_memory", &AppSettings::companion_memory},
+    {"companion_notes", &AppSettings::companion_notes},
+    {"companion_semantic_memory", &AppSettings::companion_semantic_memory},
+    {"steam_silent_launch", &AppSettings::steam_silent_launch},
+    {"steam_hide_launch_window", &AppSettings::steam_hide_launch_window},
+    {"steam_account_switch", &AppSettings::steam_account_switch},
+    {"steam_install_dialog", &AppSettings::steam_install_dialog},
+    {"game_videos", &AppSettings::game_videos},
+    {"steam_trailers", &AppSettings::steam_trailers},
+    {"emulation_names", &AppSettings::emulation_names},
+    {"emulation_rom_art", &AppSettings::emulation_rom_art},
+    {"console_colors", &AppSettings::console_colors},
+    {"metro_3d", &AppSettings::metro_3d},
+    {"psfive_clock", &AppSettings::psfive_clock},
+    {"flix_category_all", &AppSettings::flix_category_all},
+    {"quick_resume", &AppSettings::quick_resume},
+    {"guide_overlay", &AppSettings::guide_overlay},
+    {"game_fps", &AppSettings::game_fps},
+    {"game_fps_low", &AppSettings::game_fps_low},
+    {"steam_controller", &AppSettings::steam_controller},
+    {"focus_spring", &AppSettings::focus_spring},
+    {"glow_pulse", &AppSettings::glow_pulse},
+    {"glow_trace", &AppSettings::glow_trace},
+    {"screensaver", &AppSettings::screensaver},
+    {"drmfree_background", &AppSettings::drm_background},
+    {"tour_done", &AppSettings::tour_done},
+    {"update_check", &AppSettings::update_check},
+};
+bool parseFlagSetting(AppSettings& settings, std::string_view key, std::string_view value) {
+    for (const auto& flag : flag_settings)
+        if (flag.key == key) { if (value == "0" || value == "1") settings.*flag.field = value == "1"; return true; }
+    return false;
+}
 // Interface look and layout options added after the main list (button colours, tile entrance,
 // focus gap, search artwork, Flix icons, the default home's facts). True: the key was one of them.
 bool parseLookSetting(AppSettings& settings, std::string_view key, std::string_view value) {
     const auto flag = [&](bool& target) { if (value == "0" || value == "1") target = value == "1"; return true; };
     if (key == "flix_top_icons") return true; // Retired: Flix has no icons in the corner any more.
-    if (key == "hide_while_playing") return flag(settings.hide_while_playing);
-    if (key == "shelves_hero_facts") return flag(settings.shelves_hero_facts);
     if (key == "shelves_steam") { flag(settings.shelves_steam); if (settings.shelves_steam) settings.shelves_posters = true; return true; }
     if (key == "focus_gap") {
         // 0 / 1 were the first version's off / outside.
@@ -216,7 +340,6 @@ bool parseEmulatorSetting(AppSettings& settings, std::string_view key, std::stri
 }
 // 0.4.9: artwork sources, the wallpaper, home tiles, PSfive's details, the menu dialog, Metro's light theme.
 bool parseExtraSetting(AppSettings& settings, std::string_view key, std::string_view value) {
-    const auto flag = [&](bool& target) { if (value == "0" || value == "1") target = value == "1"; return true; };
     if (key == "psfive_dim") { // PSfive: the extra darkening of the background.
         float level = 0;
         const auto result = std::from_chars(value.data(), value.data() + value.size(), level);
@@ -246,35 +369,16 @@ bool parseExtraSetting(AppSettings& settings, std::string_view key, std::string_
         if (error == std::errc{} && end == value.data() + value.size()) settings.wallpaper_id = id;
         return true;
     }
-    if (key == "wallpaper_snitch") return flag(settings.wallpaper_snitch);
-    if (key == "wallpaper_menus") return flag(settings.wallpaper_menus);
-    if (key == "wallpaper_artwork") return flag(settings.wallpaper_artwork);
-    if (key == "wallpaper_tiles") return flag(settings.wallpaper_tiles);
     if (key == "home_tiles") {
         if (value == "layout") settings.home_tiles = AppSettings::HomeTiles::layout;
         if (value == "first") settings.home_tiles = AppSettings::HomeTiles::first;
         if (value == "last") settings.home_tiles = AppSettings::HomeTiles::last;
         return true;
     }
-    if (key == "add_game_tile") return flag(settings.add_game_tile);
-    if (key == "psfive_details") return flag(settings.psfive_details);
-    if (key == "menu_dialog") return flag(settings.menu_dialog);
-    if (key == "metro_light") return flag(settings.metro_light);
-    if (key == "snitch_colour_icons") return flag(settings.snitch_colour_icons);
-    if (key == "metro_category_tabs") return flag(settings.metro_category_tabs);
-    if (key == "flix_category_tabs") return flag(settings.flix_category_tabs);
-    if (key == "psfive_category_tabs") return flag(settings.psfive_category_tabs);
-    if (key == "show_publishers") return flag(settings.show_publishers);
-    if (key == "show_developers") return flag(settings.show_developers);
-    if (key == "show_companies") return flag(settings.show_companies);
     if (key == "studio_min_games") {
         if (value == "1" || value == "2" || value == "3" || value == "5") settings.studio_min_games = value[0] - '0';
         return true;
     }
-    if (key == "show_updated_row") return flag(settings.show_updated_row);
-    if (key == "show_discovery_row") return flag(settings.show_discovery_row);
-    if (key == "home_tab_icons") return flag(settings.home_tab_icons);
-    if (key == "flix_rail") return flag(settings.flix_rail);
     if (key == "hint_style") {
         if (value == "glass") settings.hint_style = AppSettings::HintStyle::glass;
         else if (value == "white") settings.hint_style = AppSettings::HintStyle::white;
@@ -313,10 +417,10 @@ AppSettings parseAppSettings(std::string_view text) {
         };
         const auto key = trim(line.substr(0, equal));
         auto value = trim(line.substr(equal + 1));
-        if (parseLookSetting(settings, key, value)) continue; // Kept apart: MSVC caps one if/else chain's depth.
+        if (parseFlagSetting(settings, key, value)) continue;
+        if (parseLookSetting(settings, key, value)) continue; // Kept apart: MSVC caps one if/else chain's depth (C1061).
         if (parseExtraSetting(settings, key, value)) continue;
         if (key == "desktop_view") { if (value == "0" || value == "1" || value == "2" || value == "3") settings.desktop_view = value[0] - '0'; continue; }
-        if (key == "start_hidden") { if (value == "0" || value == "1") settings.start_hidden = value == "1"; continue; }
         if (key == "start_done") {
             if (!value.empty() && value.size() <= 3 && value.find_first_not_of("0123456789") == std::string_view::npos)
                 settings.start_done = static_cast<uint32_t>(std::stoul(std::string(value))) & 0xFFu;
@@ -334,10 +438,8 @@ AppSettings parseAppSettings(std::string_view text) {
             }
             continue;
         }
-        if (key == "hud_enabled") { if (value == "0" || value == "1") settings.hud_enabled = value == "1"; continue; }
         if (key == "hud_layout") { if (value == "0" || value == "1") settings.hud_layout = value[0] - '0'; continue; }
         if (key == "cpu_temp_source") { if (value == "0" || value == "1") settings.cpu_temp_source = value[0] - '0'; continue; }
-        if (key == "hud_label_colors") { if (value == "0" || value == "1") settings.hud_label_colors = value == "1"; continue; }
         if (key == "hud_size") {
             if (!value.empty() && value.size() <= 3 && std::all_of(value.begin(), value.end(), [](char c) { return c >= '0' && c <= '9'; })) {
                 const int percent = std::stoi(std::string(value));
@@ -345,11 +447,7 @@ AppSettings parseAppSettings(std::string_view text) {
             }
             continue;
         }
-        if (key == "fps_graph") { if (value == "0" || value == "1") settings.fps_graph = value == "1"; continue; }
-        if (key == "fps_badges") { if (value == "0" || value == "1") settings.fps_badges = value == "1"; continue; }
         if (key == "fps_limit_mode") { if (value == "0" || value == "1") settings.fps_limit_mode = value[0] - '0'; continue; }
-        if (key == "fps_limiter") { if (value == "0" || value == "1") settings.fps_limiter = value == "1"; continue; }
-        if (key == "fps_limit_precise") { if (value == "0" || value == "1") settings.fps_limit_precise = value == "1"; continue; }
         if (key == "fps_limit" || key == "fps_game_limit") { // "60", or "60:<game key>" for one game.
             const auto colon = key == "fps_game_limit" ? value.find(':') : std::string_view::npos;
             const auto number = value.substr(0, colon);
@@ -363,12 +461,8 @@ AppSettings parseAppSettings(std::string_view text) {
             }
             continue;
         }
-        if (key == "xbox_own_install") { if (value == "0" || value == "1") settings.xbox_own_install = value == "1"; continue; }
-        if (key == "texture_compression") { if (value == "0" || value == "1") settings.texture_compression = value == "1"; continue; }
         // Before 0.4.6 (opt-in under the low memory mode): on stays on; off takes the new default.
         if (key == "low_memory_bc1") { if (value == "1") settings.texture_compression = true; continue; }
-        if (key == "aurelia") { if (value == "0" || value == "1") settings.aurelia = value == "1"; continue; }
-        if (key == "aurelia_intro_done") { if (value == "0" || value == "1") settings.aurelia_intro_done = value == "1"; continue; }
         if (key == "steam_account") { // <app id>:<SteamID64>
             const auto colon = value.find(':');
             const auto app = value.substr(0, colon == std::string_view::npos ? 0 : colon), id = colon == std::string_view::npos ? std::string_view{} : value.substr(colon + 1);
@@ -378,9 +472,6 @@ AppSettings parseAppSettings(std::string_view text) {
                 error == std::errc{} && parsed == id.data() + id.size() && steam_id) settings.steam_launch_accounts[std::string(app)] = steam_id;
             continue;
         }
-        if (key == "steam_enabled") { if (value == "0" || value == "1") settings.steam_enabled = value == "1"; continue; }
-        if (key == "aurelia_default") { if (value == "0" || value == "1") settings.aurelia_default = value == "1"; continue; }
-        if (key == "aurelia_cloud") { if (value == "0" || value == "1") settings.aurelia_cloud = value == "1"; continue; }
         if (key == "aurelia_auto_cloud") continue; // 0.4.1 and earlier: an opt-in; syncing is on by default now.
         if (key == "aurelia_standalone" || key == "aurelia_cloud_skip" || key == "aurelia_steam") {
             if (!value.empty() && value.size() <= 10 && std::all_of(value.begin(), value.end(), [](char c) { return c >= '0' && c <= '9'; }))
@@ -388,9 +479,6 @@ AppSettings parseAppSettings(std::string_view text) {
             continue;
         }
         // Outside the else-if chain below: MSVC refuses one level more of it (C1061).
-        if (key == "recent_uninstalled") { if (value == "0" || value == "1") settings.recent_uninstalled = value == "1"; continue; }
-        if (key == "save_backup_after_game") { if (value == "0" || value == "1") settings.save_backup_after_game = value == "1"; continue; }
-        if (key == "desktop_poster_glow") { if (value == "0" || value == "1") settings.desktop_poster_glow = value == "1"; continue; }
         if (key == "desktop_theme") { if (value.size() == 1 && value[0] >= '0' && value[0] <= '9') settings.desktop_theme = value[0] - '0'; continue; }
         if (key == "desktop_accent" || key == "desktop_button") {
             // #RRGGBB; the button's "accent": the same as the accent (0).
@@ -412,11 +500,8 @@ AppSettings parseAppSettings(std::string_view text) {
             }
             continue;
         }
-        // Outside the chain below (it is as deep as the compiler allows).
-        if (key == "pad_cursor") { if (value == "0" || value == "1") settings.pad_cursor = value == "1"; continue; }
         if (key.starts_with("crt")) {
-            if (key == "crt" && (value == "0" || value == "1")) settings.crt = value == "1";
-            else if (key == "crt_mask" && value.size() == 1 && value[0] >= '0' && value[0] <= '4') settings.crt_mask = value[0] - '0';
+            if (key == "crt_mask" && value.size() == 1 && value[0] >= '0' && value[0] <= '4') settings.crt_mask = value[0] - '0';
             else if (key == "crt_warp_x" || key == "crt_warp_y" || key == "crt_mask_level" || key == "crt_scanlines" || key == "crt_glow" || key == "crt_phosphor") {
                 float level = 0;
                 const auto result = std::from_chars(value.data(), value.data() + value.size(), level);
@@ -429,18 +514,7 @@ AppSettings parseAppSettings(std::string_view text) {
             }
             continue;
         }
-        if (key == "show_uninstalled" && (value == "0" || value == "1")) settings.show_uninstalled = value == "1";
-        else if (key == "windowed" && (value == "0" || value == "1")) settings.windowed = value == "1";
-        else if (key == "launch_tv_mode" && (value == "0" || value == "1")) settings.launch_tv_mode = value == "1";
-        else if (key == "pc_sources_detected" && (value == "0" || value == "1")) settings.pc_sources_detected = value == "1";
-        else if (key == "autostart" && (value == "0" || value == "1")) settings.autostart = value == "1";
-        else if (key == "low_memory" && (value == "0" || value == "1")) settings.low_memory = value == "1";
-        else if (key == "tv_monitor" && value.size() < 64 && value.starts_with("\\\\.\\")) settings.tv_monitor = text_encoding::wideLenient(value);
-        else if (key == "desktop_platform_badges" && (value == "0" || value == "1")) settings.desktop_platform_badges = value == "1";
-        else if (key == "desktop_gray_uninstalled" && (value == "0" || value == "1")) settings.desktop_gray_uninstalled = value == "1";
-        else if (key == "desktop_maximized" && (value == "0" || value == "1")) settings.desktop_maximized = value == "1";
-        else if (key == "desktop_installed" && (value == "0" || value == "1")) settings.desktop_installed = value == "1";
-        else if (key == "desktop_narrow" && (value == "0" || value == "1")) settings.desktop_narrow = value == "1";
+        if (key == "tv_monitor" && value.size() < 64 && value.starts_with("\\\\.\\")) settings.tv_monitor = text_encoding::wideLenient(value);
         else if (key == "desktop_pane") {
             int width = 0;
             const auto parsed = std::from_chars(value.data(), value.data() + value.size(), width);
@@ -481,26 +555,10 @@ AppSettings parseAppSettings(std::string_view text) {
                 value = comma == std::string_view::npos ? std::string_view{} : value.substr(comma + 1);
             }
         }
-        else if ((key == "show_emulation" || key == "home_rows_migrated") && (value == "0" || value == "1"))
-            (key == "show_emulation" ? settings.show_emulation : settings.home_rows_migrated) = value == "1";
         else if (key == "studio_libraries" && (value == "0" || value == "1")) settings.show_publishers = settings.show_developers = value == "1"; // Before 0.5.8: both rows.
-        else if (key == "show_private" && (value == "0" || value == "1")) settings.show_private = value == "1";
-        else if (key == "show_store" && (value == "0" || value == "1")) settings.show_store = value == "1";
-        else if (key == "show_categories" && (value == "0" || value == "1")) settings.show_categories = value == "1";
-        else if (key == "xmb_posters" && (value == "0" || value == "1")) settings.xmb_posters = value == "1";
-        else if (key == "shelves_posters" && (value == "0" || value == "1")) settings.shelves_posters = value == "1";
-        else if (key == "shelves_category_all" && (value == "0" || value == "1")) settings.shelves_category_all = value == "1";
-        else if (key == "panel_borders" && (value == "0" || value == "1")) settings.panel_borders = value == "1";
-        else if (key == "screen_transitions" && (value == "0" || value == "1")) settings.screen_transitions = value == "1";
-        else if (key == "input_hints" && (value == "0" || value == "1")) settings.input_hints = value == "1";
-        else if (key == "glance" && (value == "0" || value == "1")) settings.glance = value == "1";
-        else if (key == "tarot" && (value == "0" || value == "1")) settings.tarot = value == "1";
-        else if (key == "companion" && (value == "0" || value == "1")) settings.companion = value == "1";
         // The first version's two looks were white and red: Yuki and Akane (res/companion/yuki, akane).
         else if (key == "companion_look" && companionKey(value))
             settings.companion_look = value == "white" ? std::string("yuki") : value == "red" ? std::string("akane") : std::string(value);
-        else if (key == "companion_guests" && (value == "0" || value == "1")) settings.companion_guests = value == "1";
-        else if (key == "companion_gamification" && (value == "0" || value == "1")) settings.companion_gamification = value == "1";
         else if (key == "companion_user_name") settings.companion_user_name = companionUserName(text_encoding::wideLenient(value));
         else if (key == "companion_user_gender")
             settings.companion_user_gender = value == "male" ? AppSettings::CompanionUserGender::male :
@@ -510,7 +568,6 @@ AppSettings parseAppSettings(std::string_view text) {
                 std::all_of(value.begin(), value.end(), [](char ch) { return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_' || ch == '-'; });
             if (valid) settings.companion_costumes[std::string(key.substr(18))] = std::string(value);
         }
-        else if (key == "companion_debug" && (value == "0" || value == "1")) settings.companion_debug = value == "1";
         else if (key == "companion_model" || key == "companion_xai_model") {
             // A model ID: letters, digits, dots and dashes (a full RID is accepted too).
             if (!value.empty() && value.size() < 120 && std::all_of(value.begin(), value.end(), [](char ch) {
@@ -538,10 +595,6 @@ AppSettings parseAppSettings(std::string_view text) {
             if ((decoded.empty() || decoded.starts_with(L"https://") || decoded.starts_with(L"http://")) && decoded.size() < 300 &&
                 decoded.find_first_of(L" \t\"") == std::wstring::npos) settings.companion_ollama_host = decoded;
         }
-        else if (key == "companion_model_info" && (value == "0" || value == "1")) settings.companion_model_info = value == "1";
-        else if (key == "companion_typing" && (value == "0" || value == "1")) settings.companion_typing = value == "1";
-        else if (key == "companion_weather" && (value == "0" || value == "1")) settings.companion_weather = value == "1";
-        else if (key == "companion_remote" && (value == "0" || value == "1")) settings.companion_remote = value == "1";
         else if (key == "companion_remote_port") {
             int port = 0;
             if (std::from_chars(value.data(), value.data() + value.size(), port).ec == std::errc{} && port >= 1024 && port <= 65535) settings.companion_remote_port = port;
@@ -583,9 +636,6 @@ AppSettings parseAppSettings(std::string_view text) {
             if (valid && key == "companion_city") settings.companion_city = std::string(value);
             else if (valid && !value.empty()) settings.companion_cities[std::string(key.substr(15))] = std::string(value);
         }
-        else if (key == "companion_memory" && (value == "0" || value == "1")) settings.companion_memory = value == "1";
-        else if (key == "companion_notes" && (value == "0" || value == "1")) settings.companion_notes = value == "1";
-        else if (key == "companion_semantic_memory" && (value == "0" || value == "1")) settings.companion_semantic_memory = value == "1";
         else if (key == "hint_glyphs") {
             if (value == "auto") settings.hint_glyphs = AppSettings::HintGlyphs::automatic;
             else if (value == "xbox") settings.hint_glyphs = AppSettings::HintGlyphs::xbox;
@@ -598,34 +648,14 @@ AppSettings parseAppSettings(std::string_view text) {
             if (result.ec == std::errc{} && result.ptr == value.data() + value.size() && std::isfinite(level))
                 settings.glass = std::clamp(level, 0.0f, 1.0f);
         }
-        else if (key == "steam_silent_launch" && (value == "0" || value == "1")) settings.steam_silent_launch = value == "1";
-        else if (key == "steam_hide_launch_window" && (value == "0" || value == "1")) settings.steam_hide_launch_window = value == "1";
-        else if (key == "steam_account_switch" && (value == "0" || value == "1")) settings.steam_account_switch = value == "1";
-        else if (key == "steam_install_dialog" && (value == "0" || value == "1")) settings.steam_install_dialog = value == "1";
-        else if (key == "game_videos" && (value == "0" || value == "1")) settings.game_videos = value == "1";
         else if (key == "video_delay" && (value == "1" || value == "3" || value == "5" || value == "10")) settings.video_delay = value == "1" ? 1 : value == "3" ? 3 : value == "5" ? 5 : 10;
         else if (key == "video_volume" && value.size() == 1 && value[0] >= '0' && value[0] <= '3') settings.video_volume = value[0] - '0';
-        else if (key == "steam_trailers" && (value == "0" || value == "1")) settings.steam_trailers = value == "1";
         else if (key == "trailer_space_mb" && (value == "100" || value == "250" || value == "500" || value == "1000")) settings.trailer_space_mb = std::stoi(std::string(value));
-        else if (key == "emulation_names" && (value == "0" || value == "1")) settings.emulation_names = value == "1";
-        else if (key == "emulation_rom_art" && (value == "0" || value == "1")) settings.emulation_rom_art = value == "1";
-        else if (key == "console_colors" && (value == "0" || value == "1")) settings.console_colors = value == "1";
-        else if (key == "metro_3d" && (value == "0" || value == "1")) settings.metro_3d = value == "1";
-        else if (key == "psfive_clock" && (value == "0" || value == "1")) settings.psfive_clock = value == "1";
-        else if (key == "flix_category_all" && (value == "0" || value == "1")) settings.flix_category_all = value == "1";
         // game_action: the earlier key (accept_action) saved its old default for everyone, so the new
         // default (details) applies once and choices made since are kept under this key.
         else if (key == "game_action" && (value == "launch" || value == "details"))
             settings.accept_action = value == "details" ? AppSettings::AcceptAction::details : AppSettings::AcceptAction::launch;
-        else if (key == "quick_resume" && (value == "0" || value == "1")) settings.quick_resume = value == "1";
         else if (key == "guide_menu") {} // Retired option: Guide / PS always opens the menu (the in-game overlay setting decides over games).
-        else if (key == "guide_overlay" && (value == "0" || value == "1")) settings.guide_overlay = value == "1";
-        else if (key == "game_fps" && (value == "0" || value == "1")) settings.game_fps = value == "1";
-        else if (key == "game_fps_low" && (value == "0" || value == "1")) settings.game_fps_low = value == "1";
-        else if (key == "steam_controller" && (value == "0" || value == "1")) settings.steam_controller = value == "1";
-        else if (key == "focus_spring" && (value == "0" || value == "1")) settings.focus_spring = value == "1";
-        else if (key == "glow_pulse" && (value == "0" || value == "1")) settings.glow_pulse = value == "1";
-        else if (key == "glow_trace" && (value == "0" || value == "1")) settings.glow_trace = value == "1";
         else if (key == "glow_level") {
             float level = 0;
             const auto result = std::from_chars(value.data(), value.data() + value.size(), level);
@@ -638,10 +668,6 @@ AppSettings parseAppSettings(std::string_view text) {
             if (result.ec == std::errc{} && result.ptr == value.data() + value.size() && std::isfinite(level))
                 settings.background_grid = std::clamp(level, 0.0f, 1.0f);
         }
-        else if (key == "screensaver" && (value == "0" || value == "1")) settings.screensaver = value == "1";
-        else if (key == "drmfree_background" && (value == "0" || value == "1")) settings.drm_background = value == "1";
-        else if (key == "tour_done" && (value == "0" || value == "1")) settings.tour_done = value == "1";
-        else if (key == "update_check" && (value == "0" || value == "1")) settings.update_check = value == "1";
         else if (key == "update_skipped" && value.size() <= 32 && value.find_first_not_of("0123456789.") == std::string_view::npos)
             settings.update_skipped = text_encoding::wideLenient(value);
         else if (key == "screensaver_style") {
@@ -982,6 +1008,8 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
     output << "input_hints=" << settings.input_hints << '\n';
     output << "glance=" << settings.glance << '\n';
     output << "tarot=" << settings.tarot << '\n';
+    output << "store_hub=" << settings.store_hub << '\n';
+    output << "show_launchers=" << settings.show_launchers << '\n';
     output << "companion=" << settings.companion << '\n';
     output << "companion_look=" << settings.companion_look << '\n';
     output << "companion_guests=" << settings.companion_guests << '\n';
