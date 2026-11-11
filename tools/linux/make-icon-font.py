@@ -85,6 +85,17 @@ def main():
         if drop in font:
             del font[drop]
 
+    # Centred horizontally in their advance: the Fluent glyphs start at x = 0 (their side padding
+    # is in the advance only), so drawn centred in a box they sat left of it, each by its own amount.
+    for name in order[1:]:
+        glyph, advance = table[name], hmtx[name][0]
+        glyph.recalcBounds(table)
+        if glyph.numberOfContours <= 0:
+            continue
+        glyph.coordinates.translate((round((advance - glyph.xMin - glyph.xMax) / 2), 0))
+        glyph.recalcBounds(table)
+        hmtx[name] = (advance, glyph.xMin)
+
     # Centred vertically on the icons' common middle, as Segoe's glyphs sit in their line.
     glyph_set = font.getGlyphSet()
     middles = []
