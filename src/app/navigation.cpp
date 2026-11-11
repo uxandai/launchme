@@ -219,7 +219,7 @@ void Launcher::openSearch() {
     rebuildCards(true);
 }
 
-void Launcher::back() {
+void Launcher::back(bool escape) {
     const auto dialog = topDialog();
     if (desktopActive() && dialog == Modal::none && !friends_open_ && !quick_open_ && !menu_open_) { desktopBack(); return; }
     if (dialog == Modal::bulk_covers) { bulkCoversClose(); return; }
@@ -358,7 +358,8 @@ void Launcher::back() {
     if (psfiveActions()) { psfiveFocusAction(-1); audio_.navigate(); return; } // The buttons give the focus back to the row.
     if (psfiveTopFocused()) { psfiveFocusTop(-1); audio_.navigate(); return; } // So does the top bar.
     if (psfiveActive() && category_ != 0) { showCategory(0); audio_.navigate(); return; } // Another shelf: back to Recent.
-    if (categoryRailActive()) { focusCategoryRail(true); return; }
+    if (categoryRailActive() && !category_rail_focus_) { focusCategoryRail(true); return; }
+    if (escape) openPowerMenu(); // Home with nothing left to close: Esc shows Zasilanie.
 }
 
 void Launcher::onCharacter(wchar_t character) {

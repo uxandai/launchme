@@ -660,7 +660,8 @@ public:
     void closeQuick();
     void quickMove(int amount);
     void quickAccept();
-    void back();
+    // `escape`: the Esc key; on the home screen, with nothing left to close, it opens Zasilanie.
+    void back(bool escape = false);
     void onCharacter(wchar_t character);
     // `repeated`: a held Backspace; it erases, but never closes a field or leaves a screen.
     void eraseSearchCharacter(bool repeated = false);

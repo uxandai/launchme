@@ -391,7 +391,7 @@ LRESULT CALLBACK windowProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lpara
                 else if (app->categoryMenuOpen()) app->closeCategoryMenu();
                 else if (app->friendsOpen()) app->friendsBack(); // Friends list -> tiles -> closed.
                 else if (app->menuOpen()) app->dismissMenu();
-                else app->back();
+                else app->back(wparam == VK_ESCAPE);
             }
         }
         return 0;
