@@ -37,6 +37,22 @@ void Renderer::drawMetro() {
         target_->FillRectangle(D2D1::RectF(0, 0, viewport_.width, viewport_.height), solid_.Get());
     }
     if (selected_ < cards.size()) drawMetroTile(cards[selected_], selected_);
+    // Tytuł w lewym dolnym rogu: the focused game's name and its platform's mark on the hints' line.
+    if (context_->metro_title_corner && selected_ < cards.size() && isGame(cards[selected_].game) && !context_->metro_tabs_focus) {
+        const auto& game = cards[selected_].game;
+        const float cy = hintsCenterY(), right = hintsLeft() - 28;
+        const auto platform = activePlatformName(game);
+        const float mark_room = platform.empty() ? 0.0f : 150.0f;
+        const float name_width = std::min(std::max(0.0f, right - 57 - mark_room), std::ceil(textAdvance(game.name, category_font_.Get())));
+        const auto ink = metro_light_ ? gray(0.08f) : gray(0.96f);
+        textLine(game.name, 57, cy, name_width + 2, category_font_.Get(), ink);
+        if (!platform.empty()) {
+            const float x = 57 + name_width + 22;
+            brush(metro_light_ ? gray(0, 0.35f) : gray(1, 0.28f));
+            target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(x - 11, cy + 1), 2.2f, 2.2f), solid_.Get());
+            drawPlatformMark(platform, x, cy, 22, std::max(0.0f, std::min(120.0f, right - x)), 1.0f, toast_font_.Get());
+        }
+    }
     // Her line beside her tile while it is on screen (left of it, over Biblioteka and Ustawienia).
     if (companion_tile_mouth_ && focus < 0.001f) {
         const auto& [tile, mouth, alpha] = *companion_tile_mouth_;
@@ -270,7 +286,9 @@ void Renderer::drawMetroTile(const GameCard& card, size_t index) {
         drawCardStatus(x, y, tile_w, tile_h, transparency * status_fade, frozen ? tr(L"Wstrzymana") : tr(L"W grze"));
     } else if (caption) {
         // Posters show their name only in focus; the other tiles always carry it.
-        const float shown = role == Role::game ? emphasis : 1.0f;
+        const bool art_tile = !metro_layout::systemTile(role) && role != Role::all;
+        const bool cornered = context_->metro_title_corner && art_tile && isGame(game);
+        const float shown = cornered ? (role == Role::game ? 0.0f : 1.0f - emphasis) : role == Role::game ? emphasis : 1.0f;
         if (shown > 0.01f) {
             const bool art = !metro_layout::systemTile(role) && role != Role::all;
             if (art) drawCardStatusShade(x, y, tile_w, tile_h, transparency * shown, shape.Get());

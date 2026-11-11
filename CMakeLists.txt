@@ -470,6 +470,7 @@ add_test(NAME low_memory_mode COMMAND launcher_ui_tests --low-memory)
     add_test(NAME store_hub_tabs_install_and_promotions COMMAND launcher_ui_tests --store-hub)
     add_test(NAME profile_page_widget_week_achievements COMMAND launcher_ui_tests --profile)
     add_test(NAME publisher_developer_libraries_and_tv_metadata COMMAND launcher_ui_tests --studios)
+    add_test(NAME tv_home_layout_shots_and_recent_searches COMMAND launcher_ui_tests --tv-shots)
     add_test(NAME home_options_flix_rail_tab_icons_favorites COMMAND launcher_ui_tests --home-options)
     add_test(NAME logo_rows_metro_pages_and_studio_tiles COMMAND launcher_ui_tests --studio-tiles)
     add_dependencies(launcher_ui_tests launchme_studios) # The logos beside the test, as beside the program.

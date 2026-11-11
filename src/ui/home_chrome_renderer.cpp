@@ -88,9 +88,21 @@ void Renderer::drawFooter() {
         return;
     }
     if (context_->main_row) {
-        if (cards_ && selected_ < cards_->size()) // "Wszystkie gry" too: its tile is only a glyph.
-            text((*cards_)[selected_].game.name, 57, y, viewport_.width - 224, 48,
-                 category_font_.Get(), color(0.96f, 0.96f, 0.96f));
+        if (!cards_ || selected_ >= cards_->size()) return;
+        // On the hints' line ("Wszystkie gry" too: its tile is only a glyph), the platform's mark
+        // right after the name, both stopping before the hints.
+        const auto& game = (*cards_)[selected_].game;
+        const float cy = hintsCenterY(), right = hintsLeft() - 28;
+        const auto platform = footerShowsPlatform() ? activePlatformName(game) : std::wstring{};
+        const float mark_room = platform.empty() ? 0.0f : 150.0f;
+        const float name_width = std::min(std::max(0.0f, right - 57 - mark_room), std::ceil(textAdvance(game.name, category_font_.Get())));
+        textLine(game.name, 57, cy, name_width + 2, category_font_.Get(), color(0.96f, 0.96f, 0.96f));
+        if (!platform.empty()) {
+            const float x = 57 + name_width + 22;
+            brush(color(1, 1, 1, 0.28f));
+            target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(x - 11, cy + 1), 2.2f, 2.2f), solid_.Get());
+            drawPlatformMark(platform, x, cy, 22, std::max(0.0f, std::min(120.0f, right - x)), 1.0f, toast_font_.Get());
+        }
         return;
     }
     const float label_width = std::max(80.0f, viewport_.width * 0.34f);
@@ -152,7 +164,15 @@ float Renderer::drawPlatformMark(const std::wstring& platform, float x, float ce
     return width;
 }
 
+bool Renderer::footerShowsPlatform() const {
+    if (context_->screen != ScreenMode::shelves || context_->xmb || context_->flix || context_->metro || context_->psfive || context_->snitch ||
+        context_->category_rail || !context_->main_row || !context_->hero_facts.empty() || !cards_ || selected_ >= cards_->size()) return false;
+    return !render_detail::studioPlatform(activePlatformName((*cards_)[selected_].game));
+}
+
 void Renderer::drawPlatformBadge() {
+    if (footerShowsPlatform()) return; // Beside the game's name in the footer.
+    if (context_->metro && context_->metro_title_corner) return; // Metro: beside the name bottom left.
     if (context_->screen == ScreenMode::glance || context_->screen == ScreenMode::companion || context_->snitch) return;
     if (context_->screen == ScreenMode::plugin_page || context_->screen == ScreenMode::downloads || context_->psfive) return; // PSfive: beside the game's name.
     // The libraries, Search and the Store: their top bar holds the tabs and controls, no badge.

@@ -140,6 +140,8 @@ enum class Id { font, home_layout, ui_accent, accent, uninstalled, emulation, mu
                    drm_roots,
                    // Metro / Flix → Pasek kategorii (AppSettings::metro_category_tabs / flix_category_tabs).
                    metro_category_tabs, flix_category_tabs, psfive_category_tabs,
+                   // XMB → Platforma jako logo; Metro → Tytuł w rogu (AppSettings::xmb_platform_badge / metro_title_corner).
+                   xmb_platform_badge, metro_title_corner,
                    // Okna i podpowiedzi → Wygląd podpowiedzi (AppSettings::hint_style).
                    hint_style,
                    // Biblioteka → Uruchamianie: FPS widget's one-time ETW permission (src/platform/etw_access.cpp).

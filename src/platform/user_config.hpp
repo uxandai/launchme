@@ -218,6 +218,8 @@ struct AppSettings {
     // Metro / Flix: the library's category strip in the middle at the top (LB/RB, Page Up/Down change
     // the category; Metro: in place of its own lower-case tabs).
     bool metro_category_tabs = true, flix_category_tabs = true;
+    bool xmb_platform_badge = true;  // XMB: the platform as PSfive's white logo badge instead of its name.
+    bool metro_title_corner = false; // Metro: the focused game's name and platform logo bottom left, not on its tile.
     bool psfive_category_tabs = true; // PSfive: the strip in place of its three tabs and "Więcej...".
     enum class TileShape { squircle, rounded, square };
     TileShape tile_shape = TileShape::squircle;

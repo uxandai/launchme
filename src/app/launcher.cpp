@@ -542,6 +542,7 @@ void Launcher::tick() {
         openContextMenu();
     }
     pollHoldGestures();
+    pollIdentifyAccept();
     tickSettingsHold(now);
     pollFileBrowserPreview();
     pollCustomEditorPoster(); // Dodaj / Edytuj grę: the typed name's poster once typing rests.

@@ -211,6 +211,7 @@ void Launcher::openSearch() {
     screen_ = ScreenMode::search;
     grid_back_focus_ = false;
     search_query_.clear(); search_after_ = 0;
+    loadRecentSearches(); recent_search_focus_ = -1;
     search_results_.clear(); search_shown_query_.clear();
     search_dirty_ = false;
     grid_scroll_ = 0;
@@ -418,6 +419,7 @@ void Launcher::onCharacter(wchar_t character) {
     if (!searching() || character < L' ' || character == 127 || search_query_.size() >= 70) return;
     dismissMenu();
     grid_back_focus_ = false; // Typing returns to the field and its results.
+    recent_search_focus_ = -1;
     if (screen_ == ScreenMode::store) {
         store_jobs_->generation.fetch_add(1);
         store_loading_ = false;
@@ -518,6 +520,7 @@ void Launcher::changeCategory(int amount) {
     if (screen_ == ScreenMode::settings) { settingsMove(amount); return; }
     if (gridScreen(screen_)) {
         if (screen_ == ScreenMode::search || screen_ == ScreenMode::store) {
+            if (recentSearchMove(amount)) return; // The empty field's recent searches.
             // Up from the first row: Back at the top left; Down returns to the games.
             if (grid_back_focus_) {
                 if (amount > 0 && !cards_.empty()) { grid_back_focus_ = false; audio_.navigate(); InvalidateRect(hwnd_, nullptr, FALSE); }

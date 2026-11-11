@@ -249,6 +249,7 @@ void Launcher::catalogAction(const Game& original) {
 
 void Launcher::openDetails(const Game& game) {
     if (!isGame(game) || pending_launch_) return;
+    if (screen_ == ScreenMode::search) rememberSearch();
     if (launcherTile(game)) { // A launcher's details are its card in the Stores: open, uninstall, the download page.
         if (!storeHubTabs()) return;
         const auto id = game.source_id.substr(9); // The game may be a card's, and the Stores replace the cards.

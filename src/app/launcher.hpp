@@ -864,6 +864,7 @@ public:
     void onCacheCompacted(std::unique_ptr<CacheCompactedMessage> message);
     void identifySwitchSource(); // The provider: Wszyscy dostawcy → RAWG → ScreenScraper (emulated games).
     void identifyManual();       // "Dopasuj ręcznie": the title, provider and list.
+    void pollIdentifyAccept();   // The automatic match, once the dialog has shown for 3 s.
     void identifySetSource(identify_ui::State::Source source);
     void identifyToggleMenu();   // The provider dropdown.
     void identifyPickProvider(int index);
@@ -1888,6 +1889,17 @@ private:
     bool studioBoard() const { return screen_ == ScreenMode::library && studioCategory(library_category_); }
     static bool studioCategory(const std::string& id) { return id == "publishers" || id == "developers"; }
     void openSearch();
+    // Szukaj gier: the last searches that opened a game (recent_searches.txt), listed under the empty field.
+    static constexpr size_t recent_search_limit = 8;
+    void loadRecentSearches();
+    void saveRecentSearches();
+    void rememberSearch();
+    bool recentSearchesShown() const;
+    bool recentSearchFocused() const;
+    bool recentSearchMove(int amount);
+    void useRecentSearch();
+    void askForgetSearch();
+    void forgetSearch(bool all);
     void openSettings();
     // Ustawienia → Asystent (desktop: the companion card's "…" menu).
     void openCompanionSettings();
@@ -2157,6 +2169,7 @@ private:
     void settingsToggle(const settings_ui::Row& row); // A switch row; saves and repaints itself.
     bool settingsResetRow(const settings_ui::Row& row); // Its badge button (Row::reset): back to the default.
 public:
+    void recentSearchDelete() { if (recentSearchFocused()) askForgetSearch(); } // Delete on Szukaj gier's recent list.
     bool settingsResetFocused(); // Delete or the pad's X on the focused row; false when it has no reset.
 private:
     // A text row (settings_text.cpp): the first Enter edits `current`, the next trims spaces and
@@ -2253,6 +2266,9 @@ private:
     // XMB home (src/app/xmb.cpp). cards_ = top-row tiles followed by the focused column's games.
     bool xmbActive() const;
     const std::vector<Game>* xmbColumn(const Game& tile) const;
+    void buildXmbPcColumns(const std::vector<Game>& stores);
+    static constexpr size_t xmb_pc_limit = 12;            // Games under a PC platform's XMB tile.
+    static constexpr const char* xmb_see_all = "xmb:all"; // The source_id of its "Zobacz wszystkie" tile.
     std::string xmbKey(const Game& tile) const;
     void rebuildXmb(bool keep_top, bool preserve_background = true);
     void xmbFocus(size_t column, int row);
@@ -2596,7 +2612,7 @@ private:
     // The same three-button prompt also asks whether downloaded videos follow a new video folder.
     // remove: "Usuń z biblioteki" of a user-added game (remove_game_); its file stays on disk.
     // delete_collection: an own collection's trash (Ustawienia → Biblioteka → Kolekcje); its key.
-    enum class PromptKind { exit, move_videos, uninstall, remove, restore_saves, delete_collection, exclude };
+    enum class PromptKind { exit, move_videos, uninstall, remove, restore_saves, delete_collection, exclude, forget_search };
     Game remove_game_;
     Game exclude_game_; // PromptKind::exclude: Wyklucz grę, asked first (Biblioteka → Co pokazywać → Wykluczone).
     std::string delete_collection_key_;
@@ -2894,6 +2910,7 @@ private:
     size_t xmb_column_ = 0;        // Focused top-row tile.
     int xmb_row_ = -1;             // -1 = the tile itself, otherwise a game in its column.
     std::unordered_map<std::string, int> xmb_rows_; // Remembered column position per xmbKey.
+    std::unordered_map<int, std::vector<Game>> xmb_pc_columns_; // A PC platform's column (GameSource), buildXmbPcColumns.
     // Identity of every XMB card (top tile or column game) and Renderer::slotGeneration() after
     // the last rebuildXmb, as flix_slots_: a rebuild over the same list keeps unchanged tiles.
     std::vector<std::string> xmb_card_keys_;
@@ -2909,6 +2926,10 @@ private:
     size_t search_after_ = 0; // Characters after the search field's insertion point.
     size_t searchCaret() const { return search_query_.size() - std::min(search_after_, search_query_.size()); }
     bool search_dirty_ = false;
+    std::vector<std::wstring> recent_searches_;
+    bool recent_searches_loaded_ = false;
+    int recent_search_focus_ = -1; // Row of recent_searches_ under the empty field; -1: none.
+    size_t forget_search_ = 0;     // PromptKind::forget_search: the row asked about.
     std::chrono::steady_clock::time_point search_edited_{};
     std::vector<settings_ui::Row> settings_rows_;
     std::string settings_rows_page_; // settingsPage() of settings_rows_.
@@ -3137,6 +3158,7 @@ private:
     // Menu highlights (focus_motion.cpp): rows by fractional index, frames by their edges.
     struct IndexGlide { Spring value; bool valid = false; };
     IndexGlide menu_glide_, power_glide_, exit_glide_, library_choice_glide_;
+    IndexGlide flix_rail_glide_; // Flix → Pasek boczny: the white disc between its icons.
     IndexGlide settings_choice_glide_; // Settings picker highlight.
     IndexGlide library_tab_glide_;     // The library's category tab strip.
     IndexGlide home_tab_glide_;        // Flix's "Pasek kategorii" (Metro's glides with metro_tab_).

@@ -69,6 +69,7 @@ void Launcher::inputHints(ViewContext& context) const {
     const Game* game = selected_ < cards_.size() ? &cards_[selected_].game : nullptr;
     const auto play = [&] {
         if (searchBackFocused() || (libraryControls() && library_controls_.focus == library_ui::back_button)) { add(HintButton::accept, tr(L"Wstecz")); return; }
+        if (recentSearchFocused()) { add(HintButton::accept, tr(L"Szukaj")); if (pad) add(HintButton::search, tr(L"Usuń")); return; }
         if (!game) return;
         if (!isGame(*game)) { add(HintButton::accept, tr(L"Otwórz")); return; }
         // A focused button beside the games says what it does (Przegląd: "Szczegóły", the primary action).
@@ -181,7 +182,7 @@ void Launcher::inputHints(ViewContext& context) const {
     case ScreenMode::platform_games:
         play();
         if (storeTabsShown() && storeTabCount() > 1) add(HintButton::shoulders, tr(L"Sklepy"));
-        if (pad) add(HintButton::search, tr(L"Szukaj"));
+        if (pad && !recentSearchFocused()) add(HintButton::search, tr(L"Szukaj"));
         else if (screen_ == ScreenMode::library) add(HintButton::type, tr(L"Szukaj"));
         if (libraryTabsShown()) add(HintButton::shoulders, tr(L"Kategorie"));
         add(HintButton::back, tr(L"Wstecz"));

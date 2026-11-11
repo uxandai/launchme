@@ -22,6 +22,9 @@ struct State {
     // "Zidentyfikuj grę" starts at once: the best match is taken as soon as a provider has one. "Dopasuj ręcznie"
     // (manual) shows the title field, the provider choice and the list instead.
     bool manual = false;
+    // The automatic pick waits until the dialog has shown for 3 s (accept_ms, GetTickCount64), so
+    // "Dopasuj ręcznie" can still be pressed when a provider answers at once.
+    uint64_t opened_ms = 0, accept_ms = 0;
     std::vector<screenscraper::GameInfo> found; // Source::screenscraper: the game of each row.
     size_t found_offset = 0;                    // The row of found[0] (a Nintendo game's eShop rows lead).
     std::wstring provider;                      // The provider that answered, as the status names it.

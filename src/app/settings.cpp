@@ -724,6 +724,11 @@ void Launcher::settingsToggle(const Row& row) {
         prefetchPosters();
         settingsChanged(); audio_.context(); return;
     }
+    else if (row.id == Id::xmb_platform_badge || row.id == Id::metro_title_corner) {
+        auto& value = row.id == Id::xmb_platform_badge ? settings_.xmb_platform_badge : settings_.metro_title_corner;
+        value = !value;
+        settingsChanged(); audio_.context(); return;
+    }
     else if (row.id == Id::xmb_posters) {
         settings_.xmb_posters = !settings_.xmb_posters;
         prefetchPosters();

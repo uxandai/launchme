@@ -2,6 +2,7 @@
 #include "renderer.hpp"
 #include "plugin_page.hpp"
 #include "renderer_internal.hpp"
+#include "desktop_view.hpp"
 #include "grid_layout.hpp"
 
 #include <algorithm>
@@ -102,6 +103,23 @@ void Renderer::drawGrid() {
     if (!cards_ || cards_->empty()) {
         // An empty result says so instead of leaving only the header. The Store reports its own
         // state in store_status; the library's typed query has its line under the field above.
+        if (searching && !store && context_->search_query.empty() && !context_->recent_searches.empty()) {
+            // Ostatnie wyszukiwania: a short list under the empty field; the pad's row a white pill.
+            textLine(tr(L"Ostatnie wyszukiwania"), 68, 214, width - 136, toast_sub_font_.Get(), palette::muted());
+            const float row_w = std::min(640.0f, width - 136);
+            for (size_t i = 0; i < context_->recent_searches.size(); ++i) {
+                const float top = 236 + static_cast<float>(i) * 54, cy = top + 25;
+                const bool focused = context_->recent_search_focus == static_cast<int>(i);
+                if (focused) {
+                    brush(palette::gray(0.96f));
+                    target_->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(52, top, 52 + row_w, top + 50), 25, 25), solid_.Get());
+                }
+                const auto ink = focused ? palette::gray(0.06f) : palette::gray(0.82f);
+                desktopGlyph(desktop_ui::glyph::history, 82, cy, 20, focused ? ink : palette::muted());
+                textLine(context_->recent_searches[i], 108, cy, row_w - 72, menu_font_.Get(), ink);
+            }
+            return;
+        }
         if (scanning_ || store) return;
         const bool library_query = library && !library->query.empty();
         if (searching && !context_->search_query.empty())

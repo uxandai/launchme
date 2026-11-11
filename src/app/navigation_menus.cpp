@@ -323,6 +323,10 @@ void Launcher::menuAccept() {
     case Item::studio_earlier: case Item::studio_later: moveStudio(text_encoding::utf8(game.platform), item == Item::studio_earlier ? -1 : 1); break;
     case Item::studio_hide: dismissMenu(); hideStudio(text_encoding::utf8(game.platform)); break;
     case Item::emulator: cycleGameEmulator(game); break; // The menu stays: the row shows the next choice.
+    case Item::more: // Więcej opcji: Details, its "…" open over it.
+        openDetails(game);
+        if (screen_ == ScreenMode::details) { detail_action_ = 1; openContextMenu(); }
+        break;
     default: openArtworkBrowser(game); break;
     }
 }

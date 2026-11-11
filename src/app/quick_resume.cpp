@@ -108,8 +108,10 @@ context_menu::Rows Launcher::menuRows() const {
         rows.steam_account = steamAccountChoices(game).size() > 1;
         rows.emulator = gameEmulatorEditable(game);
         rows.metadata = isGame(game) && game.kind != GameKind::catalog && !gameKey(game).empty(); // Not a store's offer.
-        // Zidentyfikuj grę… under "…" once the game is identified (unidentified: Details' own button).
-        rows.identify = rows.metadata && !steamArtwork(game) && !unidentifiedGame(game);
+        // Zidentyfikuj grę… / ponownie… (an unidentified game also has Details' own button).
+        rows.identify = rows.metadata && !steamArtwork(game);
+        rows.identified = rows.identify && !unidentifiedGame(game);
+        rows.plugins = static_cast<int>(pluginContext(game).size());
         rows.remove = canRemoveFromLibrary(game) && sessionState(game) == SessionState::none; // Usuń z biblioteki, never while it runs.
         rows.recent = inRecent(game);
         return rows;
@@ -118,9 +120,6 @@ context_menu::Rows Launcher::menuRows() const {
     context_menu::Rows rows{settings_.quick_resume && state == SessionState::running, static_cast<int>(pluginContext(game).size()), state != SessionState::none};
     rows.secondary_only = psfiveActive();
     rows.uninstall = canUninstall(game);
-    rows.remove = canRemoveFromLibrary(game);
-    rows.aurelia = aurelia_active_ && aurelia::validGame(game);
-    rows.identify = unidentifiedGame(game);
     rows.recent = inRecent(game) && state == SessionState::none; // A game in play keeps its place.
     return rows;
 }
@@ -396,6 +395,12 @@ void Launcher::exitPromptAccept() {
             if (removeCustomGame(game.source_id)) showNotification(NotificationKind::launch, tr(L"Usunięto z biblioteki"), game.name);
             else showNotification(NotificationKind::error, tr(L"Nie udało się zapisać listy gier."), game.name);
         } else if (index == 1) openCustomEditor(game.source_id);
+        return;
+    }
+    if (prompt_kind_ == PromptKind::forget_search) {
+        prompt_kind_ = PromptKind::exit;
+        const int index = static_cast<int>(choice); // 0 this one, 1 all of them, 2 cancel.
+        if (index == 0 || index == 1) forgetSearch(index == 1);
         return;
     }
     if (prompt_kind_ == PromptKind::exclude) {

@@ -226,6 +226,8 @@ void Launcher::buildSettingsRows() {
             if (settings_.home_layout == HomeLayout::xmb) {
                 add({Id::xmb_posters, Control::toggle, tr(L"Pionowe plakaty"),
                     tr(L"Plakaty gier zamiast kwadratowych okładek w układzie XMB."), {}, settings_.xmb_posters});
+                add({Id::xmb_platform_badge, Control::toggle, tr(L"Platforma jako logo"),
+                    tr(L"Logo platformy na białej plakietce pod nazwą gry, jak w PSfive, zamiast jej nazwy."), {}, settings_.xmb_platform_badge});
                 const int size = std::clamp(static_cast<int>(settings_.xmb_size), 0, 2);
                 add({Id::xmb_size, Control::slider, tr(L"Rozmiar kafelków XMB"),
                     tr(L"Mały, domyślny lub duży — dla okładek i plakatów."), tr(xmb_sizes[size]), false, size / 2.0f});
@@ -252,6 +254,8 @@ void Launcher::buildSettingsRows() {
                     tr(L"Strony obok bieżącej są mniejsze (80%) i powiększają się po przejściu na nie."), {}, settings_.metro_3d});
                 add({Id::metro_light, Control::toggle, tr(L"Jasny motyw"),
                     tr(L"Białe tło i ciemne napisy, jak jasny motyw Windows Phone. Kafle zostają kolorowe."), {}, settings_.metro_light});
+                add({Id::metro_title_corner, Control::toggle, tr(L"Tytuł w lewym dolnym rogu"),
+                    tr(L"Nazwa zaznaczonej gry i logo jej platformy na dole po lewej zamiast na kaflu."), {}, settings_.metro_title_corner});
             }
             if (settings_.home_layout == HomeLayout::snitch)
                 add({Id::snitch_colour_icons, Control::toggle, tr(L"Kolorowe ikony"),

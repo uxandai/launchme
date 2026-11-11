@@ -21,8 +21,9 @@ namespace context_menu {
 // "forget_recent": Usuń z ostatnio granych, a game in the recent rows (Launcher::forgetRecent), in both menus.
 // "studio_*": a publisher's or developer's logo tile (Rows::studio, only these): move it earlier or later in
 // its row, or hide it (Biblioteka → Ukryci wydawcy i developerzy shows it again).
+// "more": Więcej opcji, the game's menu only: Details with its "…" open (every other row lives there).
 enum class Item { primary, suspend, plugin, details, artwork, retry, close, folder, hide, exclude, uninstall, launch, metadata, aurelia, steam_account, remove, compat, shortcuts, identify,
-                  studio_earlier, studio_later, studio_hide, emulator, forget_recent };
+                  studio_earlier, studio_later, studio_hide, emulator, forget_recent, more };
 struct Rows {
     bool suspend = false;
     int plugins = 0;
@@ -36,41 +37,69 @@ struct Rows {
     bool steam_account = false;  // Details' "…": a Steam game and more than one remembered account to launch it from.
     bool remove = false;         // Launcher::canRemoveFromLibrary (never while the game runs).
     bool compat = false;         // Details' "…": Launcher::compatGame (Linux).
-    bool identify = false;       // The game's menu: Launcher::unidentifiedGame; Details' "…": an identified game.
+    bool identify = false;       // Details' "…": a game the identify dialog takes (not Steam's).
+    bool identified = false;     // ...already identified: the row reads Zidentyfikuj ponownie….
     bool shortcuts = false;      // Details' "…": the game can have shortcuts (Launcher::shortcutAvailable).
     bool studio = false;         // A studio's logo tile: only its three rows.
     bool emulator = false;       // Details' "…": an emulated game's own emulator (Launcher::gameEmulatorEditable).
     bool recent = false;         // The game stands in the recent rows (Launcher::inRecent): Usuń z ostatnio granych.
 };
+// The game's menu (a held A, Y, right click; PSfive's "…" without its own Graj): play, Szczegóły,
+// Usuń z ostatnio granych, Więcej opcji, Odinstaluj; a running game's Wstrzymaj / Zamknij grę too.
+// Details' "…" (detail_options) holds the rest, grouped: how the game starts, how it looks and is
+// named, its files, the plugins, its place in the library, then what removes it.
 constexpr auto order(Rows options) {
-    return options.secondary_only ?
-        std::array{Item::studio_earlier, Item::studio_later, Item::studio_hide, Item::details, Item::primary, Item::suspend, Item::aurelia, Item::plugin, Item::artwork, Item::retry, Item::close, Item::folder, Item::launch, Item::emulator, Item::compat, Item::shortcuts, Item::steam_account, Item::metadata, Item::identify, Item::forget_recent, Item::hide, Item::exclude, Item::uninstall, Item::remove} :
-        std::array{Item::studio_earlier, Item::studio_later, Item::studio_hide, Item::primary, Item::suspend, Item::aurelia, Item::plugin, Item::details, Item::artwork, Item::retry, Item::close, Item::folder, Item::launch, Item::emulator, Item::compat, Item::shortcuts, Item::steam_account, Item::metadata, Item::identify, Item::forget_recent, Item::hide, Item::exclude, Item::uninstall, Item::remove};
+    using enum Item;
+    return options.detail_options ?
+        std::array{studio_earlier, studio_later, studio_hide, primary, suspend, close, details,
+                   launch, steam_account, emulator, compat, aurelia, artwork, metadata, identify, folder, shortcuts, plugin,
+                   forget_recent, hide, exclude, uninstall, remove, retry, more} :
+           options.secondary_only ?
+        std::array{studio_earlier, studio_later, studio_hide, details, primary, suspend, close, forget_recent, more, uninstall,
+                   plugin, artwork, retry, folder, hide, exclude, launch, metadata, aurelia, steam_account, remove, compat, shortcuts, identify, emulator} :
+        std::array{studio_earlier, studio_later, studio_hide, primary, suspend, close, details, forget_recent, more, uninstall,
+                   plugin, artwork, retry, folder, hide, exclude, launch, metadata, aurelia, steam_account, remove, compat, shortcuts, identify, emulator};
 }
 constexpr bool visible(Item entry, Rows options) {
     const bool studio_item = entry == Item::studio_earlier || entry == Item::studio_later || entry == Item::studio_hide;
     if (options.studio || studio_item) return options.studio && studio_item;
-    if (entry == Item::aurelia) return options.aurelia;
-    if (entry == Item::identify) return options.identify; // Details: only an identified game's (its button is gone then).
-    if (entry == Item::steam_account) return options.detail_options && options.steam_account;
-    if (entry == Item::emulator) return options.detail_options && options.emulator;
     if (entry == Item::forget_recent) return options.recent && !options.session; // A game in play keeps its place.
-    if (options.detail_options) return entry == Item::artwork || (entry == Item::launch && options.launch) || (entry == Item::compat && options.compat) ||
-        (entry == Item::shortcuts && options.shortcuts) ||
+    if (options.detail_options) return (entry == Item::aurelia && options.aurelia) || (entry == Item::identify && options.identify) ||
+        (entry == Item::steam_account && options.steam_account) || (entry == Item::emulator && options.emulator) ||
+        (entry == Item::plugin && options.plugins > 0) || entry == Item::artwork || (entry == Item::launch && options.launch) ||
+        (entry == Item::compat && options.compat) || (entry == Item::shortcuts && options.shortcuts) ||
         (entry == Item::metadata && options.metadata) || (entry == Item::folder && options.folder) ||
         (entry == Item::hide && options.hide) || (entry == Item::exclude && options.exclude) || (entry == Item::uninstall && options.uninstall) ||
         (entry == Item::remove && options.remove);
     switch (entry) {
     case Item::primary: return !options.secondary_only;
     case Item::suspend: return options.suspend;
-    case Item::plugin: return options.plugins > 0;
-    case Item::retry: return !options.session;
     case Item::close: return options.session;
-    case Item::uninstall: return options.uninstall && !options.session; // Last and red in the game's menu too ("…" on PSfive); never while it runs.
-    case Item::remove: return options.remove && !options.session;
-    case Item::folder: case Item::hide: case Item::exclude: case Item::launch: case Item::metadata: case Item::compat: case Item::shortcuts: return false;
-    default: return true;
+    case Item::details: case Item::more: return true;
+    case Item::uninstall: return options.uninstall && !options.session; // Last and red; never while the game runs.
+    default: return false;
     }
+}
+// Details' "…" groups (order above): a hairline sets each apart from the one before.
+constexpr int group(Item entry) {
+    using enum Item;
+    switch (entry) {
+    case launch: case steam_account: case emulator: case compat: case aurelia: return 1;
+    case artwork: case metadata: case identify: case retry: return 2;
+    case folder: case shortcuts: case plugin: return 3;
+    case forget_recent: case hide: case exclude: return 4;
+    case uninstall: case remove: return 5;
+    default: return 0;
+    }
+}
+constexpr int rows(Rows options);
+constexpr Item item(int row, Rows options);
+// A hairline above this row: a new group in Details' "…"; Odinstaluj / Usuń z biblioteki in every menu.
+constexpr bool startsGroup(int row, Rows options) {
+    if (row <= 0) return false;
+    const auto entry = item(row, options), before = item(row - 1, options);
+    if (!options.detail_options) return (entry == Item::uninstall || entry == Item::remove) && before != Item::uninstall && before != Item::remove;
+    return group(entry) != group(before);
 }
 constexpr int rows(Rows options) {
     int count = 0;

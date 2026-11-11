@@ -80,7 +80,7 @@ void Renderer::drawPsfive() {
     drawPsfiveDetails(); // Szczegóły pod rzędem: the sheet over the row (psfive_details_renderer.cpp).
 }
 
-float Renderer::drawPsfiveBadge(const std::wstring& platform, float x, float center_y, float alpha) {
+float Renderer::drawPsfiveBadge(const std::wstring& platform, float x, float center_y, float alpha, bool draw) {
     constexpr float pad = 10, ink_height = 16, ink_width = 84;
     const auto found = platform_badges_.find(platform);
     const Cover* logo = found != platform_badges_.end() && found->second.bitmap && !render_detail::wordOnlyBadge(platform) ? &found->second : nullptr;
@@ -98,6 +98,7 @@ float Renderer::drawPsfiveBadge(const std::wstring& platform, float x, float cen
     }
     if (!logo) w = std::min(150.0f, textAdvance(platform, button_font_.Get()));
     const float half = psfive_layout::badge_height * 0.5f, badge_width = w + 2 * pad;
+    if (!draw) return badge_width;
     brush(gray(0.97f, alpha));
     target_->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(x, center_y - half, x + badge_width, center_y + half), 5, 5), solid_.Get());
     const auto ink = D2D1::ColorF(0.02f, 0.022f, 0.026f, alpha);

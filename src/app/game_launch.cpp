@@ -25,6 +25,7 @@ void Launcher::enterDown(bool repeated) {
     if (screen_ == ScreenMode::plugin_page) { pluginPageAccept(); return; }
     if (downloadsOpen()) { downloadsAccept(); return; }
     if (searchBackFocused()) { back(); return; }
+    if (recentSearchFocused()) { useRecentSearch(); return; }
     if (libraryAccept()) return;
     if (cropOpen()) { cropAccept(); return; }
     if (devicesOpen()) { deviceAccept(); return; }
@@ -82,6 +83,7 @@ void Launcher::accept() {
     if (libraryDialogOpen()) { collectionDialogAccept(); return; }
     if (desktopActive() && topDialog() == Modal::none && !friends_open_ && !quick_open_) { desktopAccept(); return; }
     if (searchBackFocused() && !friends_open_ && !menu_open_) { back(); return; }
+    if (recentSearchFocused() && !friends_open_ && !menu_open_) { useRecentSearch(); return; }
     if (metroTabsFocused()) { launch(); return; } // Enter/A on the tabs: back to the page's tile.
     if (snitchProfileFocused()) { openProfile(); return; }
     if (psfiveAccept()) return; // PSfive: a game goes down to "Graj" / "…", a button acts.
@@ -112,6 +114,7 @@ void Launcher::launch() {
     if (downloadsOpen() && !friends_open_ && !gogInstallOpen()) { downloadsAccept(); return; }
     if (gogInstallOpen()) { gogInstallAccept(); return; }
     if (searchBackFocused() && !friends_open_ && !menu_open_) { back(); return; }
+    if (recentSearchFocused() && !friends_open_ && !menu_open_) { useRecentSearch(); return; }
     if (customEditorOpen()) { customEditorAccept(); return; }
     if (libraryAccept()) return;
     if (cropOpen()) { cropAccept(); return; }
@@ -130,6 +133,7 @@ void Launcher::launch() {
         return;
     }
     const auto& active = cards_[selected_].game;
+    if (screen_ == ScreenMode::search && isGame(active)) rememberSearch();
     if (screen_ == ScreenMode::store) { openDetails(active); return; }
     if (screen_ == ScreenMode::details && detail_action_ == -1) { back(); return; }
     if (screen_ == ScreenMode::details && detail_action_ >= 0 && detail_action_ == closeDetailAction()) { const auto game = active; detail_action_ = 0; closeGame(game); return; } // ✕ beside Wróć.
@@ -145,6 +149,7 @@ void Launcher::launch() {
     if (screen_ == ScreenMode::details && detail_action_ == achievementsDetailAction()) { openAchievements(); return; }
     if (screen_ == ScreenMode::details && detail_action_ == 1) { openContextMenu(); return; }
     if (screen_ == ScreenMode::details && active.kind == GameKind::catalog) { catalogAction(active); return; }
+    if (active.kind == GameKind::all && active.source_id == xmb_see_all) { openPcLibrary(active.source); return; } // XMB: a PC platform's "Zobacz wszystkie".
     if (active.kind == GameKind::all) { openLibrary(); return; }
     if (active.kind == GameKind::back) { back(); return; }
     if (active.kind == GameKind::settings) { openSettings(); return; }

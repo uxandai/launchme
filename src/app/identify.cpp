@@ -27,14 +27,24 @@ void Launcher::openIdentifyFor(const Game& game) {
     if (!isGame(game) || steamArtwork(game) || gameKey(game).empty()) return;
     identify_state_ = {}; identify_state_.open = true; identify_state_.game = game; identify_state_.query = game.name;
     identify_state_.query_focus = false; // The lookup view has no field yet.
+    identify_state_.opened_ms = GetTickCount64();
     identify_state_.emulated = game.kind == GameKind::nonsteam && game.platform != L"PC";
     // One click: every provider is asked in turn and the best match is taken; "Dopasuj ręcznie" is the way out.
     closeFriends(); dismissMenu(); identifySearch();
 }
 // "Dopasuj ręcznie": the title field, the provider choice and the list of matches.
+void Launcher::pollIdentifyAccept() {
+    auto& state = identify_state_;
+    if (!state.accept_ms) return;
+    if (!state.open || state.manual || state.applying) { state.accept_ms = 0; return; }
+    if (GetTickCount64() < state.accept_ms) return;
+    state.accept_ms = 0; state.busy = false;
+    identifyAccept();
+}
 void Launcher::identifyManual() {
     auto& state = identify_state_;
     if (!state.open || state.applying || state.manual) return;
+    if (state.accept_ms) { state.accept_ms = 0; state.busy = false; } // The match waiting for its 3 s: the list shows it instead.
     state.manual = true; state.query_focus = true; state.select_all = true; state.back_focus = false;
     audio_.context();
     InvalidateRect(hwnd_, nullptr, FALSE);
@@ -279,6 +289,9 @@ void Launcher::onIdentify(std::unique_ptr<IdentifyMessage> message) {
         state.provider = message->screenscraper ? L"ScreenScraper" : L"RAWG";
         if (!state.manual && !state.games.empty()) { // The best match, taken: no click.
             state.query_focus = false;
+            // Not before the dialog has shown for 3 s: until then it still looks for, and
+            // "Dopasuj ręcznie" can still be pressed (pollIdentifyAccept takes it then).
+            if (const auto ready = state.opened_ms + 3000; GetTickCount64() < ready) { state.busy = true; state.accept_ms = ready; return; }
             identifyAccept();
             return;
         }

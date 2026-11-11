@@ -16,7 +16,7 @@ namespace {
     X(screen_transitions) X(glass) X(hint_style) X(menu_dialog) X(search_art) X(home_tiles) X(add_game_tile) \
     X(show_categories) X(shelves_posters) X(shelves_steam) X(shelves_category_all) X(shelves_hero_facts) X(xmb_posters) X(xmb_size) \
     X(flix_size) X(flix_category_all) X(flix_category_tabs) X(flix_rail) \
-    X(metro_category_tabs) X(metro_3d) X(metro_light) X(snitch_colour_icons) X(psfive_size) X(psfive_clock) X(psfive_dim) X(psfive_details) \
+    X(metro_category_tabs) X(xmb_platform_badge) X(metro_title_corner) X(metro_3d) X(metro_light) X(snitch_colour_icons) X(psfive_size) X(psfive_clock) X(psfive_dim) X(psfive_details) \
     X(psfive_category_tabs) X(home_tab_icons) X(wallpaper) X(wallpaper_file) X(wallpaper_id) X(wallpaper_snitch) \
     X(wallpaper_menus) X(wallpaper_artwork) X(wallpaper_tiles)
 } // namespace

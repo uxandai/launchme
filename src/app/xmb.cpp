@@ -1,4 +1,5 @@
 #include "launcher.hpp"
+#include "launcher_internal.hpp"
 #include "../library/view_options.hpp"
 #include "../ui/xmb_layout.hpp"
 #include "../ui/category_rail.hpp"
@@ -21,7 +22,38 @@ const std::vector<Game>* Launcher::xmbColumn(const Game& tile) const {
     if (tile.kind == GameKind::platform) {
         if (const auto* games = consoleGames(tile.platform); games && !games->empty()) return games;
     }
+    if (tile.kind == GameKind::pc_platform)
+        if (const auto found = xmb_pc_columns_.find(static_cast<int>(platformSource(tile.source))); found != xmb_pc_columns_.end() && !found->second.empty())
+            return &found->second;
     return nullptr;
+}
+
+// A PC platform's column, as a console's: its games (the latest played first, then by name), at
+// most xmb_pc_limit of them, then "Zobacz wszystkie" opening the platform's library when it has more.
+void Launcher::buildXmbPcColumns(const std::vector<Game>& stores) {
+    xmb_pc_columns_.clear();
+    for (const auto& tile : stores) {
+        const auto source = platformSource(tile.source);
+        std::vector<Game> games;
+        for (const auto& game : public_library_)
+            if (platformSource(game.source) == source && game.kind != GameKind::nonsteam) games.push_back(game);
+        std::stable_sort(games.begin(), games.end(), [](const Game& a, const Game& b) {
+            if (a.last_played != b.last_played) return a.last_played > b.last_played;
+            return _wcsicmp(a.name.c_str(), b.name.c_str()) < 0;
+        });
+        const size_t total = games.size();
+        if (total > xmb_pc_limit) {
+            games.resize(xmb_pc_limit);
+            Game all;
+            all.kind = GameKind::all;
+            all.name = tr(L"Zobacz wszystkie");
+            all.platform = gamesLabel(total); // Its line under the name.
+            all.source = source;
+            all.source_id = xmb_see_all;
+            games.push_back(std::move(all));
+        }
+        xmb_pc_columns_[static_cast<int>(source)] = std::move(games);
+    }
 }
 
 std::string Launcher::xmbKey(const Game& tile) const {
@@ -71,6 +103,7 @@ void Launcher::rebuildXmb(bool keep_top, bool preserve_background) {
                 (category.id == "private" ? hidden : collections).push_back(std::move(tile));
             }
         }
+        buildXmbPcColumns(stores);
         xmb_top_.insert(xmb_top_.begin(), widgets.begin(), widgets.end()); // No recent row yet: they lead.
         for (auto* group : {&collections, &stores, &consoles, &hidden}) xmb_top_.insert(xmb_top_.end(), group->begin(), group->end());
         Game settings;

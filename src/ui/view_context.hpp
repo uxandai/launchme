@@ -240,6 +240,8 @@ struct ViewContext {
     float screen_transition = 1; // 1 = settled; 0..1 = screen fade-in, zoom and edge bow.
     float wallpaper_zoom = 1; // Shared crop: a slow, centred 1% approach in Details, eased back elsewhere.
     std::wstring search_query;
+    std::vector<std::wstring> recent_searches; // Shown under the empty search field.
+    int recent_search_focus = -1;
     std::wstring library_title;
     const std::vector<settings_ui::Row>* settings_rows = nullptr;
     std::vector<float> settings_toggles; // Per row, 0..1 animated switch position.
@@ -375,6 +377,7 @@ struct ViewContext {
     // row in view's own (-1: another row), and how much of it shows.
     std::vector<flix_rail::Item> flix_rail;
     int flix_rail_focus = -1, flix_rail_hover = -1, flix_rail_active = -1;
+    std::optional<float> flix_rail_glide; // The white disc's place, a fractional icon (springs to flix_rail_focus).
     float flix_rail_alpha = 1;
     std::wstring menu_emulator;      // Details' "…": "Emulator: Ryujinx" (Emulator per gra); empty: none.
     context_menu::Rows menu_rows{};  // The menu's rows as Launcher::menuRows builds them (every flag, the studio's too).
@@ -436,6 +439,10 @@ struct ViewContext {
     size_t xmb_column = 0;
     int xmb_row = -1;
     std::wstring xmb_caption, xmb_subcaption;
+    // Personalizacja → XMB → Platforma jako logo: the platform as PSfive's white badge instead of its name.
+    bool xmb_platform_badge = false;
+    bool metro_title_corner = false; // Metro: the focused game's name and platform bottom left, not on its tile.
+    std::wstring xmb_subcaption_platform; // The subcaption is this platform's name (the badge's).
     // Flix home: rows of cards (the first is landscape), the focused row.
     struct FlixRow {
         std::wstring title;

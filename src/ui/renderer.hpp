@@ -773,6 +773,10 @@ private:
     void drawFrostedBackdrop(float dim);
     // Bottom-right button hints (src/ui/hints_renderer.cpp).
     void drawHints();
+    float hintsWidth(std::vector<float>* glyph_widths, std::vector<float>* label_widths); // The pill's content, glyphs and labels.
+    float hintsLeft();          // The hints pill's left edge (the screen's width without one).
+    float hintsCenterY() const; // The middle of the hints' line.
+    bool footerShowsPlatform() const; // The default home's footer: the platform beside the game's name.
     float drawHintGlyph(const InputHint& hint, float x, float cy, float alpha); // Returns its width.
     // Home layout miniature (src/ui/settings_layout_renderer.cpp): option = AppSettings::HomeLayout,
     // time = seconds into its one-shot preview (0 = at rest), emphasis 1 for a focused or chosen tile.
@@ -999,7 +1003,7 @@ private:
     // The caption's colour on a key cap: light on the glass ones, dark on the white ones (ViewContext::hint_white).
     D2D1_COLOR_F keyCapInk(float alpha) const;
     // Black on white: the platform's logo (its alpha as the ink) or its name; returns the width.
-    float drawPsfiveBadge(const std::wstring& platform, float x, float center_y, float alpha);
+    float drawPsfiveBadge(const std::wstring& platform, float x, float center_y, float alpha, bool draw = true); // draw = false: its width only.
     // Desktop mode (src/ui/desktop_renderer.cpp and its desktop_*_renderer.cpp siblings).
     void drawDesktop();
     void drawDesktopTitlebar(const desktop_ui::Layout& layout, const desktop_ui::View& view);
@@ -1463,6 +1467,7 @@ private:
     Microsoft::WRL::ComPtr<IDWriteTextFormat> friend_name_font_, friend_status_font_, friend_section_font_;
     Microsoft::WRL::ComPtr<IDWriteTextFormat> toast_font_, toast_sub_font_;
     Microsoft::WRL::ComPtr<IDWriteTextFormat> settings_heading_font_, settings_body_font_;
+    Microsoft::WRL::ComPtr<IDWriteTextFormat> prompt_body_font_; // A question's explanation under its panel (Wyklucz grę...).
     Microsoft::WRL::ComPtr<IDWriteTextFormat> details_body_font_;
     Microsoft::WRL::ComPtr<IDWriteTextFormat> clock_font_, clock_date_font_;
     Microsoft::WRL::ComPtr<IDWriteTextFormat> metro_tab_font_; // Metro page tabs.

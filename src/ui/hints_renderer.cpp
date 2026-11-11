@@ -88,12 +88,8 @@ float Renderer::drawHintGlyph(const InputHint& hint, float x, float cy, float al
     return glyph_size;
 }
 
-void Renderer::drawHints() {
-    if (context_->hints.empty() || context_->launch_animation_seconds >= 0) return;
-    // The bottom bar (including its closing animation) and dialogs leave the list empty.
-    const float alpha = 1.0f;
+float Renderer::hintsWidth(std::vector<float>* glyph_widths, std::vector<float>* label_widths) {
     const auto label_font = settings_body_font_.Get();
-    // Measure right to left, then draw left to right from the pill's left edge.
     std::vector<float> glyphs, labels;
     float total = 0;
     for (const auto& hint : context_->hints) {
@@ -109,6 +105,27 @@ void Renderer::drawHints() {
         total += glyph + gap + label;
     }
     total += spacing * static_cast<float>(context_->hints.size() - 1);
+    if (glyph_widths) *glyph_widths = std::move(glyphs);
+    if (label_widths) *label_widths = std::move(labels);
+    return total;
+}
+
+float Renderer::hintsCenterY() const { return viewport_.height - center_from_bottom; }
+
+// The pill's left edge (the screen's right edge without hints): text on its line stops before it.
+float Renderer::hintsLeft() {
+    if (context_->hints.empty() || context_->launch_animation_seconds >= 0) return viewport_.width;
+    return viewport_.width - margin - hintsWidth(nullptr, nullptr) - 14;
+}
+
+void Renderer::drawHints() {
+    if (context_->hints.empty() || context_->launch_animation_seconds >= 0) return;
+    // The bottom bar (including its closing animation) and dialogs leave the list empty.
+    const float alpha = 1.0f;
+    const auto label_font = settings_body_font_.Get();
+    // Measure right to left, then draw left to right from the pill's left edge.
+    std::vector<float> glyphs, labels;
+    const float total = hintsWidth(&glyphs, &labels);
     const float cy = viewport_.height - center_from_bottom;
     const float right = viewport_.width - margin, left = right - total;
     const auto shape = D2D1::RoundedRect(D2D1::RectF(left - 14, cy - pill_height * 0.5f, right + 14, cy + pill_height * 0.5f),

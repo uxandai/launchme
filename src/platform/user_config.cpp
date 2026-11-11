@@ -150,6 +150,8 @@ constexpr FlagSetting flag_settings[] = {
     {"metro_light", &AppSettings::metro_light},
     {"snitch_colour_icons", &AppSettings::snitch_colour_icons},
     {"metro_category_tabs", &AppSettings::metro_category_tabs},
+    {"xmb_platform_badge", &AppSettings::xmb_platform_badge},
+    {"metro_title_corner", &AppSettings::metro_title_corner},
     {"flix_category_tabs", &AppSettings::flix_category_tabs},
     {"psfive_category_tabs", &AppSettings::psfive_category_tabs},
     {"show_publishers", &AppSettings::show_publishers},
@@ -1076,6 +1078,8 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
     output << "console_colors=" << settings.console_colors << '\n';
     output << "metro_3d=" << settings.metro_3d << '\n';
     output << "metro_category_tabs=" << settings.metro_category_tabs << '\n';
+    output << "xmb_platform_badge=" << settings.xmb_platform_badge << '\n';
+    output << "metro_title_corner=" << settings.metro_title_corner << '\n';
     output << "flix_category_tabs=" << settings.flix_category_tabs << '\n';
     output << "psfive_category_tabs=" << settings.psfive_category_tabs << '\n';
     output << "show_publishers=" << settings.show_publishers << '\n';

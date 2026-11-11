@@ -153,6 +153,7 @@ void Launcher::animateFocus(float dt, float target_x, float target_y, float targ
         if (!glide.value.settled(value, 0.004f)) needs_paint = true;
     };
     glideIndex(menu_glide_, menu_open_ || menu_progress_ > 0.003f, menu_selected_);
+    glideIndex(flix_rail_glide_, flixRailFocused(), flix_rail_focus_);
     glideIndex(exit_glide_, exit_prompt_.has_value(), exit_prompt_.value_or(0));
     glideIndex(settings_choice_glide_, settingsPicking(), settings_state_.choice);
     if (libraryTabsShown()) glideIndex(library_tab_glide_, true, libraryTabIndex(libraryTabs()));
@@ -320,6 +321,7 @@ void Launcher::focusContext(ViewContext& context) const {
             std::clamp(motion.rail_focus.value, 0.0f, 1.0f), motion.row.value, motion.scroll.value,
             motion.category == settings_state_.category, motion.height.value};
     if (menu_glide_.valid) context.menu_glide = menu_glide_.value.value;
+    if (flix_rail_glide_.valid && flixRailFocused()) context.flix_rail_glide = flix_rail_glide_.value.value;
     bool picker_motion = true;
 #ifdef LAUNCHME_UI_TEST
     picker_motion = picker_motion_for_test_;

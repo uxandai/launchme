@@ -63,6 +63,7 @@ bool Renderer::createFonts() {
            font(toast_sub_font_, 13, DWRITE_FONT_WEIGHT_NORMAL) &&
            font(settings_heading_font_, 38, DWRITE_FONT_WEIGHT_SEMI_BOLD) &&
            font(settings_body_font_, 16, DWRITE_FONT_WEIGHT_NORMAL) &&
+           font(prompt_body_font_, 17, DWRITE_FONT_WEIGHT_MEDIUM) &&
            font(details_body_font_, 18, DWRITE_FONT_WEIGHT_NORMAL) &&
            font(clock_font_, 64, DWRITE_FONT_WEIGHT_LIGHT) &&
            font(metro_tab_font_, 40, DWRITE_FONT_WEIGHT_LIGHT) &&
@@ -112,7 +113,7 @@ void Renderer::setFontFamily(std::wstring family) {
     hero_font_.Reset(); label_font_.Reset(); button_font_.Reset(); action_font_.Reset(); category_font_.Reset();
     menu_font_.Reset(); sidebar_font_.Reset(); category_active_font_.Reset(); friend_name_font_.Reset();
     friend_status_font_.Reset(); friend_section_font_.Reset(); toast_font_.Reset(); toast_sub_font_.Reset();
-    settings_heading_font_.Reset(); settings_body_font_.Reset();
+    settings_heading_font_.Reset(); settings_body_font_.Reset(); prompt_body_font_.Reset();
     details_body_font_.Reset();
     clock_font_.Reset(); clock_date_font_.Reset(); tile_value_font_.Reset();
     index_font_.Reset(); metro_tab_font_.Reset(); psfive_name_font_.Reset(); psfive_clock_font_.Reset();

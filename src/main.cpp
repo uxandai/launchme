@@ -382,6 +382,7 @@ LRESULT CALLBACK windowProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lpara
             else if (wparam == 'H' && !app->searching() && (GetKeyState(VK_CONTROL) & 0x8000)) app->togglePrivateCategory();
             else if (wparam == VK_DELETE && app->companionOpen() && !app->friendsOpen() && !(lparam & (1LL << 30))) app->companionMindDeleteConfirm(true);
             else if (wparam == 'F' && app->companionOpen() && !app->searching() && !app->friendsOpen() && !(lparam & (1LL << 30))) app->companionMindNextFilter();
+            else if (wparam == VK_DELETE && app->searching() && !(lparam & (1LL << 30))) app->recentSearchDelete();
             else if (wparam == VK_BACK && app->searching()) app->eraseSearchCharacter((lparam & (1LL << 30)) != 0);
             // Back takes one step per press: a held Backspace that just emptied a search must not
             // go on to close it, leave the bar and then the library.

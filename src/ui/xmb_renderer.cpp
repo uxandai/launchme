@@ -177,7 +177,11 @@ void Renderer::drawXmbCaption() {
     const float caption_y = column_tile.y + column_tile.size + 10;
     // 17 px over 16 px (15 px was too small from the sofa); the band to the column holds both.
     textLine(context_->xmb_caption, center - 180, caption_y + 11, 360, toast_font_.Get(), gray(0.96f, caption_alpha), DWRITE_TEXT_ALIGNMENT_CENTER);
-    if (!context_->xmb_subcaption.empty())
+    if (context_->xmb_platform_badge && !context_->xmb_subcaption_platform.empty()) {
+        const auto& platform = context_->xmb_subcaption_platform;
+        const float width = drawPsfiveBadge(platform, 0, 0, caption_alpha, false);
+        drawPsfiveBadge(platform, center - width * 0.5f, caption_y + 36, caption_alpha);
+    } else if (!context_->xmb_subcaption.empty())
         textLine(context_->xmb_subcaption, center - 180, caption_y + 33, 360, settings_body_font_.Get(), gray(0.64f, caption_alpha), DWRITE_TEXT_ALIGNMENT_CENTER);
 }
 
@@ -202,11 +206,14 @@ void Renderer::drawXmbLabels() {
         }
         const auto& game = card.game;
         const auto session = sessionOf(game);
-        const std::wstring status = session == SessionState::frozen ? std::wstring(tr(L"Wstrzymana")) : session == SessionState::running ? std::wstring(tr(L"W grze")) :
+        const bool platform_line = game.kind != GameKind::all && session == SessionState::none && !game.installation.active() && game.installed;
+        const std::wstring status = game.kind == GameKind::all ? game.platform : // A PC platform's "Zobacz wszystkie": how many games.
+                                    session == SessionState::frozen ? std::wstring(tr(L"Wstrzymana")) : session == SessionState::running ? std::wstring(tr(L"W grze")) :
                                     game.installation.active() ? std::wstring(primaryActionLabel(game)) :
                                     !game.installed ? std::wstring(localFileGame(game.source) ? missingFileLabel(game) : tr(L"Do instalacji")) : activePlatformName(game);
         text(game.name, label_x, middle - 31, width, 32, category_font_.Get(), gray(0.97f, alpha));
-        text(status, label_x, middle + 5, width, 24, settings_body_font_.Get(), gray(0.62f, alpha));
+        if (platform_line && context_->xmb_platform_badge && !status.empty()) drawPsfiveBadge(status, label_x, middle + 17, alpha);
+        else text(status, label_x, middle + 5, width, 24, settings_body_font_.Get(), gray(0.62f, alpha));
     }
 }
 

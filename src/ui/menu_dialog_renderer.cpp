@@ -42,6 +42,7 @@ wchar_t icon(context_menu::Item item, bool hidden) {
     case context_menu::Item::studio_later: return glyph::chevron_down;
     case context_menu::Item::studio_hide: return glyph::hide;
     case context_menu::Item::emulator: return glyph::game;
+    case context_menu::Item::more: return glyph::more;
     }
     return glyph::more;
 }
@@ -113,7 +114,8 @@ void Renderer::drawContextMenuDialog() {
         case context_menu::Item::steam_account: return account_label;
         case context_menu::Item::compat: return L"Proton / Wine";
         case context_menu::Item::shortcuts: return tr(L"Skróty");
-        case context_menu::Item::identify: return tr(L"Zidentyfikuj grę…");
+        case context_menu::Item::identify: return rows.identified ? tr(L"Zidentyfikuj ponownie…") : tr(L"Zidentyfikuj grę…");
+        case context_menu::Item::more: return tr(L"Więcej opcji");
         case context_menu::Item::forget_recent: return tr(L"Usuń z ostatnio granych");
         case context_menu::Item::studio_earlier: return tr(L"Przesuń wcześniej");
         case context_menu::Item::studio_later: return tr(L"Przesuń dalej");
@@ -151,6 +153,11 @@ void Renderer::drawContextMenuDialog() {
             return color(std::lerp(light.r, dark.r, focus), std::lerp(light.g, dark.g, focus), std::lerp(light.b, dark.b, focus), std::lerp(light.a, dark.a, focus));
         };
         const auto tone = !enabled ? color(0.53f, 0.53f, 0.53f, 0.75f * alpha) : mix(destructive ? palette::danger(alpha) : color(0.95f, 0.95f, 0.95f, alpha));
+        if (context_menu::startsGroup(row, rows)) { // A hairline in the gap above a new group.
+            brush(color(1, 1, 1, 0.16f * alpha));
+            const float gap = box.top - (context_menu::Dialog::row_step - context_menu::Dialog::row_height) * 0.5f;
+            target_->FillRectangle(D2D1::RectF(box.left + 30, gap - 0.5f, box.right - 30, gap + 0.5f), solid_.Get());
+        }
         // The icon in a small disc on the left.
         const float cx = box.left + 44, cy = (box.top + box.bottom) * 0.5f;
         brush(focus > 0.5f ? color(0, 0, 0, 0.08f * alpha) : color(1, 1, 1, 0.07f * alpha));

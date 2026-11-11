@@ -155,7 +155,7 @@ void Renderer::drawExitPrompt() {
         category_font_.Get(), color(0.95f, 0.95f, 0.95f), DWRITE_TEXT_ALIGNMENT_CENTER);
     // What the answer changes (Wyklucz grę: where the game goes), under the panel.
     if (!context_->prompt_body.empty())
-        paragraph(context_->prompt_body, panel.left + 12, panel.bottom + 22, panel.right - panel.left - 24, settings_body_font_.Get(), color(0.82f, 0.82f, 0.82f), 3);
+        paragraph(context_->prompt_body, panel.left + 12, panel.bottom + 22, panel.right - panel.left - 24, prompt_body_font_.Get(), color(0.86f, 0.86f, 0.86f), 3);
     // PSfive's pills inside the glass panel; the white one glides to the chosen answer.
     const auto rect = [](settings_ui::Rect r) { return D2D1::RectF(r.left, r.top, r.right, r.bottom); };
     for (int i = 0; i < exit_prompt::count; ++i) drawButtonGlass(rect(layout.button(static_cast<float>(i))), 1, false);
@@ -229,12 +229,13 @@ void Renderer::drawContextMenu() {
         case context_menu::Item::steam_account: return account_label.c_str();
         case context_menu::Item::compat: return L"Proton / Wine";
         case context_menu::Item::shortcuts: return tr(L"Skróty");
-        case context_menu::Item::identify: return tr(L"Zidentyfikuj grę…");
+        case context_menu::Item::identify: return rows.identified ? tr(L"Zidentyfikuj ponownie…") : tr(L"Zidentyfikuj grę…");
         case context_menu::Item::forget_recent: return tr(L"Usuń z ostatnio granych");
         case context_menu::Item::studio_earlier: return tr(L"Przesuń wcześniej");
         case context_menu::Item::studio_later: return tr(L"Przesuń dalej");
         case context_menu::Item::studio_hide: return tr(L"Ukryj");
         case context_menu::Item::emulator: return context_->menu_emulator.c_str();
+        case context_menu::Item::more: return tr(L"Więcej opcji");
         }
         return L"";
     };
@@ -247,7 +248,7 @@ void Renderer::drawContextMenu() {
         const auto entry = context_menu::item(row, rows);
         // "Zamknij grę" and "Odinstaluj" are destructive: a soft red, as used for save errors in Settings.
         const bool destructive = entry == context_menu::Item::close || entry == context_menu::Item::uninstall || entry == context_menu::Item::remove;
-        if ((entry == context_menu::Item::uninstall || entry == context_menu::Item::remove) && row > 0) {
+        if (context_menu::startsGroup(row, rows)) {
             // Set apart from the rows above by a hairline, the way the desktop menu separates it.
             brush(color(0.90f, 0.90f, 0.90f, 0.12f * alpha));
             target_->FillRectangle(D2D1::RectF(x + 26, row_y - 2.5f, x + width - 26, row_y - 1.5f), solid_.Get());

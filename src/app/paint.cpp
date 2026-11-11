@@ -190,6 +190,7 @@ void Launcher::paint(bool overlay) {
     context.crop_editor = cropOpen() ? &crop_state_ : nullptr;
     context.device_panel = devicesOpen() ? &device_state_ : nullptr;
     context.search_query = search_query_;
+    if (recentSearchesShown()) { context.recent_searches = recent_searches_; context.recent_search_focus = recentSearchFocused() ? recent_search_focus_ : -1; }
     context.search_caret = searchCaret();
     context.library_title = pc_source_ ? sourceName(*pc_source_) : !library_console_.empty() ? library_console_ :
                             !library_category_.empty() ? category_library_title_ : tr(L"Wszystkie gry");
@@ -357,6 +358,13 @@ void Launcher::paint(bool overlay) {
         context.prompt_body = tr(L"Zniknie tylko wpis w launcherze; plik gry na dysku zostaje.");
         context.prompt_danger = true;
     }
+    if (exit_prompt_ && prompt_kind_ == PromptKind::forget_search) {
+        context.prompt_question = std::wstring(tr(L"Usunąć z ostatnich wyszukiwań?")) +
+            (forget_search_ < recent_searches_.size() ? L" „" + recent_searches_[forget_search_] + L"”" : std::wstring{});
+        context.prompt_labels = {std::wstring(tr(L"Usuń")), std::wstring(tr(L"Usuń wszystkie")), std::wstring(tr(L"Anuluj"))};
+        context.prompt_body = tr(L"Gry zostają w bibliotece; znika tylko wpis z listy ostatnich wyszukiwań.");
+        context.prompt_danger = true;
+    }
     if (exit_prompt_ && prompt_kind_ == PromptKind::exclude) {
         context.prompt_question = std::wstring(tr(L"Wykluczyć grę?")) + L" " + exclude_game_.name;
         context.prompt_labels = {std::wstring(tr(L"Wyklucz")), std::wstring(tr(L"Ukryj")), std::wstring(tr(L"Anuluj"))};
@@ -463,7 +471,10 @@ void Launcher::paint(bool overlay) {
         context.xmb_row = xmb_row_;
         const auto& tile = xmb_top_[xmb_column_];
         context.xmb_caption = tile.name;
-        if (const auto* column = xmbColumn(tile)) context.xmb_subcaption = gamesLabel(column->size());
+        context.xmb_platform_badge = settings_.xmb_platform_badge;
+        if (const auto* column = xmbColumn(tile))
+            // A PC platform's column ends in "Zobacz wszystkie", which holds the count of all its games.
+            context.xmb_subcaption = column->back().kind == GameKind::all ? column->back().platform : gamesLabel(column->size());
         else if (tile.kind == GameKind::all) context.xmb_subcaption = gamesLabel(public_library_.size());
         else if (isGame(tile)) {
             // What the column's focused game says: its state, else its platform (the row is Ostatnio grane already).
@@ -472,6 +483,7 @@ void Launcher::paint(bool overlay) {
                 session == SessionState::running ? std::wstring(tr(L"W grze")) :
                 tile.installation.active() ? installationText(tile.installation) :
                 !tile.installed ? std::wstring(localFileGame(tile.source) ? missingFileLabel(tile) : tr(L"Do instalacji")) : activePlatformName(tile);
+            if (session == SessionState::none && !tile.installation.active() && tile.installed) context.xmb_subcaption_platform = context.xmb_subcaption;
         }
         else if (tile.kind == GameKind::glance) context.xmb_subcaption = tr(L"Nowości i premiery");
         else if (tile.kind == GameKind::companion && context.companion) {
@@ -656,6 +668,7 @@ void Launcher::paint(bool overlay) {
         }
     }
     context.metro_light = settings_.metro_light;
+    context.metro_title_corner = settings_.metro_title_corner;
     context.snitch_colour_icons = settings_.snitch_colour_icons;
     context.menu_dialog = menuDialog();
     context.friends_progress = friends_progress_;

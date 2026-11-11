@@ -236,6 +236,7 @@ set(LAUNCHME_APP_SOURCES
     src/app/game_sessions.cpp
     src/app/tray.cpp
     src/app/quick_resume.cpp
+    src/app/recent_searches.cpp
     src/store/game_details.cpp
     src/store/steam_trailer.cpp
     src/store/steam_app_match.cpp
