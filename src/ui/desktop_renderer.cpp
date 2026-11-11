@@ -56,9 +56,9 @@ void Renderer::desktopStroke(Rect r, float radius, D2D1_COLOR_F ink, float width
 
 void Renderer::desktopShadow(Rect r, float radius, float strength) {
     if (strength <= 0.003f) return;
-    for (int layer = 4; layer >= 1; --layer) {
-        const float spread = static_cast<float>(layer) * 3.5f;
-        desktopFill({r.left - spread, r.top - spread + 6, r.right + spread, r.bottom + spread + 8}, radius + spread, gray(0, 0.07f * strength));
+    for (int layer = 14; layer >= 1; --layer) { // One-pixel steps: wide ones showed as bands on bright backgrounds (#23).
+        const float spread = static_cast<float>(layer);
+        desktopFill({r.left - spread, r.top - spread + 6, r.right + spread, r.bottom + spread + 8}, radius + spread, gray(0, 0.02f * strength));
     }
 }
 
@@ -111,12 +111,12 @@ const Renderer::PosterShape* Renderer::posterShape(float width, float height) {
     if (scale > 0 && pixel_width && pixel_height && pixel_width <= 4096 && pixel_height <= 4096 &&
         SUCCEEDED(target_->CreateCompatibleRenderTarget(D2D1::SizeF(static_cast<float>(pixel_width), static_cast<float>(pixel_height)),
                                                         D2D1::SizeU(pixel_width, pixel_height), layers.GetAddressOf())) &&
-        SUCCEEDED(layers->CreateSolidColorBrush(D2D1::ColorF(0, 0, 0, 0.07f), ink.GetAddressOf()))) {
+        SUCCEEDED(layers->CreateSolidColorBrush(D2D1::ColorF(0, 0, 0, 0.02f), ink.GetAddressOf()))) {
         layers->BeginDraw();
         layers->Clear(D2D1::ColorF(0, 0, 0, 0));
         layers->SetTransform(D2D1::Matrix3x2F::Translation(-shape.shadow_box.left, -shape.shadow_box.top) * D2D1::Matrix3x2F::Scale(scale, scale));
-        for (int layer = 4; layer >= 1; --layer) {
-            const float spread = static_cast<float>(layer) * 3.5f, radius = 12 + spread;
+        for (int layer = 14; layer >= 1; --layer) { // One-pixel steps (#23); drawn once, kept as a bitmap.
+            const float spread = static_cast<float>(layer), radius = 12 + spread;
             layers->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(-spread, -spread + 6, width + spread, height + spread + 8), radius, radius), ink.Get());
         }
         if (SUCCEEDED(layers->EndDraw())) layers->GetBitmap(shape.shadow.GetAddressOf());

@@ -222,9 +222,9 @@ void Renderer::drawCoverflowPoster(const GameCard& card, size_t index) {
     squircle_corner_ = previous_corner;
     if (!shape) return;
     const float alpha = card.opacity;
-    for (int layer = 3; layer >= 1; --layer) {
-        const float spread = layer * 3.0f;
-        brush(gray(0, 0.065f * alpha));
+    for (int layer = 9; layer >= 1; --layer) { // One-pixel steps: wide ones showed as bands on bright pictures (#23).
+        const float spread = static_cast<float>(layer);
+        brush(gray(0, 0.022f * alpha));
         target_->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(rect.left - spread, rect.top + 7 - spread,
             rect.right + spread, rect.bottom + 7 + spread), 14, 14), solid_.Get());
     }

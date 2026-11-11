@@ -22,11 +22,15 @@ D2D1_COLOR_F Renderer::platformTileFill(const Game& game, float alpha) const {
 
 void Renderer::drawSquareShadow(float x, float y, float size, bool selected, float transparency) {
     const auto base = canvasBase();
-    for (int layer = 4; layer >= 1; --layer) {
-        const float spread = static_cast<float>(layer) * (selected ? 4.0f : 2.0f);
+    const int layers = selected ? 16 : 8;
+    const float alpha = (selected ? 0.012f : 0.014f) * transparency;
+    for (int layer = layers; layer >= 1; --layer) {
+        const float spread = static_cast<float>(layer);
         target_->SetTransform(D2D1::Matrix3x2F::Scale(size + spread * 2, size + spread * 2) *
                               D2D1::Matrix3x2F::Translation(x - spread, y + 10.0f - spread) * base);
-        brush(color(0, 0, 0, selected ? 0.048f * transparency : 0.028f * transparency));
+    // Layers one pixel apart, so the edge fades smoothly: four wide steps showed as bands on bright
+    // backgrounds (issue #23). The same reach and darkness as before (16 px focused, 8 px otherwise).
+        brush(color(0, 0, 0, alpha));
         fillSquircle(solid_.Get());
     }
     target_->SetTransform(base);

@@ -49,17 +49,24 @@ void Renderer::drawPsfive() {
     }
     drawQuickShade();
     const auto row_clip = D2D1::RectF(psfive_layout::rowClipLeft(), 0, width, height);
-    target_->PushAxisAlignedClip(row_clip, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
     // Every shadow first: the tiles sit close, so none may fall over a neighbour (the focused
-    // tile, drawn last, would darken the edges of the tiles beside it).
+    // tile, drawn last, would darken the edges of the tiles beside it). The shadows reach past the
+    // row's clip on the left (the first tile's was cut off there, issue #23); a tile sliding out
+    // past the row's start takes its shadow with it.
+    constexpr float shadow_reach = 20;
+    target_->PushAxisAlignedClip(D2D1::RectF(psfive_layout::rowClipLeft() - shadow_reach, 0, width, height), D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
     for (size_t i = 0; i < cards.size(); ++i) {
         const auto& card = cards[i];
         if (card.opacity < 0.01f || card.size <= 0 || card.x > width + 45 || card.x + card.size < -45) continue;
         const bool focused = i == selected_;
         const float zoom = focused ? 1.0f + 0.13f * smoothFade(context_->launch_progress) : 1.0f;
         const float size = card.size * zoom;
-        drawSquareShadow(card.x - (size - card.size) * 0.5f, card.y - (size - card.size) * 0.5f, size, focused, card.opacity);
+        const float leaving = std::clamp(1.0f - (psfive_layout::rowClipLeft() - card.x) / shadow_reach, 0.0f, 1.0f);
+        if (leaving <= 0.001f) continue;
+        drawSquareShadow(card.x - (size - card.size) * 0.5f, card.y - (size - card.size) * 0.5f, size, focused, card.opacity * leaving);
     }
+    target_->PopAxisAlignedClip();
+    target_->PushAxisAlignedClip(row_clip, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
     for (size_t i = 0; i < cards.size(); ++i) if (i != selected_) drawCard(cards[i], i);
     target_->PopAxisAlignedClip();
     const float launch = smoothFade(context_->launch_progress);

@@ -124,9 +124,9 @@ void Renderer::drawRectangularCard(const GameCard& card, size_t index, float alp
     if (inner > 0.05f) if (auto inside = tileShape(rect, tile_shape_)) shape = inside;
     const float transparency = card.opacity * alpha * (context_->xmb ? 1.0f : 0.9f + 0.1f * emphasis);
     const auto& game = card.game;
-    for (int layer = 3; layer >= 1; --layer) {
-        const float spread = layer * (3.0f + 2.0f * emphasis);
-        brush(D2D1::ColorF(0, 0, 0, (0.045f + 0.025f * emphasis) * transparency));
+    for (int layer = 6; layer >= 1; --layer) { // Half steps: wide ones showed as bands on bright pictures (#23).
+        const float spread = layer * 0.5f * (3.0f + 2.0f * emphasis);
+        brush(D2D1::ColorF(0, 0, 0, 0.5f * (0.045f + 0.025f * emphasis) * transparency));
         const auto shadow = tileShape(D2D1::RectF(x - spread, y + 8 - spread, x + tile_w + spread, y + tile_h + 8 + spread), tile_shape_);
         if (shadow) target_->FillGeometry(shadow.Get(), solid_.Get());
     }
@@ -288,9 +288,9 @@ void Renderer::drawFlixUnfolded(const GameCard& card, size_t index, float alpha)
     if (!shape) return;
     const bool focused = index == selected_;
     const float emphasis = focused ? card.emphasis : 0.0f;
-    for (int layer = 3; layer >= 1; --layer) { // A deeper shadow than the posters': it stands above them.
-        const float spread = layer * (4.0f + 3.0f * open);
-        brush(D2D1::ColorF(0, 0, 0, (0.06f + 0.04f * open) * transparency));
+    for (int layer = 6; layer >= 1; --layer) { // A deeper shadow than the posters': it stands above them. Half steps (#23).
+        const float spread = layer * 0.5f * (4.0f + 3.0f * open);
+        brush(D2D1::ColorF(0, 0, 0, 0.5f * (0.06f + 0.04f * open) * transparency));
         if (const auto shadow = tileShape(D2D1::RectF(x - spread, y + 10 - spread, x + w + spread, y + h + 10 + spread), tile_shape_))
             target_->FillGeometry(shadow.Get(), solid_.Get());
     }

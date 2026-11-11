@@ -161,9 +161,9 @@ void Renderer::drawMetroTile(const GameCard& card, size_t index) {
     // which page the arrows act on even without the 3D effect.
     const float away = std::clamp(std::abs(static_cast<float>(info.page) - context_->metro_tab), 0.0f, 1.0f);
     const float transparency = card.opacity * (0.9f + 0.1f * emphasis) * (1.0f - 0.55f * away);
-    for (int layer = 3; layer >= 1; --layer) {
-        const float spread = layer * (3.0f + 2.0f * emphasis);
-        brush(D2D1::ColorF(0, 0, 0, (0.045f + 0.025f * emphasis) * transparency * (metro_light_ ? 0.45f : 1.0f)));
+    for (int layer = 6; layer >= 1; --layer) { // Half steps: wide ones showed as bands on bright pictures (#23).
+        const float spread = layer * 0.5f * (3.0f + 2.0f * emphasis);
+        brush(D2D1::ColorF(0, 0, 0, 0.5f * (0.045f + 0.025f * emphasis) * transparency * (metro_light_ ? 0.45f : 1.0f)));
         const auto shadow = tileShape(D2D1::RectF(x - spread, y + 8 - spread, x + tile_w + spread, y + tile_h + 8 + spread), tile_shape_);
         if (shadow) target_->FillGeometry(shadow.Get(), solid_.Get());
     }
