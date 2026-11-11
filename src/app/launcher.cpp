@@ -943,6 +943,8 @@ void Launcher::tick() {
     if (screensaverActive()) needs_paint = true;
     tickVideo(needs_paint); // After the screensaver: it stops the video the moment it starts.
     tickWallpaper(needs_paint); // A video wallpaper's frames while it is seen (src/app/wallpaper.cpp).
+    tickAnimatedArt(needs_paint); // The focused card's animated artwork (src/app/animated_art.cpp).
+    if (artworkOpen() && renderer_.artworkAnimationDue()) needs_paint = true; // Zmień grafikę's moving tiles.
     tickPsfiveDetails(dt, needs_paint); // PSfive's details sliding in under the row (src/app/psfive_details.cpp).
     if (renderer_.marqueeActive() && GetForegroundWindow() == hwnd_) needs_paint = true; // A long focused name glides (fadingLine).
     // Card rows (controllers, companions, the TV layouts): their focus frame glides, pulses or

@@ -2,8 +2,12 @@
 #include "../i18n/i18n.hpp"
 #include "../net/json.hpp"
 #include "../platform/text_encoding.hpp"
+#include "animated_image.hpp"
 #include "image_codec.hpp"
 #include <cmath>
+#include <fstream>
+#include <mutex>
+#include <unordered_map>
 #include <unordered_set>
 
 namespace {
@@ -26,6 +30,99 @@ std::wstring error(uint32_t status) {
 std::string_view body(const HttpResponse& response) {
     return {reinterpret_cast<const char*>(response.body.data()), response.body.size()};
 }
+
+// How many animated assets a gallery query has (its first page tells), so the later pages know
+// where the static ones start without asking again. For this run of the launcher only.
+std::mutex& animatedCountsMutex() { static std::mutex value; return value; }
+std::unordered_map<std::wstring, int>& animatedCounts() { static std::unordered_map<std::wstring, int> value; return value; }
+int knownAnimated(const std::wstring& query) {
+    std::lock_guard lock(animatedCountsMutex());
+    const auto found = animatedCounts().find(query);
+    return found == animatedCounts().end() ? -1 : found->second;
+}
+void rememberAnimated(const std::wstring& query, int count) {
+    std::lock_guard lock(animatedCountsMutex());
+    if (animatedCounts().size() > 512) animatedCounts().clear();
+    animatedCounts()[query] = count;
+}
+}
+
+namespace {
+GridPage browse(const Game& game, ArtworkKind kind, int page, GridSource source, const std::wstring& key,
+                const ArtworkHttp& get, bool animated) {
+    if (kind == ArtworkKind::disc) return {{}, {}, false, tr(L"Grafiki płyt pochodzą ze ScreenScraper.")};
+    if (!isGame(game) || gameKey(game).empty() || page < 0) return {{}, {}, false, tr(L"Brak gry.")};
+    if (key.empty()) return {{}, {}, false, tr(L"Brak klucza SteamGridDB.")};
+    if (key.size() > 1024 || key.find_first_of(L"\r\n") != std::wstring::npos) return {{}, {}, false, tr(L"Nieprawidłowy klucz SteamGridDB.")};
+    const auto headers = L"Accept: application/json\r\nAuthorization: Bearer " + key + L"\r\n";
+    // Covers, posters and wide tiles are all SGDB "grids", told apart by their dimensions.
+    const auto endpoint = kind == ArtworkKind::hero ? L"heroes" : kind == ArtworkKind::logo ? L"logos" : L"grids";
+    const auto dimensions = kind == ArtworkKind::cover ? L"&dimensions=512x512,600x900" :
+                            kind == ArtworkKind::poster ? L"&dimensions=600x900,342x482,660x930" :
+                            kind == ArtworkKind::landscape ? L"&dimensions=920x430,460x215" : L"";
+    // Animated assets are animated WebP files (the only kind decoded: animated_image.hpp).
+    const auto query = [&](GridSource selected, bool moving, int number) {
+        const auto address = L"https://www.steamgriddb.com/api/v2/" + std::wstring(endpoint) + L'/' +
+            (selected.steam ? L"steam/" : L"game/") + std::to_wstring(selected.id) +
+            (moving ? std::wstring(L"?types=animated&mimes=image/webp") :
+             L"?types=static&mimes=" + (kind == ArtworkKind::logo ? std::wstring(L"image/png") : std::wstring(L"image/png,image/jpeg"))) +
+            L"&limit=" + std::to_wstring(grid_page_size) +
+            L"&page=" + std::to_wstring(number) + dimensions;
+        const auto response = get(address, headers, 2 * 1024 * 1024);
+        GridPage result;
+        if (response.status == 200) result = parseGridPage(body(response));
+        else if (response.status != 404) result.error = error(response.status);
+        result.source = selected;
+        for (auto& asset : result.assets) asset.animated = moving;
+        return result;
+    };
+    const auto fetch = [&](GridSource selected) {
+        if (!animated) return query(selected, false, page);
+        // The animated ones first: those of this page, then the static ones after the earlier pages' share.
+        const auto counted = std::wstring(endpoint) + (selected.steam ? L"|s" : L"|g") + std::to_wstring(selected.id) + dimensions;
+        int known = knownAnimated(counted);
+        GridPage result;
+        if (known < 0 || page * grid_page_size < known) {
+            auto moving = query(selected, true, page);
+            // A refused animated query leaves the static ones (its count is not kept); a rate limit stops here.
+            if (moving.error.empty()) {
+                result = std::move(moving);
+                known = result.total >= 0 ? result.total : page * grid_page_size + static_cast<int>(result.assets.size());
+                rememberAnimated(counted, known);
+            } else if (moving.error == error(429)) return moving;
+            else known = 0;
+        }
+        result.source = selected;
+        result.error.clear();
+        const int shown = static_cast<int>(result.assets.size());
+        const int offset = page * grid_page_size - std::min(known, page * grid_page_size); // Static ones on earlier pages.
+        bool more = known > (page + 1) * grid_page_size || shown == grid_page_size;
+        if (shown < grid_page_size) {
+            std::unordered_set<uint32_t> seen;
+            for (const auto& asset : result.assets) seen.insert(asset.id);
+            const int want = grid_page_size - shown;
+            const int first = offset / grid_page_size, last = (offset + want - 1) / grid_page_size;
+            for (int number = first; number <= last; ++number) {
+                auto still = query(selected, false, number);
+                if (!still.error.empty()) { if (result.assets.empty()) result.error = std::move(still.error); break; }
+                const int from = number == first ? offset % grid_page_size : 0;
+                for (int i = from; i < static_cast<int>(still.assets.size()) && result.assets.size() < grid_page_size; ++i)
+                    if (seen.insert(still.assets[static_cast<size_t>(i)].id).second) result.assets.push_back(std::move(still.assets[static_cast<size_t>(i)]));
+                more = more || (still.total >= 0 ? offset + want < still.total : still.more && number == last);
+                if (still.total >= 0 ? (number + 1) * grid_page_size >= still.total : !still.more) break; // No static page after it.
+            }
+        }
+        result.more = more;
+        return result;
+    };
+    if (source.id) return fetch(source);
+    if (steamArtwork(game)) {
+        auto result = fetch({game.app_id, true});
+        if (!result.assets.empty() || !result.error.empty() || result.more) return result;
+    }
+    const auto matched = resolveGridGame(artworkTitle(game), key, get);
+    return matched.source.id ? fetch(matched.source) : GridPage{{}, {}, false, matched.error};
+}
 }
 
 GridPage parseGridPage(std::string_view bytes) {
@@ -37,6 +134,8 @@ GridPage parseGridPage(std::string_view bytes) {
         return result;
     }
     result.more = data->elements.size() >= grid_page_size;
+    if (const auto* total = root->get("total"); total && total->type == json::Value::Type::number && std::isfinite(total->numeric) &&
+        total->numeric >= 0 && total->numeric <= 1e7) result.total = static_cast<int>(total->numeric);
     std::unordered_set<uint32_t> seen;
     for (const auto& item : data->elements) {
         GridAsset asset;
@@ -58,36 +157,12 @@ GridPage parseGridPage(std::string_view bytes) {
 
 GridPage browseSteamGridDB(const Game& game, ArtworkKind kind, int page, GridSource source,
                            const std::wstring& key, const ArtworkHttp& get) {
-    if (kind == ArtworkKind::disc) return {{}, {}, false, tr(L"Grafiki płyt pochodzą ze ScreenScraper.")};
-    if (!isGame(game) || gameKey(game).empty() || page < 0) return {{}, {}, false, tr(L"Brak gry.")};
-    if (key.empty()) return {{}, {}, false, tr(L"Brak klucza SteamGridDB.")};
-    if (key.size() > 1024 || key.find_first_of(L"\r\n") != std::wstring::npos) return {{}, {}, false, tr(L"Nieprawidłowy klucz SteamGridDB.")};
-    const auto headers = L"Accept: application/json\r\nAuthorization: Bearer " + key + L"\r\n";
-    // Covers, posters and wide tiles are all SGDB "grids", told apart by their dimensions.
-    const auto endpoint = kind == ArtworkKind::hero ? L"heroes" : kind == ArtworkKind::logo ? L"logos" : L"grids";
-    const auto dimensions = kind == ArtworkKind::cover ? L"&dimensions=512x512,600x900" :
-                            kind == ArtworkKind::poster ? L"&dimensions=600x900,342x482,660x930" :
-                            kind == ArtworkKind::landscape ? L"&dimensions=920x430,460x215" : L"";
-    const auto fetch = [&](GridSource selected) {
-        const auto address = L"https://www.steamgriddb.com/api/v2/" + std::wstring(endpoint) + L'/' +
-            (selected.steam ? L"steam/" : L"game/") + std::to_wstring(selected.id) +
-            L"?types=static&mimes=" + (kind == ArtworkKind::logo ? std::wstring(L"image/png") : std::wstring(L"image/png,image/jpeg")) +
-            L"&limit=" + std::to_wstring(grid_page_size) +
-            L"&page=" + std::to_wstring(page) + dimensions;
-        const auto response = get(address, headers, 2 * 1024 * 1024);
-        GridPage result;
-        if (response.status == 200) result = parseGridPage(body(response));
-        else if (response.status != 404) result.error = error(response.status);
-        result.source = selected;
-        return result;
-    };
-    if (source.id) return fetch(source);
-    if (steamArtwork(game)) {
-        auto result = fetch({game.app_id, true});
-        if (!result.assets.empty() || !result.error.empty() || result.more) return result;
-    }
-    const auto matched = resolveGridGame(artworkTitle(game), key, get);
-    return matched.source.id ? fetch(matched.source) : GridPage{{}, {}, false, matched.error};
+    return browse(game, kind, page, source, key, get, false);
+}
+
+GridPage browseSteamGridDBGallery(const Game& game, ArtworkKind kind, int page, GridSource source,
+                                  const std::wstring& key, const ArtworkHttp& get) {
+    return browse(game, kind, page, source, key, get, animated_image::supported() && kind != ArtworkKind::logo);
 }
 
 bool decodableArtwork(const std::vector<uint8_t>& bytes) {
@@ -108,3 +183,46 @@ std::vector<uint8_t> downloadGridImage(const GridAsset& asset, bool thumbnail, c
     }
     return {};
 }
+
+std::vector<uint8_t> downloadAnimatedPreview(const GridAsset& asset, const ArtworkHttp& get) {
+    if (!asset.animated || !asset.url.starts_with(L"https://")) return {};
+    const auto response = get ? get(asset.url, L"Accept: image/webp\r\n", animated_preview_bytes) :
+                                httpGetPrefix(asset.url, L"Accept: image/webp\r\n", animated_preview_bytes, 30000);
+    if (response.status != 200) return {};
+    return animated_image::wholeFrames(response.body);
+}
+
+bool downloadAnimatedGrid(const GridAsset& asset, const std::filesystem::path& file, const ArtworkFileHttp& download) {
+    if (!asset.animated || !asset.url.starts_with(L"https://")) return false;
+    const auto headers = L"Accept: image/webp\r\n";
+    const auto response = download ? download(asset.url, headers, file, animated_artwork_limit) :
+                                      httpDownloadFile(asset.url, headers, file, animated_artwork_limit, 180000, false);
+    std::error_code error;
+    const auto size = std::filesystem::file_size(file, error);
+    bool valid = false;
+    if (response.status == 200 && !error && size >= 30 && size <= animated_artwork_limit) {
+        std::ifstream input(file, std::ios::binary);
+        std::vector<uint8_t> head(30);
+        valid = input.read(reinterpret_cast<char*>(head.data()), static_cast<std::streamsize>(head.size())) && animated_image::animatedWebp(head);
+    }
+    if (valid && !animatedStill(file).empty()) return true;
+    if (response.status == 200) std::filesystem::remove(file, error); // Complete but not an animation: not kept.
+    return false;
+}
+
+namespace {
+std::optional<image_codec::Size> stillSize(const image_codec::Info& info) {
+    if (info.width > 8192 || info.height > 8192) return {};
+    return image_codec::Size{info.width, info.height};
+}
+std::vector<uint8_t> encodeStill(const std::optional<image_codec::Image>& image) {
+    if (!image) return {};
+    bool opaque = true;
+    for (size_t i = 3; i < image->pixels.size() && opaque; i += 4) opaque = image->pixels[i] == 255;
+    auto bytes = opaque ? image_codec::encodeJpeg(*image, 0.9f) : image_codec::encodePng(*image);
+    return decodableArtwork(bytes) ? bytes : std::vector<uint8_t>{};
+}
+} // namespace
+
+std::vector<uint8_t> animatedStill(const std::filesystem::path& file) { return encodeStill(image_codec::decodeFile(file, stillSize)); }
+std::vector<uint8_t> animatedStill(std::span<const uint8_t> bytes) { return encodeStill(image_codec::decode(bytes, stillSize)); }

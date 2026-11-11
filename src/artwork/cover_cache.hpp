@@ -25,6 +25,12 @@ bool cacheArtworkVariant(const Game& game, ArtworkKind kind, uint32_t asset_id,
                          const std::vector<uint8_t>& bytes, const std::filesystem::path& cache);
 bool selectArtworkVariant(const Game& game, ArtworkKind kind, uint32_t asset_id,
                           const std::filesystem::path& cache);
+// An animated SteamGridDB pick keeps its animated WebP beside the variant (<id>.webp), the variant
+// itself being the still first frame every view decodes. The animation of the pick in use for this
+// type: empty when that pick is a still (or the game has none).
+std::filesystem::path artworkAnimationPath(const Game& game, ArtworkKind kind, uint32_t asset_id,
+                                           const std::filesystem::path& cache);
+std::filesystem::path selectedArtworkAnimation(const Game& game, ArtworkKind kind, const std::filesystem::path& cache);
 // The files the player added from disk (variant IDs from 0x80000000), newest first; whether the game has any
 // of any type; and whether a variant of the type is the one chosen (the "set" dots of Zmień grafikę).
 inline constexpr uint32_t local_artwork_first_id = 0x80000000u;

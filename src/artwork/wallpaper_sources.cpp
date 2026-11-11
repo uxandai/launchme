@@ -3,8 +3,12 @@
 #include "../i18n/i18n.hpp"
 #include "../net/json.hpp"
 #include "../net/url_encoding.hpp"
+#include "../library/steam.hpp"
+#include "../platform/ascii_text.hpp"
 #include "../platform/atomic_file.hpp"
+#include "../platform/file_io.hpp"
 #include "../platform/text_encoding.hpp"
+#include "../platform/unicode_text.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -16,6 +20,9 @@
 
 namespace wallpaper_sources {
 namespace {
+// Wallpaper Engine's assets (files on this PC): only these are read from disk, never a path a site sent.
+constexpr uint32_t wallpaper_engine_ids = 0x50000000u;
+bool wallpaperEngineAsset(const GridAsset& asset) { return (asset.id & 0xf0000000u) == wallpaper_engine_ids; }
 uint32_t fnv(std::wstring_view text) {
     uint32_t hash = 2166136261u;
     for (const auto ch : text) { hash ^= static_cast<uint32_t>(ch); hash *= 16777619u; }
@@ -23,7 +30,8 @@ uint32_t fnv(std::wstring_view text) {
 }
 uint32_t assetId(ArtworkProvider provider, const std::wstring& url) {
     const uint32_t prefix = provider == ArtworkProvider::wallhaven ? 0x10000000u : provider == ArtworkProvider::danbooru ? 0x20000000u :
-                            provider == ArtworkProvider::motionbgs ? 0x30000000u : 0x40000000u;
+                            provider == ArtworkProvider::motionbgs ? 0x30000000u :
+                            provider == ArtworkProvider::wallpaper_engine ? wallpaper_engine_ids : 0x40000000u;
     return prefix | (fnv(url) & 0x0fffffffu);
 }
 std::wstring wide(std::string_view text) { return text_encoding::wideLenient(text); }
@@ -262,6 +270,27 @@ bool videoFile(const std::filesystem::path& file) {
     for (auto& ch : extension) ch = static_cast<wchar_t>(std::towlower(ch));
     return extension == L".mp4" || extension == L".m4v" || extension == L".webm" || extension == L".mkv" || extension == L".mov" || extension == L".wmv" || extension == L".avi";
 }
+// A file of a Wallpaper Engine item: a plain relative name inside its folder, never above it.
+std::filesystem::path insideItem(const std::filesystem::path& item, std::string_view name) {
+    if (name.empty() || name.size() > 512) return {};
+    const std::filesystem::path relative(text_encoding::wideLenient(name));
+    if (relative.is_absolute() || relative.has_root_name() || relative.has_root_directory()) return {};
+    for (const auto& part : relative) if (part == L".." || part == L".") return {};
+    return item / relative;
+}
+// Its preview picture (JPEG, PNG or a GIF's first frame) as a JPEG tile of at most 640×360.
+std::vector<uint8_t> localThumbnail(const std::filesystem::path& file) {
+    const auto bytes = file_io::readBytes(file, 30 * 1024 * 1024);
+    if (bytes.empty()) return {};
+    const auto image = image_codec::decode(bytes, [](const image_codec::Info& info) -> std::optional<image_codec::Size> {
+        if (!info.width || !info.height || static_cast<uint64_t>(info.width) * info.height > 64ull * 1024 * 1024) return std::nullopt;
+        const double scale = std::min({1.0, 640.0 / info.width, 360.0 / info.height});
+        return image_codec::Size{std::max(1u, static_cast<uint32_t>(std::lround(info.width * scale))),
+                                 std::max(1u, static_cast<uint32_t>(std::lround(info.height * scale)))};
+    }, image_codec::Filter::cubic);
+    return image ? image_codec::encodeJpeg(*image, 0.88f) : std::vector<uint8_t>{};
+}
+
 // A picture scaled to cover 2560×1440 (never enlarged), as JPEG; empty when it cannot be read.
 std::vector<uint8_t> screenPicture(std::span<const uint8_t> bytes) {
     const auto image = image_codec::decode(bytes, [](const image_codec::Info& info) -> std::optional<image_codec::Size> {
@@ -286,9 +315,70 @@ void removeOthers(const std::filesystem::path& folder, const std::filesystem::pa
 
 bool own(ArtworkProvider provider) {
     return provider == ArtworkProvider::wallhaven || provider == ArtworkProvider::danbooru || provider == ArtworkProvider::motionbgs ||
-           provider == ArtworkProvider::steam_backgrounds;
+           provider == ArtworkProvider::steam_backgrounds || provider == ArtworkProvider::wallpaper_engine;
 }
-bool video(ArtworkProvider provider) { return provider == ArtworkProvider::motionbgs || provider == ArtworkProvider::steam_backgrounds; }
+bool video(ArtworkProvider provider) {
+    return provider == ArtworkProvider::motionbgs || provider == ArtworkProvider::steam_backgrounds || provider == ArtworkProvider::wallpaper_engine;
+}
+
+GridPage wallpaperEngine(const std::wstring& query, int page, const std::vector<std::filesystem::path>& libraries) {
+    GridPage out;
+    out.provider = ArtworkProvider::wallpaper_engine;
+    struct Found { std::wstring title; GridAsset asset; };
+    std::vector<Found> found;
+    std::set<std::wstring> seen;
+    bool installed = false;
+    const auto filter = unicode_text::lower(trimmed(query));
+    for (const auto& library : libraries) {
+        // Workshop subscriptions, and the player's own projects in Wallpaper Engine's folder.
+        const auto steamapps = library / L"steamapps";
+        for (const auto& folder : {steamapps / L"workshop" / L"content" / L"431960", steamapps / L"common" / L"wallpaper_engine" / L"projects" / L"myprojects"}) {
+            std::error_code ec;
+            if (!std::filesystem::is_directory(folder, ec)) continue;
+            installed = true;
+            size_t items = 0;
+            for (std::filesystem::directory_iterator it(folder, ec), end; !ec && it != end && items < 10000; it.increment(ec), ++items) {
+                std::error_code entry;
+                if (!it->is_directory(entry)) continue;
+                const auto item = it->path();
+                const auto text = file_io::readTextWithoutBom(item / L"project.json", 1024 * 1024);
+                const auto project = text.empty() ? std::nullopt : json::parse(text, 1024 * 1024);
+                if (!project || project->type != json::Value::Type::object) continue;
+                // Videos only: scenes and web wallpapers need Wallpaper Engine itself to run.
+                if (!ascii_text::equalIgnoreCase(field(&*project, "type"), "video")) continue;
+                // Like the other sources: nothing marked for adults.
+                if (ascii_text::equalIgnoreCase(field(&*project, "contentrating"), "mature")) continue;
+                const auto file = insideItem(item, field(&*project, "file"));
+                if (file.empty() || !videoFile(file) || !file_io::isFile(file)) continue;
+                const auto key = unicode_text::lower(file.lexically_normal().wstring());
+                if (!seen.insert(key).second) continue; // A library listed twice.
+                auto title = trimmed(wide(field(&*project, "title")));
+                if (title.empty()) title = item.filename().wstring();
+                if (!filter.empty() && unicode_text::lower(title).find(filter) == std::wstring::npos) continue;
+                GridAsset asset;
+                asset.url = file.wstring();
+                asset.preview = asset.url; // Played from where it is, before and after it is chosen.
+                if (const auto picture = insideItem(item, field(&*project, "preview")); !picture.empty() && file_io::isFile(picture))
+                    asset.thumbnail = picture.wstring();
+                asset.id = assetId(ArtworkProvider::wallpaper_engine, key);
+                asset.author = L"Wallpaper Engine · " + title;
+                asset.width = 1920; asset.height = 1080;
+                found.push_back({std::move(title), std::move(asset)});
+            }
+        }
+    }
+    std::sort(found.begin(), found.end(), [](const Found& a, const Found& b) {
+        const int order = unicode_text::compareNatural(a.title, b.title);
+        return order != 0 ? order < 0 : a.asset.url < b.asset.url;
+    });
+    const size_t from = static_cast<size_t>(std::max(0, page)) * grid_page_size;
+    for (size_t i = from; i < found.size() && i < from + grid_page_size; ++i) out.assets.push_back(std::move(found[i].asset));
+    out.more = found.size() > from + grid_page_size;
+    if (out.assets.empty())
+        out.error = !installed ? tr(L"Nie znaleziono Wallpaper Engine ani jego subskrypcji w bibliotekach Steam.") :
+                    !filter.empty() ? tr(L"Brak tapet dla tego hasła.") : tr(L"Brak tapet wideo z Wallpaper Engine (sceny i strony nie są obsługiwane).");
+    return out;
+}
 
 GridPage browse(ArtworkProvider provider, const std::wstring& query, int page, const ArtworkHttp& get) {
     GridPage out;
@@ -297,6 +387,7 @@ GridPage browse(ArtworkProvider provider, const std::wstring& query, int page, c
     case ArtworkProvider::danbooru: out = danbooru(query, page, get); break;
     case ArtworkProvider::motionbgs: out = motionbgs(query, page, get); break;
     case ArtworkProvider::steam_backgrounds: out = steamBackgrounds(query, page, get); break;
+    case ArtworkProvider::wallpaper_engine: out = wallpaperEngine(query, page, steamLibraryFolders(findSteamRoot())); break;
     default: break;
     }
     out.provider = provider;
@@ -305,6 +396,7 @@ GridPage browse(ArtworkProvider provider, const std::wstring& query, int page, c
 }
 
 std::vector<uint8_t> thumbnail(const GridAsset& asset, const ArtworkHttp& get) {
+    if (wallpaperEngineAsset(asset)) return asset.thumbnail.empty() ? std::vector<uint8_t>{} : localThumbnail(asset.thumbnail);
     for (const auto& address : {asset.thumbnail, asset.url}) {
         // A video's own address is never a picture.
         if (address.empty() || !address.starts_with(L"https://") || address.find(L"/dl/") != std::wstring::npos || address.ends_with(L".mp4")) continue;
@@ -318,6 +410,12 @@ std::filesystem::path store(ArtworkProvider provider, const GridAsset& asset, co
     std::error_code ec;
     std::filesystem::create_directories(folder, ec);
     const auto id = std::to_wstring(asset.id);
+    if (provider == ArtworkProvider::wallpaper_engine) {
+        // Played from Wallpaper Engine's folder (no copy of a large file); earlier downloads go.
+        if (!wallpaperEngineAsset(asset) || !videoFile(asset.url) || !file_io::isFile(asset.url)) { error = tr(L"Nie można odczytać tapety."); return {}; }
+        removeOthers(folder, {});
+        return std::filesystem::path(asset.url);
+    }
     if (video(provider)) {
         const auto file = folder / (L"video-" + id + L".mp4");
         if (!std::filesystem::exists(file, ec)) {
@@ -369,6 +467,7 @@ std::filesystem::path storeLocal(const std::filesystem::path& source, const std:
 }
 
 std::filesystem::path preview(const GridAsset& asset, const std::filesystem::path& folder) {
+    if (wallpaperEngineAsset(asset)) return videoFile(asset.preview) && file_io::isFile(asset.preview) ? std::filesystem::path(asset.preview) : std::filesystem::path{};
     if (asset.preview.empty() || !asset.preview.starts_with(L"https://")) return {};
     const auto previews = folder / L"previews";
     std::error_code ec;

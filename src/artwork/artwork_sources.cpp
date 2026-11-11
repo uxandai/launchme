@@ -499,6 +499,7 @@ const char* slug(ArtworkProvider provider) {
     case ArtworkProvider::danbooru: return "danbooru";
     case ArtworkProvider::motionbgs: return "motionbgs";
     case ArtworkProvider::steam_backgrounds: return "steam_backgrounds";
+    case ArtworkProvider::wallpaper_engine: return "wallpaper_engine";
     case ArtworkProvider::local: return "local";
     }
     return "";
@@ -520,6 +521,7 @@ const wchar_t* name(ArtworkProvider provider) {
     case ArtworkProvider::danbooru: return L"Danbooru";
     case ArtworkProvider::motionbgs: return L"MotionBGs";
     case ArtworkProvider::steam_backgrounds: return L"Steam";
+    case ArtworkProvider::wallpaper_engine: return L"Wallpaper Engine (Video)";
     case ArtworkProvider::local: return tr(L"Lokalne");
     }
     return L"";

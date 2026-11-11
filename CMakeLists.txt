@@ -407,6 +407,10 @@ if(BUILD_TESTING)
     launchme_executable(steamgriddb_tests TEST steamgriddb_browser_and_selection
         SOURCES tests/steamgriddb_tests.cpp src/artwork/steamgriddb.cpp ${LAUNCHME_COVER_SOURCES} ${LAUNCHME_WEB_SOURCES}
         LIBS windowscodecs winhttp shell32 ole32)
+    launchme_executable(animated_image_tests TEST animated_artwork
+        SOURCES tests/animated_image_tests.cpp LIBS windowscodecs winhttp shell32 ole32)
+    launchme_executable(wallpaper_engine_tests TEST wallpaper_engine_video_wallpapers
+        SOURCES tests/wallpaper_engine_tests.cpp LIBS windowscodecs winhttp shell32 ole32)
     launchme_executable(artwork_browser_live_test
         SOURCES tests/artwork_browser_live_test.cpp src/artwork/steamgriddb.cpp ${LAUNCHME_COVER_SOURCES} ${LAUNCHME_WEB_SOURCES}
         LIBS windowscodecs winhttp shell32 ole32)
@@ -473,6 +477,8 @@ add_test(NAME low_memory_mode COMMAND launcher_ui_tests --low-memory)
     add_test(NAME launchme_updates_and_whats_new COMMAND launcher_ui_tests --updates)
     add_test(NAME tray_while_playing_and_background_crop COMMAND launcher_ui_tests --tray)
     add_test(NAME drm_free_artwork_crop_controls COMMAND launcher_ui_tests --drm-free)
+    add_test(NAME animated_artwork_gallery_and_focus COMMAND launcher_ui_tests --animated-art)
+    add_test(NAME wallpaper_engine_video_source COMMAND launcher_ui_tests --wallpaper-engine)
     add_test(NAME theme_studio_tabs_cards_and_saved_looks COMMAND launcher_ui_tests --theme-studio)
     add_test(NAME emulation_settings_pages_and_add_folder COMMAND launcher_ui_tests --emulation)
     set_tests_properties(tarot_reading_cards_and_results PROPERTIES TIMEOUT 60)

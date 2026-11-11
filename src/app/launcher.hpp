@@ -2050,6 +2050,25 @@ private:
     std::wstring wallpaperDescription() const;
     VideoPlayer wallpaper_player_;
     std::vector<uint8_t> wallpaper_frame_;
+    // Animated SteamGridDB picks (src/app/animated_art.cpp): the card with the focus (in the desktop
+    // window the one under the pointer first) plays its animated cover, poster or background after
+    // a short rest; the still comes back when the focus leaves.
+    void tickAnimatedArt(bool& needs_paint);
+    void stopAnimatedArt();
+    void forgetAnimatedArt(const std::string& key); // A pick changed: its animations are looked up again.
+    const std::filesystem::path& animatedArtFile(const Game& game, ArtworkKind kind);
+    struct AnimatedArtPlay {
+        ArtworkKind kind = ArtworkKind::cover;
+        ImageBytes still; // The picture its frames stand in for (art_'s bytes of that type).
+        animated_image::Player player;
+        std::vector<uint8_t> frame;
+    };
+    std::vector<std::unique_ptr<AnimatedArtPlay>> animated_art_plays_;
+    std::unordered_map<std::string, std::array<std::filesystem::path, 6>> animated_art_files_; // By game key, per ArtworkKind.
+    std::vector<ArtworkKind> animated_art_failed_; // Of the card in focus: files that would not play.
+    size_t animated_art_index_ = SIZE_MAX;
+    std::string animated_art_key_;
+    std::chrono::steady_clock::time_point animated_art_since_{};
     std::filesystem::path wallpaper_playing_, wallpaper_preview_, wallpaper_failed_;
     uint32_t wallpaper_preview_id_ = 0;
     // 0.4.9's settings rows (src/app/settings_extras.cpp); false: not theirs.
@@ -2616,6 +2635,7 @@ private:
         bool more = false;
         std::wstring status;
         std::unordered_map<uint32_t, std::vector<uint8_t>> thumbnails;
+        std::unordered_map<uint32_t, std::shared_ptr<const animated_image::Frames>> animations; // Moving tiles.
     };
     std::unordered_map<std::string, ArtworkPageCache> artwork_pages_;
     std::string artwork_page_key_; // The page being shown (or loaded): its entry in artwork_pages_.

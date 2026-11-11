@@ -9,6 +9,8 @@ using render_detail::box;
 void Renderer::resetArtworkThumbnails(size_t count) {
     artwork_thumbnails_.clear();
     artwork_thumbnails_.resize(count);
+    artwork_animations_.clear();
+    artwork_animations_.resize(count);
 }
 
 void Renderer::setArtworkThumbnail(size_t index, std::vector<uint8_t> bytes, bool logo) {
@@ -210,6 +212,11 @@ void Renderer::drawArtworkBrowser() {
                                  D2D1_BITMAP_INTERPOLATION_MODE_LINEAR, &source);
         }
         outline(r, selected ? shade(0.95f, 0.8f) : shade(1, 0.12f), selected ? 2.0f : 1.0f);
+        if (asset.animated) { // It moves already; the label says so where the motion is slow.
+            const settings_ui::Rect badge{r.left + 10, r.top + 10, r.left + 120, r.top + 38};
+            fill(badge, shade(0.04f, 0.72f), 14);
+            textLine(tr(L"Animowana"), badge.left, center(badge), badge.right - badge.left, toast_sub_font_.Get(), shade(0.95f), DWRITE_TEXT_ALIGNMENT_CENTER);
+        }
         if (asset.id == state.applied_id) {
             const float x = r.right - 20, y = r.top + 20;
             brush(shade(0.95f));

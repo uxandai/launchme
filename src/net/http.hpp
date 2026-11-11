@@ -60,6 +60,10 @@ bool lanHost(std::wstring_view host);
 HttpResponse httpDownloadFile(const std::wstring& url, const std::wstring& headers, const std::filesystem::path& file,
                               size_t max_bytes, uint32_t timeout_ms, bool private_request);
 
+// The first `bytes` of a file (Range: bytes=0-…; a server that ignores Range has its body cut
+// there), within timeout_ms. Status 200 with that start (shorter when the file is), else the failure.
+HttpResponse httpGetPrefix(const std::wstring& url, const std::wstring& headers, size_t bytes, uint32_t timeout_ms);
+
 // Bounds a whole fallback chain on the current worker, not just one HTTP read.
 class HttpBudget {
 public:

@@ -155,6 +155,24 @@ HttpResponse httpApi(const std::wstring& url, const std::wstring& headers, const
     return request(url, headers, max_bytes, true, body, timeout_ms, {}, static_cast<int>(std::min<uint32_t>(timeout_ms, 120000)), 0, false, true);
 }
 
+HttpResponse httpGetPrefix(const std::wstring& url, const std::wstring& headers, size_t bytes, uint32_t timeout_ms) {
+    if (!bytes) return {};
+    std::vector<uint8_t> received;
+    uint32_t answered = 0;
+    HttpBudget budget(timeout_ms);
+    // The sink stops the transfer once the start is here (the transport then returns nothing: the
+    // bytes and the status are kept here).
+    const auto response = request(url, headers + L"Range: bytes=0-" + std::to_wstring(bytes - 1) + L"\r\n",
+                                  std::numeric_limits<size_t>::max(), false, nullptr, timeout_ms,
+        [&](uint32_t status, const uint8_t* data, size_t size) {
+            answered = status;
+            received.insert(received.end(), data, data + std::min(size, bytes - received.size()));
+            return received.size() < bytes;
+        });
+    if ((answered == 200 || answered == 206) && !received.empty()) return {200, std::move(received)};
+    return {response.status};
+}
+
 HttpResponse httpDownloadFile(const std::wstring& url, const std::wstring& headers, const std::filesystem::path& file,
                               size_t max_bytes, uint32_t timeout_ms, bool private_request) {
     // <file>.part keeps what arrived; the next call asks for the rest (Range) and appends.

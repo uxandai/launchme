@@ -1,10 +1,12 @@
 #include "launcher.hpp"
+#include "../artwork/animated_image.hpp"
 #include "../artwork/artwork_sources.hpp"
 #include "../artwork/cover_cache.hpp"
 #include "../artwork/esde_art.hpp"
 #include "../artwork/screenscraper_art.hpp"
 #include "../artwork/wallpaper_sources.hpp"
 #include "../platform/atomic_file.hpp"
+#include "../platform/file_io.hpp"
 #include "../platform/text_encoding.hpp"
 #include <algorithm>
 #include <cstdlib>
@@ -21,6 +23,22 @@ std::vector<uint8_t> cachedImage(const std::filesystem::path& file) {
 }
 void saveThumbnail(const std::filesystem::path& file, const std::vector<uint8_t>& bytes) {
     atomic_file::write(file, bytes);
+}
+// An animated SteamGridDB asset's tile: its first seconds (kept in thumbnails\<type>\<id>.webp)
+// decoded as a short loop about the tile's size, or its first frame where it does not decode.
+void animatedThumbnail(const GridAsset& asset, ArtworkKind kind, const std::filesystem::path& folder, ArtworkBrowserMessage& result) {
+    const auto file = folder / (std::to_wstring(asset.id) + L".webp");
+    auto bytes = file_io::readBytes(file, animated_preview_bytes + 1024);
+    if (!animated_image::animatedWebp(bytes) || animated_image::wholeFrames(bytes).empty()) {
+        bytes = downloadAnimatedPreview(asset);
+        if (!bytes.empty()) saveThumbnail(file, bytes);
+    }
+    if (bytes.empty()) return;
+    const uint32_t edge = kind == ArtworkKind::hero ? 640 : kind == ArtworkKind::landscape ? 480 : 360;
+    // About two to three seconds at 10 frames a second, at most 8 MB of pixels a tile.
+    if (auto loop = animated_image::decodeLoop(bytes, edge, edge, 8u << 20, 30, 100))
+        result.animation = std::make_shared<const animated_image::Frames>(std::move(*loop));
+    else result.bytes = animatedStill(bytes);
 }
 CoverMessage::Kind coverKind(ArtworkKind kind) {
     switch (kind) {
@@ -162,7 +180,7 @@ void Launcher::initializeArtworkBrowser() {
                                                      userSecret(L"THEGAMESDB_API_KEY", L"thegamesdb_api_key.txt")};
                     result->page = artwork_sources::browse(job.provider, job.game, job.kind, context);
                 } else result->page = job.provider == ArtworkProvider::steamgriddb ?
-                    browseSteamGridDB(job.game, job.kind, job.page, job.source, userSecret(L"STEAMGRIDDB_API_KEY", L"steamgriddb_api_key.txt")) :
+                    browseSteamGridDBGallery(job.game, job.kind, job.page, job.source, userSecret(L"STEAMGRIDDB_API_KEY", L"steamgriddb_api_key.txt")) :
                     providerPage(job.game, job.kind, job.provider);
                 if (!job.wallpaper) result->applied_id = selectedArtworkId(job.game, job.kind, cache);
             } else if (job.wallpaper) {
@@ -172,6 +190,27 @@ void Launcher::initializeArtworkBrowser() {
                 if (result->bytes.empty()) {
                     result->bytes = wallpaper_sources::thumbnail(job.asset);
                     if (!result->bytes.empty()) saveThumbnail(file, result->bytes);
+                }
+            } else if (job.asset.animated && job.provider == ArtworkProvider::steamgriddb && job.type == ArtworkBrowserMessage::Type::thumbnail) {
+                animatedThumbnail(job.asset, job.kind, cache.parent_path() / L"artwork" / L"thumbnails" / artworkKindSlug(job.kind), *result);
+            } else if (job.asset.animated && job.provider == ArtworkProvider::steamgriddb) {
+                // An animated pick: the whole animation beside its still first frame, the variant every view shows.
+                const auto still = artworkVariantPath(job.game, job.kind, job.asset.id, cache);
+                const auto motion = artworkAnimationPath(job.game, job.kind, job.asset.id, cache);
+                std::error_code missing;
+                result->bytes = std::filesystem::is_regular_file(motion, missing) ? cachedImage(still) : std::vector<uint8_t>{};
+                if (result->bytes.empty()) {
+                    if (!downloadAnimatedGrid(job.asset, motion)) result->error = tr(L"Nie można pobrać animowanej grafiki.");
+                    else if (result->bytes = animatedStill(motion); result->bytes.empty() ||
+                             !cacheArtworkVariant(job.game, job.kind, job.asset.id, result->bytes, cache)) {
+                        result->bytes.clear();
+                        result->error = tr(L"Nie można zapisać grafiki w cache.");
+                    }
+                }
+                if (!result->bytes.empty() && job.kind == ArtworkKind::cover) {
+                    auto focus = still;
+                    focus.replace_extension(L".focus");
+                    result->focus = cachedTextCrop(still, focus, job.game.name);
                 }
             } else {
                 const bool thumbnail = job.type == ArtworkBrowserMessage::Type::thumbnail;
@@ -294,9 +333,8 @@ std::vector<ArtworkProvider> Launcher::artworkChoices(const artwork_ui::State& s
     std::vector<ArtworkProvider> choices;
     const auto on = [&](ArtworkProvider provider) { return !settings_.artwork_sources_off.contains(artwork_sources::slug(provider)); };
     if (state.wallpaper) {
-        for (const auto provider : state.videoWallpapers() ? std::array{ArtworkProvider::motionbgs, ArtworkProvider::steam_backgrounds}
-                                                           : std::array{ArtworkProvider::wallhaven, ArtworkProvider::danbooru})
-            choices.push_back(provider);
+        if (state.videoWallpapers()) choices = {ArtworkProvider::motionbgs, ArtworkProvider::steam_backgrounds, ArtworkProvider::wallpaper_engine};
+        else choices = {ArtworkProvider::wallhaven, ArtworkProvider::danbooru};
         return choices;
     }
     // ScreenScraper and ES-DE right after SteamGridDB for emulated games, as before.
@@ -371,11 +409,16 @@ void Launcher::loadArtworkPage() {
         if (page.provider == ArtworkProvider::steamgriddb) state.source = page.source;
         state.applied_id = state.wallpaper ? settings_.wallpaper_id : selectedArtworkId(state.game, state.kind(), coverCacheDirectory()); // A pick made since.
         renderer_.resetArtworkThumbnails(state.assets.size());
-        for (size_t i = 0; i < state.assets.size(); ++i)
+        for (size_t i = 0; i < state.assets.size(); ++i) {
             if (const auto bytes = page.thumbnails.find(state.assets[i].id); bytes != page.thumbnails.end()) {
                 state.requested.insert(state.assets[i].id);
                 renderer_.setArtworkThumbnail(i, bytes->second, state.kind() == ArtworkKind::logo);
             }
+            if (const auto moving = page.animations.find(state.assets[i].id); moving != page.animations.end()) {
+                state.requested.insert(state.assets[i].id);
+                renderer_.setArtworkThumbnailAnimation(i, moving->second);
+            }
+        }
         requestArtworkThumbnails(); // Those that had not arrived yet.
         InvalidateRect(hwnd_, nullptr, FALSE);
         return;
@@ -568,11 +611,15 @@ void Launcher::onArtworkBrowser(std::unique_ptr<ArtworkBrowserMessage> message) 
             searchArtwork();
         }
     } else if (message->type == ArtworkBrowserMessage::Type::thumbnail) {
-        if (const auto page = artwork_pages_.find(artwork_page_key_); page != artwork_pages_.end() && !message->bytes.empty())
-            page->second.thumbnails[message->asset_id] = message->bytes;
+        if (const auto page = artwork_pages_.find(artwork_page_key_); page != artwork_pages_.end()) {
+            if (!message->bytes.empty()) page->second.thumbnails[message->asset_id] = message->bytes;
+            if (message->animation) page->second.animations[message->asset_id] = message->animation;
+        }
         for (size_t i = 0; i < state.assets.size(); ++i)
-            if (state.assets[i].id == message->asset_id)
-                renderer_.setArtworkThumbnail(i, std::move(message->bytes), state.kind() == ArtworkKind::logo);
+            if (state.assets[i].id == message->asset_id) {
+                if (message->animation) renderer_.setArtworkThumbnailAnimation(i, message->animation);
+                else renderer_.setArtworkThumbnail(i, std::move(message->bytes), state.kind() == ArtworkKind::logo);
+            }
     } else {
         const bool local = message->type == ArtworkBrowserMessage::Type::local;
         if (!state.applying || (!local && (state.assets.empty() || state.assets[state.selected].id != message->asset_id))) return;
@@ -587,6 +634,7 @@ void Launcher::onArtworkBrowser(std::unique_ptr<ArtworkBrowserMessage> message) 
             refreshArtworkSet();
             if (local) { state.status = tr(L"Zastosowano grafikę z dysku."); local_added = true; }
             const auto key = gameKey(state.game);
+            forgetAnimatedArt(key); // A pick that moves (or no longer does).
             invalidateArtwork(state.game, coverKind(kind));
             auto& cached = art_.at(key);
             switch (kind) {

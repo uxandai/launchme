@@ -23,7 +23,7 @@ std::wstring Launcher::wallpaperLabel() const {
 }
 
 std::wstring Launcher::wallpaperDescription() const {
-    return tr(L"Zdjęcia z Wallhaven i Danbooru (tylko bezpieczne treści) albo animowane tła z MotionBGs i profili Steam, z ruchomym podglądem przed pobraniem. Także z dysku.");
+    return tr(L"Zdjęcia z Wallhaven i Danbooru (tylko bezpieczne treści) albo animowane tła z MotionBGs, profili Steam i subskrypcji Wallpaper Engine (wideo), z ruchomym podglądem przed wyborem. Także z dysku.");
 }
 
 // The wallpaper from the settings, shown again: a picture to the renderer, a video to the player.

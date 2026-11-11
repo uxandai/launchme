@@ -2,6 +2,7 @@
 #include "../artwork/identified_artwork.hpp"
 #include "../artwork/download_art.hpp"
 #include "../artwork/bulk_covers.hpp"
+#include "../artwork/animated_image.hpp"
 #include "../artwork/steamgriddb.hpp"
 #include "../friends/steam_friends.hpp"
 #include "../library/collections.hpp"
@@ -303,6 +304,8 @@ struct ArtworkBrowserMessage {
     uint32_t asset_id = 0;
     uint32_t applied_id = 0;
     std::vector<uint8_t> bytes;
+    // thumbnail: an animated SteamGridDB asset's moving tile (its first seconds), in place of `bytes`.
+    std::shared_ptr<const animated_image::Frames> animation;
     CropFocus focus;
     std::wstring error;
     // The wallpaper picker: the stored wallpaper (apply, local) or preview (preview), and whether it is a video.

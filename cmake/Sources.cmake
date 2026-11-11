@@ -188,6 +188,7 @@ set(LAUNCHME_APP_SOURCES
     src/plugins/manager.cpp
     src/plugins/achievements.cpp
     src/app/artwork_browser.cpp
+    src/app/animated_art.cpp
     src/app/plugin_achievements.cpp
     src/app/pc_platforms.cpp
     src/app/gog.cpp
@@ -267,6 +268,7 @@ set(LAUNCHME_APP_SOURCES
     src/ui/details_renderer.cpp
     src/ui/keyboard_renderer.cpp
     src/ui/artwork_renderer.cpp
+    src/ui/animated_art_renderer.cpp
     src/ui/device_renderer.cpp
     src/ui/audio_renderer.cpp
     src/ui/notification_renderer.cpp
@@ -344,6 +346,8 @@ set(LAUNCHME_APP_SOURCES
     src/library/screenscraper.cpp
     ${LAUNCHME_COVER_SOURCES}
     src/artwork/image_codec_wic.cpp
+    src/artwork/animated_image.cpp
+    src/artwork/animated_image_wic.cpp
     src/artwork/steamgriddb.cpp
     src/artwork/platform_logo.cpp
     src/artwork/esde_art.cpp

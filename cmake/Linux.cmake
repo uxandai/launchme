@@ -168,6 +168,8 @@ set(LAUNCHME_LINUX_PROCESS_SOURCES
 # Image decoding and encoding (WIC on Windows).
 set(LAUNCHME_LINUX_IMAGE_SOURCES
     src/artwork/image_codec_linux.cpp
+    src/artwork/animated_image.cpp
+    src/artwork/animated_image_linux.cpp
     src/artwork/image_compact.cpp
     src/artwork/screenscraper_art.cpp
     src/artwork/steamgriddb.cpp
@@ -355,6 +357,7 @@ if(BUILD_TESTING)
     launchme_executable(image_validation_tests TEST controller_png_transparency SOURCES tests/image_validation_tests.cpp)
     launchme_executable(background_art_tests TEST background_art_and_trailer_match SOURCES tests/background_art_tests.cpp)
     launchme_executable(steamgriddb_tests TEST steamgriddb_browser_and_selection SOURCES tests/steamgriddb_tests.cpp)
+    launchme_executable(animated_image_tests TEST animated_artwork SOURCES tests/animated_image_tests.cpp)
     launchme_executable(identified_artwork_tests TEST rawg_identification_missing_artwork SOURCES tests/identified_artwork_tests.cpp)
     launchme_executable(companion_feed_tests TEST companion_feed_publication_and_archive SOURCES tests/companion_feed_tests.cpp)
     launchme_executable(download_art_tests TEST download_artwork_sources_and_cache SOURCES tests/download_art_tests.cpp)

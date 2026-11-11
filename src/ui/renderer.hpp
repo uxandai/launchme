@@ -2,6 +2,7 @@
 
 #include "../model/game_card.hpp"
 #include "../i18n/i18n.hpp"
+#include "../artwork/animated_image.hpp"
 #include "../artwork/text_crop.hpp"
 #include "image_decoder.hpp"
 #include "swap_chain.hpp"
@@ -269,6 +270,17 @@ public:
     // Dodaj / Edytuj grę: its poster still decoding (the launcher paints until it shows).
     bool customPosterPending() const { return custom_poster_.loaded() && !custom_poster_.bitmap; }
     void setArtworkThumbnail(size_t index, std::vector<uint8_t> bytes, bool logo);
+    // Zmień grafikę: an animated asset's tile plays its short loop in place of a still
+    // (animated_art_renderer.cpp); artworkAnimationDue tells the launcher a tile's next frame is due.
+    void setArtworkThumbnailAnimation(size_t index, std::shared_ptr<const animated_image::Frames> frames);
+    bool artworkAnimationDue() const;
+    // A card's animated artwork (src/app/animated_art.cpp): its frames stand in for the still `still`
+    // in card `index`'s cover, poster or background slot holding it, until clearAnimatedArt puts the
+    // still back. animatedArtSize: that slot's bitmap size (0 x 0 while none holds the still).
+    D2D1_SIZE_U animatedArtSize(size_t index, const ImageBytes& still) const;
+    bool setAnimatedArtFrame(size_t index, const ImageBytes& still, const uint8_t* pixels, uint32_t width, uint32_t height);
+    void clearAnimatedArt();
+    bool animatedArtShown() const;
     // Screensaver (src/ui/screensaver_renderer.cpp): three image slots, decoded off the UI thread.
     static constexpr int screensaver_slots = 3;
     enum class SlotState { empty, pending, ready, failed };
@@ -329,6 +341,12 @@ public:
     bool screenSnapshotForTest() const { return screen_frame_ != nullptr || screen_ui_target_ != nullptr; }
     bool screenBowTargetForTest() const { return screen_bow_target_ != nullptr; }
     bool captureForTest(const std::filesystem::path& file, const std::function<void()>& draw);
+    // Zmień grafikę: the tile shows its loop's bitmap (animated_art_renderer.cpp), at this frame.
+    bool artworkThumbnailMovingForTest(size_t index, size_t* frame = nullptr) const {
+        if (index >= artwork_animations_.size() || index >= artwork_thumbnails_.size() || !artwork_animations_[index].bitmap) return false;
+        if (frame) *frame = artwork_animations_[index].shown;
+        return artwork_thumbnails_[index].bitmap == artwork_animations_[index].bitmap;
+    }
     // Captures through a Direct3D 11 device (hardware, else WARP) and a Direct2D device context, as the
     // window draws: what needs Direct3D (the held case in 3D) shows in the picture.
     void gpuCaptureForTest(bool on) { capture_gpu_ = on; }
@@ -1181,6 +1199,31 @@ private:
     std::vector<Cover> logos_;
     std::vector<Cover> heroes_;
     std::vector<Cover> artwork_thumbnails_;
+    // Moving tiles of Zmień grafikę, indexed like artwork_thumbnails_: one bitmap each, the loop's
+    // frame of the moment copied in (stepArtworkAnimations, every paint).
+    struct ThumbnailAnimation {
+        std::shared_ptr<const animated_image::Frames> frames;
+        std::chrono::steady_clock::time_point started{};
+        size_t shown = SIZE_MAX;
+        Microsoft::WRL::ComPtr<ID2D1Bitmap> bitmap;
+        Microsoft::WRL::ComPtr<ID2D1BitmapBrush> brush;
+    };
+    std::vector<ThumbnailAnimation> artwork_animations_;
+    void stepArtworkAnimations();
+    // A card slot showing an animation's frame: the slot, and its still to put back.
+    struct ArtFrame {
+        std::vector<Cover>* slots = nullptr;
+        size_t index = 0;
+        ImageBytes still_pixels;
+        Microsoft::WRL::ComPtr<ID2D1Bitmap> still_bitmap;
+        Microsoft::WRL::ComPtr<ID2D1BitmapBrush> still_brush;
+        Microsoft::WRL::ComPtr<ID2D1Bitmap> frame;
+        Microsoft::WRL::ComPtr<ID2D1BitmapBrush> brush;
+    };
+    std::vector<ArtFrame> art_frames_;
+    static const Cover* artHolding(const std::vector<Cover>& slots, size_t index, const ImageBytes& still) {
+        return index < slots.size() && slots[index].bitmap && slots[index].same(still) ? &slots[index] : nullptr;
+    }
     Cover file_browser_preview_;
     Cover notification_cover_;
     Cover snitch_avatar_; // Snitch: the profile shortcut's picture (ViewContext::snitch_avatar).

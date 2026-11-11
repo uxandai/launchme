@@ -550,6 +550,22 @@ std::filesystem::path artworkVariantPath(const Game& game, ArtworkKind kind, uin
     return selectionFolder(game, cache) / artworkKindSlug(kind) / (std::to_wstring(asset_id) + L".img");
 }
 
+std::filesystem::path artworkAnimationPath(const Game& game, ArtworkKind kind, uint32_t asset_id,
+                                           const std::filesystem::path& cache) {
+    auto file = artworkVariantPath(game, kind, asset_id, cache);
+    file.replace_extension(L".webp");
+    return file;
+}
+
+std::filesystem::path selectedArtworkAnimation(const Game& game, ArtworkKind kind, const std::filesystem::path& cache) {
+    const auto id = selectedArtworkId(game, kind, cache);
+    if (!id) return {};
+    auto file = artworkAnimationPath(game, kind, id, cache);
+    std::error_code error;
+    const auto size = std::filesystem::file_size(file, error);
+    return !error && size >= 30 ? file : std::filesystem::path{};
+}
+
 uint32_t selectedArtworkId(const Game& game, ArtworkKind kind, const std::filesystem::path& cache) {
     if (!isGame(game) || gameKey(game).empty()) return 0;
     std::ifstream input(selectionFolder(game, cache) / (std::wstring(artworkKindSlug(kind)) + L".selected"));

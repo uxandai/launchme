@@ -184,6 +184,8 @@ public:
     static int privateGames(HWND window);
     static int steamVisibility(HWND window);
     static int bulkCovers(HWND window);
+    static int animatedArt(HWND window); // animated_art_ui_cases.hpp
+    static int wallpaperEngine(HWND window); // wallpaper_engine_ui_cases.hpp
     static int tour(HWND window);
     static int launchAnimation(HWND window);
     static int organization(HWND window);
@@ -2303,6 +2305,8 @@ int LauncherUiTest::language(HWND window) {
 #include "private_games_ui_cases.hpp"
 #include "steam_visibility_ui_cases.hpp"
 #include "bulk_covers_ui_cases.hpp"
+#include "animated_art_ui_cases.hpp"
+#include "wallpaper_engine_ui_cases.hpp"
 #include "exit_ui_cases.hpp"
 #include "screen_transitions_ui_cases.hpp"
 #include "tour_ui_cases.hpp"
@@ -2568,6 +2572,22 @@ int main(int argc, char** argv) {
         if (window) DestroyWindow(window);
         CoUninitialize();
         if (code) std::cerr << "Menus regression: " << code << '\n';
+        return code;
+    }
+    if (argc == 2 && std::string_view(argv[1]) == "--wallpaper-engine") {
+        std::filesystem::create_directories(root);
+        const auto code = window ? LauncherUiTest::wallpaperEngine(window) : 99;
+        if (window) DestroyWindow(window);
+        CoUninitialize();
+        if (code) std::cerr << "Wallpaper Engine regression: " << code << '\n';
+        return code;
+    }
+    if (argc == 2 && std::string_view(argv[1]) == "--animated-art") {
+        std::filesystem::create_directories(root);
+        const auto code = window ? LauncherUiTest::animatedArt(window) : 99;
+        if (window) DestroyWindow(window);
+        CoUninitialize();
+        if (code) std::cerr << "Animated artwork regression: " << code << '\n';
         return code;
     }
     if (argc == 2 && std::string_view(argv[1]) == "--bulk-covers") {

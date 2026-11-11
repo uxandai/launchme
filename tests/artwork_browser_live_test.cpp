@@ -1,7 +1,10 @@
+#include "../src/artwork/animated_image.hpp"
 #include "../src/artwork/steamgriddb.hpp"
 #include "../src/platform/user_config.hpp"
 #include <Windows.h>
+#include <chrono>
 #include <iostream>
+#include <thread>
 
 int main(int argc, char**) {
     const auto key = userSecret(L"STEAMGRIDDB_API_KEY", L"steamgriddb_api_key.txt");
@@ -9,6 +12,45 @@ int main(int argc, char**) {
     const auto root = std::filesystem::temp_directory_path() / (L"launchme-grid-live-" + std::to_wstring(GetCurrentProcessId()));
     struct Cleanup { std::filesystem::path root; ~Cleanup() { std::error_code ec; std::filesystem::remove_all(root, ec); } } cleanup{root};
     const auto cache = root / "covers";
+    if (argc > 1 && std::string_view(__argv[1]) == "--animated") {
+        // Hollow Knight: Silksong has animated grids and a hero: the gallery lists them first, a tile
+        // plays the ranged start, and a whole hero plays at its size.
+        using clock = std::chrono::steady_clock;
+        const auto ms = [](clock::time_point since) { return std::chrono::duration_cast<std::chrono::milliseconds>(clock::now() - since).count(); };
+        Game silksong{1030300, L"Hollow Knight: Silksong"};
+        for (const auto kind : {ArtworkKind::cover, ArtworkKind::hero}) {
+            const auto page = browseSteamGridDBGallery(silksong, kind, 0, {}, key);
+            if (!page.error.empty() || page.assets.empty() || !page.assets.front().animated) { std::cerr << "no animated asset first\n"; return 10; }
+            size_t animated = 0;
+            for (const auto& asset : page.assets) animated += asset.animated;
+            std::cout << "kind=" << static_cast<int>(kind) << " assets=" << page.assets.size() << " animated=" << animated << " more=" << page.more << '\n';
+            auto started = clock::now();
+            const auto preview = downloadAnimatedPreview(page.assets.front());
+            const auto fetched = ms(started);
+            started = clock::now();
+            const auto loop = animated_image::decodeLoop(preview, 360, 360, 8u << 20, 30, 100);
+            if (!loop || loop->pixels.size() < 2) { std::cerr << "preview does not play\n"; return 11; }
+            std::cout << "  preview " << preview.size() << " B in " << fetched << " ms; loop " << loop->pixels.size() << " frames "
+                      << loop->width << 'x' << loop->height << ' ' << loop->total << " ms, decoded in " << ms(started) << " ms\n";
+            if (kind != ArtworkKind::hero) continue;
+            const auto file = root / L"hero.webp";
+            started = clock::now();
+            if (!downloadAnimatedGrid(page.assets.front(), file)) { std::cerr << "whole animation not kept\n"; return 12; }
+            std::cout << "  whole " << std::filesystem::file_size(file) << " B in " << ms(started) << " ms, still " << animatedStill(file).size() << " B\n";
+            animated_image::Player player;
+            if (!player.open(file, 1920, 1080)) return 13;
+            std::vector<uint8_t> frame; uint32_t width = 0, height = 0; int frames = 0;
+            started = clock::now();
+            while (ms(started) < 3000 && !player.failed()) {
+                if (player.frame(frame, width, height)) ++frames;
+                std::this_thread::sleep_for(std::chrono::milliseconds(2));
+            }
+            std::cout << "  player " << width << 'x' << height << ": " << frames << " frames in 3 s\n";
+            if (frames < 30) return 14;
+        }
+        std::cout << "Live animated gallery, preview and player passed (temporary cache only)\n";
+        return 0;
+    }
     Game game{620, L"Portal 2"};
     const auto names = searchGridGames(L"Alan Wake 2", key);
     const auto steam_id = searchGridGames(L"620", key);

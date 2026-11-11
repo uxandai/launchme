@@ -94,7 +94,7 @@ struct Layout {
     int provider_count = 3; // Rows of its list (State::choices).
     int rail_count = static_cast<int>(kinds.size()); // Rail entries above "Z dysku…" (State::railCount()).
     bool crop = true;       // "Kadruj" is shown (State::croppable()); off in the wallpaper picker.
-    static constexpr float provider_width = 270, provider_gap = 12, provider_row_step = 54, crop_width = 150;
+    static constexpr float provider_width = 320, provider_gap = 12, provider_row_step = 54, crop_width = 150;
     bool cropping() const { return crop && (kind == ArtworkKind::cover || kind == ArtworkKind::hero); } // State::croppable().
     settings_ui::Layout base() const { return {width, height}; }
     float left() const { return base().contentLeft(); }

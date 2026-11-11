@@ -468,7 +468,7 @@ void Renderer::paint(const std::vector<GameCard>& cards, size_t selected, bool s
     if (createTarget()) {
         updateViewport();
         const bool exit_snapshot = context.exit_progress >= 0 && exit_frame_;
-        if (!exit_snapshot) uploadDecoded();
+        if (!exit_snapshot) { uploadDecoded(); stepArtworkAnimations(); }
         if (exit_snapshot || (context.screensaver && context.screensaver->opacity >= 0.999f)) {
             // A captured exit frame or opaque screensaver covers everything. Skip
             // the launcher scene and leave its selection/hero handoff untouched.
