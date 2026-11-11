@@ -248,11 +248,6 @@ void Renderer::drawContextMenu() {
         const auto entry = context_menu::item(row, rows);
         // "Zamknij grę" and "Odinstaluj" are destructive: a soft red, as used for save errors in Settings.
         const bool destructive = entry == context_menu::Item::close || entry == context_menu::Item::uninstall || entry == context_menu::Item::remove;
-        if (context_menu::startsGroup(row, rows)) {
-            // Set apart from the rows above by a hairline, the way the desktop menu separates it.
-            brush(color(0.90f, 0.90f, 0.90f, 0.12f * alpha));
-            target_->FillRectangle(D2D1::RectF(x + 26, row_y - 2.5f, x + width - 26, row_y - 1.5f), solid_.Get());
-        }
         text(entry == context_menu::Item::plugin ? context_->menu_plugins[row - context_menu::row(context_menu::Item::plugin, rows)].c_str() : label(entry), x + 32, row_y + 11, width - 50, 35,
              menu_font_.Get(), destructive ? palette::danger(alpha) :
              (entry != context_menu::Item::primary || context_->primary_enabled) ? color(0.96f, 0.96f, 0.96f, alpha) :

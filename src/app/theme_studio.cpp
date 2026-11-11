@@ -131,6 +131,7 @@ void Launcher::themeBuildOptions() {
         } else if (s.home_layout == HomeLayout::xmb) {
             cards(Id::xmb_size, Look::size, L"Rozmiar kafelków XMB", static_cast<int>(s.xmb_size), names(xmb_sizes, xmb_sizes.size()));
             toggle(Id::xmb_posters, L"Pionowe plakaty", s.xmb_posters);
+            toggle(Id::xmb_platform_badge, L"Platforma jako logo", s.xmb_platform_badge);
         } else if (s.home_layout == HomeLayout::flix) {
             cards(Id::flix_size, Look::size, L"Rozmiar kafelków Flix", static_cast<int>(s.flix_size), names(flix_sizes, flix_sizes.size()));
             toggle(Id::flix_category_all, L"Kafelek „Wszystkie” w rzędach", s.flix_category_all);
@@ -141,6 +142,7 @@ void Launcher::themeBuildOptions() {
             if (!s.metro_category_tabs) toggle(Id::home_tab_icons, L"Ikony zamiast nazw", s.home_tab_icons);
             toggle(Id::metro_3d, L"Efekt 3D", s.metro_3d);
             toggle(Id::metro_light, L"Jasny motyw", s.metro_light);
+            toggle(Id::metro_title_corner, L"Tytuł w lewym dolnym rogu", s.metro_title_corner);
         } else if (s.home_layout == HomeLayout::psfive) {
             cards(Id::psfive_size, Look::size, L"Rozmiar kafelków PSfive", static_cast<int>(s.psfive_size), names(xmb_sizes, xmb_sizes.size()));
             toggle(Id::psfive_clock, L"Zegar", s.psfive_clock);

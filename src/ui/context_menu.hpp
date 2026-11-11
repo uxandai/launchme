@@ -80,27 +80,8 @@ constexpr bool visible(Item entry, Rows options) {
     default: return false;
     }
 }
-// Details' "…" groups (order above): a hairline sets each apart from the one before.
-constexpr int group(Item entry) {
-    using enum Item;
-    switch (entry) {
-    case launch: case steam_account: case emulator: case compat: case aurelia: return 1;
-    case artwork: case metadata: case identify: case retry: return 2;
-    case folder: case shortcuts: case plugin: return 3;
-    case forget_recent: case hide: case exclude: return 4;
-    case uninstall: case remove: return 5;
-    default: return 0;
-    }
-}
 constexpr int rows(Rows options);
 constexpr Item item(int row, Rows options);
-// A hairline above this row: a new group in Details' "…"; Odinstaluj / Usuń z biblioteki in every menu.
-constexpr bool startsGroup(int row, Rows options) {
-    if (row <= 0) return false;
-    const auto entry = item(row, options), before = item(row - 1, options);
-    if (!options.detail_options) return (entry == Item::uninstall || entry == Item::remove) && before != Item::uninstall && before != Item::remove;
-    return group(entry) != group(before);
-}
 constexpr int rows(Rows options) {
     int count = 0;
     for (const auto entry : order(options)) count += visible(entry, options);
