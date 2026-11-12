@@ -30,7 +30,7 @@ no HTML UI. English, Polish, Brazilian Portuguese and Spanish.
 - **Artwork**: SteamGridDB (animated too) and a dozen other sources, a variant browser and crop editor; animated wallpapers, also from Wallpaper Engine.
 - **Library**: grid, list, coverflow, game-case shelf and more; collections synced with Steam; Recently played.
 - **Playing**: Steam account switching, installs and downloads in one list, per-game logs and HDR switching, Proton per game on Linux, an in-game overlay (experimental).
-- **Details**: metadata, playtime, achievements (also GOG, Epic, RetroAchievements), ratings, system requirements.
+- **Details**: metadata, playtime, achievements (also GOG, Epic, RetroAchievements and local saves of DRM-free games, with an unlock card over the game), ratings, system requirements.
 - **Aurelia** (optional): Steam games without the Steam client ([guide](docs/AURELIA.md)).
 - **Extras**: Glance news hub, Tarot game picker, an AI companion, widgets, profile with play stats, save backups (Ludusavi).
 - **Plugins**: HowLongToBeat and Achievements built in; write your own with the [Plugin SDK](docs/plugins/README.md).

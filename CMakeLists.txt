@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(launchme VERSION 0.7.13 LANGUAGES C CXX)
+project(launchme VERSION 0.7.14 LANGUAGES C CXX)
 
 if(NOT WIN32)
     # Linux (highly experimental, docs/linux-port.md): the shared core, its tests and the launcher on SDL3 + Skia.
@@ -160,10 +160,10 @@ install(TARGETS launchme_limiter RUNTIME DESTINATION . COMPONENT Runtime)
 install(FILES LICENSE DESTINATION . RENAME LICENSE.txt COMPONENT Runtime)
 add_custom_target(launchme_audio ALL
     COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${LAUNCHME_RES_DIR}/HorizonsTheme.mp3" "${LAUNCHME_RES_DIR}/ExploratorySilenceTheme.mp3" "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets/"
-    DEPENDS "${LAUNCHME_RES_DIR}/HorizonsTheme.mp3" "${LAUNCHME_RES_DIR}/ExploratorySilenceTheme.mp3" VERBATIM)
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${LAUNCHME_RES_DIR}/HorizonsTheme.mp3" "${LAUNCHME_RES_DIR}/ExploratorySilenceTheme.mp3" "${LAUNCHME_RES_DIR}/achievement.mp3" "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets/"
+    DEPENDS "${LAUNCHME_RES_DIR}/HorizonsTheme.mp3" "${LAUNCHME_RES_DIR}/ExploratorySilenceTheme.mp3" "${LAUNCHME_RES_DIR}/achievement.mp3" VERBATIM)
 add_dependencies(launchme launchme_audio)
-install(FILES res/HorizonsTheme.mp3 res/ExploratorySilenceTheme.mp3 DESTINATION assets COMPONENT Runtime)
+install(FILES res/HorizonsTheme.mp3 res/ExploratorySilenceTheme.mp3 res/achievement.mp3 DESTINATION assets COMPONENT Runtime)
 # Publisher and developer logos (src/library/studios.cpp; HVR88's Monochrome Gaming Logos, see README).
 file(GLOB LAUNCHME_STUDIO_LOGOS CONFIGURE_DEPENDS "${LAUNCHME_RES_DIR}/studios/*.png")
 add_custom_target(launchme_studios ALL

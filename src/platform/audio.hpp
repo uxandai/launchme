@@ -15,7 +15,7 @@
 // The platform half (audio_output.hpp): XAudio2 on Windows, SDL3 audio streams elsewhere.
 namespace audio_output { class Engine; class Voice; }
 
-enum class SoundCue { navigation, toast, boot, music };
+enum class SoundCue { navigation, toast, boot, music, achievement };
 
 inline int soundCueSlot(SoundCue cue) {
     switch (cue) {
@@ -33,6 +33,7 @@ public:
     ~Audio();
     void navigate();
     void toast();
+    void achievement(); // An achievement unlocked over a game (assets/achievement.mp3), at half volume.
     void prepareBoot() { boot_pending_ = true; }
     void boot();
     void skipBoot() { boot_pending_ = false; } // The desktop window starts silently: music is not left waiting.
@@ -86,6 +87,7 @@ private:
     AudioClip navigation_clip_;
     AudioClip toast_clip_;
     AudioClip boot_clip_;
+    AudioClip achievement_clip_;
     AudioClip music_clip_;
     AudioClip pending_music_;
     std::unique_ptr<audio_output::Voice> music_voice_;

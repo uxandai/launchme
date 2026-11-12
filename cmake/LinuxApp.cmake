@@ -72,7 +72,8 @@ file(GLOB LAUNCHME_STUDIO_LOGOS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/r
 file(GLOB LAUNCHME_PLATFORM_LOGOS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/res/platforms/*.png")
 file(GLOB LAUNCHME_SYSTEM_LOGOS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/res/systems/*.png") # Emulacja's system logos (res/systems/README.txt).
 file(GLOB LAUNCHME_CASE_FRONTS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/res/cases/*.png") # Półka's case fronts (MIT, res/cases/LICENSE.txt).
-set(LAUNCHME_THEMES "${CMAKE_CURRENT_SOURCE_DIR}/res/HorizonsTheme.mp3" "${CMAKE_CURRENT_SOURCE_DIR}/res/ExploratorySilenceTheme.mp3")
+set(LAUNCHME_THEMES "${CMAKE_CURRENT_SOURCE_DIR}/res/HorizonsTheme.mp3" "${CMAKE_CURRENT_SOURCE_DIR}/res/ExploratorySilenceTheme.mp3"
+    "${CMAKE_CURRENT_SOURCE_DIR}/res/achievement.mp3") # And the achievement card's sound.
 # The icon font standing in for Segoe Fluent Icons (tools/linux/make-icon-font.sh, Fluent UI System Icons, MIT).
 file(GLOB LAUNCHME_LEXEND CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/res/fonts/Lexend-*.ttf")
 set(LAUNCHME_FONTS "${CMAKE_CURRENT_SOURCE_DIR}/res/fonts/launchme-icons.ttf" "${CMAKE_CURRENT_SOURCE_DIR}/res/fonts/launchme-icons-LICENSE.txt"

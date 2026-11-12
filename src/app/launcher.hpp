@@ -61,6 +61,8 @@
 #include "../model/game_details.hpp"
 #include "../model/game_session.hpp"
 #include "../platform/game_activity.hpp"
+#include <deque>
+#include <set>
 #include "../platform/process_freeze.hpp"
 #include "../ui/context_menu.hpp"
 #include "../ui/power_menu.hpp"
@@ -1243,6 +1245,56 @@ private:
     const LocalAchievements* localAchievements(const Game& game) const; // Answered, with local achievements found.
     void requestLocalAchievements(const Game& game, bool force = false);
     void receiveLocalAchievements(std::unique_ptr<AchievementsMessage> message);
+    // Unlocks while such a game runs (src/app/achievement_toasts.cpp): its saves are looked at every
+    // few seconds; each new one slides in as a card at the bottom right of the game's screen.
+public:
+    struct AchievementToast {
+        std::wstring name, description;
+        std::shared_ptr<const std::vector<uint8_t>> icon;
+    };
+    struct AchievementWatchAnswer {
+        std::string key;
+        uint32_t generation = 0;
+        std::filesystem::path state;    // The unlocks file the worker read (empty: none yet).
+        uint32_t app_id = 0;
+        bool searched = false;          // The game folder was walked again.
+        bool changed = false;           // The file was read: `unlocked` holds every earned id.
+        std::filesystem::file_time_type written{};
+        std::set<std::string> unlocked;
+        std::vector<AchievementToast> toasts; // The ones earned since the last answer.
+    };
+    void achievementWatchAnswered(AchievementWatchAnswer answer);
+    void testAchievementToast(const std::wstring& command); // "achievement-test[:name]" (--jump=…).
+private:
+    struct AchievementWatch {
+        std::filesystem::path folder, state;
+        uint32_t app_id = 0;
+        std::filesystem::file_time_type written{};
+        std::set<std::string> unlocked;
+        bool baseline = false, pending = false;
+        uint32_t generation = 0;
+        uint64_t next_at = 0, searched_at = 0;
+    };
+    std::map<std::string, AchievementWatch> achievement_watch_;
+    uint32_t achievement_watch_generation_ = 0;
+    std::deque<AchievementToast> achievement_toasts_;
+    std::unique_ptr<OverlayWindow> toast_window_;
+    AchievementToast toast_current_;
+    uint64_t toast_id_ = 0, toast_shown_at_ = 0;
+    float toast_scale_ = 1;
+    bool toast_visible_ = false;
+    // The screen under the card, blurred (frosted glass); taken again while shown when the card's
+    // window is kept out of screen captures, else once before it comes.
+    std::shared_ptr<const std::vector<uint8_t>> toast_backdrop_;
+    uint32_t toast_backdrop_width_ = 0, toast_backdrop_height_ = 0;
+    RECT toast_rect_{}, toast_backdrop_rect_{};
+    uint64_t toast_captured_at_ = 0;
+    bool toast_live_backdrop_ = false;
+    void captureToastBackdrop();
+    void watchLocalAchievements();
+    void queueAchievementToast(AchievementToast toast);
+    void showNextAchievementToast();
+    LRESULT toastMessage(HWND window, UINT message, WPARAM wparam, LPARAM lparam);
     uint32_t plugin_achievements_generation_ = 0;
     std::shared_ptr<launcher_queues::StoreGateway> store_gateway_ = std::make_shared<launcher_queues::StoreGateway>();
     std::optional<plugins::Action> pluginAchievementsProvider(const Game& game) const;

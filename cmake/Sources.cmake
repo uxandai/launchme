@@ -211,6 +211,7 @@ set(LAUNCHME_APP_SOURCES
     src/app/add_game.cpp
     src/app/drm_free.cpp
     src/app/local_achievements.cpp
+    src/app/achievement_toasts.cpp
     src/app/emulation_library.cpp
     src/app/emulation_settings.cpp
     src/app/installations.cpp
@@ -299,6 +300,7 @@ set(LAUNCHME_APP_SOURCES
     src/ui/glass_renderer.cpp
     src/ui/achievements_renderer.cpp
     src/ui/dashboard_renderer.cpp
+    src/ui/achievement_toast_renderer.cpp
     src/ui/screensaver_renderer.cpp
     src/library/steam.cpp
     src/library/game_ratings.cpp

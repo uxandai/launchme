@@ -373,6 +373,7 @@ void Launcher::onAudio(std::unique_ptr<AudioMessage> message) {
         audio_.setCue(message->cue, std::move(message->clip));
         return;
     }
+    if (message->cue == SoundCue::achievement) { audio_.setCue(message->cue, std::move(message->clip)); return; }
     const int slot = soundCueSlot(message->cue);
     if (slot < 0 || message->generation != sound_generation_[slot]) return;
     const bool preview = message->preview;

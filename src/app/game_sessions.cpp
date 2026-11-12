@@ -352,6 +352,7 @@ void Launcher::onGameActivity(std::unique_ptr<GameActivityMessage> message) {
     // that simply keeps running costs no repaint of the launcher behind it.
     invalidateGameOverlay(); // Live playtime comparisons while the Guide drawer is visible.
     applyGameFocus(*message);
+    watchLocalAchievements(); // New unlocks of a running DRM-free game slide in (achievement_toasts.cpp).
     // While a game runs (not suspended) the computer neither sleeps nor blanks its screen: a pad's
     // input is not the system's idle input.
     const bool playing = std::any_of(game_sessions_.begin(), game_sessions_.end(),

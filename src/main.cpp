@@ -233,6 +233,7 @@ LRESULT CALLBACK windowProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lpara
         if (!app || !data || data->dwData != jump_copy_data || !data->lpData || data->cbData < sizeof(wchar_t) || data->cbData > 4096) break;
         std::wstring command(static_cast<const wchar_t*>(data->lpData), data->cbData / sizeof(wchar_t));
         while (!command.empty() && command.back() == L'\0') command.pop_back();
+        if (command.starts_with(L"achievement-test")) { app->jumpCommand(command); return TRUE; } // Over the game: the launcher stays behind.
         app->showFromTray(); // Hidden while a game runs: back first.
         if (IsIconic(hwnd)) ShowWindow(hwnd, SW_RESTORE);
         SetForegroundWindow(hwnd);

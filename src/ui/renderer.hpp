@@ -51,11 +51,14 @@ struct Viewport {
     float height = 900;
 };
 
+namespace achievement_toast { struct View; }
+
 class Renderer {
 public:
     bool initialize(HWND hwnd, bool layered = false);
     bool paintOverlay(const ViewContext& context);
     bool paintHud(const ViewContext& context); // The pinned widgets, small, in a corner of the game's screen.
+    bool paintAchievementToast(const achievement_toast::View& toast); // An unlocked achievement over the game.
     void setDrawerStyle(DrawerStyle style) { drawer_style_ = style; }
     void setFontFamily(std::wstring family);
     void setCoverAccent(uint32_t rgb) { cover_accent_ = rgb; }
@@ -1457,6 +1460,12 @@ private:
     Microsoft::WRL::ComPtr<IDWriteFontCollection1> sst_fonts_;
     Microsoft::WRL::ComPtr<IDWriteFontCollection1> lexend_fonts_; // The Lexend files beside the program.
     Microsoft::WRL::ComPtr<IWICImagingFactory> wic_;
+    // The achievement toast's icon (achievement_toast_renderer.cpp): for one toast, on one target.
+    Microsoft::WRL::ComPtr<ID2D1Bitmap> toast_icon_;
+    const void* toast_icon_target_ = nullptr;
+    uint64_t toast_icon_id_ = 0;
+    Microsoft::WRL::ComPtr<ID2D1Bitmap> toast_backdrop_;
+    const void* toast_backdrop_source_ = nullptr;
     Microsoft::WRL::ComPtr<IDWriteTextFormat> hero_font_, label_font_, cd_pen_font_;
     Microsoft::WRL::ComPtr<IDWriteTextFormat> button_font_;
     Microsoft::WRL::ComPtr<IDWriteTextFormat> action_font_;

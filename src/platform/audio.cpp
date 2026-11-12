@@ -43,6 +43,9 @@ void Audio::setDesktop(bool desktop) {
 void Audio::toast() {
     if (!toast_clip_.samples.empty()) playClip(toast_clip_, 0.28f);
 }
+void Audio::achievement() {
+    if (!achievement_clip_.samples.empty()) playClip(achievement_clip_, 0.5f);
+}
 void Audio::boot() {
     if (auto* sound = playClip(boot_clip_, 0.5f)) sound->startup_boot = boot_pending_;
     boot_pending_ = false; // Missing/disabled/failed boot must not leave music waiting forever.
@@ -60,6 +63,10 @@ void Audio::quick() {
 
 void Audio::setCue(SoundCue cue, AudioClip clip) {
     if (cue == SoundCue::music) { setMusic(std::move(clip)); return; }
+    if (cue == SoundCue::achievement) { // Played whole, as it is.
+        achievement_clip_ = clip.samples.empty() || clip.format.size() < sizeof(WAVEFORMATEX) ? AudioClip{} : std::move(clip);
+        return;
+    }
     if (cue == SoundCue::boot) {
         boot_clip_ = clip.samples.empty() || clip.format.size() < sizeof(WAVEFORMATEX) ? AudioClip{} : std::move(clip);
         return;

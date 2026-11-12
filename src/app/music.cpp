@@ -66,6 +66,12 @@ void Launcher::initializeMusic() {
     requestSound(SoundCue::navigation, settings_.ui_sound, false);
     requestSound(SoundCue::toast, settings_.toast_sound, false);
     requestMusic();
+    // The achievement card's sound (achievement_toasts.cpp), from assets/.
+    if (const auto achievement = localSoundFile(L"achievement.mp3"); !achievement.empty()) {
+        std::lock_guard lock(music_jobs_->mutex);
+        music_jobs_->cues.push_back({SoundCue::achievement, 0, false, 0, achievement.wstring()});
+        music_jobs_->wake.notify_one();
+    }
     work_.start([hwnd = hwnd_, alive = alive_, jobs = music_jobs_] {
         const auto send = [&](AudioClip clip, SoundCue cue, uint32_t generation, bool preview) {
             if (!alive->load()) return;
