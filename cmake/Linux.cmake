@@ -53,6 +53,7 @@ set(LAUNCHME_CORE_SOURCES
     src/library/binary_kv.cpp
     src/library/collections.cpp
     src/library/drm_free_titles.cpp
+    src/library/local_achievements.cpp
     src/library/emulation_scan.cpp
     src/library/emulators.cpp
     src/library/esde_gamelist.cpp
@@ -333,6 +334,7 @@ if(BUILD_TESTING)
     launchme_executable(ludusavi_tests TEST ludusavi_save_backups SOURCES tests/ludusavi_tests.cpp src/library/ludusavi.cpp src/platform/helper_process.cpp)
     launchme_executable(controller_models_tests TEST controller_picture_classification SOURCES tests/controller_models_tests.cpp)
     launchme_executable(profile_data_tests TEST play_journal_achievement_history_and_playtime SOURCES tests/profile_data_tests.cpp)
+    launchme_executable(local_achievements_tests TEST local_achievements SOURCES tests/local_achievements_tests.cpp)
     launchme_executable(visibility_tests TEST steam_visibility SOURCES tests/visibility_tests.cpp)
     launchme_executable(ink_bounds_tests TEST logo_ink_bounds SOURCES tests/ink_bounds_tests.cpp)
     launchme_executable(shortcuts_tests TEST steam_nonsteam_shortcuts SOURCES tests/shortcuts_tests.cpp)

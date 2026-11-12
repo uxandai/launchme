@@ -85,7 +85,7 @@ void Launcher::updateGuideHotkey() {
 void Launcher::guideKeyboardHotkey() {
     if (!guideHotkeyWanted()) { updateGuideHotkey(); return; } // Ignore a queued hotkey after Alt+Tab.
     if (gameOverlayOpen()) dismissGameOverlay(); // The keyboard chord always closes the entire overlay.
-    else toggleGameOverlay(true); // On the widgets, as the pad's Guide opens it.
+    else toggleGameOverlay(false); // On the bottom bar, as Guide and the pad pair open it.
 }
 
 bool Launcher::overlayChordModifiers() const {

@@ -286,6 +286,8 @@ void Launcher::requestDetails() {
         else details_.error = tr(L"Brak lokalnego opisu.");
         completeDetails(details_, game); // What the game index knows fills the gaps.
         if (const auto* known = pluginAchievements(game)) { details_.achievements_unlocked = known->list.unlocked; details_.achievements_total = known->list.total; }
+        if (const auto* local = localAchievements(game)) { details_.achievements_unlocked = local->list.unlocked; details_.achievements_total = local->list.total; }
+        requestLocalAchievements(game); // A DRM-free game's local achievements.
         requestPluginAchievements(game); // An achievements plugin's list for games outside Steam.
         details_requested_ = true;
         return;

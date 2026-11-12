@@ -210,6 +210,7 @@ set(LAUNCHME_APP_SOURCES
     src/app/file_browser.cpp
     src/app/add_game.cpp
     src/app/drm_free.cpp
+    src/app/local_achievements.cpp
     src/app/emulation_library.cpp
     src/app/emulation_settings.cpp
     src/app/installations.cpp
@@ -324,6 +325,7 @@ set(LAUNCHME_APP_SOURCES
     src/library/achievement_history.cpp
     src/library/studios.cpp
     src/library/drm_free.cpp
+    src/library/local_achievements.cpp
     src/library/drm_free_titles.cpp
     src/library/pc_platforms.cpp
     src/library/multimc.cpp

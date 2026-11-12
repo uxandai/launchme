@@ -431,11 +431,11 @@ void Launcher::controllerInput(const PadReading& state) {
         pad_start_.swallow(buttons & XINPUT_GAMEPAD_START);
         controller_buttons_ = buttons; controller_direction_ = 0;
         if (pair) {
-            if (pair_pressed) toggleGameOverlay(true);
+            if (pair_pressed) toggleGameOverlay(false); // The bottom bar, as the keyboard shortcut opens it.
             return;
         }
         if (guide == HoldGesture::Event::press || guide == HoldGesture::Event::hold) {
-            toggleGameOverlay(true); // On the widgets, as the keyboard shortcut opens it.
+            toggleGameOverlay(false); // The bottom bar, as every overlay shortcut opens it.
             if (guide == HoldGesture::Event::hold && gameOverlayOpen()) { openPowerMenu(); invalidateGameOverlay(); }
         }
         return;

@@ -21,6 +21,7 @@ struct SteamAchievement {
     bool achieved = false, hidden = false;
     uint64_t unlocked_at = 0;       // Unix time; 0 while locked.
     float global_percent = -1;      // Share of all players who have it; -1 unknown.
+    std::wstring gray_icon;         // Schemas only: the locked icon (empty: unknown, or `icon` is already it).
 };
 struct SteamAchievements {
     std::vector<SteamAchievement> items;
@@ -34,6 +35,9 @@ using SteamHttp = std::function<HttpResponse(const std::wstring&, const std::wst
 // account's state (UserGameStats_<account>_<AppID>.bin: unlock bits and times). Global shares
 // come from the game page cache where it has them. Empty when the client has no schema.
 SteamAchievements readLocalAchievements(const std::filesystem::path& steam_root, uint64_t steam_id, uint32_t app_id, bool english);
+// The client's schema alone (every achievement locked, no shares): the names, descriptions and
+// icons of a game whose unlocks come from elsewhere (local_achievements.hpp).
+SteamAchievements readSteamSchema(const std::filesystem::path& steam_root, uint32_t app_id, bool english);
 // Only the counts of readLocalAchievements: {unlocked, total}, total 0 without a schema.
 std::pair<uint32_t, uint32_t> localAchievementCounts(const std::filesystem::path& steam_root, uint64_t steam_id, uint32_t app_id);
 
@@ -50,6 +54,10 @@ void applyGlobalPercentages(SteamAchievements& list, const std::vector<std::pair
 // (no key, private game details, no network); the caller keeps the local list then.
 SteamAchievements fetchSteamAchievements(const std::wstring& key, uint64_t steam_id, uint32_t app_id,
                                          bool english, const SteamHttp& get = httpGetPrivate);
+
+// GetSchemaForGame alone with the user's key (no account state): every achievement locked, the
+// colour icon in `icon` and the grey one in `gray_icon`. Empty on any failure.
+SteamAchievements fetchSteamSchema(const std::wstring& key, uint32_t app_id, bool english, const SteamHttp& get = httpGetPrivate);
 
 // Unlocked first (newest first), then locked (most common first), hidden locked ones last.
 void sortAchievements(std::vector<SteamAchievement>& items);

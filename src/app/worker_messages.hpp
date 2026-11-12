@@ -216,6 +216,11 @@ struct AchievementsMessage {
     size_t index = 0; // Icon: its row.
     std::wstring url; // Icon: the row's URL when it was asked for (a replaced list may reorder rows).
     std::vector<uint8_t> bytes;
+    // Local achievements (AchievementsJob::local): the game, whether its folder has them, and the
+    // game's Steam AppID (0: unknown).
+    bool local = false, found = false;
+    std::string key;
+    uint32_t app_id = 0;
 };
 struct ScreensaverMessage {
     uint32_t generation = 0;

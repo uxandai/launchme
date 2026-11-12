@@ -181,6 +181,10 @@ struct AchievementsJob {
     size_t index = 0;
     std::wstring url;
     std::wstring folder; // Icons' cache folder under achievements\: the AppID, or a plugin game's cache key.
+    // A DRM-free game's local achievements (local_achievements.hpp): its folder and game key.
+    bool local = false;
+    std::filesystem::path game_folder;
+    std::string key;
 };
 // The store accounts the plugin worker may call for a plugin (achievements' store requests,
 // src/app/plugin_achievements.cpp). The Launcher fills it as its services start and empties it

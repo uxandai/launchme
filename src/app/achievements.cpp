@@ -6,6 +6,7 @@
 // (plugin_achievements.cpp). Icons of the rows on screen are downloaded once into
 // achievements\<AppID or game cache key>\; a plugin may also point at a picture on this computer.
 #include "launcher.hpp"
+#include "../library/local_achievements.hpp"
 #include "../library/steam.hpp"
 #include "../library/steam_stats.hpp"
 #include "../platform/atomic_file.hpp"
@@ -63,6 +64,7 @@ void Launcher::initializeAchievements() {
     work_.start([queue, alive, hwnd, aurelia = aurelia_active_, invoke = aurelia_transport_] {
         const auto steam = findSteamRoot();
         const auto icons = userConfigDirectory() / L"achievements";
+        const auto places = local_achievements::systemPlaces();
         const auto post = [&](std::unique_ptr<AchievementsMessage> message) {
             if (!alive->load() || queue->generation.load() != message->generation) return;
             if (PostMessageW(hwnd, achievements_message, 0, reinterpret_cast<LPARAM>(message.get()))) message.release();
@@ -79,6 +81,55 @@ void Launcher::initializeAchievements() {
             if (queue->generation.load() != job.generation) continue;
             auto message = std::make_unique<AchievementsMessage>();
             message->generation = job.generation;
+            if (job.local) { // A DRM-free game's local achievements (local_achievements.cpp).
+                namespace saves = local_achievements;
+                const bool english = i18n::english();
+                const auto found = saves::find(job.game_folder, places);
+                auto local = found ? saves::localList(found, steam, english) : saves::Local{};
+                message->local = true; message->key = job.key; message->found = static_cast<bool>(found); message->app_id = found.app_id;
+                message->list = local.list;
+                // Online: names from the Web API (with the user's key) when no schema had them, and
+                // the public shares of players (which also complete a list of earned ones only).
+                const bool online = found && found.app_id;
+                message->final = !online;
+                post(std::move(message));
+                if (!online) continue;
+                const auto send = [&](SteamAchievements list, bool final) {
+                    auto next = std::make_unique<AchievementsMessage>();
+                    next->generation = job.generation; next->final = final;
+                    next->local = true; next->key = job.key; next->found = true; next->app_id = found.app_id;
+                    next->list = std::move(list);
+                    post(std::move(next));
+                };
+                const auto stop = [&] { return !alive->load() || queue->generation.load() != job.generation; };
+                if (!local.named)
+                    if (const auto key = userSecret(L"STEAM_WEB_API_KEY", L"steam_web_api_key.txt"); !key.empty()) {
+                        SteamAchievements schema, other; // English, and Polish for the names in that language.
+                        {
+                            HttpBudget budget(20000);
+                            schema = fetchSteamSchema(key, found.app_id, true);
+                            if (!schema.items.empty()) other = fetchSteamSchema(key, found.app_id, false);
+                        }
+                        if (!schema.items.empty()) {
+                            local.list = saves::overlay(english || other.items.empty() ? schema : other, saves::readUnlocks(found));
+                            send(local.list, false); // The names at once; the icons follow.
+                            // A Steam emulator's steam_settings without a schema: written there with its icons,
+                            // so the game can unlock them; the list then shows the pictures from the game folder.
+                            const SteamHttp get = [](const std::wstring& url, const std::wstring& headers, size_t limit) {
+                                HttpBudget icon(10000);
+                                return httpGet(url, headers, limit);
+                            };
+                            if (saves::saveSchema(found, schema, other, get, stop)) local = saves::localList(found, steam, english);
+                            if (stop()) continue;
+                        }
+                    }
+                {
+                    HttpBudget budget(15000);
+                    saves::applyShares(local.list, fetchGlobalPercentages(found.app_id));
+                }
+                send(std::move(local.list), true);
+                continue;
+            }
             if (!job.icon) {
                 if (aurelia) {
                     aurelia::Request request{aurelia::Command::achievements, job.app_id}; request.language = i18n::steamLanguage();
@@ -128,9 +179,15 @@ void Launcher::initializeAchievements() {
             const auto file = icons / job.folder / name;
             message->bytes = readImage(file);
             if (message->bytes.empty()) {
-                HttpBudget budget(10000);
-                auto reply = httpGet(job.url, L"Accept: image/jpeg, image/png\r\n", 1024 * 1024);
-                message->bytes = reply.status == 200 && looksLikeImage(reply.body) ? std::move(reply.body) : std::vector<uint8_t>{};
+                // Steam's icon hosts in turn: the newest icons are not on every one (local_achievements::iconUrls).
+                auto urls = local_achievements::iconUrls(job.url, job.app_id);
+                if (urls.empty()) urls.push_back(job.url);
+                for (const auto& url : urls) {
+                    if (!alive->load() || queue->generation.load() != job.generation) break;
+                    HttpBudget budget(10000);
+                    auto reply = httpGet(url, L"Accept: image/jpeg, image/png\r\n", 1024 * 1024);
+                    if (reply.status == 200 && looksLikeImage(reply.body)) { message->bytes = std::move(reply.body); break; }
+                }
                 if (!message->bytes.empty()) atomic_file::write(file, std::span<const uint8_t>(message->bytes));
             }
             if (!message->bytes.empty()) post(std::move(message));
@@ -139,7 +196,8 @@ void Launcher::initializeAchievements() {
 }
 
 int Launcher::achievementsDetailAction() const {
-    return screen_ == ScreenMode::details && !detail_games_.empty() && (steamArtwork(detail_games_[0]) || pluginAchievementsProvider(detail_games_[0])) &&
+    return screen_ == ScreenMode::details && !detail_games_.empty() &&
+           (steamArtwork(detail_games_[0]) || localAchievements(detail_games_[0]) || pluginAchievementsProvider(detail_games_[0])) &&
            details_.achievements_total ? lastDetailAction() + 1 : -2;
 }
 
@@ -147,7 +205,8 @@ void Launcher::openAchievements() {
     if (screen_ != ScreenMode::details || detail_games_.empty()) return;
     const auto& game = detail_games_[0];
     const bool steam = steamArtwork(game);
-    if (!steam && !pluginAchievementsProvider(game)) return;
+    const auto* local = steam ? nullptr : localAchievements(game);
+    if (!steam && !local && !pluginAchievementsProvider(game)) return;
     achievements_ = {};
     achievements_.open = true;
     achievements_.loading = true;
@@ -159,6 +218,21 @@ void Launcher::openAchievements() {
     achievements_.total = details_.achievements_total;
     achievement_icons_requested_.clear();
     renderer_.resetArtworkThumbnails(0);
+    if (local) {
+        // The last list read at once; a fresh read replaces it.
+        {
+            std::lock_guard lock(achievement_jobs_->mutex);
+            achievement_jobs_->generation.fetch_add(1);
+            achievement_jobs_->jobs.clear();
+        }
+        achievements_.app_id = local->app_id;
+        if (local->list.total) showAchievementList(local->list, false);
+        achievements_.loading = true;
+        requestLocalAchievements(game, true);
+        audio_.drawer();
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        return;
+    }
     if (!steam) {
         // The plugin's last answer at once; a fresh one replaces it when it comes.
         {
@@ -200,6 +274,7 @@ void Launcher::closeAchievements() {
 }
 
 void Launcher::onAchievements(std::unique_ptr<AchievementsMessage> message) {
+    if (message->local) { receiveLocalAchievements(std::move(message)); return; }
     if (!achievementsOpen() || message->generation != achievement_jobs_->generation.load()) return;
     auto& state = achievements_;
     if (message->icon) {

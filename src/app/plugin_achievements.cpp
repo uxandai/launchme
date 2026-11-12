@@ -41,6 +41,7 @@ json::Value pluginAchievementRounds(plugins::Manager& manager, const plugins::Jo
 std::optional<plugins::Action> Launcher::pluginAchievementsProvider(const Game& game) const {
     // Steam games keep the client's own achievements (achievements.cpp).
     if (plugins_busy_ || !isGame(game) || steamArtwork(game) || game.kind == GameKind::catalog) return {};
+    if (localAchievements(game)) return {}; // Local achievements (local_achievements.cpp).
     const auto providers = plugins_.contributions("achievements", &game);
     return providers.empty() ? std::nullopt : std::optional<plugins::Action>(providers.front());
 }
@@ -54,6 +55,7 @@ void Launcher::requestFocusedAchievements(const Game& game) {
     const auto key = gameKey(game);
     if (key.empty() || key == plugin_achievements_focus_) return;
     plugin_achievements_focus_ = key;
+    requestLocalAchievements(game);
     requestPluginAchievements(game, false, true);
 }
 

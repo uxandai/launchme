@@ -924,7 +924,7 @@ void Launcher::desktopView(desktop_ui::View& view) {
     if (pane.details.achievements_total) {
         pane.achievements = std::to_wstring(pane.details.achievements_unlocked) + L" / " + std::to_wstring(pane.details.achievements_total);
         pane.achievements_share = std::clamp(static_cast<float>(pane.details.achievements_unlocked) / pane.details.achievements_total, 0.0f, 1.0f);
-        pane.achievements_link = steamArtwork(game) || pluginAchievementsProvider(game);
+        pane.achievements_link = steamArtwork(game) || localAchievements(game) || pluginAchievementsProvider(game);
     }
     pane.rating = ratingLabel();
     pane.protondb = protonDbLabel(game); // Linux only.

@@ -509,6 +509,8 @@ add_test(NAME low_memory_mode COMMAND launcher_ui_tests --low-memory)
         LIBS advapi32 winhttp shell32 ole32)
     launchme_executable(drm_free_tests TEST drm_free_folder_scan_and_matching
         SOURCES tests/drm_free_tests.cpp)
+    launchme_executable(local_achievements_tests TEST local_achievements
+        SOURCES tests/local_achievements_tests.cpp)
     launchme_executable(profile_data_tests TEST play_journal_achievement_history_and_playtime
         SOURCES tests/profile_data_tests.cpp)
     launchme_executable(studios_tests SOURCES tests/studios_tests.cpp)

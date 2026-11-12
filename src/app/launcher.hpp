@@ -1230,6 +1230,19 @@ private:
         bool pending = false, answered = false;
     };
     std::map<std::string, PluginAchievements> plugin_achievements_;
+    // Local achievements of DRM-free games (src/app/local_achievements.cpp):
+    // the last list read from its saves per game key. They win over an achievements plugin.
+    struct LocalAchievements {
+        SteamAchievements list;
+        uint32_t app_id = 0;    // The game's Steam AppID; 0 unknown.
+        uint64_t checked_at = 0;
+        bool pending = false, answered = false, found = false; // found: the folder has local achievements.
+    };
+    std::map<std::string, LocalAchievements> local_achievements_;
+    std::filesystem::path localAchievementsFolder(const Game& game) const; // Empty: not a local game.
+    const LocalAchievements* localAchievements(const Game& game) const; // Answered, with local achievements found.
+    void requestLocalAchievements(const Game& game, bool force = false);
+    void receiveLocalAchievements(std::unique_ptr<AchievementsMessage> message);
     uint32_t plugin_achievements_generation_ = 0;
     std::shared_ptr<launcher_queues::StoreGateway> store_gateway_ = std::make_shared<launcher_queues::StoreGateway>();
     std::optional<plugins::Action> pluginAchievementsProvider(const Game& game) const;

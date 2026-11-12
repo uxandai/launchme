@@ -79,9 +79,11 @@ std::wstring schemaIcon(uint32_t app_id, const binary_kv::Node* node) {
 std::filesystem::path statsFolder(const std::filesystem::path& steam_root) { return steam_root / L"appcache" / L"stats"; }
 }
 
-SteamAchievements readLocalAchievements(const std::filesystem::path& steam_root, uint64_t steam_id, uint32_t app_id, bool english) {
+namespace {
+// steam_id 0: the schema alone, every achievement locked (a game run under a Steam emulator).
+SteamAchievements readSchemaList(const std::filesystem::path& steam_root, uint64_t steam_id, uint32_t app_id, bool english) {
     SteamAchievements result;
-    if (steam_id <= steam_id_offset || !app_id) return result;
+    if ((steam_id && steam_id <= steam_id_offset) || !app_id) return result;
     const auto folder = statsFolder(steam_root);
     const auto schema_bytes = readBytes(folder / (L"UserGameStatsSchema_" + std::to_wstring(app_id) + L".bin"), 32 * 1024 * 1024);
     const auto schema = binary_kv::parse(schema_bytes);
@@ -91,13 +93,16 @@ SteamAchievements readLocalAchievements(const std::filesystem::path& steam_root,
     const auto* stats = game ? game->child("stats") : nullptr;
     if (!stats) return result;
     // The account's state: cache/<stat>/data (unlock bits) and cache/<stat>/AchievementTimes/<bit>.
-    const auto account = std::to_wstring(steam_id - steam_id_offset);
-    const auto user = binary_kv::parse(readBytes(folder / (L"UserGameStats_" + account + L"_" + std::to_wstring(app_id) + L".bin"), 4 * 1024 * 1024));
-    const auto* cache = user ? user->child("cache") : nullptr;
-    // Global shares the game page cache already has.
+    std::optional<binary_kv::Node> user;
     std::unordered_map<std::string, float> shares;
-    for (const auto& item : readCachedAchievements(steam_root, steam_id, app_id).items)
-        if (item.global_percent >= 0) shares[item.id] = item.global_percent;
+    if (steam_id) {
+        const auto account = std::to_wstring(steam_id - steam_id_offset);
+        user = binary_kv::parse(readBytes(folder / (L"UserGameStats_" + account + L"_" + std::to_wstring(app_id) + L".bin"), 4 * 1024 * 1024));
+        // Global shares the game page cache already has.
+        for (const auto& item : readCachedAchievements(steam_root, steam_id, app_id).items)
+            if (item.global_percent >= 0) shares[item.id] = item.global_percent;
+    }
+    const auto* cache = user ? user->child("cache") : nullptr;
     for (const auto& stat : stats->children) {
         const auto* bits = stat.object ? stat.child("bits") : nullptr;
         if (!bits) continue;
@@ -118,8 +123,9 @@ SteamAchievements readLocalAchievements(const std::filesystem::path& steam_root,
             item.hidden = display && nodeNumber(display->child("hidden")) > 0;
             item.achieved = ((data >> index) & 1u) != 0;
             if (item.achieved && times) item.unlocked_at = static_cast<uint64_t>(std::max<int64_t>(0, nodeNumber(times->child(std::to_string(index)))));
-            item.icon = schemaIcon(app_id, display ? display->child(item.achieved ? "icon" : "icon_gray") : nullptr);
-            if (item.icon.empty() && display) item.icon = schemaIcon(app_id, display->child("icon"));
+            item.icon = schemaIcon(app_id, display ? display->child("icon") : nullptr);
+            item.gray_icon = schemaIcon(app_id, display ? display->child("icon_gray") : nullptr);
+            if (!item.achieved && !item.gray_icon.empty()) item.icon = item.gray_icon;
             if (const auto found = shares.find(item.id); found != shares.end()) item.global_percent = found->second;
             result.unlocked += item.achieved;
             result.items.push_back(std::move(item));
@@ -129,6 +135,15 @@ SteamAchievements readLocalAchievements(const std::filesystem::path& steam_root,
     result.complete = !result.items.empty();
     sortAchievements(result.items);
     return result;
+}
+}
+
+SteamAchievements readLocalAchievements(const std::filesystem::path& steam_root, uint64_t steam_id, uint32_t app_id, bool english) {
+    return steam_id ? readSchemaList(steam_root, steam_id, app_id, english) : SteamAchievements{};
+}
+
+SteamAchievements readSteamSchema(const std::filesystem::path& steam_root, uint32_t app_id, bool english) {
+    return readSchemaList(steam_root, 0, app_id, english);
 }
 
 std::pair<uint32_t, uint32_t> localAchievementCounts(const std::filesystem::path& steam_root, uint64_t steam_id, uint32_t app_id) {
@@ -206,16 +221,53 @@ SteamAchievements readCachedAchievements(const std::filesystem::path& steam_root
     return result;
 }
 
-SteamAchievements fetchSteamAchievements(const std::wstring& key, uint64_t steam_id, uint32_t app_id, bool english, const SteamHttp& get) {
-    SteamAchievements result;
-    if (key.empty() || key.size() > 1024 || key.find_first_of(L"\r\n&?#") != std::wstring::npos || !steam_id || !app_id) return result;
-    const auto app = std::to_wstring(app_id);
-    const auto schema = fetchJson(get, L"https://api.steampowered.com/ISteamUserStats/GetSchemaForGame/v2/?key=" + key +
-                                       L"&appid=" + app + (english ? L"&l=english" : L"&l=polish"));
+namespace {
+bool usableKey(const std::wstring& key) { return !key.empty() && key.size() <= 1024 && key.find_first_of(L"\r\n&?#") == std::wstring::npos; }
+std::optional<json::Value> schemaJson(const std::wstring& key, uint32_t app_id, bool english, const SteamHttp& get) {
+    return fetchJson(get, L"https://api.steampowered.com/ISteamUserStats/GetSchemaForGame/v2/?key=" + key +
+                          L"&appid=" + std::to_wstring(app_id) + (english ? L"&l=english" : L"&l=polish"));
+}
+const json::Value* schemaAchievements(const std::optional<json::Value>& schema) {
     const auto* game = schema ? schema->get("game") : nullptr;
     const auto* stats = game ? game->get("availableGameStats") : nullptr;
     const auto* achievements = stats ? stats->get("achievements") : nullptr;
-    if (!achievements || achievements->type != json::Value::Type::array || achievements->elements.empty()) return result;
+    return achievements && achievements->type == json::Value::Type::array && !achievements->elements.empty() ? achievements : nullptr;
+}
+SteamAchievement schemaItem(const json::Value& entry) {
+    SteamAchievement item;
+    item.id = entry.get("name") ? entry.get("name")->stringOr() : std::string{};
+    item.name = text(entry.get("displayName"));
+    item.description = text(entry.get("description"));
+    item.icon = httpsUrl(entry.get("icon"));
+    item.hidden = flag(entry.get("hidden"));
+    return item;
+}
+}
+
+SteamAchievements fetchSteamSchema(const std::wstring& key, uint32_t app_id, bool english, const SteamHttp& get) {
+    SteamAchievements result;
+    if (!usableKey(key) || !app_id) return result;
+    const auto schema = schemaJson(key, app_id, english, get);
+    const auto* achievements = schemaAchievements(schema);
+    if (!achievements) return result;
+    for (const auto& entry : achievements->elements) {
+        auto item = schemaItem(entry);
+        if (item.id.empty()) continue;
+        if (const auto gray = httpsUrl(entry.get("icongray")); !gray.empty()) item.gray_icon = gray;
+        result.items.push_back(std::move(item));
+    }
+    result.total = static_cast<uint32_t>(result.items.size());
+    result.complete = !result.items.empty();
+    return result;
+}
+
+SteamAchievements fetchSteamAchievements(const std::wstring& key, uint64_t steam_id, uint32_t app_id, bool english, const SteamHttp& get) {
+    SteamAchievements result;
+    if (!usableKey(key) || !steam_id || !app_id) return result;
+    const auto app = std::to_wstring(app_id);
+    const auto schema = schemaJson(key, app_id, english, get);
+    const auto* achievements = schemaAchievements(schema);
+    if (!achievements) return result;
     const auto player = fetchJson(get, L"https://api.steampowered.com/ISteamUserStats/GetPlayerAchievements/v1/?key=" + key +
                                        L"&steamid=" + std::to_wstring(steam_id) + L"&appid=" + app);
     const auto* player_stats = player ? player->get("playerstats") : nullptr;
@@ -231,13 +283,8 @@ SteamAchievements fetchSteamAchievements(const std::wstring& key, uint64_t steam
     const auto global = fetchGlobalPercentages(app_id, get); // Optional: public numbers.
     const std::unordered_map<std::string, float> percentages(global.begin(), global.end());
     for (const auto& entry : achievements->elements) {
-        SteamAchievement item;
-        item.id = entry.get("name") ? entry.get("name")->stringOr() : std::string{};
+        auto item = schemaItem(entry);
         if (item.id.empty()) continue;
-        item.name = text(entry.get("displayName"));
-        item.description = text(entry.get("description"));
-        item.icon = httpsUrl(entry.get("icon"));
-        item.hidden = flag(entry.get("hidden"));
         if (const auto found = state.find(item.id); found != state.end()) {
             item.achieved = found->second.first;
             item.unlocked_at = item.achieved ? found->second.second : 0;
