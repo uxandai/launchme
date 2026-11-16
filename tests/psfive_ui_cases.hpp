@@ -223,11 +223,11 @@ int LauncherUiTest::psfive(HWND window) {
     using MenuItem = context_menu::Item;
     if (context_menu::item(0, app.menuRows()) != MenuItem::details ||
         context_menu::row(MenuItem::primary, app.menuRows()) != -1 || app.menu_selected_ != 0) return 5051;
-    // Details stays first with a live session and multiple plugin actions; their row offsets stay valid.
+    // Details stays first with a live session; plugin actions live in Details' "…", Więcej opcji ends the menu.
     auto session_menu = app.menuRows(); session_menu.suspend = session_menu.session = true; session_menu.plugins = 2;
     if (context_menu::item(0, session_menu) != MenuItem::details || context_menu::item(1, session_menu) != MenuItem::suspend ||
-        context_menu::row(MenuItem::plugin, session_menu) != 2 || context_menu::item(3, session_menu) != MenuItem::plugin ||
-        context_menu::item(context_menu::rows(session_menu) - 1, session_menu) != MenuItem::close) return 5052;
+        context_menu::item(2, session_menu) != MenuItem::close || context_menu::row(MenuItem::plugin, session_menu) != -1 ||
+        context_menu::item(context_menu::rows(session_menu) - 1, session_menu) != MenuItem::more) return 5052;
     app.menu_progress_ = 1; settle();
     const auto menu = context_menu::bounds(app.cards_[app.selected_], app.menuRows(), app.menuBeside(), view.width, view.height, app.libraryMenuAnchor());
     if (menu.bottom > layout::action(1, view.height).top || menu.left != layout::action(1, view.height).left) return 4916;

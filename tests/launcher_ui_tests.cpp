@@ -1277,13 +1277,27 @@ public:
         artwork_failure::record(failures, crop_key, crop_game.name, failed_at, failed_at + 60000, false);
         app.retryGameArtwork(crop_game, false);
         if (artwork_failure::blockedUntil(failures, crop_key, crop_game.name, artwork_failure::now()) || !manualTextCrop(crop_file)) return 115;
-        // Fixed coordinates below target the 4-row menu's last row, "Ponów grafiki".
+        // A click on the menu's Więcej opcji runs that row (Details with its "…" open), never the game under it.
+        if (app.artworkOpen()) app.back(); // Saving the crop returns to the artwork browser.
+        app.openLibrary();
+        if (app.cards_.empty()) return 160;
         app.cards_[0].x = 68; app.cards_[0].y = 190; app.cards_[0].size = 186;
-        app.mouse_transition_until_ = 0; app.openContextMenu();
-        if (context_menu::rows(app.menuRows()) != 4 || context_menu::item(3, app.menuRows()) != context_menu::Item::retry) return 160;
-        app.click(150 * app.renderer_.viewport().scale, 200 * app.renderer_.viewport().scale, false);
-        app.click(150 * app.renderer_.viewport().scale, 200 * app.renderer_.viewport().scale, true);
-        if (app.menu_open_ || app.pending_launch_) return 124;
+        app.mouse_transition_until_ = 0; app.focusCard(0); app.openContextMenu();
+        const auto menu_rows = app.menuRows();
+        const int last_row = context_menu::row(context_menu::Item::more, menu_rows);
+        if (!app.menu_open_ || last_row < 1) return 160;
+        const auto menu_view = app.renderer_.viewport();
+        const auto menu_box = context_menu::bounds(app.cards_[app.selected_], menu_rows, app.menuBeside(), menu_view.width, menu_view.height, app.libraryMenuAnchor());
+        settings_ui::Rect row_box{menu_box.left, menu_box.top + 8 + 53.0f * last_row, menu_box.right, menu_box.top + 8 + 53.0f * (last_row + 1)};
+        if (app.menuDialog()) { // Duże menu gry: the same rows in the dialog.
+            const context_menu::Dialog dialog{menu_view.width, menu_view.height, context_menu::rows(menu_rows)};
+            row_box = dialog.row(last_row, dialog.first(app.menu_selected_));
+        }
+        const float row_x = (row_box.left + row_box.right) * 0.5f * menu_view.scale, row_y = (row_box.top + row_box.bottom) * 0.5f * menu_view.scale;
+        app.click(row_x, row_y, false); // (A double click's second half would land on Details' "…" opened by it.)
+        if (app.pending_launch_ || app.screen_ != ScreenMode::details || !app.menu_open_ || !app.menuRows().detail_options) return 124;
+        app.back(); app.back(); // The "…", then Details.
+        if (app.menu_open_ || app.screen_ == ScreenMode::details) return 124;
         auto late_cover = std::make_unique<CoverMessage>();
         late_cover->key = gameKey(crop_game); late_cover->generation = app.jobs_->generation.load();
         late_cover->revision = app.art_revisions_[crop_key] - 1; late_cover->bytes = pixel();
@@ -1734,7 +1748,8 @@ int LauncherUiTest::xmb(HWND window) {
         if (!app.settings_state_.at(settings_ui::Page::layout_options)) return 219;
     }
     const int posters_row = rowIndex(settings_ui::Id::xmb_posters), size_row = rowIndex(settings_ui::Id::xmb_size);
-    if (posters_row != 0 || size_row != posters_row + 1 ||
+    // Pionowe plakaty, Platforma jako logo, then the tiles' size.
+    if (posters_row != 0 || rowIndex(settings_ui::Id::xmb_platform_badge) != posters_row + 1 || size_row != posters_row + 2 ||
         app.settings_.xmb_posters || app.settings_.xmb_size != AppSettings::XmbSize::normal) return 219;
     app.settings_state_.enter(static_cast<int>(app.settings_rows_.size()));
     app.settings_state_.selected[0] = posters_row; app.settingsActivate();
@@ -1886,8 +1901,10 @@ int LauncherUiTest::quickResume(HWND window) {
     app.openDetails(located);
     if (app.lastDetailAction() != 3 || app.favoriteDetailAction() != 2) return 323;
     app.detail_action_ = 1; app.enterDown(false); app.enterUp();
-    if (!app.menu_open_ || context_menu::row(context_menu::Item::folder, app.menuRows()) != 1) return 323;
-    app.menuMove(1);
+    // "…" is grouped: the folder comes after how the game starts and looks (Zmień grafikę always before it).
+    const int folder_row = app.menu_open_ ? context_menu::row(context_menu::Item::folder, app.menuRows()) : -1;
+    if (folder_row <= context_menu::row(context_menu::Item::artwork, app.menuRows())) return 323;
+    app.menu_selected_ = folder_row - 1; app.menuMove(1);
     if (!capture(L"details-open-folder.png")) return 324;
     dispatched.clear(); app.launch();
     if (app.menu_open_ || app.detail_action_ != 1 || dispatched != std::vector<std::wstring>{located.install_directory.wstring()}) return 325;
@@ -1906,9 +1923,10 @@ int LauncherUiTest::quickResume(HWND window) {
     if (app.sessionState(first) != SessionState::running || app.actionLabel(first) != L"Wróć") return 303;
     app.openContextMenu();
     const auto live = app.menuRows();
-    // "Zamknij grę" takes the place of "Ponów grafiki" while the game runs.
-    if (!live.suspend || context_menu::item(1, live) != context_menu::Item::suspend || context_menu::row(context_menu::Item::retry, live) != -1 ||
-        context_menu::item(context_menu::rows(live) - 1, live) != context_menu::Item::close || context_menu::rows(live) != 5) return 304;
+    // A running game: Wróć, Wstrzymaj, Zamknij grę, Szczegóły, Więcej opcji (never Odinstaluj or Usuń z ostatnio granych).
+    if (!live.suspend || context_menu::item(1, live) != context_menu::Item::suspend || context_menu::item(2, live) != context_menu::Item::close ||
+        context_menu::row(context_menu::Item::uninstall, live) != -1 || context_menu::row(context_menu::Item::forget_recent, live) != -1 ||
+        context_menu::item(context_menu::rows(live) - 1, live) != context_menu::Item::more || context_menu::rows(live) != 5) return 304;
     if (!capture(L"quick-resume-running.png")) return 305;
     app.menu_selected_ = 1; app.menuAccept();
     if (app.sessionState(first) != SessionState::frozen || log != std::vector<std::string>{"suspend:3000"} ||

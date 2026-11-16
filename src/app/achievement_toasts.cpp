@@ -71,8 +71,10 @@ void boxBlur(std::vector<uint8_t>& image, int width, int height, int radius, boo
     }
 }
 
+// Linux has no screen copy here: the card goes without glass.
 Frost frostScreen(const RECT& area) {
     Frost frost;
+#ifdef _WIN32
     const int width = area.right - area.left, height = area.bottom - area.top;
     if (width <= 0 || height <= 0) return frost;
     const HDC screen = GetDC(nullptr);
@@ -118,6 +120,9 @@ Frost frostScreen(const RECT& area) {
     if (memory) DeleteDC(memory);
     ReleaseDC(nullptr, screen);
     if (!copied) frost = {};
+#else
+    (void)area;
+#endif
     return frost;
 }
 } // namespace
@@ -238,7 +243,11 @@ void Launcher::showNextAchievementToast() {
         toast_window_ = std::move(window);
         toast_window_->appearance(settings_);
         // Kept out of screen copies (Windows 10 2004+): the glass may copy what is under it while shown.
+#ifdef _WIN32
         toast_live_backdrop_ = SetWindowDisplayAffinity(toast_window_->handle(), 0x11 /* WDA_EXCLUDEFROMCAPTURE */) != FALSE;
+#else
+        toast_live_backdrop_ = false;
+#endif
     }
     toast_current_ = std::move(achievement_toasts_.front());
     achievement_toasts_.pop_front();

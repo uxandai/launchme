@@ -122,6 +122,9 @@ int LauncherUiTest::ux076(HWND window) {
     auto answer = std::make_unique<IdentifyMessage>(); answer->generation = app.identify_token_->load();
     answer->search.games = {{501, L"Game 0", L"2020-01-01", L"Switch"}, {502, L"Game 0 Deluxe", L"2021-01-01", L"Switch"}};
     app.onIdentify(std::move(answer));
+    // The match waits until the dialog has shown for 3 s ("Dopasuj ręcznie" still possible), then is taken.
+    if (state.applying || !state.accept_ms) return 12063;
+    state.accept_ms = 1; app.pollIdentifyAccept();
     if (!state.applying || state.selected != 0 || state.manual) return 12053; // No click: the first match is downloaded.
     app.paint();
     if (!capture(L"ux076-identify-applying.png")) return 12054;
@@ -142,6 +145,8 @@ int LauncherUiTest::ux076(HWND window) {
     offer.details.description = L"A description from a store."; offer.details.developer = L"Studio"; offer.details.release_date = L"2020-01-01";
     answer->texts = {offer};
     app.onIdentify(std::move(answer));
+    if (!state.accept_ms) return 12064; // Taken once the dialog has shown for 3 s too.
+    state.accept_ms = 1; app.pollIdentifyAccept();
     const auto* own = app.metadataOverride(game);
     if (app.identifyOpen() || !own || own->description != L"A description from a store." || own->developer != L"Studio" || own->release_date != L"2020-01-01") return 12057;
     // "Dopasuj ręcznie" while the lookup runs: the field and the provider choice, the lookup's answer is a list to pick from.

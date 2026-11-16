@@ -1,6 +1,8 @@
-// The transport for http.cpp on systems without WinHTTP: libcurl, with one share for
-// connections, DNS and TLS sessions (keep-alive across workers, as WinHTTP's shared session)
-// and no cookie engine (requests stay isolated).
+// The transport for http.cpp on systems without WinHTTP: libcurl, with one share for DNS and
+// TLS sessions (resumed handshakes across workers) and no cookie engine (requests stay isolated).
+// The connection pool is not shared: libcurl does not support sharing it between concurrent
+// threads, and with the threaded resolver one worker's handle could close a connection whose
+// lookup belonged to another (a crash in destroy_async_data under Curl_disconnect, curl 8.5).
 #include "http_internal.hpp"
 #include "http_download.hpp"
 #include "../platform/text_encoding.hpp"
@@ -45,7 +47,6 @@ struct Share {
         curl_share_setopt(handle, CURLSHOPT_USERDATA, this);
         curl_share_setopt(handle, CURLSHOPT_SHARE, CURL_LOCK_DATA_DNS);
         curl_share_setopt(handle, CURLSHOPT_SHARE, CURL_LOCK_DATA_SSL_SESSION);
-        curl_share_setopt(handle, CURLSHOPT_SHARE, CURL_LOCK_DATA_CONNECT);
     }
     // Deliberately never cleaned up: detached workers may still be finishing a request during
     // process exit (as with the WinHTTP session).

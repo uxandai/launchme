@@ -197,7 +197,12 @@ int LauncherUiTest::aureliaIntegration(HWND window) {
         fake->qr_approve = false;
     }
     app.aurelia_active_ = app.aurelia_authenticated_ = true; app.aurelia_account_ = app.account_;
-    if (!app.menuRows().aurelia) return 10305;
+    { // Aurelia's row lives in Details' "…".
+        app.openDetails(game);
+        const bool offered = app.screen_ == ScreenMode::details && app.menuRows().aurelia;
+        app.back();
+        if (!offered) return 10305;
+    }
     // A Steam game the client manages: the dialog offers only the choice; nothing goes through Aurelia.
     app.openAurelia(&game); if (!wait([&] { return !app.aurelia_ui_.busy; })) return 10306;
     if (app.aureliaManaged(game) || app.aurelia_ui_.rows.size() != 1 || app.aurelia_ui_.rows[0].action != A::steam || !app.aurelia_ui_.rows[0].toggle) return 10370;

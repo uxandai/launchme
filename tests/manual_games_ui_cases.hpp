@@ -135,12 +135,13 @@ int LauncherUiTest::manualGames(HWND window) {
     if (app.identifyOpen() || editor.error.empty() || editor.focus != Item::name) return 9526;
     app.closeCustomEditor();
 
-    // The game's menu: "Usuń z biblioteki" last (red), never Odinstaluj; Details' "…" holds it too.
+    // The game's menu: never Odinstaluj, Więcej opcji last; "Usuń z biblioteki" (red, last) lives in Details' "…".
     const auto game = app.custom_library_.front();
     app.openPcLibrary(GameSource::custom); settle(app);
     app.focusCard(0); app.openContextMenu(); settle(app);
     auto rows = app.menuRows();
-    if (!app.menu_open_ || !rows.remove || rows.uninstall || context_menu::row(context_menu::Item::remove, rows) != context_menu::rows(rows) - 1) return 9527;
+    if (!app.menu_open_ || rows.uninstall || context_menu::row(context_menu::Item::remove, rows) != -1 ||
+        context_menu::item(context_menu::rows(rows) - 1, rows) != context_menu::Item::more) return 9527;
     if (!capture(app, L"manual-game-menu-remove.png")) return 9528;
     app.dismissMenu(); app.openDetails(game);
     app.detail_action_ = 1; app.enterDown(false); app.enterUp(); settle(app);
