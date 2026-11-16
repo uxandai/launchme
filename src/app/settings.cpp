@@ -160,6 +160,7 @@ void Launcher::settingsChanged(bool shelves) {
     settings_edited_ = std::chrono::steady_clock::now();
     renderer_.setDrawerStyle(settings_.drawer);
     renderer_.setFontFamily(settings_.font_family);
+    renderer_.setHandheld(settings_.handheld_mode);
     renderer_.setCoverAccent(settings_.cover_accent_rgb);
     applyAccentColors();
     renderer_.setDesktopTheme(settings_.desktop_theme);
@@ -759,8 +760,9 @@ void Launcher::settingsToggle(const Row& row) {
         settingsChanged(); audio_.context(); return; // Visual only: no shelf rebuild.
     }
     else if (row.id == Id::steam_silent_launch || row.id == Id::steam_account_switch || row.id == Id::steam_install_dialog ||
-             row.id == Id::hide_while_playing || row.id == Id::steam_hide_launch_window) {
+             row.id == Id::hide_while_playing || row.id == Id::steam_hide_launch_window || row.id == Id::gog_comet) {
         auto& flag = row.id == Id::steam_silent_launch ? settings_.steam_silent_launch :
+                     row.id == Id::gog_comet ? settings_.gog_comet :
                      row.id == Id::steam_hide_launch_window ? settings_.steam_hide_launch_window :
                      row.id == Id::steam_account_switch ? settings_.steam_account_switch :
                      row.id == Id::hide_while_playing ? settings_.hide_while_playing : settings_.steam_install_dialog;
@@ -790,6 +792,12 @@ void Launcher::settingsToggle(const Row& row) {
     else if (row.id == Id::launch_tv_mode) {
         settings_.launch_tv_mode = !settings_.launch_tv_mode;
         settingsChanged(); audio_.context(); return; // Read at the next start; the mode now stays.
+    }
+    else if (row.id == Id::handheld_mode) {
+        settings_.handheld_mode = !settings_.handheld_mode;
+        settingsChanged(true); audio_.context(); // Home rebuilt: Metro's start page has its own shape there.
+        buildSettingsRows(); InvalidateRect(hwnd_, nullptr, FALSE); // The whole of Tryb TV redraws at the new size.
+        return;
     }
     else if (row.id == Id::screen_transitions) {
         settings_.screen_transitions = !settings_.screen_transitions;

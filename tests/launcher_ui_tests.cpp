@@ -112,6 +112,7 @@ public:
     static int settingsDevices(HWND window);
     static int pcSettings(HWND window);
     static int pcRefresh(HWND window);
+    static int gogComet(HWND window);
     static int drmFree(HWND window);
     static int themeStudio(HWND window);
     static int xmb(HWND window);
@@ -2312,6 +2313,7 @@ int LauncherUiTest::language(HWND window) {
 #include "settings_devices_ui_cases.hpp"
 #include "platform_settings_ui_cases.hpp"
 #include "pc_refresh_ui_cases.hpp"
+#include "gog_comet_ui_cases.hpp"
 #include "drm_free_ui_cases.hpp"
 #include "theme_studio_ui_cases.hpp"
 #include "emulation_settings_ui_cases.hpp"
@@ -2358,7 +2360,12 @@ int main(int argc, char** argv) {
     RegisterClassW(&type);
     wchar_t duration[16]{};
     const bool profiling = GetEnvironmentVariableW(L"LAUNCHME_PERF_SECONDS", duration, 16) > 0;
-    const int width = profiling ? GetSystemMetrics(SM_CXSCREEN) : 1600, height = profiling ? GetSystemMetrics(SM_CYSCREEN) : 900;
+    int width = profiling ? GetSystemMetrics(SM_CXSCREEN) : 1600, height = profiling ? GetSystemMetrics(SM_CYSCREEN) : 900;
+    // LAUNCHME_UI_TEST_SIZE=1280x800: captures at another window size (a handheld's screen); by hand only.
+    if (wchar_t size[32]{}; GetEnvironmentVariableW(L"LAUNCHME_UI_TEST_SIZE", size, 32) && size[0]) {
+        int w = 0, h = 0;
+        if (swscanf_s(size, L"%dx%d", &w, &h) == 2 && w >= 640 && h >= 400 && w <= 7680 && h <= 4320) { width = w; height = h; }
+    }
     const auto window = CreateWindowW(type.lpszClassName, L"Test", WS_POPUP, 0, 0, width, height,
                                       nullptr, nullptr, type.hInstance, nullptr);
     // GetKeyState() starts from the real keyboard (the thread's queue exists from its first window on): a Shift held while the process starts (typing a "+" in
@@ -2825,6 +2832,7 @@ int main(int argc, char** argv) {
     if (!code && !profiling) code = LauncherUiTest::settingsDevices(window);
     if (!code && !profiling) code = LauncherUiTest::pcSettings(window);
     if (!code && !profiling) code = LauncherUiTest::pcRefresh(window);
+    if (!code && !profiling) code = LauncherUiTest::gogComet(window);
     if (!code && !profiling) code = LauncherUiTest::privateGames(window);
     if (!code && !profiling) code = LauncherUiTest::steamVisibility(window);
     if (!code && !profiling) code = LauncherUiTest::bulkCovers(window);

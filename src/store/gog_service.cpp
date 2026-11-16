@@ -1,5 +1,7 @@
 #include "gog_account.hpp"
+#include "../net/json.hpp"
 #include "../platform/system.hpp"
+#include "../platform/text_encoding.hpp"
 #ifdef _WIN32
 #include <Windows.h>
 #include <bcrypt.h>
@@ -26,9 +28,11 @@ class AccountService final : public Service {
     std::mutex mutex_;
     std::condition_variable wake_;
     using Reply = std::promise<std::optional<HttpResponse>>;
+    using CometReply = std::promise<std::shared_ptr<Comet>>;
     struct Work {
         Command command; std::wstring input; uint64_t generation; std::optional<InstallRequest> install;
         std::optional<AccountRequest> call; std::shared_ptr<Reply> reply; // request(): an account API call.
+        std::optional<CometRequest> comet; std::shared_ptr<CometReply> comet_reply; // comet().
     };
     std::deque<Work> work_;
     std::optional<Snapshot> result_;
@@ -41,6 +45,7 @@ class AccountService final : public Service {
     uint64_t login_generation_ = 0, retry_at_ = 0;
     std::chrono::milliseconds login_timeout_;
     InstallOperations install_operations_;
+    CometStart comet_start_;
     InstallSnapshot install_status_;
     bool install_dirty_ = false;
     std::atomic_bool install_busy_{false};
@@ -158,8 +163,44 @@ class AccountService final : public Service {
         } catch (...) { answer.reset(); }
         work.reply->set_value(std::move(answer));
     }
+    // comet(): a token valid for a while yet (comet refreshes the game's own ones itself), the
+    // account's name for the game, then the process. A rotation is kept like any other.
+    void startCometFor(Work& work) {
+        std::shared_ptr<Comet> started;
+        try {
+            if (session_ && nowSeconds() >= retry_at_) {
+                config_ = configuration_();
+                if (config_.valid() && config_.client_id == session_->tokens.client && config_.client_id == galaxy_client_id) {
+                    const Cancel cancel = [&] { return stopping_.load(); };
+                    auto next = *session_;
+                    Result result;
+                    if (next.tokens.expires <= nowSeconds() + 15 * 60) result = backend_->refresh(config_, next.tokens, cancel);
+                    std::string username;
+                    if (result) {
+                        HttpResponse response;
+                        const AccountRequest profile{L"https://users.gog.com/users/" + text_encoding::wide(next.tokens.user)};
+                        if (backend_->call(profile, next.tokens, config_, cancel, response) && response.status == 200)
+                            if (const auto root = json::parse({reinterpret_cast<const char*>(response.body.data()), response.body.size()}))
+                                if (const auto* name = root->get("username"); name && name->type == json::Value::Type::string && name->text.size() <= 256 &&
+                                    std::all_of(name->text.begin(), name->text.end(), [](unsigned char c) { return c >= 32 && c != 127; }))
+                                    username = name->text;
+                    }
+                    if ((next.tokens.access != session_->tokens.access || next.tokens.refresh != session_->tokens.refresh) && vault_->save(next))
+                        session_ = std::move(next);
+                    if (result && !cancel()) {
+                        CometCredentials credentials{session_->tokens.access, session_->tokens.refresh, session_->tokens.user, std::move(username)};
+                        started = comet_start_(*work.comet, credentials);
+                        SecureZeroMemory(credentials.access.data(), credentials.access.size());
+                        SecureZeroMemory(credentials.refresh.data(), credentials.refresh.size());
+                    }
+                }
+            }
+        } catch (...) { started.reset(); }
+        work.comet_reply->set_value(std::move(started));
+    }
     void process(Work& work) {
         if (work.call) { serve(work); return; }
+        if (work.comet) { startCometFor(work); return; }
         const auto generation = work.generation;
         const Cancel cancel = [&] { return stopping_.load() || generation_.load() != generation; };
         // Logout is ordered and cannot be dropped by a subsequent Connect.
@@ -241,7 +282,7 @@ class AccountService final : public Service {
             }
             try { process(work); }
             catch (...) {
-                if (work.reply) continue;
+                if (work.reply || work.comet_reply) continue;
                 state_.clear();
                 if (work.install) installProgress(work.generation, InstallState::error, InstallError::storage);
                 else failed(work.generation, {Failure::invalid});
@@ -254,9 +295,10 @@ class AccountService final : public Service {
         }
     }
 public:
-    AccountService(std::unique_ptr<Backend> backend, std::unique_ptr<Vault> vault, std::function<Config()> config, std::chrono::milliseconds timeout, InstallOperations operations)
+    AccountService(std::unique_ptr<Backend> backend, std::unique_ptr<Vault> vault, std::function<Config()> config, std::chrono::milliseconds timeout,
+                   InstallOperations operations, CometStart comet_start)
         : backend_(std::move(backend)), vault_(std::move(vault)), configuration_(std::move(config)), login_timeout_(timeout),
-          install_operations_(std::move(operations)), worker_([this] { run(); }) {}
+          install_operations_(std::move(operations)), comet_start_(std::move(comet_start)), worker_([this] { run(); }) {}
     ~AccountService() override {
         // Serialize with the wait predicate: an atomic flag alone can lose a
         // notification between the worker's predicate check and its wait.
@@ -323,10 +365,25 @@ public:
         wake_.notify_one();
         return answer;
     }
+    std::future<std::shared_ptr<Comet>> comet(CometRequest request) override {
+        auto reply = std::make_shared<CometReply>();
+        auto answer = reply->get_future();
+        {
+            // Like request(): no new generation, nothing else is cancelled.
+            std::lock_guard lock(mutex_);
+            if (stopping_ || !comet_start_) { reply->set_value(nullptr); return answer; }
+            Work work{Command::sync, {}, generation_.load()};
+            work.comet = std::move(request); work.comet_reply = reply;
+            work_.push_back(std::move(work));
+        }
+        wake_.notify_one();
+        return answer;
+    }
 };
 }
-std::unique_ptr<Service> makeService(std::unique_ptr<Backend> backend, std::unique_ptr<Vault> vault, std::function<Config()> config, std::chrono::milliseconds timeout, InstallOperations operations) {
-    return std::make_unique<AccountService>(std::move(backend), std::move(vault), std::move(config), timeout, std::move(operations));
+std::unique_ptr<Service> makeService(std::unique_ptr<Backend> backend, std::unique_ptr<Vault> vault, std::function<Config()> config, std::chrono::milliseconds timeout,
+                                     InstallOperations operations, CometStart comet_start) {
+    return std::make_unique<AccountService>(std::move(backend), std::move(vault), std::move(config), timeout, std::move(operations), std::move(comet_start));
 }
 std::wstring statusText(const Snapshot& value) {
     switch (value.failure) {

@@ -47,6 +47,9 @@ constexpr float quick_lift = 60;            // The tiles rise while the quick ba
 constexpr size_t category_tiles = 12;       // Tiles on a category page, its "Wszystkie" tile included.
 constexpr float depth_scale = 0.8f;         // "Efekt 3D": the pages beside the focused one.
 
+// A tile showing landscape art: the recent games, and the installation tile where it is a wide cell
+// (Tryb handhelda's start page, three columns wide).
+inline bool wideTile(Role role, const Rect& rect) { return landscape(role) || (role == Role::install && rect.width() > rect.height() * 1.3f); }
 // Grid top: centred a little lower on screens taller than 16:9.
 inline float top(float height) { return grid_top + std::max(0.0f, (height - 900.0f) * 0.5f); }
 // A start page cell spanning `columns` x `rows`.

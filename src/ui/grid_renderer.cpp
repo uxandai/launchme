@@ -179,6 +179,13 @@ void Renderer::drawGrid() {
                        color(0.92f, 0.92f, 0.92f, (i == selected_ ? 1.0f : 0.74f) * card.opacity), i == selected_, DWRITE_TEXT_ALIGNMENT_CENTER);
         }
         if (pinned) target_->PopAxisAlignedClip();
+        // The rows fade out before the screen's foot, so the button hints never sit on a cover.
+        if (status_shade_ && context_->screen == ScreenMode::library) {
+            status_shade_->SetStartPoint(D2D1::Point2F(0, viewport_.height - 150));
+            status_shade_->SetEndPoint(D2D1::Point2F(0, viewport_.height - 40));
+            status_shade_->SetOpacity(1);
+            target_->FillRectangle(D2D1::RectF(0, viewport_.height - 150, width, viewport_.height), status_shade_.Get());
+        }
     }
     target_->SetTransform(frame);
     if (!carousel) drawScrollLetter();

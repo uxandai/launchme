@@ -23,6 +23,10 @@ struct AppSettings {
     bool windowed = false; // Tryb TV in a window (F11) instead of full screen.
     // Start in Tryb TV (the console layouts below) instead of the desktop window (src/app/desktop*.cpp).
     bool launch_tv_mode = false;
+    // Tryb TV on a handheld's small screen (Steam Deck, ROG Ally, Legion Go): everything a quarter
+    // larger (Renderer::setHandheld: a 1280x720 canvas instead of 1600x900).
+    bool handheld_mode = false;
+    bool handheld_detected = false; // The first start looked at the hardware once (handheld::detect).
     bool pad_cursor = true; // Tryb TV: L3 + R3 turns the pad into a mouse (left stick moves, R2 clicks, L2 goes back).
     bool desktop_platform_badges = false;     // The desktop window's posters: the store's or console's mark top right.
     bool desktop_gray_uninstalled = false;    // ...and games not installed in black and white.
@@ -264,6 +268,15 @@ struct AppSettings {
     // Installing a Steam game: Launchme's dialog picks the library (with its free space) instead of
     // Steam's install window.
     bool steam_install_dialog = true;
+    // A GOG game started here gets comet (an open GOG Galaxy service) with the linked account:
+    // achievements, stats and leaderboards without Galaxy (src/store/gog_comet.hpp).
+    bool gog_comet = true;
+    // Linux: GOG Galaxy's stand-in service added to a GOG game's Wine/Proton prefix before it starts
+    // (src/store/gog_galaxy_service.hpp). On Windows the service is installed once, by hand.
+    bool gog_galaxy_service = true;
+    // GOG Galaxy's own in-game overlay (friends, chat, invitations) in GOG games, through comet
+    // (src/store/gog_comet.hpp); fetched once from GOG when switched on.
+    bool gog_overlay = false;
     // Optional out-of-process Steam features; changing the backend takes effect on restart.
     bool aurelia = false;
     bool aurelia_intro_done = false;
@@ -433,6 +446,7 @@ struct AppSettings {
     enum class EmulationSource { roms, steam };
     EmulationSource emulation_source = EmulationSource::roms;
     std::filesystem::path emulation_roms; // Empty: the one ES-DE or EmuDeck names.
+    std::vector<std::filesystem::path> emulation_roms_extra; // More ROM folders (other drives), scanned the same way.
     // Ustawienia > Biblioteka > Emulacja (src/library/emulators.hpp): an emulator's program and its
     // arguments set by hand (emulator ID -> empty fields: found on its own, its default), and the
     // emulator a system folder starts with (system -> emulator ID; absent: the first one found).

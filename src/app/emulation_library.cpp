@@ -15,7 +15,7 @@ using namespace settings_ui;
 
 bool Launcher::romLibraryActive() const {
     return settings_.emulation_source == AppSettings::EmulationSource::roms && emulation_setup_ &&
-        (!emulation_setup_->paths.roms.empty() || std::any_of(emulation_setup_->rules.begin(), emulation_setup_->rules.end(),
+        (!emulation_setup_->paths.roms.empty() || !emulation_setup_->extra_roms.empty() || std::any_of(emulation_setup_->rules.begin(), emulation_setup_->rules.end(),
                                                           [](const auto& rule) { return !rule.folder.empty(); }));
 }
 
@@ -30,6 +30,7 @@ void Launcher::startRomScan() {
     }
     rom_scanning_ = true;
     const auto folder = settings_.emulation_roms;
+    const auto extra = settings_.emulation_roms_extra;
     const bool scan_games = settings_.emulation_source == AppSettings::EmulationSource::roms;
     const bool hidden = settings_.show_private;
     // The emulators chosen in Ustawienia → Emulacja: found again with the setup (src/library/emulators.hpp).
@@ -37,9 +38,10 @@ void Launcher::startRomScan() {
     for (const auto& [id, chosen] : settings_.emulator_overrides) choices.overrides[id] = {chosen.program, chosen.arguments};
     choices.systems = settings_.system_emulator;
     choices.roms = settings_.system_roms;
-    work_.start([alive = alive_, window = hwnd_, generation, folder, scan_games, hidden, choices = std::move(choices),
+    work_.start([alive = alive_, window = hwnd_, generation, folder, extra, scan_games, hidden, choices = std::move(choices),
                  environment = emulation_environment_]() mutable {
         auto setup = std::make_shared<emulation_scan::Setup>(emulation_scan::load(environment ? environment() : emulation_scan::systemEnvironment(), folder, std::move(choices)));
+        setup->extra_roms = extra;
         auto games = std::make_shared<std::vector<Game>>();
         auto counts = std::make_shared<std::map<std::wstring, size_t>>();
         if (scan_games) {

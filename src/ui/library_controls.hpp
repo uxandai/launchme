@@ -1,5 +1,6 @@
 #pragma once
 #include "category_menu.hpp"
+#include "grid_layout.hpp"
 #include "settings_view.hpp"
 #include "../library/view_options.hpp"
 #include <cmath>
@@ -37,7 +38,7 @@ struct Layout {
     static constexpr float row_step = 53, toggle_gap = 12, filters_width = 300;
     settings_ui::Rect views() const { return {width - 64 - 46, 32, width - 64, 78}; }
     settings_ui::Rect search() const { const auto v = views(); return {v.left - 12 - 46, 32, v.left - 12, 78}; }
-    settings_ui::Rect filters() const { const auto s = search(); return {s.left - 12 - filters_width, 32, s.left - 12, 78}; }
+    settings_ui::Rect filters() const { const auto s = search(); return {s.left - 12 - library_tabs::filtersWidth(width), 32, s.left - 12, 78}; }
     settings_ui::Rect back() const { return {16, 35, 52, 71}; }
     settings_ui::Rect button(int index) const { return index == back_button ? back() : index == search_button ? search() : index == views_button ? views() : filters(); }
     // The search field unfolds into the free line under the top bar.

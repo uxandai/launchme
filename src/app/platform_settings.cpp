@@ -165,6 +165,18 @@ void Launcher::pcSettingsRows() {
             [&](const auto& entry) { return entry.first.starts_with(prefix); });
         add({Id::pc_excluded, Control::action, tr(L"Wykluczone gry"),
             tr(L"Niewidoczne także w wyszukiwaniu i pod Ctrl+H.") + std::wstring(L" · ") + std::to_wstring(excluded), tr(L"Zarządzaj")});
+        if (is_gog) {
+            // Comet: the games' Galaxy features with this account, without the Galaxy client.
+            Row comet{Id::gog_comet, Control::toggle, tr(L"Osiągnięcia bez Galaxy"),
+                tr(L"Gra GOG uruchomiona z Launchme dostaje Comet (otwarty zamiennik usługi GOG Galaxy) z połączonym kontem: osiągnięcia, statystyki i rankingi trafiają na konto GOG. Pobierany raz, około 14 MB. Gdy Galaxy działa, odpowiada samo."),
+                {}, settings_.gog_comet};
+            comet.lines = 3;
+            add(std::move(comet));
+            std::vector<Row> service;
+            gogOverlayRow(service);
+            gogGalaxyServiceRow(service);
+            for (auto& row : service) add(std::move(row));
+        }
         if (connected) add({is_gog ? Id::gog_logout : Id::epic_logout, Control::action, tr(L"Połączenie konta"),
             tr(L"Usuń lokalną sesję i bibliotekę kontową."), tr(L"Wyloguj")});
         return;
@@ -334,6 +346,14 @@ bool Launcher::pcSettingsActivate(const Row& row) {
     // Store accounts: sync and sign-out, the website imports.
     else if (row.id == Id::gog_refresh) gogCommand(gog::Command::sync);
     else if (row.id == Id::gog_logout) gogCommand(gog::Command::logout);
+    else if (row.id == Id::gog_galaxy_service) {
+        if (row.locked) { navigationBoundary(); return true; }
+        gogGalaxyServiceActivate();
+    }
+    else if (row.id == Id::gog_overlay) {
+        if (row.locked) { navigationBoundary(); return true; }
+        gogOverlayActivate();
+    }
     else if (row.id == Id::epic_refresh) epicCommand(epic::Command::sync);
     else if (row.id == Id::epic_logout) epicCommand(epic::Command::logout);
     else if (row.id == Id::amazon_helper) {

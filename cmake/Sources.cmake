@@ -205,6 +205,7 @@ set(LAUNCHME_APP_SOURCES
     src/store/launcher_install.cpp
     src/store/xbox_account.cpp
     src/app/gog_install.cpp
+    src/app/gog_comet.cpp
     src/app/my_games.cpp
     src/app/my_games_identify.cpp
     src/app/file_browser.cpp
@@ -220,6 +221,8 @@ set(LAUNCHME_APP_SOURCES
     src/store/gog_config.cpp
     src/store/gog_vault.cpp
     src/store/gog_service.cpp
+    src/store/gog_comet.cpp
+    src/store/gog_galaxy_service.cpp
     src/store/gog_install.cpp
     src/store/gog_install_native.cpp
     src/net/http_download.cpp
@@ -310,6 +313,7 @@ set(LAUNCHME_APP_SOURCES
     src/library/metadata_sources.cpp
     src/library/hardware_rating.cpp
     src/platform/hardware_profile.cpp
+    src/platform/handheld.cpp
     src/app/hardware_check.cpp
     src/library/binary_kv.cpp
     src/library/steam_achievements.cpp

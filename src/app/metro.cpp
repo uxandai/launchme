@@ -76,6 +76,9 @@ void Launcher::rebuildMetro(bool preserve_background) {
     //             [3rd     ][  game   ][ (poster, ]
     //             [Bib][Ust][PC ][Emu ][  tall)  ]
     // Towarzyszka and Glance (while on) take the PC and Emulacja cells; their pages stay in the tabs.
+    // Tryb handhelda: three columns, so the page fits a small screen whole; the installation (or
+    // newest game) takes the bottom row's last cell, the shortcuts share the cell before it.
+    const bool compact = renderer_.handheld();
     if (!categories_.empty()) {
         pages.push_back({0, 0, 0, 0, 0, categories_[0].id});
         page = &pages.back();
@@ -136,13 +139,20 @@ void Launcher::rebuildMetro(bool preserve_background) {
                 tile.source_id = categories_[*category].id;
                 middle.emplace_back(std::move(tile), role);
             }
-        if (middle.size() > 4) middle.resize(4);
-        for (size_t i = 0; i < middle.size(); ++i)
-            if (middle.size() <= 2) add(middle[i].first, middle[i].second, metro_layout::cell(0, 1 + static_cast<int>(i), 2, middle.size() == 1 ? 2 : 1, 1));
-            else add(middle[i].first, middle[i].second, metro_layout::half(0, 1 + static_cast<int>(i / 2), 2, static_cast<int>(i % 2)));
-        if (const auto* install = metroInstallGame();
-            install && std::none_of(recent.begin(), recent.end(), [&](const Game* game) { return gameKey(*game) == gameKey(*install); }))
-            add(*install, Role::install, metro_layout::cell(0, 3, 0, 1, 3));
+        const auto* install = metroInstallGame();
+        if (install && std::any_of(recent.begin(), recent.end(), [&](const Game* game) { return gameKey(*game) == gameKey(*install); })) install = nullptr;
+        if (compact && install) {
+            if (middle.size() > 2) middle.resize(2);
+            for (size_t i = 0; i < middle.size(); ++i)
+                add(middle[i].first, middle[i].second, middle.size() == 1 ? metro_layout::cell(0, 1, 2) : metro_layout::half(0, 1, 2, static_cast<int>(i)));
+            add(*install, Role::install, metro_layout::cell(0, 2, 2));
+        } else {
+            if (middle.size() > 4) middle.resize(4);
+            for (size_t i = 0; i < middle.size(); ++i)
+                if (middle.size() <= 2) add(middle[i].first, middle[i].second, metro_layout::cell(0, 1 + static_cast<int>(i), 2, middle.size() == 1 ? 2 : 1, 1));
+                else add(middle[i].first, middle[i].second, metro_layout::half(0, 1 + static_cast<int>(i / 2), 2, static_cast<int>(i % 2)));
+            if (install) add(*install, Role::install, metro_layout::cell(0, 3, 0, 1, 3));
+        }
     }
     // One page per further category, side by side.
     for (size_t index = 1; index < categories_.size(); ++index) {
@@ -419,7 +429,7 @@ void Launcher::bindMetroArt(size_t index, bool replace) {
         } else requestArt(game, CoverMessage::Kind::cover);
     };
     if (!isGame(game)) { cover(); return; } // Store and console logos.
-    const bool wide = metro_layout::landscape(role);
+    const bool wide = metro_layout::wideTile(role, metro_tiles_[index].rect);
     const ImageBytes shaped = found ? (wide ? found->landscape : found->poster) : ImageBytes{};
     if (shaped) {
         if (replace || !renderer_.hasPoster(index)) renderer_.setPoster(index, shaped);
@@ -459,7 +469,7 @@ void Launcher::metroArtArrived(const std::string& key, CoverMessage::Kind kind) 
         }
         if (gameKey(cards_[i].game) != key) continue;
         if (kind == CoverMessage::Kind::poster || kind == CoverMessage::Kind::landscape) bindMetroArt(i, true);
-        else if (kind == CoverMessage::Kind::hero && metro_layout::landscape(role)) bindMetroArt(i); // A wide tile's stand-in.
+        else if (kind == CoverMessage::Kind::hero && metro_layout::wideTile(role, metro_tiles_[i].rect)) bindMetroArt(i); // A wide tile's stand-in.
     }
     InvalidateRect(hwnd_, nullptr, FALSE);
 }

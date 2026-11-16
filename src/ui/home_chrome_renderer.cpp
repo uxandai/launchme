@@ -96,12 +96,15 @@ void Renderer::drawFooter() {
         const auto platform = footerShowsPlatform() ? activePlatformName(game) : std::wstring{};
         const float mark_room = platform.empty() ? 0.0f : 150.0f;
         const float name_width = std::min(std::max(0.0f, right - 57 - mark_room), std::ceil(textAdvance(game.name, category_font_.Get())));
-        textLine(game.name, 57, cy, name_width + 2, category_font_.Get(), color(0.96f, 0.96f, 0.96f));
+        // The bottom bar (Home) rises over this line: the name makes way as it comes.
+        const float shown = 1.0f - smoothFade(std::min(1.0f, context_->quick_progress * 2.0f));
+        if (shown < 0.004f) return;
+        textLine(game.name, 57, cy, name_width + 2, category_font_.Get(), color(0.96f, 0.96f, 0.96f, shown));
         if (!platform.empty()) {
             const float x = 57 + name_width + 22;
-            brush(color(1, 1, 1, 0.28f));
+            brush(color(1, 1, 1, 0.28f * shown));
             target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(x - 11, cy + 1), 2.2f, 2.2f), solid_.Get());
-            drawPlatformMark(platform, x, cy, 22, std::max(0.0f, std::min(120.0f, right - x)), 1.0f, toast_font_.Get());
+            drawPlatformMark(platform, x, cy, 22, std::max(0.0f, std::min(120.0f, right - x)), shown, toast_font_.Get());
         }
         return;
     }

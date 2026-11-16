@@ -31,14 +31,14 @@ enum class Id { font, home_layout, ui_accent, accent, uninstalled, emulation, mu
                  glow_level, glow_pulse, glow_trace, screenscraper, screenscraper_open, game_videos, video_folder, video_folder_reset, screenscraper_test, screenscraper_clear, video_delay, video_volume, steam_trailers, emulation_names, emulation_rom_art, trailer_space, background_grid, background_grid_style, psfive_size, psfive_clock, custom_games,
                  // Settings 2.0.
                   glass, input_hints, hint_glyphs, audio_sources, system_volume, bt_audio, bt_devices, windows_sound, controller_pads, collections_open,
-                  steam_silent_launch, steam_hide_launch_window, steam_account_switch, steam_install_dialog, bulk_covers, screen_transitions, glance,
+                  steam_silent_launch, steam_hide_launch_window, steam_account_switch, steam_install_dialog, gog_comet, gog_galaxy_service, gog_overlay, bulk_covers, screen_transitions, glance,
                   // Towarzyszka (Asystent).
                   companion, companion_look, companion_model, companion_token, companion_host, companion_test,
                   companion_voice, companion_voice_key, companion_voice_model, companion_voice_style, companion_voice_test,
                   companion_memory, companion_notes, companion_semantic_memory, companion_forget, companion_provider, companion_ollama_model, companion_model_info,
                   companion_photos, companion_photo_folder, companion_guests, companion_gamification,
                   // Interfejs → Tryb TV: start in it instead of the desktop window.
-                  launch_tv_mode,
+                  launch_tv_mode, handheld_mode,
                   // Dostosuj wygląd → Inne: Tryb TV's CRT filter (src/ui/crt_view.hpp).
                   crt, crt_mask, crt_warp_x, crt_warp_y, crt_mask_level, crt_scanlines, crt_glow, crt_phosphor,
                   pad_cursor, // Interfejs → Tryb TV: L3 + R3 as a mouse.
@@ -129,7 +129,7 @@ enum class Id { font, home_layout, ui_accent, accent, uninstalled, emulation, mu
                    // Interfejs → Tryb TV: the special tiles in the first row; the "+" tile (Dodaj grę).
                    home_tiles, add_game_tile,
                    // Opcje układu: PSfive's details under the row; Metro's light theme. Okna: the game menu as a dialog.
-                   psfive_details, metro_light, snitch_colour_icons, menu_dialog, emulation_source, emulation_folder, emulation_folder_reset,
+                   psfive_details, metro_light, snitch_colour_icons, menu_dialog, emulation_source, emulation_folder, emulation_folder_reset, emulation_folder_extra, emulation_folder_add,
                    // Biblioteka → Emulacja (src/app/emulation_settings.cpp): a system's row (Row::key its folder),
                    // the other systems' fold; a system's page: its emulator, how it was found, the program
                    // chosen by hand and its reset, the launch arguments and the command they make.

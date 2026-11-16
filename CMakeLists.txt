@@ -276,8 +276,9 @@ launchme_executable(gog_client_setup
     LIBS winhttp crypt32 shell32 ole32 bcrypt)
 launchme_executable(gog_account_probe
     SOURCES tools/gog_account_probe.cpp src/store/gog_config.cpp src/store/gog_api.cpp src/store/gog_vault.cpp
+        src/store/gog_service.cpp src/store/gog_comet.cpp src/platform/hashing.cpp ${LAUNCHME_PC_SCAN_SOURCES}
         ${LAUNCHME_WEB_SOURCES} ${LAUNCHME_GOG_INSTALL_SOURCES}
-    LIBS winhttp crypt32 shell32 ole32 bcrypt)
+    LIBS winhttp crypt32 shell32 ole32 bcrypt advapi32 ws2_32)
 launchme_executable(image_probe
     SOURCES tools/image_probe.cpp src/net/http.cpp
     LIBS windowscodecs winhttp ole32)
@@ -292,6 +293,7 @@ if(BUILD_TESTING)
         SOURCES tests/browser_window_tests.cpp src/ui/browser_window.cpp DEFINES LAUNCHME_UI_TEST)
     set_tests_properties(evergreen_browser_lifecycle PROPERTIES TIMEOUT 90 RUN_SERIAL TRUE SKIP_RETURN_CODE 77)
     launchme_executable(glance_tests TEST glance_sources_and_cache SOURCES tests/glance_tests.cpp)
+    launchme_executable(handheld_tests TEST handheld_detection SOURCES tests/handheld_tests.cpp src/platform/handheld.cpp LIBS advapi32)
     launchme_executable(tarot_tests TEST tarot_deck_wish_and_picks SOURCES tests/tarot_tests.cpp)
     launchme_executable(store_hub_tests TEST store_hub_launchers_promotions_and_grid SOURCES tests/store_hub_tests.cpp)
     launchme_executable(updater_tests TEST updater_release_package_and_swap SOURCES tests/updater_tests.cpp)
@@ -371,8 +373,8 @@ if(BUILD_TESTING)
         LIBS winhttp bcrypt shell32 ole32)
     launchme_executable(gog_account_tests TEST gog_account_sync_and_privacy
         SOURCES tests/gog_account_tests.cpp src/store/gog_api.cpp src/store/gog_config.cpp src/store/gog_vault.cpp
-            src/store/gog_service.cpp ${LAUNCHME_PC_SCAN_SOURCES} ${LAUNCHME_WEB_SOURCES} ${LAUNCHME_GOG_INSTALL_SOURCES}
-        LIBS winhttp crypt32 bcrypt shell32 ole32 advapi32)
+            src/store/gog_service.cpp src/store/gog_comet.cpp src/store/gog_galaxy_service.cpp src/platform/hashing.cpp ${LAUNCHME_PC_SCAN_SOURCES} ${LAUNCHME_WEB_SOURCES} ${LAUNCHME_GOG_INSTALL_SOURCES}
+        LIBS winhttp crypt32 bcrypt shell32 ole32 advapi32 ws2_32 miniz)
     set_tests_properties(gog_account_sync_and_privacy epic_account_and_clientless_contracts PROPERTIES TIMEOUT 60)
     launchme_executable(image_validation_tests TEST controller_png_transparency
         SOURCES tests/image_validation_tests.cpp

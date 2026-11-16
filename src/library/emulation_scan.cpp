@@ -631,7 +631,7 @@ Setup load(const Environment& environment, const std::filesystem::path& roms_ove
         rule.glob = builtinGlob(entry);
         rule.core = std::wstring(entry.core);
         const auto own = setup.choices.roms.find(text_encoding::utf8(rule.system));
-        if (own != setup.choices.roms.end() && own->second.is_absolute()) rule.folder = own->second.lexically_normal();
+        if (own != setup.choices.roms.end() && own->second.is_absolute()) { rule.folder = own->second.lexically_normal(); rule.own = true; }
         else if (!setup.paths.roms.empty()) rule.folder = setup.paths.roms / rule.system;
         rule.present = folderExists(rule.folder);
         for (const auto id : entry.emulators) if (!id.empty()) rule.emulators.emplace_back(id);
@@ -786,7 +786,20 @@ Result scan(const Setup& setup, bool show_hidden, const Cancelled& cancelled) {
         return static_cast<int>(order.size());
     };
     std::unordered_map<std::wstring, std::pair<size_t, std::filesystem::path>> unpacked; // Game folder -> its entry in `found`.
-    for (const auto& rule : setup.rules) {
+    // The setup's systems, then the same systems under each further ROM folder (`found` points into
+    // this list, so it is complete before the walk).
+    std::vector<Rule> rules;
+    rules.reserve(setup.rules.size() * (1 + setup.extra_roms.size()));
+    rules.insert(rules.end(), setup.rules.begin(), setup.rules.end());
+    for (const auto& extra : setup.extra_roms) {
+        if (extra.empty() || romKey(extra) == romKey(setup.paths.roms)) continue;
+        for (const auto& rule : setup.rules) {
+            if (rule.own) continue;
+            auto copy = rule; copy.folder = extra / rule.system; copy.present = folderExists(copy.folder);
+            rules.push_back(std::move(copy));
+        }
+    }
+    for (const auto& rule : rules) {
         if (cancelled && cancelled()) break;
         if (rule.folder.empty() || !folderExists(rule.folder)) continue;
         const bool switch_rule = rule.system == L"switch" || rule.system == L"switch2";

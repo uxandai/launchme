@@ -241,6 +241,8 @@ void Launcher::launchGame(const Game& original, bool via_steam) {
     pending_game_ = active;
     pending_launch_ = true;
     launch_age_ = 0;
+    // A GOG game: comet answers its Galaxy calls (achievements, stats) from now on.
+    if (action.kind == ActionKind::play) startGogComet(active);
     dismissMenu();
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
@@ -256,6 +258,10 @@ void Launcher::finishLaunch() {
 #ifndef _WIN32
     // A Windows program runs through umu/Proton/Wine with the game's options in its prefix.
     if (compatGame(pending_game_)) action.compat = launch_options_store::compatLaunch(pending_game_);
+    if (action.compat && action.kind == ActionKind::play && gogCometWanted(pending_game_)) {
+        gogGalaxyServiceIntoPrefix(*action.compat);
+        gogOverlayWrap(action); // GOG Galaxy's overlay: galaxy-helper starts the game and attaches it.
+    }
     // Zapisuj logi: Proton's or Wine's own log too (the runner's output is always kept).
     if (action.compat && (launchFlags(pending_game_) & launch_flag::log) && !action.compat->options.log) {
         auto logged = std::make_shared<CompatLaunch>(*action.compat);

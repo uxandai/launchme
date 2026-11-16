@@ -25,7 +25,7 @@ workers and comes back as posted messages.
 | `src/app/` | `Launcher` (one class, declared in `launcher.hpp`) split by feature into many `.cpp` files, plus feature state headers (`companion_state.hpp`, `screensaver_state.hpp`, `update_state.hpp`, `tour_state.hpp`, `compat_state.hpp`, `launcher_queues.hpp`, `launcher_backends.hpp`) and private helper headers (`launcher_internal.hpp`, `companion_app_internal.hpp`, `compat_internal.hpp`). |
 | `src/ui/` | `Renderer` (declared in `renderer.hpp`, one `*_renderer.cpp` per screen or part) and pure geometry and state: `*_view.hpp`, `*_layout.hpp`, `view_context.hpp`. |
 | `src/library/` | Libraries and stores on disk (Steam, GOG, Epic via Heroic/Legendary, Battle.net, EA, Ubisoft, DRM-free folders, MultiMC/Prism, Lutris), collections, view options, the game index, Tarot's model, launch options, Ludusavi. |
-| `src/store/` | Store backends that talk to services or helpers: GOG and Epic APIs and installers, EA/Battle.net imports, Amazon (Nile), Xbox, Aurelia. |
+| `src/store/` | Store backends that talk to services or helpers: GOG and Epic APIs and installers, GOG's Galaxy service for games through comet (`gog_comet.*`), EA/Battle.net imports, Amazon (Nile), Xbox, Aurelia. |
 | `src/net/` | HTTP (`http.hpp` with a WinHTTP and a curl transport), JSON, Glance, ProtonDB, web search, and the AI companion (`companion*.cpp`: prompts, replies, transport, memory, mind, social model). |
 | `src/artwork/` | The cover cache, SteamGridDB, store art, image codecs and compaction. |
 | `src/platform/` | Operating-system services: settings (`user_config.*`), processes and launching, audio, devices, power, updates, files, Proton/Wine (`wine_runner.*`); `*_windows.cpp` / `*_linux.cpp` pairs where they differ. |

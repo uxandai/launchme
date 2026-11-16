@@ -921,7 +921,8 @@ void Renderer::updateViewport() {
     GetClientRect(hwnd_, &rect);
     const float width = static_cast<float>(std::max(1L, rect.right));
     const float height = static_cast<float>(std::max(1L, rect.bottom));
-    viewport_.scale = std::max(0.42f, std::min(width / 1600.0f, height / 900.0f));
+    const float base_width = handheld_ ? 1280.0f : 1600.0f, base_height = handheld_ ? 720.0f : 900.0f;
+    viewport_.scale = std::max(0.42f, std::min(width / base_width, height / base_height));
     viewport_.width = width / viewport_.scale;
     viewport_.height = height / viewport_.scale;
 }

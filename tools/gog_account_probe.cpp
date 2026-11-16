@@ -2,8 +2,52 @@
 #include "../src/platform/user_config.hpp"
 #include "../src/net/json.hpp"
 #include <iostream>
+#include <mutex>
+#include <regex>
+#include <thread>
+
+namespace {
+// --comet: the account's comet started as Launchme starts it, its log shown with every long
+// token-like run masked, the port watched, then ended. Never prints credentials.
+int cometProbe() {
+    auto service = gog::makeService(gog::makeBackend(), gog::makeVault(userConfigDirectory() / L"accounts" / L"gog.session"));
+    service->submit(gog::Command::restore);
+    std::optional<gog::Snapshot> state;
+    for (int i = 0; i < 600; ++i) {
+        if (auto next = service->take()) state = std::move(next);
+        if (state && state->state != gog::State::syncing && state->state != gog::State::preparing && state->state != gog::State::verifying) break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    std::cout << "account_state=" << (state ? static_cast<int>(state->state) : -1) << "; failure=" << (state ? static_cast<int>(state->failure) : -1)
+              << "; games=" << (state ? state->games.size() : 0) << '\n';
+    if (!state || state->account.empty()) return 1;
+    const auto exe = gog::prepareComet(userConfigDirectory(), [] { return false; });
+    std::cout << "comet_binary=" << !exe.empty() << "; port_busy_before=" << gog::galaxyPortBusy() << '\n';
+    if (exe.empty()) return 1;
+    std::mutex print;
+    const std::regex secret("[A-Za-z0-9_\\-\\.]{32,}");
+    gog::CometRequest request{exe, userConfigDirectory() / L"gog" / L"comet"};
+    request.unlocked = [&](std::wstring) { std::lock_guard lock(print); std::cout << "UNLOCK seen\n"; };
+    request.log = [&](std::string_view line) {
+        std::lock_guard lock(print); std::cout << "comet| " << std::regex_replace(std::string(line), secret, "<masked>") << '\n';
+    };
+    auto answer = service->comet(std::move(request));
+    if (answer.wait_for(std::chrono::seconds(60)) != std::future_status::ready) { std::cout << "comet_request=timeout\n"; return 1; }
+    auto comet = answer.get();
+    std::cout << "comet_started=" << (comet != nullptr) << '\n';
+    if (!comet) return 1;
+    for (int second = 0; second < 40; ++second) {
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+        if (second % 10 == 9) { std::lock_guard lock(print); std::cout << "t=" << second + 1 << "s running=" << comet->running() << " port_busy=" << gog::galaxyPortBusy() << '\n'; }
+    }
+    comet.reset();
+    std::cout << "comet_stopped; port_busy_after=" << gog::galaxyPortBusy() << '\n';
+    return 0;
+}
+}
 
 int main(int argc, char** argv) {
+    if (argc == 2 && std::string_view(argv[1]) == "--comet") return cometProbe();
     // Opt-in diagnostic: run with Launchme closed. Never print identifiers,
     // URLs, credentials, titles, response bodies or server-provided errors.
     auto vault = gog::makeVault(userConfigDirectory() / L"accounts" / L"gog.session");

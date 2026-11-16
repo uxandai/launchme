@@ -183,6 +183,8 @@ constexpr FlagSetting flag_settings[] = {
     {"show_uninstalled", &AppSettings::show_uninstalled},
     {"windowed", &AppSettings::windowed},
     {"launch_tv_mode", &AppSettings::launch_tv_mode},
+    {"handheld_mode", &AppSettings::handheld_mode},
+    {"handheld_detected", &AppSettings::handheld_detected},
     {"pc_sources_detected", &AppSettings::pc_sources_detected},
     {"autostart", &AppSettings::autostart},
     {"low_memory", &AppSettings::low_memory},
@@ -216,6 +218,9 @@ constexpr FlagSetting flag_settings[] = {
     {"steam_hide_launch_window", &AppSettings::steam_hide_launch_window},
     {"steam_account_switch", &AppSettings::steam_account_switch},
     {"steam_install_dialog", &AppSettings::steam_install_dialog},
+    {"gog_comet", &AppSettings::gog_comet},
+    {"gog_galaxy_service", &AppSettings::gog_galaxy_service},
+    {"gog_overlay", &AppSettings::gog_overlay},
     {"game_videos", &AppSettings::game_videos},
     {"steam_trailers", &AppSettings::steam_trailers},
     {"emulation_names", &AppSettings::emulation_names},
@@ -390,6 +395,13 @@ bool parseExtraSetting(AppSettings& settings, std::string_view key, std::string_
     if (key == "emulation_roms") {
         const auto decoded = text_encoding::wide(value);
         if (std::filesystem::path(decoded).is_absolute()) settings.emulation_roms = decoded;
+        return true;
+    }
+    if (key == "emulation_roms_extra") {
+        const std::filesystem::path decoded = text_encoding::wide(value);
+        if (decoded.is_absolute() && settings.emulation_roms_extra.size() < 32 &&
+            std::find(settings.emulation_roms_extra.begin(), settings.emulation_roms_extra.end(), decoded) == settings.emulation_roms_extra.end())
+            settings.emulation_roms_extra.push_back(decoded);
         return true;
     }
     return parseEmulatorSetting(settings, key, value);
@@ -845,6 +857,8 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
     output << "drawer_opacity=" << settings.drawer.opacity << '\n'
            << "windowed=" << settings.windowed << '\n'
            << "launch_tv_mode=" << settings.launch_tv_mode << '\n'
+           << "handheld_mode=" << settings.handheld_mode << '\n'
+           << "handheld_detected=" << settings.handheld_detected << '\n'
            << "pad_cursor=" << settings.pad_cursor << '\n'
            << "pc_sources_detected=" << settings.pc_sources_detected << '\n'
            << "autostart=" << settings.autostart << '\n'
@@ -984,6 +998,7 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
     output << "snitch_colour_icons=" << settings.snitch_colour_icons << '\n';
     output << "emulation_source=" << (settings.emulation_source == AppSettings::EmulationSource::steam ? "steam" : "roms") << '\n';
     output << "emulation_roms=" << text_encoding::utf8Lenient(settings.emulation_roms.wstring()) << '\n';
+    for (const auto& folder : settings.emulation_roms_extra) output << "emulation_roms_extra=" << text_encoding::utf8Lenient(folder.wstring()) << '\n';
     for (const auto& [system, folder] : settings.system_roms)
         if (emulatorKey(system) && folder.is_absolute() && folder.wstring().find_first_of(L"\r\n") == std::wstring::npos)
             output << "system_roms." << system << '=' << text_encoding::utf8Lenient(folder.wstring()) << '\n';
@@ -1060,6 +1075,9 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
     output << "hide_while_playing=" << settings.hide_while_playing << '\n';
     output << "steam_account_switch=" << settings.steam_account_switch << '\n';
     output << "steam_install_dialog=" << settings.steam_install_dialog << '\n';
+    output << "gog_comet=" << settings.gog_comet << '\n';
+    output << "gog_galaxy_service=" << settings.gog_galaxy_service << '\n';
+    output << "gog_overlay=" << settings.gog_overlay << '\n';
     output << "aurelia=" << settings.aurelia << '\n' << "aurelia_intro_done=" << settings.aurelia_intro_done << '\n';
     for (const auto& id : settings.aurelia_standalone) output << "aurelia_standalone=" << id << '\n';
     for (const auto& id : settings.aurelia_cloud_skip) output << "aurelia_cloud_skip=" << id << '\n';

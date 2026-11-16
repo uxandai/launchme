@@ -156,7 +156,10 @@ inline std::pair<size_t, size_t> visibleRange(size_t count, float width, float h
 // LB/RB (PgUp/PgDn) hints (hint_room: Renderer::drawCategoryStrip).
 namespace library_tabs {
 constexpr float top = 35, height = 40, hint_room = 64, left = 72 + hint_room;
-inline float right(float width) { return width - 504 - hint_room; }
+// The Filtry button beside the tabs (library_ui::Layout::filters): narrower on a small canvas
+// (Tryb handhelda), so the three tabs keep room for their names.
+inline float filtersWidth(float width) { return std::clamp(width * 0.19f, 230.0f, 300.0f); }
+inline float right(float width) { return width - 204 - filtersWidth(width) - hint_room; }
 inline float slot(float width) { return std::clamp((right(width) - left) / 3, 190.0f, 320.0f); } // Between tab centres.
 inline float center(float width) { return left + 1.5f * slot(width); }
 inline float focusOffset(float current) { return std::clamp(current, 0.0f, 1.0f) - 1; }
@@ -176,7 +179,7 @@ inline std::optional<int> hit(float x, float y, float width, int current, float 
 // top in the middle of the screen, three tabs as in the library (the first one at the left, later
 // selections in the middle).
 namespace home {
-inline float slot(float width) { return std::clamp(width * 0.11f, 160.0f, 210.0f); }
+inline float slot(float width) { return std::clamp(width * 0.18f, 210.0f, 250.0f); } // Room for "OSTATNIO GRANE" and its count.
 inline float center(float width) { return width * 0.5f; }
 inline settings_ui::Rect tab(float offset, float width, float current) {
     const float c = center(width) + (offset + focusOffset(current)) * slot(width), half = slot(width) * 0.5f - 10;

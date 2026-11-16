@@ -361,6 +361,9 @@ void Launcher::buildSettingsRows() {
             add({Id::launch_tv_mode, Control::toggle, tr(L"Uruchamiaj w trybie TV"),
                 tr(L"Po starcie pełny ekran z układem powyżej zamiast okna desktopowego. Przełączysz też ikoną telewizora lub w menu zasilania."),
                 {}, settings_.launch_tv_mode});
+            add({Id::handheld_mode, Control::toggle, tr(L"Tryb handhelda"),
+                tr(L"Tryb TV na małym ekranie (Steam Deck, ROG Ally, Legion Go): napisy, okładki i przyciski o jedną czwartą większe."),
+                {}, settings_.handheld_mode});
             add({Id::pad_cursor, Control::toggle, tr(L"Kursor na padzie (L3 + R3)"),
                 tr(L"W trybie TV L3 i R3 wciśnięte razem włączają i wyłączają kursor: lewa gałka go przesuwa, R2 klika, L2 cofa, prawa gałka przewija."),
                 {}, settings_.pad_cursor});
@@ -410,6 +413,9 @@ void Launcher::buildSettingsRows() {
         add({Id::launch_tv_mode, Control::toggle, tr(L"Uruchamiaj w trybie TV"),
             tr(L"Po starcie pełny ekran z układem powyżej zamiast okna desktopowego. Przełączysz też ikoną telewizora lub w menu zasilania."),
             {}, settings_.launch_tv_mode});
+        add({Id::handheld_mode, Control::toggle, tr(L"Tryb handhelda"),
+            tr(L"Tryb TV na małym ekranie (Steam Deck, ROG Ally, Legion Go): napisy, okładki i przyciski o jedną czwartą większe."),
+            {}, settings_.handheld_mode});
         choiceRow(Id::search_art, tr(L"Grafiki w wyszukiwarce"),
                   tr(L"Wyniki wyszukiwania jako kwadratowe okładki, pionowe plakaty albo poziome kafle."),
                   search_arts, static_cast<int>(settings_.search_art));
@@ -1030,9 +1036,11 @@ void Launcher::buildSettingsRows() {
         add({Id::low_memory, Control::toggle, tr(L"Tryb niskiego zużycia RAM"),
             tr(L"Grafiki w rozmiarze z ekranu i mniej trzymanych w pamięci; gdy gra działa, launcher oddaje pamięć."),
             {}, settings_.low_memory});
+#ifdef _WIN32 // Linux keeps artwork as BGRA (the GPU port has no block-compressed textures).
         add({Id::texture_compression, Control::toggle, tr(L"Kompresja grafik (BC1)"),
             tr(L"Okładki i plakaty w pamięci karty graficznej 8 razy mniejsze, loga 4 razy, kosztem odrobiny jakości. W trybie niskiego zużycia RAM także tła."),
             {}, settings_.texture_compression});
+#endif
         section(tr(L"Pomoc"));
         // The version, and the folder with the logs and crash reports a user can send.
         add({Id::about, Control::action, L"Launchme " + diagnostics::version(),

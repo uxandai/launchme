@@ -56,9 +56,13 @@ int LauncherUiTest::pcSettings(HWND window) {
     const auto dispatched_before = dispatched.size();
     app.settingsClick((cog.left + cog.right) * 0.5f, (cog.top + cog.bottom) * 0.5f);
     if (app.settings_state_.platform() != GameSource::gog) return 2002;
-    if (app.settings_rows_.size() != 4) return 2025;
+    if (app.settings_rows_.size() != 7) return 2025;
     if (!gog->commands.empty() || dispatched.size() != dispatched_before) return 2026;
     for (const auto& row : app.settings_rows_) if (row.source != GameSource::gog || row.title.find(L"GOG") != row.title.npos) return 2003;
+    // Osiągnięcia bez Galaxy (comet): on by default, a plain switch.
+    if (!app.settings_.gog_comet || !select(Id::gog_comet)) return 2028;
+    app.settingsActivate(); if (app.settings_.gog_comet || !gog->commands.empty()) return 2029;
+    app.settingsActivate(); if (!app.settings_.gog_comet) return 2030;
     if (!capture(L"pc-settings-gog.png") || !select(Id::gog_refresh)) return 2004;
     app.settingsActivate();
     if (gog->commands != std::vector<gog::Command>{gog::Command::sync} || !epic->commands.empty()) return 2005;
@@ -66,7 +70,7 @@ int LauncherUiTest::pcSettings(HWND window) {
     if (gog->commands.size() != 2 || !epic->commands.empty()) return 2006; // F5 refreshes only the open account.
     if (!select(Id::gog_logout)) return 2007;
     app.settingsActivate();
-    if (!app.gog_state_.account.empty() || app.settings_rows_.size() != 3 || app.settings_state_.platform() != GameSource::gog) return 2008;
+    if (!app.gog_state_.account.empty() || app.settings_rows_.size() != 6 || app.settings_state_.platform() != GameSource::gog) return 2008;
     app.back(); if (!overview() || app.settings_state_.row() != position(GameSource::gog)) return 2009;
     // Pad/keyboard uses Right -> cog -> Enter, and Back restores a scrolled list.
     app.settingsMove(position(GameSource::xbox) - position(GameSource::gog)); const auto parent_scroll = app.settings_state_.offset();

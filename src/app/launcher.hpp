@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../platform/audio.hpp"
+#include "../platform/handheld.hpp"
 #include "../platform/video_player.hpp"
 #include "../platform/background_work.hpp"
 #include "../platform/change_watch.hpp"
@@ -1842,6 +1843,28 @@ private:
     void pollGogInstall();
     void applyGogInstallProgress();
     void gogCommand(gog::Command command);
+    // GOG achievements without Galaxy (src/app/gog_comet.cpp): comet beside a GOG game.
+    bool gogCometWanted(const Game& game) const;
+    void startGogComet(const Game& game);
+    void gogCometPrepared(uint64_t generation, const std::filesystem::path& exe);
+    void gogCometStarted(uint64_t generation, std::shared_ptr<gog::Comet> comet);
+    void tickGogComet();
+    void stopGogComet();
+    // GOG Galaxy's stand-in service (src/store/gog_galaxy_service.hpp): Windows installs or removes it
+    // once (UAC) from the GOG page; Linux adds it to a GOG game's prefix before the game starts.
+    void gogGalaxyServiceRow(std::vector<settings_ui::Row>& rows);
+    void gogGalaxyServiceActivate();
+    void gogGalaxyServiceFinished(bool install, bool ok);
+    void gogGalaxyServiceIntoPrefix(const CompatLaunch& launch);
+    // GOG Galaxy's own overlay through comet (src/app/gog_comet.cpp): fetched when switched on;
+    // Windows starts it as the game opens its session, Linux runs the game through galaxy-helper.
+    bool gogOverlayReady() const;
+    void gogOverlayRow(std::vector<settings_ui::Row>& rows);
+    void gogOverlayActivate();
+    void gogOverlayPrepared(bool ok);
+    void gogOverlaySession(uint64_t generation, uint32_t pid);
+    void gogOverlayWrap(GameAction& action);
+    bool gogOverlayOwnsShiftTab() const; // Shift+Tab belongs to GOG's overlay in its game.
     // User-added games ("Moje gry", src/app/my_games.cpp).
     void loadCustomGames();
     void refreshCustomGames();
@@ -2814,6 +2837,86 @@ private:
     std::unordered_set<std::string> completed_pc_installs_;
     bool gog_initial_ready_ = false;
     bool gog_enable_on_connect_ = false;
+    std::shared_ptr<gog::Comet> gog_comet_;  // Comet for the game below (its session, then a grace).
+    std::string gog_comet_key_;
+    uint64_t gog_comet_generation_ = 0, gog_comet_retire_at_ = 0;
+    gog::GalaxyServiceState gog_galaxy_service_state_ = gog::GalaxyServiceState::unknown;
+    bool gog_galaxy_service_busy_ = false;
+    std::filesystem::path gog_galaxy_service_exe_; // Linux: the stand-in, once fetched (for prefixes).
+    std::shared_ptr<gog::Comet> gog_overlay_; // Windows: GalaxyOverlay.exe beside comet's game.
+    // Is this PC a handheld (first start only); UI tests never read the real hardware.
+    std::function<bool()> handheld_detect_ =
+#ifdef LAUNCHME_UI_TEST
+        [] { return false; };
+#else
+        handheld::detect;
+#endif
+    std::string gog_comet_product_;           // That game's GOG product ID.
+    bool gog_overlay_busy_ = false;           // Being fetched.
+    bool gog_overlay_wrapped_ = false;        // Linux: the game runs through galaxy-helper.
+    // The overlay on disk, its download (comet's binary, the profile), its start for a game's process;
+    // UI tests never download or start it.
+    std::function<bool(const std::filesystem::path&)> gog_overlay_present_ =
+#ifdef LAUNCHME_UI_TEST
+        [](const std::filesystem::path&) { return false; };
+#else
+        [](const std::filesystem::path& root) {
+            return gog::overlayInstalled(root / L"gog" / L"comet")
+#ifndef _WIN32
+                && gog::galaxyHelperInstalled(root)
+#endif
+                ;
+        };
+#endif
+    std::function<bool(const std::filesystem::path&, const std::filesystem::path&, const std::function<bool()>&)> gog_overlay_download_ =
+#ifdef LAUNCHME_UI_TEST
+        [](const std::filesystem::path&, const std::filesystem::path&, const std::function<bool()>&) { return false; };
+#else
+        [](const std::filesystem::path& comet, const std::filesystem::path& root, const std::function<bool()>& cancel) {
+            return gog::downloadOverlay(comet, root / L"gog" / L"comet", cancel)
+#ifndef _WIN32
+                && !gog::prepareGalaxyHelper(root, cancel).empty()
+#endif
+                ;
+        };
+#endif
+    std::function<std::shared_ptr<gog::Comet>(const std::filesystem::path&, uint32_t, std::string_view, std::wstring_view)> gog_overlay_start_ =
+#ifdef LAUNCHME_UI_TEST
+        [](const std::filesystem::path&, uint32_t, std::string_view, std::wstring_view) { return std::shared_ptr<gog::Comet>{}; };
+#else
+        gog::startOverlay;
+#endif
+    // The service's state, its change (download, then UAC; true: done) and its download for prefixes;
+    // UI tests never ask Windows, prompt or download.
+    std::function<gog::GalaxyServiceState()> gog_galaxy_service_query_ =
+#ifdef LAUNCHME_UI_TEST
+        [] { return gog::GalaxyServiceState::missing; };
+#else
+        gog::galaxyServiceState;
+#endif
+    std::function<bool(const std::filesystem::path&, bool)> gog_galaxy_service_change_ =
+#ifdef LAUNCHME_UI_TEST
+        [](const std::filesystem::path&, bool) { return false; };
+#else
+        [](const std::filesystem::path& root, bool install) {
+            if (!install) return gog::removeGalaxyService();
+            const auto exe = gog::prepareGalaxyService(root, [] { return false; });
+            return !exe.empty() && gog::installGalaxyService(exe);
+        };
+#endif
+    std::function<std::filesystem::path(const std::filesystem::path&, const std::function<bool()>&)> gog_galaxy_service_prepare_ =
+#ifdef LAUNCHME_UI_TEST
+        [](const std::filesystem::path&, const std::function<bool()>&) { return std::filesystem::path{}; };
+#else
+        gog::prepareGalaxyService;
+#endif
+    // Fetches the pinned comet (gog::prepareComet); UI tests never download it.
+    std::function<std::filesystem::path(const std::filesystem::path&, const std::function<bool()>&)> gog_comet_prepare_ =
+#ifdef LAUNCHME_UI_TEST
+        [](const std::filesystem::path&, const std::function<bool()>&) { return std::filesystem::path{}; };
+#else
+        gog::prepareComet;
+#endif
     std::optional<GameSource> pc_source_;
     std::vector<Game> pc_library_;
     // Library of one console (openPlatform): its name, the games are platform_games_[name]; empty = none.

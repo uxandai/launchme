@@ -145,7 +145,7 @@ public:
     }
     bool clear() override { std::lock_guard lock(stored_->mutex); stored_->value.reset(); return !stored_->refuse; }
 };
-struct Control { std::atomic_bool block{false}, entered{false}, offline{false}; std::atomic_int account{1}; };
+struct Control { std::atomic_bool block{false}, entered{false}, offline{false}; std::atomic_int account{1}, refreshes{0}; };
 class FakeBackend : public gog::Backend {
     std::shared_ptr<Control> control_;
     gog::Result wait(const gog::Cancel& cancel) {
@@ -158,7 +158,9 @@ public:
     gog::Result exchange(const gog::Config&, const std::string&, gog::Tokens& tokens, const gog::Cancel& cancel) override {
         const auto result = wait(cancel); tokens = session(std::to_string(control_->account.load())).tokens; return result;
     }
-    gog::Result refresh(const gog::Config&, gog::Tokens&, const gog::Cancel&) override { return {}; }
+    gog::Result refresh(const gog::Config&, gog::Tokens& tokens, const gog::Cancel&) override {
+        ++control_->refreshes; tokens.access = "refreshed-access"; tokens.expires = gog::nowSeconds() + 3600; return {};
+    }
     gog::Result verify(gog::Tokens&, const gog::Config&, const gog::Cancel& cancel) override { return wait(cancel); }
     gog::Result library(gog::Session& value, const gog::Config&, const gog::Cancel& cancel) override {
         const auto result = wait(cancel); if (!result) return result;
@@ -172,6 +174,9 @@ public:
         value = {{L"setup.exe", L"https://cdn.gog.com/fixture", "900150983cd24fb0d6963f7d28e17f72", 3}}; return {};
     }
     gog::Result call(const AccountRequest& request, gog::Tokens& tokens, const gog::Config&, const gog::Cancel&, HttpResponse& response) override {
+        if (request.url == L"https://users.gog.com/users/" + std::wstring(tokens.user.begin(), tokens.user.end())) {
+            response = reply(R"({"id":")" + tokens.user + R"(","username":"Fixture Player"})"); return {};
+        }
         check(request.url == L"https://gameplay.gog.com/clients/7/users/" + std::wstring(tokens.user.begin(), tokens.user.end()) + L"/achievements", "account ID filled in by the worker");
         tokens.access = "rotated-by-call"; // A 401 refresh: the worker must keep it.
         response = reply(R"({"items":[]})"); return {};
@@ -272,6 +277,71 @@ void installServiceTests(const std::filesystem::path& root) {
     until([&] { auto next = service->takeInstall(); if (next && next->state == gog::InstallState::completed) result = std::move(next); return result.has_value(); });
     check(executed == 1 && result->product == "223", "B's verified membership can download and install once");
 }
+// Comet (gog_comet.hpp): its arguments and log, and the account worker handing it the credentials.
+void cometTests() {
+    check(gog::cometUnlocked("[2026-11-16T10:00:00Z INFO  comet::api::handlers::utils] Unlocking achievement first_blood, First Blood, Again") ==
+          L"First Blood, Again", "unlock line: the name");
+    check(gog::cometUnlocked("[2026-11-16T10:00:00Z INFO  comet] Unlocking achievement only_key") == L"only_key", "unlock line without a name: the key");
+    check(!gog::cometUnlocked("[2026-11-16T10:00:00Z INFO  comet] Listening on port 9977"), "other lines are not unlocks");
+    // A game's session: GOG's overlay attaches to its process.
+    check(gog::cometSession("[2026-11-16T10:00:00Z INFO  comet::api::handlers::communication_service] Requested session start for 4321") == 4321u,
+          "session line: the game's process ID");
+    check(!gog::cometSession("[2026-11-16T10:00:00Z INFO  comet] Requested session start for ") &&
+          !gog::cometSession("Requested session start for 0") && !gog::cometSession("Requested session start for 99999999999"),
+          "session line without a usable process ID");
+    {
+        const auto arguments = gog::overlayArguments(std::filesystem::path(L"C:\\data\\redist"), 4321, "1207658924",
+                                                     std::filesystem::path(L"C:\\data\\cache\\1207658924"), L"pl-PL");
+        check(arguments.find(L"--startoverlay") != std::wstring::npos && arguments.find(L"--attached-pid=4321") != std::wstring::npos &&
+              arguments.find(L"--product-id=1207658924") != std::wstring::npos && arguments.find(L"--client-language-code=pl-PL") != std::wstring::npos &&
+              arguments.find(L"--startup-url=file://C:/data/redist/web/overlay.html") != std::wstring::npos &&
+              arguments.find(L"-cache-path=\"C:\\data\\cache\\1207658924\"") != std::wstring::npos, "overlay arguments as Galaxy passes them");
+        const auto empty = std::filesystem::temp_directory_path() / L"launchme-overlay-none";
+        check(!gog::overlayInstalled(empty) && !gog::startOverlay(empty, 4321, "1207658924", L"en-US") &&
+              !gog::startOverlay(empty, 4321, "12 && calc", L"en-US"), "no overlay, or a product ID that is not a number: nothing starts");
+    }
+    const auto arguments = gog::cometArguments({"a", "r", "42", ""});
+    check(arguments == std::vector<std::string>{"--access-token", "a", "--refresh-token", "r", "--user-id", "42", "--username", "42", "--quit"},
+          "comet arguments, the ID standing in for a missing name");
+
+    struct FakeComet : gog::Comet { bool running() const override { return true; } };
+    std::mutex mutex; std::vector<gog::CometCredentials> seen;
+    const gog::CometStart start = [&](const gog::CometRequest& request, const gog::CometCredentials& credentials) -> std::shared_ptr<gog::Comet> {
+        check(request.exe == std::filesystem::path(L"C:/fixture/comet.exe"), "the prepared binary is started");
+        std::lock_guard lock(mutex); seen.push_back(credentials); return std::make_shared<FakeComet>();
+    };
+    const gog::Config galaxy{std::string(gog::galaxy_client_id), "fixture-secret", "https://example.test/callback?origin=client"};
+    const auto ask = [](gog::Service& service) {
+        auto answer = service.comet({L"C:/fixture/comet.exe", L"C:/fixture/data", {}});
+        check(answer.wait_for(std::chrono::seconds(5)) == std::future_status::ready, "comet request answered");
+        return answer.get();
+    };
+    {
+        auto stored = std::make_shared<Stored>(); auto control = std::make_shared<Control>();
+        auto service = gog::makeService(std::make_unique<FakeBackend>(control), std::make_unique<FakeVault>(stored), [&] { return galaxy; },
+                                        std::chrono::minutes(5), gog::nativeInstallOperations(), start);
+        service->submit(gog::Command::restore); await(*service, gog::State::disconnected);
+        check(!ask(*service) && seen.empty(), "no session, no comet");
+        auto account = session(); account.tokens.client = galaxy.client_id; account.tokens.expires = gog::nowSeconds() + 60;
+        { std::lock_guard lock(stored->mutex); stored->value = account; }
+        service->submit(gog::Command::restore); await(*service, gog::State::connected);
+        check(ask(*service) != nullptr, "comet started for a Galaxy-profile account");
+        std::lock_guard lock(mutex);
+        check(seen.size() == 1 && control->refreshes == 1 && seen[0].access == "refreshed-access" && seen[0].refresh == "fixture-refresh" &&
+              seen[0].user == account.tokens.user && seen[0].username == "Fixture Player", "a due token refreshed first; the account's name");
+        std::lock_guard saved(stored->mutex);
+        check(stored->value && stored->value->tokens.access == "refreshed-access", "comet's refresh kept in the vault");
+    }
+    {
+        // Another client profile: comet could not get the games' tokens with it.
+        auto stored = std::make_shared<Stored>(); auto control = std::make_shared<Control>();
+        stored->value = session();
+        auto service = gog::makeService(std::make_unique<FakeBackend>(control), std::make_unique<FakeVault>(stored), [] { return config; },
+                                        std::chrono::minutes(5), gog::nativeInstallOperations(), start);
+        service->submit(gog::Command::restore); await(*service, gog::State::connected);
+        check(!ask(*service) && seen.size() == 1, "no comet with a non-Galaxy client profile");
+    }
+}
 void shutdownTests() {
     auto stored = std::make_shared<Stored>(); auto control = std::make_shared<Control>();
     const auto create = [&] { return gog::makeService(std::make_unique<FakeBackend>(control), std::make_unique<FakeVault>(stored), [] { return config; }); };
@@ -336,7 +406,7 @@ void persistenceAndMerge(const std::filesystem::path& root) {
 int main() {
     const auto root = std::filesystem::temp_directory_path() / (L"launchme-gog-test-" + std::to_wstring(GetCurrentProcessId()));
     struct Cleanup { std::filesystem::path root; ~Cleanup() { std::error_code ec; std::filesystem::remove_all(root, ec); } } cleanup{root};
-    try { apiTests(); serviceTests(); installServiceTests(root); shutdownTests(); persistenceAndMerge(root); }
+    try { apiTests(); serviceTests(); installServiceTests(root); cometTests(); shutdownTests(); persistenceAndMerge(root); }
     catch (const std::exception& error) { std::cerr << error.what() << '\n'; return 1; }
     std::cout << "GOG OAuth, pagination, isolation, cancellation, offline, merge and DPAPI passed\n";
 }

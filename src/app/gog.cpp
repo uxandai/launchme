@@ -16,6 +16,7 @@ void Launcher::gogCommand(gog::Command command) {
     } else {
         gog_service_->submit(command);
         if (command == gog::Command::connect || command == gog::Command::logout) {
+            stopGogComet(); // It holds the old account's session.
             gog_enable_on_connect_ = command == gog::Command::connect;
             gog_state_ = {};
             // Invalidate old membership and queued scans before the worker can

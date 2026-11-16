@@ -103,6 +103,24 @@ int LauncherUiTest::emulationSettings(HWND window) {
     if (system_logos::file(L"genesis", L"Mega Drive") != L"genesis.png" || system_logos::file(L"megadrivejp", L"Mega Drive") != L"megadrive.png" ||
         system_logos::file(L"PSX", L"PS1") != L"psx.png" || system_logos::file(L"xyz", L"Retro") != L"retroarch.png" ||
         system_logos::file(L"fbneo", L"Arcade") != L"fbneo.png" || system_logos::file(L"mame", L"Arcade") != L"mame.png") return 19977;
+    // Dodatkowy folder ROM-ów (another drive): the same system folders; its games join, Usuń drops them.
+    {
+        const auto second = root / L"Drive2" / L"roms";
+        write(second / L"snes" / L"Chrono Trigger.sfc", "rom");
+        write(second / L"gba" / L"Metroid Fusion.gba", "rom");
+        if (!rowOf(Id::emulation_folder_add) || rowOf(Id::emulation_folder_extra)) return 9994;
+        app.settings_.emulation_roms_extra = {second, roms}; // The main folder again: not scanned twice.
+        app.startRomScan();
+        if (!scanned() || app.rom_library_.size() != 5) return 9995;
+        app.buildSettingsRows();
+        const auto key = text_encoding::utf8Lenient(second.wstring());
+        if (!select(Id::emulation_folder_extra, key) || rowOf(Id::emulation_folder_extra, key)->value != tr(L"Usuń")) return 9996;
+        app.settingsActivate();
+        if (app.settings_.emulation_roms_extra != std::vector<std::filesystem::path>{roms}) return 9997;
+        if (!scanned() || app.rom_library_.size() != 3) return 9998;
+        app.settings_.emulation_roms_extra.clear(); app.buildSettingsRows();
+        if (rowOf(Id::emulation_folder_extra)) return 9999;
+    }
     settle();
     if (!capture(L"emulation-page.png")) return 9957;
     if (!select(Id::emulation_system, "snes")) return 9957; // Down to the systems.

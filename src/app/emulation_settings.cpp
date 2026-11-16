@@ -230,6 +230,16 @@ void Launcher::emulationSettingsRows() {
         if (!settings_.emulation_roms.empty())
             add({Id::emulation_folder_reset, Control::action, tr(L"Wykryj folder ROM-ów"),
                 tr(L"Ten, który wskazuje ES-DE lub EmuDeck."), tr(L"Przywróć")});
+        // More ROM folders (another drive): the same system subfolders (snes, ps2…) in each.
+        for (const auto& extra : settings_.emulation_roms_extra) {
+            std::error_code missing;
+            Row row{Id::emulation_folder_extra, Control::action, tr(L"Dodatkowy folder ROM-ów"),
+                    extra.wstring() + (std::filesystem::is_directory(extra, missing) ? L"" : L" · " + std::wstring(tr(L"Tego folderu nie ma."))), tr(L"Usuń")};
+            row.key = text_encoding::utf8Lenient(extra.wstring());
+            add(std::move(row));
+        }
+        add({Id::emulation_folder_add, Control::action, tr(L"Dodaj folder ROM-ów"),
+            tr(L"Kolejny folder z podfolderami systemów (np. na innym dysku); gry ze wszystkich trafiają do biblioteki."), tr(L"Dodaj")});
     }
     add({Id::emulation_names, Control::toggle, tr(L"Nazwy gier z ES-DE / ScreenScraper"),
         tr(L"Gry z emulatorów pod nazwą dopasowaną do pliku ROM zamiast nazwy skrótu Steam."), {}, settings_.emulation_names});
@@ -344,6 +354,33 @@ bool Launcher::emulationSettingsActivate(const Row& row) {
         settingsChanged(); audio_.context();
         settings_state_.selected[settings_state_.category] = std::max(0, settings_state_.row() - 1); // Its row is gone.
         startRomScan();
+        return true;
+    }
+    if (row.id == Id::emulation_folder_extra) {
+        const std::filesystem::path folder = text_encoding::wideLenient(row.key);
+        std::erase(settings_.emulation_roms_extra, folder);
+        settingsChanged(); audio_.context();
+        settings_state_.selected[settings_state_.category] = std::max(0, settings_state_.row() - 1); // Its row is gone.
+        buildSettingsRows();
+        startRomScan();
+        return true;
+    }
+    if (row.id == Id::emulation_folder_add) {
+        const auto apply = [this](const std::filesystem::path& picked) {
+            if (!settingsOpen() || picked.empty() || !picked.is_absolute()) return;
+            auto& extra = settings_.emulation_roms_extra;
+            if (picked == settings_.emulation_roms || std::find(extra.begin(), extra.end(), picked) != extra.end()) return;
+            extra.push_back(picked);
+            settingsChanged(); audio_.context();
+            buildSettingsRows();
+            startRomScan();
+        };
+        file_browser::Request request;
+        request.mode = file_browser::Mode::folder;
+        request.title = tr(L"Dodaj folder ROM-ów");
+        request.initial = !settings_.emulation_roms_extra.empty() ? settings_.emulation_roms_extra.back() : std::filesystem::path{};
+        request.native = [this, initial = request.initial] { return pickPath(hwnd_, true, tr(L"Dodaj folder ROM-ów"), {}, {}, false, initial); };
+        openFileBrowser(std::move(request), apply);
         return true;
     }
     if (row.id == Id::emulation_folder) {

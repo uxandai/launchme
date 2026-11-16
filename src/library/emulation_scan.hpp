@@ -59,11 +59,15 @@ struct Rule {
     std::filesystem::path folder;              // Explicit system override, else <roms>\<system>.
     std::vector<std::wstring> emulators;
     bool present = false;                      // Its folder exists.
+    bool own = false;                          // `folder` is the system's own override (not under a ROM folder).
 };
 struct Setup {
     Environment environment;
     Paths paths;
     std::vector<Rule> rules; // Every built-in system (also those without a folder: a ROM added by hand).
+    // More ROM folders (another drive): scanned like paths.roms, <folder>\<system> for each system
+    // without a folder of its own. A game found twice is listed once.
+    std::vector<std::filesystem::path> extra_roms;
     emulators::Context context;
     std::vector<emulators::Found> detected; // One per emulators::catalog() entry.
     emulators::Choices choices;

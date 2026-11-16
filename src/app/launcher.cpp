@@ -234,8 +234,17 @@ bool Launcher::initialize(HWND hwnd) {
             tr(L"Raport: ") + (userConfigDirectory() / L"crashes" / crash->dump).wstring());
     }
     initializeLibraryPreferences();
+    // The first start on a handheld (Steam Deck, ROG Ally, Legion Go…): Tryb handhelda on by itself;
+    // Interfejs turns it off again, and it is never asked twice.
+    if (!settings_.handheld_detected) {
+        settings_.handheld_detected = true;
+        settings_.handheld_mode = settings_.handheld_mode || handheld_detect_();
+        settings_dirty_ = true; settings_save_failed_ = false; settings_edited_ = std::chrono::steady_clock::now();
+        if (settings_.handheld_mode) diagnostics::log("info", "Handheld detected: Tryb handhelda on");
+    }
     renderer_.setDrawerStyle(settings_.drawer);
     renderer_.setFontFamily(settings_.font_family);
+    renderer_.setHandheld(settings_.handheld_mode);
     renderer_.setCoverAccent(settings_.cover_accent_rgb);
     applyAccentColors();
     renderer_.setDesktopTheme(settings_.desktop_theme);
@@ -888,6 +897,7 @@ void Launcher::tick() {
     syncSettingsDevices();
     pollSettingsDevices();
     pollGog();
+    tickGogComet();
     pollEpic();
     pollAmazon();
     pollXbox();

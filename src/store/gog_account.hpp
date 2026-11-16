@@ -2,6 +2,8 @@
 #include "../model/game.hpp"
 #include "../net/http.hpp"
 #include "account_request.hpp"
+#include "gog_comet.hpp"
+#include "gog_galaxy_service.hpp"
 #include "gog_install.hpp"
 #include <functional>
 #include <future>
@@ -89,10 +91,17 @@ public:
     virtual std::future<std::optional<HttpResponse>> request(AccountRequest) {
         std::promise<std::optional<HttpResponse>> none; none.set_value(std::nullopt); return none.get_future();
     }
+    // Comet beside a GOG game (gog_comet.hpp): the account worker brings the token up to date and
+    // starts it with the account's credentials. Null without a session, with another client
+    // profile than Galaxy's, when GOG refuses the token or the port is taken.
+    virtual std::future<std::shared_ptr<Comet>> comet(CometRequest) {
+        std::promise<std::shared_ptr<Comet>> none; none.set_value(nullptr); return none.get_future();
+    }
 };
 std::unique_ptr<Service> makeService(std::unique_ptr<Backend> backend, std::unique_ptr<Vault> vault,
                                   std::function<Config()> config = loadConfig,
                                   std::chrono::milliseconds login_timeout = std::chrono::minutes(5),
-                                  InstallOperations install_operations = nativeInstallOperations());
+                                  InstallOperations install_operations = nativeInstallOperations(),
+                                  CometStart comet_start = startComet);
 std::wstring statusText(const Snapshot& snapshot);
 }

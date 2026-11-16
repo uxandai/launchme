@@ -78,6 +78,7 @@ set(LAUNCHME_CORE_SOURCES
     src/library/metadata_sources.cpp
     src/library/hardware_rating.cpp
     src/platform/hardware_profile.cpp
+    src/platform/handheld.cpp
     src/library/steam_sync_state.cpp
     src/library/steam_tags_builtin.cpp
     src/library/store_adapter.cpp
@@ -156,6 +157,8 @@ set(LAUNCHME_LINUX_PROCESS_SOURCES
     src/library/steam_registry.cpp
     src/store/epic_legendary.cpp
     src/store/gog_install_native.cpp
+    src/store/gog_comet.cpp
+    src/store/gog_galaxy_service.cpp
     src/platform/game_activity.cpp
     src/platform/game_overlay_monitor_linux.cpp
     src/platform/launch.cpp
@@ -356,6 +359,7 @@ if(BUILD_TESTING)
     launchme_executable(text_crop_tests TEST text_aware_crop SOURCES tests/text_crop_tests.cpp)
     launchme_executable(low_memory_tests TEST low_memory_block_compression SOURCES tests/low_memory_tests.cpp)
     launchme_executable(glance_tests TEST glance_sources_and_cache SOURCES tests/glance_tests.cpp)
+    launchme_executable(handheld_tests TEST handheld_detection SOURCES tests/handheld_tests.cpp)
     launchme_executable(image_validation_tests TEST controller_png_transparency SOURCES tests/image_validation_tests.cpp)
     launchme_executable(background_art_tests TEST background_art_and_trailer_match SOURCES tests/background_art_tests.cpp)
     launchme_executable(steamgriddb_tests TEST steamgriddb_browser_and_selection SOURCES tests/steamgriddb_tests.cpp)

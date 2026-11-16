@@ -93,6 +93,10 @@ public:
     // (a responsive layout) instead of on the 1600 × 900 TV canvas. desktopViewport() is that
     // viewport whatever the current screen (hit tests between two frames).
     void setDesktopViewport(bool desktop) { if (desktop_viewport_ != desktop) { desktop_viewport_ = desktop; updateViewport(); } }
+    // Tryb TV on a handheld's small screen (Steam Deck 1280x800): the layout on a 1280x720 canvas
+    // instead of 1600x900, so everything is drawn a quarter larger.
+    void setHandheld(bool handheld) { if (handheld_ != handheld) { handheld_ = handheld; updateViewport(); } }
+    bool handheld() const { return handheld_; }
     Viewport desktopViewport() const;
     // As drawn last: the pane's content height and its collection chips, "+" chip, rating link and
     // achievements number (empty when the game has none: nothing to open).
@@ -1495,6 +1499,7 @@ private:
     Microsoft::WRL::ComPtr<IDWriteTextFormat> desktop_title_font_, desktop_heading_font_, desktop_button_font_, desktop_icon_font_;
     bool createDesktopFonts();
     bool desktop_viewport_ = false;
+    bool handheld_ = false;
     float desktop_pane_height_ = 0;
     std::vector<settings_ui::Rect> desktop_chips_;
     settings_ui::Rect desktop_chip_add_{}, desktop_rating_{}, desktop_protondb_{}, desktop_hardware_{}, desktop_achievements_{}, desktop_cloud_{};

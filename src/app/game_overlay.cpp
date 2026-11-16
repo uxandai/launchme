@@ -62,6 +62,8 @@ void Launcher::configureGameOverlay() {
 
 bool Launcher::guideHotkeyWanted() const {
     if (closing_ || !settings_.guide_overlay || !settings_.guide_menu) return false;
+    // GOG Galaxy's overlay answers Shift+Tab in its game: Launchme's opens with Guide there.
+    if (settings_.overlay_key == AppSettings::OverlayKey::shift_tab && gogOverlayOwnsShiftTab()) return false;
     const auto foreground = overlay_backend_.foreground();
     if (!foreground || foreground == hwnd_) return false;
     return gameOverlayOpen() ? overlayForeground(foreground) :
