@@ -11,11 +11,19 @@
 // cards: the description, the facts table, and the achievements and the plugin's comparison.
 // Drawing, clicks and the keys share this geometry.
 //
+// With Zrzuty ekranu i podobne gry (Interfejs) the page goes on below the cards: a strip of the
+// game's screenshots and one of similar games; Down from the cards scrolls the page up to them
+// (Layout::scroll moves everything; the background stays).
+//
 // Action indices (Launcher::detail_action_): -1 Back, 0 the primary action, 1 "…",
 // then the ones a game may have (identify, favourite, collections, versions, Zamknij grę beside
 // Wróć while it runs, the cloud after "…"), then the achievements card, the rating and the plugin card.
 namespace details_layout {
-enum class Kind { back, rating, primary, close, more, cloud, collections, favorite, versions, identify, achievements, plugin };
+enum class Kind { back, rating, primary, close, more, cloud, collections, favorite, versions, identify, achievements, plugin, shot, similar };
+// The strips' targets: a screenshot's and a similar game's action, by index.
+inline constexpr int shot_action = 100000, similar_action = 200000;
+inline bool shotAction(int action) { return action >= shot_action && action < similar_action; }
+inline bool similarAction(int action) { return action >= similar_action && action < similar_action + 100000; }
 // The actions shown for this game (-2 or false: none).
 struct Actions {
     int identify = -2, favorite = -2, collections = -2, versions = -2;
@@ -24,12 +32,18 @@ struct Actions {
     // The rating pill ends the line of facts, after text only the renderer measures: its
     // rectangle as last drawn (Renderer::ratingLink); empty before the first frame.
     settings_ui::Rect rating_rect{};
+    // Below the cards (0 and not loading: no strip): screenshots, similar games, how far each strip slid.
+    size_t shots = 0, similar = 0;
+    bool shots_loading = false;
+    float shots_scroll = 0, similar_scroll = 0;
+    bool media() const { return shots || shots_loading || similar; }
 };
 struct Item {
     int action;
     Kind kind;
     settings_ui::Rect rect;
     bool card() const { return kind == Kind::achievements || kind == Kind::plugin; }
+    bool media() const { return kind == Kind::shot || kind == Kind::similar; }
 };
 // Pill widths: wide enough for the longest label (Polish and English).
 inline float buttonWidth(Kind kind) {
@@ -47,16 +61,18 @@ inline float buttonWidth(Kind kind) {
 }
 struct Layout {
     float width, height;
+    float scroll = 0; // The page moved up to show the strips under the cards.
     static constexpr float margin = 68, button_height = 54, gap = 12, card_gap = 16;
+    static constexpr float shot_width = 352, shot_height = 198, similar_size = 170, strip_gap = 18;
     float left() const { return margin; }
     float right() const { return width - margin; }
     // The achievements list (achievements_view.hpp) over the page: a centred panel.
     float panelWidth() const { return std::min(1280.0f, width - 128); }
     float origin() const { return (width - panelWidth()) * 0.5f; }
     float top() const { return std::max(120.0f, (height - 630) * 0.5f); }
-    settings_ui::Rect back() const { return {margin, 40, margin + 44, 84}; }
+    settings_ui::Rect back() const { return {margin, 40 - scroll, margin + 44, 84 - scroll}; }
     // Cards along the bottom, clear of the button hints.
-    float cardsBottom() const { return height - 64; }
+    float cardsBottom() const { return height - 64 - scroll; }
     float cardsTop() const { return cardsBottom() - std::clamp(height * 0.29f, 236.0f, 330.0f); }
     // The buttons in their order on screen, wrapped onto a second line when they do not fit.
     std::vector<Item> buttons(const Actions& a) const {
@@ -102,7 +118,34 @@ struct Layout {
     // The logo or title over the facts, the picture clear on its right.
     settings_ui::Rect logo(const Actions& a) const {
         const float bottom = factsCenter(a) - 40;
-        return {left(), std::max(104.0f, bottom - 180), std::min(left() + 720, right()), bottom};
+        return {left(), std::max(104.0f - scroll, bottom - 180), std::min(left() + 720, right()), bottom};
+    }
+    // The strips under the cards: each a heading (its centre line) over a row of pictures.
+    bool hasShots(const Actions& a) const { return a.shots || a.shots_loading; }
+    float shotsLabel() const { return cardsBottom() + 80; } // Below the screen until the page moves.
+    float shotsTop() const { return shotsLabel() + 26; }
+    float similarLabel(const Actions& a) const { return hasShots(a) ? shotsTop() + shot_height + 52 : shotsLabel(); }
+    float similarTop(const Actions& a) const { return similarLabel(a) + 26; }
+    settings_ui::Rect shot(const Actions& a, size_t index) const {
+        const float x = left() + static_cast<float>(index) * (shot_width + strip_gap) - a.shots_scroll;
+        return {x, shotsTop(), x + shot_width, shotsTop() + shot_height};
+    }
+    settings_ui::Rect similar(const Actions& a, size_t index) const {
+        const float x = left() + static_cast<float>(index) * (similar_size + strip_gap) - a.similar_scroll;
+        return {x, similarTop(a), x + similar_size, similarTop(a) + similar_size};
+    }
+    // How far the page moves up while a strip has the focus: its bottom clear of the hints.
+    float mediaScroll(const Actions& a) const {
+        if (!a.media()) return 0;
+        const Layout top{width, height};
+        const float bottom = a.similar ? top.similarTop(a) + similar_size : top.shotsTop() + shot_height;
+        return std::max(0.0f, bottom + 72 - height);
+    }
+    // Where a strip slides to keep its focused item in view (the one after it peeking in).
+    float stripScroll(size_t focus, size_t count, float step) const {
+        const auto visible = static_cast<size_t>(std::max(1.0f, (right() - left() + strip_gap) / step));
+        if (count <= visible || focus + 1 < visible) return 0;
+        return static_cast<float>(std::min(focus + 2 - visible, count - visible)) * step;
     }
     // Cards: the description, the facts table, and (with achievements or a plugin) a progress column.
     bool progress(const Actions& a) const { return a.achievements >= 0 || a.plugin >= 0; }
@@ -130,6 +173,8 @@ struct Layout {
         all.insert(all.end(), row.begin(), row.end());
         if (a.achievements >= 0) all.push_back({a.achievements, Kind::achievements, progressCard(a, false)});
         if (a.plugin >= 0) all.push_back({a.plugin, Kind::plugin, progressCard(a, true)});
+        for (size_t i = 0; i < a.shots; ++i) all.push_back({shot_action + static_cast<int>(i), Kind::shot, shot(a, i)});
+        for (size_t i = 0; i < a.similar; ++i) all.push_back({similar_action + static_cast<int>(i), Kind::similar, similar(a, i)});
         return all;
     }
     const Item* find(const std::vector<Item>& all, int action) const {
@@ -143,7 +188,8 @@ struct Layout {
         return item ? item->rect : settings_ui::Rect{};
     }
     int hit(const Actions& a, float x, float y) const {
-        for (const auto& item : items(a)) if (item.rect.contains(x, y)) return item.action;
+        for (const auto& item : items(a))
+            if (item.rect.contains(x, y) && (!item.media() || item.rect.left >= left() - 1)) return item.action; // Not one slid past the margin.
         return -3;
     }
 };

@@ -858,6 +858,8 @@ constexpr Entry entries[] = {
     {L"Nie pobrano (brak sieci?).", L"No se descargó (¿sin red?)."},
     {L"Tryb handhelda", L"Modo portátil"},
     {L"Tryb TV na małym ekranie (Steam Deck, ROG Ally, Legion Go): napisy, okładki i przyciski o jedną czwartą większe.", L"El modo TV en una pantalla pequeña (Steam Deck, ROG Ally, Legion Go): textos, portadas y botones un cuarto más grandes."},
+    {L"Zrzuty ekranu i podobne gry w szczegółach", L"Capturas y juegos similares en los detalles"},
+    {L"Pod kartami szczegółów gry zrzuty ekranu ze sklepu Steam i podobne gry z biblioteki. W trybie TV zjedź niżej, na pulpicie przewiń.", L"Bajo las tarjetas de detalles del juego: capturas de la tienda de Steam y juegos similares de la biblioteca. En el modo TV baja, en el escritorio desplaza la página."},
     {L"wolne miejsce nieznane", L"espacio libre desconocido"},
     {L" wolne z ", L" libres de "},
     {L"Brak bibliotek Steam", L"No hay bibliotecas de Steam"},

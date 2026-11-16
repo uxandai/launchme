@@ -217,7 +217,14 @@ void Launcher::desktopPageActivate(const SheetHit& hit, bool double_click) {
                     if (desktop_menu_) desktop_menu_->align_right = true;
                 }
                 desktop_marked_ = marked; selected_ = selected;
-            } else if (hit.sub == static_cast<int>(DetailsExtra::artwork)) openArtworkBrowser(game);
+            } else if (hit.sub == static_cast<int>(DetailsExtra::shot)) {
+                if (hit.index >= 0 && static_cast<size_t>(hit.index) < psfive_shot_full_urls_.size()) { psfive_shot_ = static_cast<size_t>(hit.index); psfiveViewShot(); }
+            } else if (hit.sub == static_cast<int>(DetailsExtra::similar)) {
+                if (hit.index >= 0 && static_cast<size_t>(hit.index) < psfive_similar_games_.size()) { const auto similar = psfive_similar_games_[hit.index]; openDetails(similar); }
+            } else if (hit.sub == static_cast<int>(DetailsExtra::viewer)) detailsCloseShot();
+            else if (hit.sub == static_cast<int>(DetailsExtra::viewer_previous)) detailsShotStep(-1);
+            else if (hit.sub == static_cast<int>(DetailsExtra::viewer_next)) detailsShotStep(1);
+            else if (hit.sub == static_cast<int>(DetailsExtra::artwork)) openArtworkBrowser(game);
             else if (hit.sub == static_cast<int>(DetailsExtra::folder)) {
                 if (const auto folder = gameFolder(game); !folder.empty() && execute_(hwnd_, GameAction{folder.wstring(), {}, {}, ActionKind::open_client}) <= 32)
                     showNotification(NotificationKind::error, tr(L"Nie można otworzyć folderu"), folder.wstring());

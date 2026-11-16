@@ -245,6 +245,7 @@ void Launcher::wheel(int amount, float mouse_x) {
     if (downloadsOpen() && !friends_open_ && !gogInstallOpen()) { if (amount > 0 || selected_ > 0) downloadsMove(amount); return; } // The wheel stays on the rows.
     if (identifyOpen()) { identifyMove(amount); return; }
     if (psfiveDetailsShown() && !menu_open_) { psfiveDetailsVertical(amount); return; } // PSfive's details: between their sections.
+    if (screen_ == ScreenMode::details && !menu_open_ && !desktop_mode_ && detailsMediaWheel(amount)) return; // Down to the strips.
     // An open filter menu or view drawer scrolls its rows, never picks one.
     if (libraryControls() && library_controls_.open()) { libraryVertical(amount); return; }
     if (achievementsOpen()) { if (amount > 0 || achievements_.selected > 0) achievementsMove(amount); return; } // The wheel stays on the list.

@@ -60,10 +60,16 @@ void Renderer::drawDetails() {
                                                          stops.Get(), down.GetAddressOf())))
             target_->FillRectangle(D2D1::RectF(0, height * 0.4f, width, height), down.Get());
     }
+    const auto* media = context_->details_media ? &*context_->details_media : nullptr;
+    // Scrolled down to the strips: the picture darker behind them.
+    if (media && media->scroll > 0.5f) {
+        brush(D2D1::ColorF(0.006f, 0.008f, 0.012f, std::min(0.72f, media->scroll / 400.0f)));
+        target_->FillRectangle(D2D1::RectF(0, 0, width, height), solid_.Get());
+    }
     beginScreenForeground();
     const auto& game = (*cards_)[0].game;
     const auto* info = context_->game_details;
-    const details_layout::Layout layout{width, height};
+    const details_layout::Layout layout{width, height, media ? media->scroll : 0.0f};
     details_layout::Actions actions;
     actions.identify = context_->detail_identify;
     actions.favorite = context_->detail_favorite_action;
@@ -74,6 +80,10 @@ void Renderer::drawDetails() {
     actions.plugin = context_->detail_comparison ? context_->detail_comparison_action : -2;
     actions.close = context_->detail_close_action;
     actions.cloud = context_->detail_cloud_action;
+    if (media) {
+        actions.shots = media->shots; actions.similar = media->similar_names.size(); actions.shots_loading = media->loading;
+        actions.shots_scroll = media->shots_scroll; actions.similar_scroll = media->similar_scroll;
+    }
     // One line of facts: the platform's logo, the year, the genres, the playtime, then the rating
     // as a pill that opens its source (its rectangle goes to the hit tests: ratingLink).
     const float facts_y = layout.factsCenter(actions);
@@ -133,7 +143,7 @@ void Renderer::drawDetails() {
     const auto row = layout.buttons(actions);
     drawButtonGlass(box(layout.back()));
     for (const auto& item : row) drawButtonGlass(box(item.rect), 1, true, false, item.kind != details_layout::Kind::primary || context_->primary_enabled);
-    if (focus && !focus->card()) {
+    if (focus && !focus->card() && !focus->media()) {
         auto r = box(focus->rect);
         if (context_->details_glide) { const auto& g = *context_->details_glide; r = D2D1::RectF(g.left, g.top, g.right, g.bottom); }
         drawButtonFocus(r);
@@ -335,5 +345,7 @@ void Renderer::drawDetails() {
             }
         } else textLine(comparison.status, r.left + 24, r.top + (compact ? 70 : 92), r.right - r.left - 48, settings_body_font_.Get(), palette::muted());
     }
+    if (actions.media()) drawDetailsMedia(layout, actions, context_->detail_action);
     controls();
+    if (media && media->viewer) drawShotViewer(media->shot, media->shots);
 }

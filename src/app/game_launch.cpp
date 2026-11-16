@@ -132,6 +132,7 @@ void Launcher::launch() {
         else openAchievementCard(achievements_.selected);
         return;
     }
+    if (detailsMediaAccept()) return; // Szczegóły: a screenshot, a similar game, the viewer.
     const auto& active = cards_[selected_].game;
     if (screen_ == ScreenMode::search && isGame(active)) rememberSearch();
     if (screen_ == ScreenMode::store) { openDetails(active); return; }

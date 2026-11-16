@@ -2243,6 +2243,21 @@ private:
     int closeDetailAction() const; // ✕ Zamknij grę beside Wróć; -2 while the game does not run.
     int cloudDetailAction() const; // The cloud icon after "…" (games Aurelia manages); -2 without.
     details_layout::Actions detailsActions() const; // What the details screen shows (ui/game_details_layout.hpp).
+    // Szczegóły → Zrzuty ekranu i podobne gry (src/app/details_media.cpp): the strips under the cards.
+    bool detailsMedia() const;
+    bool detailsMediaReady() const; // On, and PSfive's loader holds this game's.
+    bool detailsMediaFocused() const;
+    details_layout::Layout detailsLayout() const; // With the page's scroll.
+    void detailsMediaActions(details_layout::Actions& actions) const;
+    void detailsMediaOpened();
+    bool detailsMediaAccept();
+    bool detailsMediaBack();
+    bool detailsMediaWheel(int amount);
+    void detailsCloseShot();
+    void detailsShotStep(int amount);
+    void bindSimilarCovers(bool& needs_paint);
+    void tickDetailsMedia(float dt, bool& needs_paint);
+    float details_scroll_ = 0; // Szczegóły moved up to the strips (details_layout::Layout::scroll).
     void updateSearch();
     void buildShelves();
     void buildSettingsRows();

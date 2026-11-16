@@ -38,7 +38,7 @@ enum class Id { font, home_layout, ui_accent, accent, uninstalled, emulation, mu
                   companion_memory, companion_notes, companion_semantic_memory, companion_forget, companion_provider, companion_ollama_model, companion_model_info,
                   companion_photos, companion_photo_folder, companion_guests, companion_gamification,
                   // Interfejs → Tryb TV: start in it instead of the desktop window.
-                  launch_tv_mode, handheld_mode,
+                  launch_tv_mode, handheld_mode, details_media,
                   // Dostosuj wygląd → Inne: Tryb TV's CRT filter (src/ui/crt_view.hpp).
                   crt, crt_mask, crt_warp_x, crt_warp_y, crt_mask_level, crt_scanlines, crt_glow, crt_phosphor,
                   pad_cursor, // Interfejs → Tryb TV: L3 + R3 as a mouse.

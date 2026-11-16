@@ -364,6 +364,9 @@ void Launcher::buildSettingsRows() {
             add({Id::handheld_mode, Control::toggle, tr(L"Tryb handhelda"),
                 tr(L"Tryb TV na małym ekranie (Steam Deck, ROG Ally, Legion Go): napisy, okładki i przyciski o jedną czwartą większe."),
                 {}, settings_.handheld_mode});
+            add({Id::details_media, Control::toggle, tr(L"Zrzuty ekranu i podobne gry w szczegółach"),
+                    tr(L"Pod kartami szczegółów gry zrzuty ekranu ze sklepu Steam i podobne gry z biblioteki. W trybie TV zjedź niżej, na pulpicie przewiń."),
+                    {}, settings_.details_media});
             add({Id::pad_cursor, Control::toggle, tr(L"Kursor na padzie (L3 + R3)"),
                 tr(L"W trybie TV L3 i R3 wciśnięte razem włączają i wyłączają kursor: lewa gałka go przesuwa, R2 klika, L2 cofa, prawa gałka przewija."),
                 {}, settings_.pad_cursor});
@@ -416,6 +419,9 @@ void Launcher::buildSettingsRows() {
         add({Id::handheld_mode, Control::toggle, tr(L"Tryb handhelda"),
             tr(L"Tryb TV na małym ekranie (Steam Deck, ROG Ally, Legion Go): napisy, okładki i przyciski o jedną czwartą większe."),
             {}, settings_.handheld_mode});
+        add({Id::details_media, Control::toggle, tr(L"Zrzuty ekranu i podobne gry w szczegółach"),
+                tr(L"Pod kartami szczegółów gry zrzuty ekranu ze sklepu Steam i podobne gry z biblioteki. W trybie TV zjedź niżej, na pulpicie przewiń."),
+                {}, settings_.details_media});
         choiceRow(Id::search_art, tr(L"Grafiki w wyszukiwarce"),
                   tr(L"Wyniki wyszukiwania jako kwadratowe okładki, pionowe plakaty albo poziome kafle."),
                   search_arts, static_cast<int>(settings_.search_art));

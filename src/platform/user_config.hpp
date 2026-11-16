@@ -438,6 +438,8 @@ struct AppSettings {
     bool add_game_tile = false; // A "+" tile opening Dodaj grę.
     // PSfive: Down from Graj / … scrolls to the game's details, screenshots and similar games.
     bool psfive_details = true;
+    // Szczegóły (Tryb TV and the desktop window): the game's screenshots and similar games below its cards.
+    bool details_media = true;
     // The game menu as a large scrollable dialog with an icon beside each option.
     bool menu_dialog = true;
     // Ustawienia > Biblioteka > Gry emulowane: the ROM folder read by launchme's own parsers

@@ -179,7 +179,7 @@ bool Launcher::menuBeside() const { return xmbActive() || flixActive() || metroA
 std::optional<settings_ui::Rect> Launcher::libraryMenuAnchor() const {
     if (screen_ == ScreenMode::details) {
         const auto view = renderer_.viewport();
-        return details_layout::Layout{view.width, view.height}.rect(detailsActions(), 1);
+        return detailsLayout().rect(detailsActions(), 1);
     }
     if (!library_menu_from_action_) return std::nullopt;
     const auto view = renderer_.viewport();

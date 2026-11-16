@@ -44,6 +44,7 @@ void Launcher::navigate(int amount, bool edge_menu) {
     if (achievementsOpen()) { if (achievements_.card) achievementsMove(amount); return; } // A card: the previous/next one; the list scrolls vertically only.
     if (screen_ == ScreenMode::details) {
         if (menu_open_) { dismissMenu(); return; }
+        if (psfive_shot_view_) { detailsShotStep(amount); return; } // A screenshot full screen: the strip's next.
         if (edge_menu && std::abs(amount) == 1) { detailsMove(amount, 0); return; } // Keys and pad: by position.
         // Programmatic jumps: the buttons, then the achievements row when the game has achievements.
         const int next = std::clamp(detail_action_ + amount, -1, std::max({lastDetailAction(), achievementsDetailAction(), ratingDetailAction(), pluginDetailAction()}));
@@ -222,6 +223,7 @@ void Launcher::openSearch() {
 
 void Launcher::back(bool escape) {
     const auto dialog = topDialog();
+    if (dialog == Modal::none && !friends_open_ && !quick_open_ && !menu_open_ && !achievementsOpen() && detailsMediaBack()) return; // The viewer, a strip.
     if (desktopActive() && dialog == Modal::none && !friends_open_ && !quick_open_ && !menu_open_) { desktopBack(); return; }
     if (dialog == Modal::bulk_covers) { bulkCoversClose(); return; }
     if (dialog == Modal::library_dialog) { collectionDialogBack(); return; }
@@ -480,18 +482,18 @@ void Launcher::updateSearch() {
 // card Up returns to the button last left. Action indices only identify the targets.
 void Launcher::detailsMove(int dx, int dy) {
     if (cards_.empty()) return;
-    const auto view = renderer_.viewport();
-    const details_layout::Layout layout{view.width, view.height};
+    const auto layout = detailsLayout();
     const auto actions = detailsActions();
     const auto all = layout.items(actions);
     const int current = detail_action_;
     const auto* from = layout.find(all, current);
     int next = !from ? 0 : details_layout::move(all, current, dx, dy); // A target that is gone: the primary button.
-    if (from && from->card() && dy < 0) {
+    // Up from a card or a strip to the buttons: the button last left.
+    if (const auto* to = layout.find(all, next); from && (from->card() || from->media()) && dy < 0 && to && !to->card() && !to->media()) {
         const auto row = layout.buttons(actions);
         if (std::any_of(row.begin(), row.end(), [&](const details_layout::Item& item) { return item.action == detail_column_; })) next = detail_column_;
     }
-    if (const auto* to = layout.find(all, next); to && !to->card() && to->kind != details_layout::Kind::back && to->kind != details_layout::Kind::rating)
+    if (const auto* to = layout.find(all, next); to && !to->card() && !to->media() && to->kind != details_layout::Kind::back && to->kind != details_layout::Kind::rating)
         detail_column_ = next;
     if (next == current) { navigationBoundary(); return; }
     audio_.navigate();
@@ -516,7 +518,11 @@ void Launcher::changeCategory(int amount) {
     if (devicesOpen()) { deviceMove(amount); return; }
     if (artworkOpen()) { artworkMove(0, amount); return; }
     if (achievementsOpen()) { achievementsMove(amount); return; }
-    if (screen_ == ScreenMode::details) { if (std::abs(amount) == 1) detailsMove(0, amount); else navigate(amount, false); return; }
+    if (screen_ == ScreenMode::details) {
+        if (psfive_shot_view_) { navigationBoundary(); return; }
+        if (std::abs(amount) == 1) detailsMove(0, amount); else navigate(amount, false);
+        return;
+    }
     if (screen_ == ScreenMode::settings) { settingsMove(amount); return; }
     if (gridScreen(screen_)) {
         if (screen_ == ScreenMode::search || screen_ == ScreenMode::store) {

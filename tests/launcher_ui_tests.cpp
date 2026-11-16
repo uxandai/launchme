@@ -151,6 +151,7 @@ public:
     static int flix(HWND window);
     static int metro(HWND window);
     static int tvShots(HWND window);
+    static int detailsMedia(HWND window);
     static int psfive(HWND window);
     static int snitch(HWND window);
     static int glanceHub(HWND window, bool live = false);
@@ -1607,6 +1608,7 @@ public:
 #include "rawg_ui_cases.hpp"
 #include "metro_ui_cases.hpp"
 #include "tv_shots_ui_cases.hpp"
+#include "details_media_ui_cases.hpp"
 #include "psfive_ui_cases.hpp"
 #include "snitch_ui_cases.hpp"
 #include "glance_ui_cases.hpp"
@@ -2659,6 +2661,14 @@ int main(int argc, char** argv) {
         CoUninitialize();
         if (code) std::cerr << "Find in Edit metadata regression: " << code << '\n';
         else std::cout << "Find in Edit metadata: sources, pad, keyboard, mouse, Insert and Save passed\n";
+        return code;
+    }
+    if (argc == 2 && std::string_view(argv[1]) == "--details-media") {
+        std::filesystem::create_directories(root);
+        const auto code = window ? LauncherUiTest::detailsMedia(window) : 99;
+        if (window) DestroyWindow(window);
+        CoUninitialize();
+        if (code) std::cerr << "Details screenshots and similar games: " << code << '\n';
         return code;
     }
     if (argc == 2 && std::string_view(argv[1]) == "--tv-shots") {

@@ -13,6 +13,7 @@
 #include "controller_art.hpp"
 #include "text_layout_cache.hpp"
 #include "psfive_layout.hpp"
+#include "game_details_layout.hpp"
 #include "quick_menu.hpp"
 #include "palette.hpp"
 #include "avatar.hpp"
@@ -1330,6 +1331,12 @@ private:
     std::vector<Cover> psfive_shots_, psfive_similar_;
     Cover psfive_shot_full_;
     void drawPsfiveDetails();
+    // A screenshot full screen (PSfive's sheet, Szczegóły): its full picture, else the strip's.
+    void drawShotViewer(size_t shot, size_t shots);
+    // Szczegóły's strips under the cards (details_media_renderer.cpp): Tryb TV's, and the desktop
+    // sheet's sections from `y` (returns where they end).
+    void drawDetailsMedia(const details_layout::Layout& layout, const details_layout::Actions& actions, int focus);
+    float drawDesktopDetailsMedia(float left, float right, float y, const desktop_ui::SheetView& view);
     // The large game menu (menu_dialog_renderer.cpp).
     void drawContextMenuDialog();
     Microsoft::WRL::ComPtr<ID2D1Effect> video_blur_; // Fill behind 4:3 videos.

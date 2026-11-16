@@ -226,7 +226,7 @@ void Launcher::animateFocus(float dt, float target_x, float target_y, float targ
     } else psfive_action_glide_.valid = false;
     // Szczegóły: Back, the rating, a button or a card.
     if (screen_ == ScreenMode::details && !cards_.empty()) {
-        const details_layout::Layout layout{view.width, view.height};
+        const auto layout = detailsLayout();
         const auto all = layout.items(detailsActions());
         if (const auto* item = layout.find(all, detail_action_))
             glideBox(details_glide_, true, 0, item->rect.left, item->rect.top, item->rect.right, item->rect.bottom);

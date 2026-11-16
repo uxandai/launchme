@@ -87,6 +87,10 @@ void Launcher::psfiveLoadDetails(const Game& game) {
     uint32_t linked = steamArtwork(game) ? game.app_id : 0;
     if (!linked) if (const auto found = rawg_metadata_.find(key); found != rawg_metadata_.end()) linked = found->second.steam_app_id;
     const bool by_title = trailerByTitle(game);
+#ifdef LAUNCHME_UI_TEST
+    psfive_shots_loading_ = false; // UI tests never ask the Steam store; they set the screenshots themselves.
+    (void)linked; (void)by_title; (void)generation;
+#else
     work_.start([alive = alive_, hwnd = hwnd_, generation, game, linked, by_title] {
         uint32_t app = linked;
         const auto root = userConfigDirectory();
@@ -130,6 +134,7 @@ void Launcher::psfiveLoadDetails(const Game& game) {
         };
         if (PostMessageW(hwnd, remote_message, 0, reinterpret_cast<LPARAM>(message.get()))) message.release();
     });
+#endif
 }
 
 void Launcher::psfiveShotsArrived(uint32_t generation, std::vector<std::wstring> fulls, std::vector<std::vector<uint8_t>> pictures) {
@@ -297,15 +302,5 @@ void Launcher::tickPsfiveDetails(float dt, bool& needs_paint) {
         if (gameKey(cards_[selected_].game) != psfive_details_key_) psfiveLoadDetails(cards_[selected_].game);
         if (preview_.request(cards_[selected_].game, account_)) needs_paint = true;
     }
-    // The similar games' covers from the artwork cache, asked for once when missing.
-    for (size_t i = 0; i < psfive_similar_games_.size() && i < psfive_similar_bound_.size(); ++i) {
-        const auto& game = psfive_similar_games_[i];
-        const auto* art = art_.find(gameKey(game));
-        if (psfive_similar_bound_[i] && renderer_.hasPsfiveSimilar(i)) {
-            if (art && art->cover) renderer_.setPsfiveSimilar(i, art->cover, art->focus); // A crop chosen or found later.
-            continue;
-        }
-        if (art && art->cover) { renderer_.setPsfiveSimilar(i, art->cover, art->focus); psfive_similar_bound_[i] = true; needs_paint = true; }
-        else if (!psfive_similar_bound_[i]) { requestArt(game, CoverMessage::Kind::cover); psfive_similar_bound_[i] = true; }
-    }
+    bindSimilarCovers(needs_paint); // The similar games' covers (src/app/details_media.cpp).
 }

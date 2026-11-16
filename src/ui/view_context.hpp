@@ -514,6 +514,15 @@ struct ViewContext {
         float focus_left = 0, focus_top = 0, focus_right = 0, focus_bottom = 0;
     };
     std::optional<PsfiveDetails> psfive_details;
+    // Szczegóły → Zrzuty ekranu i podobne gry (details_media_renderer.cpp): the strips under the cards
+    // (pictures in the renderer's psfive slots); the page's scroll in Tryb TV; a screenshot full screen.
+    struct DetailsMedia {
+        float scroll = 0, shots_scroll = 0, similar_scroll = 0;
+        size_t shots = 0, shot = 0;
+        bool loading = false, viewer = false;
+        std::vector<std::wstring> similar_names;
+    };
+    std::optional<DetailsMedia> details_media;
     // Metro's light theme (Opcje układu → Jasny motyw).
     bool metro_light = false;
     bool snitch_colour_icons = false; // Snitch: a few dock discs in colour.

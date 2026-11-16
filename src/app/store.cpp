@@ -226,6 +226,7 @@ details_layout::Actions Launcher::detailsActions() const {
     actions.rating = ratingDetailAction();
     actions.plugin = pluginDetailAction();
     if (actions.rating >= 0 && screen_ == ScreenMode::details) actions.rating_rect = renderer_.ratingLink(); // As last drawn.
+    detailsMediaActions(actions);
     return actions;
 }
 
@@ -256,10 +257,14 @@ void Launcher::openDetails(const Game& game) {
         store_tab_ = 0; openStores(); openLauncherCard(id);
         return;
     }
-    desktopLeaveLibrary(); rememberPlace();
-    detail_return_ = screen_;
-    detail_return_selected_ = selected_;
-    detail_return_scroll_ = grid_scroll_;
+    // From a similar game's tile on Szczegóły: the new page keeps the old one's way back.
+    if (screen_ != ScreenMode::details) {
+        desktopLeaveLibrary(); rememberPlace();
+        detail_return_ = screen_;
+        detail_return_selected_ = selected_;
+        detail_return_scroll_ = grid_scroll_;
+    }
+    desktop_sheet_scroll_ = desktop_sheet_scroll_target_ = 0;
     detail_catalog_ = game.kind == GameKind::catalog;
     detail_catalog_available_ = game.catalog_available;
     detail_action_ = detail_column_ = 0;
@@ -272,6 +277,7 @@ void Launcher::openDetails(const Game& game) {
     dismissMenu();
     screen_ = ScreenMode::details;
     rebuildCards(true);
+    detailsMediaOpened();
     requestDetails();
     audio_.drawer();
 }

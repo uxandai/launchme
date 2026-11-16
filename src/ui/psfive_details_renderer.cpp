@@ -211,19 +211,22 @@ void Renderer::drawPsfiveDetails() {
         }
         if (outline) drawCoverOutline(outline.Get(), tint, rise, true);
     }
-    // A screenshot full screen: its full picture (the strip's while it loads), contained.
-    if (details.viewer) {
-        brush(D2D1::ColorF(0, 0, 0, 0.94f));
-        target_->FillRectangle(D2D1::RectF(0, 0, width, height), solid_.Get());
-        const Cover* image = psfive_shot_full_.bitmap ? &psfive_shot_full_ : details.shot < psfive_shots_.size() ? &psfive_shots_[details.shot] : nullptr;
-        if (image && image->bitmap) {
-            const auto size = image->bitmap->GetSize();
-            const float scale = std::min((width - 120) / size.width, (height - 140) / size.height);
-            const float w = size.width * scale, h = size.height * scale;
-            const float x = (width - w) * 0.5f, y = (height - h) * 0.5f - 10;
-            target_->DrawBitmap(image->bitmap.Get(), D2D1::RectF(x, y, x + w, y + h), 1.0f, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
-        }
-        textLine(std::to_wstring(details.shot + 1) + L" / " + std::to_wstring(details.shots), 0, height - 46, width, menu_font_.Get(), gray(0.7f),
-                 DWRITE_TEXT_ALIGNMENT_CENTER);
+    if (details.viewer) drawShotViewer(details.shot, details.shots);
+}
+
+// A screenshot full screen: its full picture (the strip's while it loads), contained.
+void Renderer::drawShotViewer(size_t shot, size_t shots) {
+    const float width = viewport_.width, height = viewport_.height;
+    brush(D2D1::ColorF(0, 0, 0, 0.94f));
+    target_->FillRectangle(D2D1::RectF(0, 0, width, height), solid_.Get());
+    const Cover* image = psfive_shot_full_.bitmap ? &psfive_shot_full_ : shot < psfive_shots_.size() ? &psfive_shots_[shot] : nullptr;
+    if (image && image->bitmap) {
+        const auto size = image->bitmap->GetSize();
+        const float scale = std::min((width - 120) / size.width, (height - 140) / size.height);
+        const float w = size.width * scale, h = size.height * scale;
+        const float x = (width - w) * 0.5f, y = (height - h) * 0.5f - 10;
+        target_->DrawBitmap(image->bitmap.Get(), D2D1::RectF(x, y, x + w, y + h), 1.0f, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
     }
+    textLine(std::to_wstring(shot + 1) + L" / " + std::to_wstring(shots), 0, height - 46, width, menu_font_.Get(), gray(0.7f),
+             DWRITE_TEXT_ALIGNMENT_CENTER);
 }

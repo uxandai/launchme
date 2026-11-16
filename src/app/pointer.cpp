@@ -198,9 +198,10 @@ void Launcher::click(float mouse_x, float mouse_y, bool double_click) {
     if (!menu_open_ && !library_controls_.open() && screen_ != ScreenMode::details && library_view::metadata(libraryPresentation()) &&
         !ratingUrl().empty() && renderer_.ratingLink().contains(x, y)) { if (!double_click) openRatingSource(); return; }
     if (screen_ == ScreenMode::details && !menu_open_) {
+        if (psfive_shot_view_) { detailsCloseShot(); return; } // A screenshot full screen: any click closes it.
         if (double_click || cards_.empty()) return; // A double-click on a Store tile cannot also press the detail action.
         // Every target from the shared geometry; the click focuses it and acts as Enter would.
-        const int action = details_layout::Layout{view.width, view.height}.hit(detailsActions(), x, y);
+        const int action = detailsLayout().hit(detailsActions(), x, y);
         if (action < -1) return;
         detail_action_ = action;
         launch();
@@ -460,7 +461,8 @@ bool Launcher::hoverButton(float mouse_x, float mouse_y) const {
         return layout.back().contains(x, y) || layout.hit(x, y, achievements_.items.size(), achievements_.scroll) >= 0; // A row opens its card.
     }
     if (screen_ == ScreenMode::details && !menu_open_) {
-        const int action = details_layout::Layout{view.width, view.height}.hit(detailsActions(), x, y);
+        if (psfive_shot_view_) return true;
+        const int action = detailsLayout().hit(detailsActions(), x, y);
         return action >= -1 && (action != 0 || (!cards_.empty() && actionEnabled(cards_[0].game)));
     }
     if (menu_open_ && !cards_.empty() && menuDialog()) {

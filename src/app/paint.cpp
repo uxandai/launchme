@@ -293,6 +293,16 @@ void Launcher::paint(bool overlay) {
     context.artwork_browser = artworkOpen() ? &artwork_state_ : nullptr;
     context.details_loading = details_loading_ && details_.description.empty() && details_.error.empty();
     context.detail_action = detail_action_;
+    if (detailsMediaReady()) {
+        ViewContext::DetailsMedia media;
+        media.scroll = details_scroll_;
+        media.shots_scroll = psfive_shots_scroll_; media.similar_scroll = psfive_similar_scroll_;
+        media.shots = psfive_shot_full_urls_.size(); media.shot = psfive_shot_;
+        media.loading = psfive_shots_loading_;
+        media.viewer = psfive_shot_view_;
+        for (const auto& similar : psfive_similar_games_) media.similar_names.push_back(similar.name);
+        context.details_media = std::move(media);
+    }
     context.detail_achievements = achievementsDetailAction();
     if (achievementsOpen()) context.achievements = &achievements_;
     if (!cards_.empty()) {

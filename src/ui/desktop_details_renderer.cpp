@@ -288,7 +288,9 @@ void Renderer::drawDesktopDetails() {
         desktopHot(hit, card);
         side_y = card.bottom + 14;
     }
-    desktop_sheet_height_ = std::max(main_y, side_y) + s - h.bottom + 12;
+    float end = std::max(main_y, side_y);
+    if (context_->details_media) end = drawDesktopDetailsMedia(left, right, end + 12, view);
+    desktop_sheet_height_ = end + s - h.bottom + 12;
     target_->PopAxisAlignedClip();
     // "…": the game's menu over the page, as the library's pane opens it.
     if (const auto* menu = context_->desktop_sheet_menu) {
@@ -296,6 +298,23 @@ void Renderer::drawDesktopDetails() {
         desktop_ui::Layout layout;
         layout.width = view_port.width; layout.height = view_port.height;
         drawDesktopMenu(layout, *menu);
+    }
+    // A screenshot full screen: a click closes it, the arrows at its sides walk the strip.
+    if (const auto* media = context_->details_media ? &*context_->details_media : nullptr; media && media->viewer) {
+        drawShotViewer(media->shot, media->shots);
+        desktop_hotspots_.clear(); // The arrows over the rest, which closes it (the last added is hit first).
+        desktopHot({Kind::tile, -1, static_cast<int>(DetailsExtra::viewer)}, {0, 0, viewport_.width, viewport_.height});
+        const float cy = viewport_.height * 0.5f;
+        const auto arrow = [&](DetailsExtra which, float cx, wchar_t icon, bool enabled) {
+            if (!enabled) return;
+            const SheetHit hit{Kind::tile, -1, static_cast<int>(which)};
+            const Rect r{cx - 26, cy - 26, cx + 26, cy + 26};
+            desktopFill(r, 26, gray(1, view.hover == hit ? 0.18f : 0.08f));
+            desktopGlyph(icon, cx, cy, 16, gray(0.92f));
+            desktopHot(hit, r);
+        };
+        arrow(DetailsExtra::viewer_previous, 40, desktop_ui::glyph::chevron_left, media->shot > 0);
+        arrow(DetailsExtra::viewer_next, viewport_.width - 40, desktop_ui::glyph::chevron_right, media->shot + 1 < media->shots);
     }
 }
 

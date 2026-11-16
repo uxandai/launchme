@@ -69,7 +69,9 @@ set(LAUNCHME_APP_SOURCES
     src/app/wallpaper.cpp
     src/app/settings_extras.cpp
     src/app/psfive_details.cpp
+    src/app/details_media.cpp
     src/ui/psfive_details_renderer.cpp
+    src/ui/details_media_renderer.cpp
     src/ui/wallpaper_renderer.cpp
     src/ui/menu_dialog_renderer.cpp
     src/artwork/bulk_covers.cpp

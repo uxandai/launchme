@@ -793,6 +793,10 @@ void Launcher::settingsToggle(const Row& row) {
         settings_.launch_tv_mode = !settings_.launch_tv_mode;
         settingsChanged(); audio_.context(); return; // Read at the next start; the mode now stays.
     }
+    else if (row.id == Id::details_media) {
+        settings_.details_media = !settings_.details_media;
+        settingsChanged(); audio_.context(); return;
+    }
     else if (row.id == Id::handheld_mode) {
         settings_.handheld_mode = !settings_.handheld_mode;
         settingsChanged(true); audio_.context(); // Home rebuilt: Metro's start page has its own shape there.
