@@ -1,8 +1,13 @@
 // Frosted glass: a panel shows the scene behind it blurred, under a tint (the PSfive buttons,
 // dialogs, the power menu, the game menu). The scene drawn so far is copied from the target
 // (CopyFromRenderTarget: it flushes the drawing before it) and blurred by Direct2D's Gaussian blur.
+// On Linux the copy would render the whole scene so far again for every panel: there Impeller
+// keeps the scene's recording and blurs what is behind the panel itself (launchme_d2d.h).
 #include "renderer.hpp"
 #include "desktop_theme.hpp"
+#ifndef _WIN32
+#include <launchme_d2d.h>
+#endif
 
 #include <algorithm>
 #include <cmath>
@@ -15,6 +20,7 @@ using palette::gray;
 
 bool Renderer::frostCapture(ID2D1Geometry* shape, float blur) {
     frost_ready_ = false;
+    frost_native_ = false;
     if (!realizer_ || !shape || layered_) return false;
     D2D1_MATRIX_3X2_F world{};
     target_->GetTransform(&world);
@@ -27,6 +33,16 @@ bool Renderer::frostCapture(ID2D1Geometry* shape, float blur) {
     const UINT left = edge(std::floor(bounds.left - reach), pixels.width), top = edge(std::floor(bounds.top - reach), pixels.height);
     const UINT right = edge(std::ceil(bounds.right + reach), pixels.width), bottom = edge(std::ceil(bounds.bottom + reach), pixels.height);
     if (right <= left || bottom <= top) return false;
+#ifndef _WIN32
+    // The transition surface (main_target_) blurs the wallpaper and the UI together: the copy.
+    if (!main_target_ && LaunchmeFrostCapture(target_.Get())) {
+        frost_native_ = true;
+        frost_bounds_ = D2D1::RectF(static_cast<float>(left), static_cast<float>(top), static_cast<float>(right), static_cast<float>(bottom));
+        frost_sigma_ = sigma;
+        frost_ready_ = true;
+        return true;
+    }
+#endif
     const auto size = D2D1::SizeU(right - left, bottom - top);
     ID2D1Bitmap* copy = nullptr;
     for (auto& bitmap : frost_bitmaps_) {
@@ -68,6 +84,16 @@ bool Renderer::frostCapture(ID2D1Geometry* shape, float blur) {
 
 void Renderer::frostDraw(ID2D1Geometry* shape, float opacity) {
     if (!frost_ready_ || !shape || !realizer_ || opacity <= 0.004f) return;
+#ifndef _WIN32
+    if (frost_native_) {
+        // The shape clips in the current transform; the blur lays the opacity over the scene itself.
+        realizer_->PushLayer(D2D1::LayerParameters1(D2D1::InfiniteRect(), shape, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
+                                                    D2D1::IdentityMatrix(), 1.0f), nullptr);
+        LaunchmeFrostDraw(target_.Get(), frost_bounds_, frost_sigma_, std::min(opacity, 1.0f));
+        realizer_->PopLayer();
+        return;
+    }
+#endif
     D2D1_MATRIX_3X2_F previous{};
     realizer_->GetTransform(&previous);
     // The shape clips in the current transform; the copy goes back pixel for pixel where it came from.

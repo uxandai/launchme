@@ -1450,6 +1450,10 @@ private:
     Microsoft::WRL::ComPtr<ID2D1Effect> orbit_blur_;
     D2D1_POINT_2F frost_origin_{};
     bool frost_ready_ = false;
+    // Linux: the capture is Impeller's (launchme_d2d.h), drawn with a backdrop blur, not a copy.
+    bool frost_native_ = false;
+    D2D1_RECT_F frost_bounds_{};
+    float frost_sigma_ = 0;
     // Metro shortcut tiles: Biblioteka, Platformy PC, Emulacja, Ustawienia (renderer_resources.cpp).
     std::array<Microsoft::WRL::ComPtr<ID2D1LinearGradientBrush>, 6> metro_gradients_;
     std::vector<settings_ui::Rect> metro_tab_rects_; // As drawn last; one per page.

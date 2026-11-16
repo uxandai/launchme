@@ -945,7 +945,9 @@ int refreshHz(HWND handle) {
     Window* target = detail::window(handle);
     const SDL_DisplayID display = target ? SDL_GetDisplayForWindow(target->sdl) : SDL_GetPrimaryDisplay();
     const SDL_DisplayMode* mode = display ? SDL_GetCurrentDisplayMode(display) : nullptr;
-    return mode && mode->refresh_rate > 1 ? static_cast<int>(std::lround(mode->refresh_rate)) : 0;
+    // Rounded up (59.94 stays 60, 60.3 is 61): frames paced at it never leave a refresh without a
+    // new one, and a present that waits for the refresh takes up the difference.
+    return mode && mode->refresh_rate > 1 ? static_cast<int>(std::ceil(mode->refresh_rate - 0.1f)) : 0;
 }
 
 void waitForInput(double seconds) {

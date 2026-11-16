@@ -173,6 +173,20 @@ public:
     bool even_odd = false;
     std::vector<Verb> verbs;
     std::vector<Point> points;
+    // What the path is when it is exactly one rectangle, rounded rectangle or oval: the canvas then
+    // draws and clips it as that shape (Impeller's own geometry, nothing tessellated). Set by the
+    // add* that start an empty path, kept by axis-aligned transforms, cleared by any other edit.
+    struct Primitive {
+        enum class Kind : uint8_t { none, rect, round_rect, oval };
+        Kind kind = Kind::none;
+        Rect rect;
+        float rx = 0, ry = 0;
+    };
+    Primitive primitive;
+    // The Impeller path made from this one (canvas.cpp), kept while the path is unchanged: a
+    // geometry drawn every frame is converted once.
+    mutable std::shared_ptr<void> native;
+    mutable bool native_even_odd = false;
 
     bool empty() const { return verbs.empty(); }
     Path& moveTo(float x, float y);
@@ -203,6 +217,9 @@ public:
     Path dashed(const std::vector<float>& intervals, float phase) const;
     // A boolean combination of the filled areas; none when the result cannot be computed.
     static std::optional<Path> combine(const Path& a, const Path& b, BoolOp op);
+
+private:
+    void edited(); // Forgets the primitive and the native path.
 };
 
 // Distances along a path's figures (arc length of the flattened curves).
@@ -223,8 +240,11 @@ private:
 
 class Image;
 
+// The effect shaders built into the renderer (src/linux/impeller/shaders, effects.cpp).
+enum class Program { point_specular, premultiplied_matrix, arithmetic };
+
 struct Shader {
-    enum class Kind { linear, radial, conical, image };
+    enum class Kind { linear, radial, conical, image, program };
     Kind kind = Kind::linear;
     Point p0, p1;          // linear: start, end; radial: centre in p0; conical: start centre p0, end centre p1.
     float r0 = 0, r1 = 0;  // radial: radius in r0; conical: start and end radius.
@@ -235,6 +255,11 @@ struct Shader {
     std::shared_ptr<Image> image;        // image
     bool nearest = false;                // image: nearest-neighbour sampling.
     Matrix local;                        // Brush space → the space drawn in.
+    // program: the shader, its images (in the order its samplers are declared) and its uniforms
+    // (floats in declaration order). FlutterFragCoord is the drawn shape's local space.
+    Program program = Program::point_specular;
+    std::vector<std::shared_ptr<Image>> samplers;
+    std::vector<float> uniforms;
 };
 using ShaderPtr = std::shared_ptr<const Shader>;
 
@@ -264,42 +289,47 @@ struct Sampling {
 
 // ---- Images -------------------------------------------------------------------------------
 
-// Premultiplied BGRA pixels, or BC1/BC3 blocks, that live in memory, on the GPU or both. Created
-// from memory on any thread; the GPU copy is made on the thread that owns the context, the first
-// time a canvas draws the image. Immutable once made.
+// Premultiplied BGRA pixels that live in memory, on the GPU or both. Created from memory on any
+// thread; the GPU copy is made on the thread that owns the context, the first time a canvas draws
+// the image. Immutable once made, except for replace (a video's next frame into the same texture).
 class Image : public std::enable_shared_from_this<Image> {
 public:
     ~Image();
     static std::shared_ptr<Image> fromPixels(int width, int height, std::vector<uint8_t> bgra_premultiplied);
-    static std::shared_ptr<Image> fromCompressed(unsigned format, int width, int height, const uint8_t* blocks, size_t bytes);
     // A render result (RGBA8 on the GPU).
     static std::shared_ptr<Image> fromTexture(ImpellerTexture texture, int width, int height);
 
     int width() const { return width_; }
     int height() const { return height_; }
     uint64_t id() const { return id_; }
-    bool compressed() const { return format_ != 0; }
+    // A shader samples it upside down (the effect shaders flip v then). Never on the pinned SDK:
+    // Impeller hands runtime effects OpenGL ES render results already upright
+    // (impeller_d2d_tests checks both kinds of input on both backends).
+    bool upsideDown() const;
     bool onGpu() const;
     // The pixels as premultiplied BGRA (decoded or read back when needed); null when impossible.
     std::shared_ptr<const std::vector<uint8_t>> pixels();
     // The GPU texture, uploaded now when needed; null off the context's thread or on failure.
     ImpellerTexture texture();
-    // A copy at 1/2^level of the size (box filtered), the source of reduced drawing.
+    // A copy at 1/2^level of the size (box filtered on the GPU), the source of reduced drawing;
+    // null off the context's thread.
     std::shared_ptr<Image> reduced(int level);
+    // New pixels of the same size into the texture the image already has (no new allocation).
+    // False when it has none, or when the frame being recorded drew it already (that drawing
+    // must keep what it saw): then a new image is the way.
+    bool replace(const std::vector<uint8_t>& bgra_premultiplied);
     size_t gpuBytes() const;
-    void dropGpu(); // Forget the texture (kept blocks or pixels upload again).
+    void dropGpu(); // Forget the texture (kept pixels upload again).
 
 private:
     Image() = default;
     friend void releaseAllImages();
-    friend void trimImages(uint64_t frame);
     int width_ = 0, height_ = 0;
     uint64_t id_ = 0;
-    unsigned format_ = 0; // 0: pixels; 1: BC1; 3: BC3.
-    std::vector<uint8_t> blocks_;
     std::shared_ptr<const std::vector<uint8_t>> pixels_;
     ImpellerTexture texture_ = nullptr;
     bool rgba_ = false; // The texture's channel order, for read-back.
+    bool rendered_ = false; // fromTexture: a render result.
     uint64_t epoch_ = 0;
     uint64_t used_ = 0;
     std::vector<std::shared_ptr<Image>> levels_;
@@ -341,7 +371,9 @@ public:
     void drawPath(const Path& p, const Paint& paint);
     void drawLine(Point a, Point b, const Paint& paint);
     // `source` (pixels of the image) stretched over `dest`; the paint gives alpha, blend and tint.
-    void drawImageRect(const std::shared_ptr<Image>& image, const Rect& source, const Rect& dest, Sampling sampling, const Paint* paint);
+    // `reduce`: drawn much smaller, from the image's reductions (Image::reduced).
+    void drawImageRect(const std::shared_ptr<Image>& image, const Rect& source, const Rect& dest, Sampling sampling, const Paint* paint,
+                       bool reduce = true);
     void drawParagraph(ImpellerParagraph paragraph, Point origin);
     // Replaces everything in the current clip with `color`.
     void clear(Color color);
@@ -352,11 +384,23 @@ public:
     // What was recorded so far, rendered on the GPU.
     std::shared_ptr<Image> snapshot();
 
+    // Frosted glass without rendering the scene to a texture first. frostCapture remembers what
+    // was recorded so far (balanced saves required); frostDraw lays it over, blurred by `sigma`
+    // pixels, within `bounds` (pixels) and the current clip, at `opacity`. With nothing drawn
+    // since the capture and no layer open that is Impeller's backdrop filter on what is already
+    // there; otherwise the captured list is drawn again into a blurred layer.
+    bool frostCapture();
+    bool frostDraw(const Rect& bounds, float sigma, float opacity);
+
 private:
     void applyMatrix();
-    struct Saved { Matrix matrix; };
+    struct Saved { Matrix matrix; bool layer = false; };
     ImpellerDisplayListBuilder builder_ = nullptr;
     ImpellerDisplayList finished_ = nullptr;
+    ImpellerDisplayList captured_ = nullptr; // frostCapture's list (a reference of its own).
+    uint64_t drawn_ = 0;                     // Draws recorded so far.
+    uint64_t captured_drawn_ = 0;            // drawn_ at frostCapture.
+    int layers_ = 0;                         // saveLayers open.
     Matrix matrix_;
     std::vector<Saved> stack_;
     int width_, height_;
@@ -374,10 +418,11 @@ std::shared_ptr<Canvas> beginFrame(SDL_Window* window, int width, int height);
 bool present(SDL_Window* window);
 void releaseWindow(SDL_Window* window);
 void shutdown();
-bool supportsCompression(unsigned format); // 1: BC1; 3: BC3.
 // Vulkan samples B8G8R8A8 textures as they are; Impeller's OpenGL ES backend takes the same bytes as RGBA, so there
 // pictures are uploaded as RGBA (Image::texture).
 bool bgraNative();
+// An effect shader (effects.cpp); null when the context cannot run it.
+ImpellerFragmentProgram program(Program which);
 
 // ---- Text (typography.cpp) ----------------------------------------------------------------
 

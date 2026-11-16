@@ -1,8 +1,7 @@
 // Direct2D bitmaps on kernel images: premultiplied BGRA (Direct2D's B8G8R8A8 in memory), or alpha
 // only (kept as BGRA with no colour). Straight, ignored-alpha and R8G8B8A8 pixels are converted
-// on the way in; BC1/BC3 blocks go straight into a compressed GPU texture where the GPU samples
-// them (createCompressed), other block-compressed formats are refused. A bitmap a render target
-// drew into holds the render's GPU texture until something asks for its pixels.
+// on the way in; block-compressed formats are refused (Linux keeps artwork as BGRA). A bitmap a
+// render target drew into holds the render's GPU texture until something asks for its pixels.
 #include "d2d_internal.hpp"
 
 #include <algorithm>
@@ -70,24 +69,6 @@ HRESULT Bitmap::create(D2D1_SIZE_U size, const void* data, UINT32 pitch, D2D1_PI
     return data ? out->CopyFromMemory(nullptr, data, pitch) : S_OK;
 }
 
-bool blockCompressionSupported(DXGI_FORMAT format) {
-    return (format == DXGI_FORMAT_BC1_UNORM && gx::supportsCompression(1)) || (format == DXGI_FORMAT_BC3_UNORM && gx::supportsCompression(3));
-}
-
-HRESULT Bitmap::createCompressed(D2D1_SIZE_U size, const void* data, UINT32 pitch, D2D1_PIXEL_FORMAT format, float dpiX, float dpiY,
-                                 ComPtr<Bitmap>& out) {
-    const unsigned compression = format.format == DXGI_FORMAT_BC1_UNORM ? 1 : format.format == DXGI_FORMAT_BC3_UNORM ? 3 : 0;
-    if (!blockCompressionSupported(format.format)) return D2DERR_UNSUPPORTED_PIXEL_FORMAT;
-    if (!data || !size.width || !size.height || size.width % 4 || size.height % 4 || size.width > 16384 || size.height > 16384 ||
-        pitch != size.width / 4 * (compression == 1 ? 8u : 16u)) return E_INVALIDARG;
-    auto image = gx::Image::fromCompressed(compression, static_cast<int>(size.width), static_cast<int>(size.height),
-                                           static_cast<const uint8_t*>(data), static_cast<size_t>(pitch) * (size.height / 4));
-    if (!image) return E_FAIL;
-    out.Attach(new Bitmap(static_cast<int>(size.width), static_cast<int>(size.height), {format.format, D2D1_ALPHA_MODE_PREMULTIPLIED}, dpiX, dpiY));
-    out->image_ = std::move(image);
-    return S_OK;
-}
-
 Bitmap* Bitmap::from(ID2D1Image* image) { return dynamic_cast<Bitmap*>(image); }
 ImageSource* ImageSource::from(ID2D1Image* image) { return dynamic_cast<ImageSource*>(image); }
 
@@ -128,6 +109,13 @@ HRESULT STDMETHODCALLTYPE Bitmap::CopyFromMemory(const D2D1_RECT_U* rect, const 
     for (int y = 0; y < rows; ++y, source += pitch) {
         uint8_t* row = pixels.data() + (static_cast<size_t>(area.top + y) * width_ + area.left) * 4;
         convertRow(source, row, columns, format_);
+    }
+    // A whole new picture (a video's next frame) goes into the texture this bitmap already has when
+    // nothing else holds the image: no texture made and dropped per frame.
+    if (whole && image_ && image_.use_count() == 1 && image_->replace(pixels)) {
+        version_ = newVersion();
+        scaled_ = {};
+        return S_OK;
     }
     auto made = gx::Image::fromPixels(width_, height_, std::move(pixels));
     if (!made) return E_OUTOFMEMORY;

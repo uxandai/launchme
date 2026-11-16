@@ -24,8 +24,6 @@ PixelFormat pixelFormat(LaunchmeImpellerFormat format) {
     switch (format) {
     case kLaunchmeImpellerRGBA: return PixelFormat::kR8G8B8A8UNormInt;
     case kLaunchmeImpellerBGRA: return PixelFormat::kB8G8R8A8UNormInt;
-    case kLaunchmeImpellerBC1: return PixelFormat::kBC1RGBAUNormInt;
-    case kLaunchmeImpellerBC3: return PixelFormat::kBC3RGBAUNormInt;
     }
     return PixelFormat::kUnknown;
 }
@@ -39,28 +37,18 @@ uint32_t LaunchmeImpellerGetAbiVersion() { return LAUNCHME_IMPELLER_ABI; }
 bool LaunchmeImpellerSupportsFormat(ImpellerContext handle, LaunchmeImpellerFormat format) {
     if (!handle || pixelFormat(format) == PixelFormat::kUnknown) return false;
     const auto context = peer<interop::Context>(handle)->GetContext();
-    if (!context || !context->IsValid()) return false;
-    if (IsCompressed(pixelFormat(format)) && context->GetBackendType() == Context::BackendType::kOpenGLES) {
-        // The core's family query also requires BC5/BC7 extensions. Launchme asks specifically
-        // for BC1/BC3, which only need S3TC; desktop GL may expose BPTC as ARB rather than EXT.
-        const auto& gl = ContextGLES::Cast(*context).GetReactor()->GetProcTable();
-        const auto description = gl.GetDescription();
-        return description && gl.CompressedTexImage2D.IsAvailable() &&
-            (description->HasExtension("GL_EXT_texture_compression_s3tc") ||
-             description->HasExtension(format == kLaunchmeImpellerBC1 ? "GL_EXT_texture_compression_dxt1" : "GL_ANGLE_texture_compression_dxt5"));
-    }
-    return !IsCompressed(pixelFormat(format)) ||
-        context->GetCapabilities()->SupportsTextureCompression(CompressedTextureFamily::kBC);
+    return context && context->IsValid();
 }
 
 ImpellerTexture LaunchmeImpellerTextureNew(ImpellerContext handle, LaunchmeImpellerFormat format,
     int32_t width, int32_t height, const uint8_t* data, uint64_t length) {
     if (!data || !sizeValid(width, height) || !LaunchmeImpellerSupportsFormat(handle, format)) return nullptr;
     const auto pixel_format = pixelFormat(format);
-    if (IsCompressed(pixel_format) && (width % 4 || height % 4)) return nullptr;
     if (length != BytesForTextureRegion(pixel_format, width, height)) return nullptr;
     TextureDescriptor descriptor;
-    descriptor.storage_mode = StorageMode::kHostVisible;
+    // Sampled every frame: device-local memory. Contents arrive through a staging buffer either way
+    // (host-visible device memory is the small BAR window on discrete GPUs).
+    descriptor.storage_mode = StorageMode::kDevicePrivate;
     descriptor.format = pixel_format;
     descriptor.size = {width, height};
     descriptor.mip_count = 1;
@@ -68,6 +56,16 @@ ImpellerTexture LaunchmeImpellerTextureNew(ImpellerContext handle, LaunchmeImpel
     auto texture = interop::Create<interop::Texture>(*peer<interop::Context>(handle), descriptor);
     if (!texture->IsValid() || !texture->SetContents(data, length)) return nullptr;
     return texture.Leak();
+}
+
+bool LaunchmeImpellerTextureUpdate(ImpellerContext handle, ImpellerTexture texture_handle, const uint8_t* data, uint64_t length) {
+    if (!handle || !texture_handle || !data) return false;
+    const auto context = peer<interop::Context>(handle)->GetContext();
+    if (!context || !context->IsValid()) return false;
+    auto* texture = peer<interop::Texture>(texture_handle);
+    const auto native = texture->GetTexture();
+    if (!native || length != native->GetTextureDescriptor().GetByteSizeOfBaseMipLevel()) return false;
+    return texture->SetContents(data, length);
 }
 
 ImpellerTexture LaunchmeImpellerRenderToTextureNew(ImpellerContext handle, ImpellerDisplayList list,

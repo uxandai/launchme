@@ -99,7 +99,7 @@ bool createVulkan(GetProc get_proc, bool want_validation, Veto veto, bool headle
     s.vulkan = true;
     s.headless = headless;
     ++s.epoch;
-    std::fprintf(stderr, "launchme gpu: Impeller Vulkan: %s (BC1/BC3=%s)\n", properties.name, supportsCompression(1) ? "yes" : "no");
+    std::fprintf(stderr, "launchme gpu: Impeller Vulkan: %s\n", properties.name);
     return true;
 }
 } // namespace
@@ -149,16 +149,11 @@ bool tryOpenGl() {
     s.vulkan = false;
     s.headless = false;
     ++s.epoch;
-    std::fprintf(stderr, "launchme gpu: Impeller OpenGL (BC1/BC3=%s)\n", supportsCompression(1) ? "yes" : "no");
+    std::fprintf(stderr, "launchme gpu: Impeller OpenGL\n");
     return true;
 }
 
 bool bgraNative() { return state().vulkan; }
-
-bool supportsCompression(unsigned format) {
-    if (!active() || (format != 1 && format != 3)) return false;
-    return LaunchmeImpellerSupportsFormat(context(), format == 1 ? kLaunchmeImpellerBC1 : kLaunchmeImpellerBC3);
-}
 
 std::shared_ptr<Canvas> beginFrame(SDL_Window* window, int width, int height) {
     if (!active() || !window || width <= 0 || height <= 0 || width > 16384 || height > 16384) return nullptr;
@@ -166,7 +161,6 @@ std::shared_ptr<Canvas> beginFrame(SDL_Window* window, int width, int height) {
     auto& w = windows[window];
     w.canvas.reset();
     ++s.frame;
-    trimImages(s.frame);
     int pixel_width = 0, pixel_height = 0;
     SDL_GetWindowSizeInPixels(window, &pixel_width, &pixel_height);
     // Nothing tells Impeller that a surface sized by its window has resized: a new swapchain.

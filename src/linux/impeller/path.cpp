@@ -38,7 +38,13 @@ constexpr float kappa = 0.5522847498f; // A quarter circle as a cubic.
 Point last(const Path& p) { return p.points.empty() ? Point{} : p.points.back(); }
 } // namespace
 
+void Path::edited() {
+    primitive = {};
+    native.reset();
+}
+
 Path& Path::moveTo(float x, float y) {
+    edited();
     // A move right after a move replaces it.
     if (!verbs.empty() && verbs.back() == Verb::move) { points.back() = {x, y}; return *this; }
     verbs.push_back(Verb::move);
@@ -47,6 +53,7 @@ Path& Path::moveTo(float x, float y) {
 }
 
 Path& Path::lineTo(float x, float y) {
+    edited();
     if (verbs.empty() || verbs.back() == Verb::close) moveTo(verbs.empty() ? x : last(*this).x, verbs.empty() ? y : last(*this).y);
     verbs.push_back(Verb::line);
     points.push_back({x, y});
@@ -54,6 +61,7 @@ Path& Path::lineTo(float x, float y) {
 }
 
 Path& Path::quadTo(float cx, float cy, float x, float y) {
+    edited();
     if (verbs.empty()) moveTo(cx, cy);
     verbs.push_back(Verb::quad);
     points.push_back({cx, cy});
@@ -62,6 +70,7 @@ Path& Path::quadTo(float cx, float cy, float x, float y) {
 }
 
 Path& Path::cubicTo(float x1, float y1, float x2, float y2, float x3, float y3) {
+    edited();
     if (verbs.empty()) moveTo(x1, y1);
     verbs.push_back(Verb::cubic);
     points.push_back({x1, y1});
@@ -71,6 +80,7 @@ Path& Path::cubicTo(float x1, float y1, float x2, float y2, float x3, float y3) 
 }
 
 Path& Path::close() {
+    edited();
     if (!verbs.empty() && verbs.back() != Verb::close && verbs.back() != Verb::move) verbs.push_back(Verb::close);
     return *this;
 }
@@ -119,21 +129,28 @@ Path& Path::arcTo(float rx, float ry, float rotation_degrees, bool large, bool c
 }
 
 Path& Path::addPath(const Path& other) {
+    const bool was_empty = empty();
+    edited();
+    if (was_empty) primitive = other.primitive;
     verbs.insert(verbs.end(), other.verbs.begin(), other.verbs.end());
     points.insert(points.end(), other.points.begin(), other.points.end());
     return *this;
 }
 
 Path& Path::addRect(const Rect& r) {
+    const bool was_empty = empty();
     moveTo(r.left, r.top);
     lineTo(r.right, r.top);
     lineTo(r.right, r.bottom);
     lineTo(r.left, r.bottom);
-    return close();
+    close();
+    if (was_empty) primitive = {Primitive::Kind::rect, r.sorted()};
+    return *this;
 }
 
 Path& Path::addRoundRect(const Rect& r, float rx, float ry) {
     if (rx <= 0 || ry <= 0) return addRect(r);
+    const bool was_empty = empty();
     const float kx = rx * kappa, ky = ry * kappa;
     moveTo(r.left + rx, r.top);
     lineTo(r.right - rx, r.top);
@@ -144,10 +161,13 @@ Path& Path::addRoundRect(const Rect& r, float rx, float ry) {
     cubicTo(r.left + rx - kx, r.bottom, r.left, r.bottom - ry + ky, r.left, r.bottom - ry);
     lineTo(r.left, r.top + ry);
     cubicTo(r.left, r.top + ry - ky, r.left + rx - kx, r.top, r.left + rx, r.top);
-    return close();
+    close();
+    if (was_empty) primitive = {Primitive::Kind::round_rect, r.sorted(), rx, ry};
+    return *this;
 }
 
 Path& Path::addOval(const Rect& r) {
+    const bool was_empty = empty();
     const float cx = (r.left + r.right) / 2, cy = (r.top + r.bottom) / 2, rx = r.width() / 2, ry = r.height() / 2;
     const float kx = rx * kappa, ky = ry * kappa;
     moveTo(r.right, cy);
@@ -155,7 +175,9 @@ Path& Path::addOval(const Rect& r) {
     cubicTo(cx - kx, r.bottom, r.left, cy + ky, r.left, cy);
     cubicTo(r.left, cy - ky, cx - kx, r.top, cx, r.top);
     cubicTo(cx + kx, r.top, r.right, cy - ky, r.right, cy);
-    return close();
+    close();
+    if (was_empty) primitive = {Primitive::Kind::oval, r.sorted()};
+    return *this;
 }
 
 Path& Path::addLine(Point a, Point b) { return moveTo(a.x, a.y).lineTo(b.x, b.y); }
@@ -166,6 +188,9 @@ Path Path::transformed(const Matrix& m) const {
     result.verbs = verbs;
     result.points.reserve(points.size());
     for (const Point& p : points) result.points.push_back(m.map(p));
+    // Scaled and moved, a rectangle, rounded rectangle or oval stays one.
+    if (primitive.kind != Primitive::Kind::none && m.v[1] == 0 && m.v[3] == 0 && !m.hasPerspective() && m.isFinite())
+        result.primitive = {primitive.kind, m.mapRect(primitive.rect).sorted(), primitive.rx * std::abs(m.v[0]), primitive.ry * std::abs(m.v[4])};
     return result;
 }
 

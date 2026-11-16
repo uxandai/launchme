@@ -1,11 +1,9 @@
-// Images: premultiplied BGRA pixels or BC1/BC3 blocks in memory, uploaded to an Impeller texture
-// the first time a canvas on the context's thread draws them, read back when a CPU consumer
-// (WIC, effects) asks. Reduced copies (box filtered) stand in for mipmaps when an image is drawn
-// much smaller than it is.
+// Images: premultiplied BGRA pixels in memory, uploaded to an Impeller texture the first time a
+// canvas on the context's thread draws them, read back when a CPU consumer (WIC, effects) asks.
+// Reduced copies (halved on the GPU, each a 2x2 box filter) stand in for mipmaps when an image is
+// drawn much smaller than it is.
 #include "kernel.hpp"
 #include "state.hpp"
-
-#include "artwork/block_compression.hpp"
 
 #include <atomic>
 #include <cstring>
@@ -42,20 +40,6 @@ std::shared_ptr<Image> Image::fromPixels(int width, int height, std::vector<uint
     return image;
 }
 
-std::shared_ptr<Image> Image::fromCompressed(unsigned format, int width, int height, const uint8_t* blocks, size_t bytes) {
-    if ((format != 1 && format != 3) || !blocks || !sizeOk(width, height) || width % 4 || height % 4) return nullptr;
-    const size_t expected = static_cast<size_t>(width / 4) * (height / 4) * (format == 1 ? 8 : 16);
-    if (bytes != expected) return nullptr;
-    std::shared_ptr<Image> image(new Image);
-    image->width_ = width;
-    image->height_ = height;
-    image->id_ = next_id++;
-    image->format_ = format;
-    image->blocks_.assign(blocks, blocks + bytes);
-    ImageAccess::add(image.get());
-    return image;
-}
-
 std::shared_ptr<Image> Image::fromTexture(ImpellerTexture texture, int width, int height) {
     if (!texture || !sizeOk(width, height)) return nullptr;
     std::shared_ptr<Image> image(new Image);
@@ -64,35 +48,30 @@ std::shared_ptr<Image> Image::fromTexture(ImpellerTexture texture, int width, in
     image->id_ = next_id++;
     image->texture_ = texture;
     image->rgba_ = true;
+    image->rendered_ = true;
     image->epoch_ = state().epoch;
     ImageAccess::add(image.get());
     return image;
 }
 
+bool Image::upsideDown() const { return false; }
+
 bool Image::onGpu() const { return texture_ && epoch_ == state().epoch; }
 
 size_t Image::gpuBytes() const {
-    if (!onGpu()) return 0;
-    return format_ ? blocks_.size() : static_cast<size_t>(width_) * height_ * 4;
+    return onGpu() ? static_cast<size_t>(width_) * height_ * 4 : 0;
 }
 
 void Image::dropGpu() {
     if (!texture_) return;
     // Only what can be uploaded again.
-    if (!format_ && !pixels_) return;
+    if (!pixels_) return;
     if (epoch_ == state().epoch) ImpellerTextureRelease(texture_);
     texture_ = nullptr;
 }
 
 std::shared_ptr<const std::vector<uint8_t>> Image::pixels() {
     if (pixels_) return pixels_;
-    if (format_) {
-        auto bytes = format_ == 1 ? block_compression::decodeBc1(blocks_.data(), blocks_.size(), width_, height_)
-                                  : block_compression::decodeBc3(blocks_.data(), blocks_.size(), width_, height_);
-        if (bytes.empty()) return nullptr;
-        // Not kept: a compressed image exists to avoid holding its pixels.
-        return std::make_shared<const std::vector<uint8_t>>(std::move(bytes));
-    }
     if (!onGpu() || !active()) return nullptr;
     std::vector<uint8_t> bytes(static_cast<size_t>(width_) * height_ * 4);
     if (!LaunchmeImpellerTextureRead(context(), texture_, bytes.data(), bytes.size())) return nullptr;
@@ -102,73 +81,77 @@ std::shared_ptr<const std::vector<uint8_t>> Image::pixels() {
     return pixels_;
 }
 
+namespace {
+// Pixels in the order the context's textures take them (OpenGL ES: RGBA).
+ImpellerTexture upload(const std::vector<uint8_t>& bgra, int width, int height, bool& rgba) {
+    rgba = !bgraNative();
+    if (!rgba) return LaunchmeImpellerTextureNew(context(), kLaunchmeImpellerBGRA, width, height, bgra.data(), bgra.size());
+    std::vector<uint8_t> swapped(bgra);
+    for (size_t i = 0; i < swapped.size(); i += 4) std::swap(swapped[i], swapped[i + 2]);
+    return LaunchmeImpellerTextureNew(context(), kLaunchmeImpellerRGBA, width, height, swapped.data(), swapped.size());
+}
+} // namespace
+
 ImpellerTexture Image::texture() {
     if (!active()) return nullptr;
     used_ = state().frame;
     if (texture_ && epoch_ == state().epoch) return texture_;
     texture_ = nullptr;
-    ImpellerTexture made = nullptr;
-    if (format_) {
-        made = LaunchmeImpellerTextureNew(context(), format_ == 1 ? kLaunchmeImpellerBC1 : kLaunchmeImpellerBC3, width_, height_,
-                                          blocks_.data(), blocks_.size());
-    } else if (pixels_) {
-        const bool native = bgraNative();
-        if (native) {
-            made = LaunchmeImpellerTextureNew(context(), kLaunchmeImpellerBGRA, width_, height_, pixels_->data(), pixels_->size());
-        } else {
-            std::vector<uint8_t> rgba(*pixels_);
-            for (size_t i = 0; i < rgba.size(); i += 4) std::swap(rgba[i], rgba[i + 2]);
-            made = LaunchmeImpellerTextureNew(context(), kLaunchmeImpellerRGBA, width_, height_, rgba.data(), rgba.size());
-        }
-        // The memory copy goes once the GPU has the pixels (read back when someone needs them);
-        // images that are drawn once and thrown away never pay for both.
-        if (made) { rgba_ = !native; pixels_.reset(); }
-    }
+    if (!pixels_) return nullptr;
+    bool rgba = false;
+    ImpellerTexture made = upload(*pixels_, width_, height_, rgba);
     if (!made) return nullptr;
+    // The memory copy goes once the GPU has the pixels (read back when someone needs them);
+    // images that are drawn once and thrown away never pay for both.
+    rgba_ = rgba;
+    pixels_.reset();
     texture_ = made;
     epoch_ = state().epoch;
     return texture_;
 }
 
-std::shared_ptr<Image> Image::reduced(int level) {
-    if (level <= 0) return shared_from_this();
-    level = std::min(level, 8);
-    if (static_cast<int>(levels_.size()) >= level && levels_[level - 1]) return levels_[level - 1];
-    const auto source = pixels();
-    if (!source) return nullptr;
-    std::shared_ptr<const std::vector<uint8_t>> current = source;
-    int w = width_, h = height_;
-    levels_.resize(std::max<size_t>(levels_.size(), level));
-    for (int step = 1; step <= level; ++step) {
-        const int nw = std::max(1, (w + 1) / 2), nh = std::max(1, (h + 1) / 2);
-        std::vector<uint8_t> next(static_cast<size_t>(nw) * nh * 4);
-        for (int y = 0; y < nh; ++y)
-            for (int x = 0; x < nw; ++x) {
-                const int x0 = std::min(2 * x, w - 1), x1 = std::min(2 * x + 1, w - 1), y0 = std::min(2 * y, h - 1), y1 = std::min(2 * y + 1, h - 1);
-                for (int c = 0; c < 4; ++c) {
-                    const int sum = (*current)[(static_cast<size_t>(y0) * w + x0) * 4 + c] + (*current)[(static_cast<size_t>(y0) * w + x1) * 4 + c] +
-                                    (*current)[(static_cast<size_t>(y1) * w + x0) * 4 + c] + (*current)[(static_cast<size_t>(y1) * w + x1) * 4 + c];
-                    next[(static_cast<size_t>(y) * nw + x) * 4 + c] = static_cast<uint8_t>((sum + 2) / 4);
-                }
-            }
-        w = nw;
-        h = nh;
-        auto made = Image::fromPixels(w, h, std::move(next));
-        if (!made) return nullptr;
-        current = made->pixels_;
-        levels_[step - 1] = std::move(made);
+bool Image::replace(const std::vector<uint8_t>& bgra) {
+    if (!active() || !onGpu() || used_ == state().frame || bgra.size() != static_cast<size_t>(width_) * height_ * 4) return false;
+    bool ok = false;
+    if (bgraNative()) {
+        ok = !rgba_ && LaunchmeImpellerTextureUpdate(context(), texture_, bgra.data(), bgra.size());
+    } else if (rgba_) {
+        std::vector<uint8_t> swapped(bgra);
+        for (size_t i = 0; i < swapped.size(); i += 4) std::swap(swapped[i], swapped[i + 2]);
+        ok = LaunchmeImpellerTextureUpdate(context(), texture_, swapped.data(), swapped.size());
     }
-    return levels_[level - 1];
+    if (!ok) return false;
+    pixels_.reset();
+    levels_.clear();
+    return true;
 }
 
-// Drops textures that compressed images can upload again but nothing has drawn for a while.
-void trimImages(uint64_t frame) {
-    std::lock_guard lock(registry_mutex);
-    for (Image* image : registry())
-        if (image->compressed() && image->texture_ && image->epoch_ == state().epoch && frame - image->used_ > 600) {
-            ImpellerTextureRelease(image->texture_);
-            image->texture_ = nullptr;
+std::shared_ptr<Image> Image::reduced(int level) {
+    if (level <= 0) return shared_from_this();
+    if (!active()) return nullptr;
+    level = std::min(level, 8);
+    levels_.resize(std::max<size_t>(levels_.size(), level));
+    // Each level halves the one above it on the GPU: linear sampling at the centre of every 2x2
+    // block averages it. A level lost with its context (or never made) is made again.
+    std::shared_ptr<Image> current = shared_from_this();
+    for (int step = 1; step <= level; ++step) {
+        auto& slot = levels_[step - 1];
+        if (!slot || !slot->onGpu()) {
+            const int w = current->width(), h = current->height();
+            const int nw = std::max(1, (w + 1) / 2), nh = std::max(1, (h + 1) / 2);
+            Canvas canvas(nw, nh);
+            if (!canvas.healthy()) return nullptr;
+            Paint copy;
+            copy.color = {0, 0, 0, 1};
+            copy.blend = kImpellerBlendModeSource;
+            canvas.drawImageRect(current, Rect::XYWH(0, 0, static_cast<float>(w), static_cast<float>(h)),
+                                 Rect::XYWH(0, 0, static_cast<float>(nw), static_cast<float>(nh)), Sampling{false}, &copy, false);
+            slot = canvas.snapshot();
+            if (!slot) return nullptr;
         }
+        current = slot;
+    }
+    return current;
 }
 
 void releaseAllImages() {

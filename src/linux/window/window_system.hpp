@@ -17,7 +17,7 @@ bool start(std::string& error);
 void stop();
 // The window layer's (SDL's) last error, for a start that failed.
 std::string lastError();
-// The window's display refresh rate in Hz (0: unknown).
+// The window's display refresh rate in whole Hz, rounded up (0: unknown).
 int refreshHz(HWND window);
 // Sleeps until an event, a posted message or a timer is due, at most `seconds`.
 void waitForInput(double seconds);

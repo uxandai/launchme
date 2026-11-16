@@ -4,6 +4,7 @@
 // nesting keeps in step. A layer is a canvas layer only when it has an opacity or an opacity
 // brush; content bounds and geometric masks are clips.
 #include "d2d_internal.hpp"
+#include "../win32/launchme_d2d.h"
 
 #include <algorithm>
 #include <cmath>
@@ -129,9 +130,7 @@ HRESULT Canvas::createBitmap(D2D1_SIZE_U size, const void* data, UINT32 pitch, c
     const auto format = properties ? properties->pixelFormat : format_;
     ComPtr<Bitmap> created;
     const float dpi_x = properties ? properties->dpiX : dpi_, dpi_y = properties ? properties->dpiY : dpi_;
-    const HRESULT result = (format.format == DXGI_FORMAT_BC1_UNORM || format.format == DXGI_FORMAT_BC3_UNORM) ?
-        Bitmap::createCompressed(size, data, pitch, format, dpi_x, dpi_y, created) :
-        Bitmap::create(size, data, pitch, format, dpi_x, dpi_y, created);
+    const HRESULT result = Bitmap::create(size, data, pitch, format, dpi_x, dpi_y, created);
     if (SUCCEEDED(result)) *bitmap = created.Detach();
     return result;
 }
@@ -141,10 +140,7 @@ HRESULT Canvas::createBitmap1(D2D1_SIZE_U size, const void* data, UINT32 pitch, 
     *bitmap = nullptr;
     if (!properties) return E_INVALIDARG;
     ComPtr<Bitmap> created;
-    // Compressed artwork into native GPU textures (BC1 and BC3).
-    const HRESULT result = (properties->pixelFormat.format == DXGI_FORMAT_BC1_UNORM || properties->pixelFormat.format == DXGI_FORMAT_BC3_UNORM) ?
-        Bitmap::createCompressed(size, data, pitch, properties->pixelFormat, properties->dpiX, properties->dpiY, created) :
-        Bitmap::create(size, data, pitch, properties->pixelFormat, properties->dpiX, properties->dpiY, created);
+    const HRESULT result = Bitmap::create(size, data, pitch, properties->pixelFormat, properties->dpiX, properties->dpiY, created);
     if (SUCCEEDED(result)) *bitmap = created.Detach();
     return result;
 }
@@ -549,3 +545,15 @@ HRESULT createHwndTarget(const D2D1_RENDER_TARGET_PROPERTIES& properties, const 
     return result;
 }
 } // namespace lm_d2d
+
+// ---- Launchme's additions (launchme_d2d.h) --------------------------------------------------
+
+bool LaunchmeFrostCapture(ID2D1RenderTarget* target) {
+    auto* canvas = lm_d2d::Canvas::from(target);
+    return canvas && canvas->frostCapture();
+}
+
+bool LaunchmeFrostDraw(ID2D1RenderTarget* target, const D2D1_RECT_F& bounds, float sigma, float opacity) {
+    auto* canvas = lm_d2d::Canvas::from(target);
+    return canvas && canvas->frostDraw(lm_impeller::Rect::LTRB(bounds.left, bounds.top, bounds.right, bounds.bottom), sigma, opacity);
+}

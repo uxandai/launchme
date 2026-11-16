@@ -39,6 +39,25 @@ PathPtr nativePath(const Path& path) {
     return PathPtr(ImpellerPathBuilderTakePathNew(builder.get(), path.even_odd ? kImpellerFillTypeOdd : kImpellerFillTypeNonZero));
 }
 
+// The path's Impeller path, made once and kept with it (Path::native) while it is unchanged.
+ImpellerPath cachedPath(const Path& path) {
+    if (path.native && path.native_even_odd == path.even_odd) return static_cast<ImpellerPath>(path.native.get());
+    PathPtr made = nativePath(path);
+    if (!made) return nullptr;
+    ImpellerPath raw = made.release();
+    path.native = std::shared_ptr<void>(raw, [](void* value) { ImpellerPathRelease(static_cast<ImpellerPath>(value)); });
+    path.native_even_odd = path.even_odd;
+    return raw;
+}
+
+ImpellerRoundingRadii radiiOf(float rx, float ry) { return {{rx, ry}, {rx, ry}, {rx, ry}, {rx, ry}}; }
+
+// A rounded rectangle's radii as Direct2D draws them: at most half the side.
+void clampRadii(const Rect& r, float& rx, float& ry) {
+    rx = std::min(std::abs(rx), r.width() * 0.5f);
+    ry = std::min(std::abs(ry), r.height() * 0.5f);
+}
+
 // The standalone API interpolates straight colours; Direct2D's gradients interpolate premultiplied.
 // Stops are subdivided where the straight interpolation would be off by more than 1/1024 of a
 // premultiplied channel, which keeps gradients on the GPU without dark fringes at transparent stops.
@@ -86,6 +105,18 @@ Stops gradientStops(const std::vector<Color>& colors, const std::vector<float>& 
 
 ColorSourceHandle nativeSource(const Shader& shader) {
     const ImpellerMatrix transform = shader.local.native();
+    if (shader.kind == Shader::Kind::program) {
+        const ImpellerFragmentProgram fragment = program(shader.program);
+        if (!fragment || !active()) return {};
+        std::vector<ImpellerTexture> textures;
+        for (const auto& image : shader.samplers) {
+            const ImpellerTexture texture = image ? image->texture() : nullptr;
+            if (!texture) return {};
+            textures.push_back(texture);
+        }
+        return ColorSourceHandle(ImpellerColorSourceCreateFragmentProgramNew(context(), fragment, textures.data(), textures.size(),
+            reinterpret_cast<const uint8_t*>(shader.uniforms.data()), shader.uniforms.size() * sizeof(float)));
+    }
     if (shader.kind == Shader::Kind::image) {
         if (!shader.image) return {};
         const ImpellerTexture texture = shader.image->texture();
@@ -147,6 +178,7 @@ Canvas::Canvas(int width, int height) : width_(width), height_(height) {
 }
 
 Canvas::~Canvas() {
+    if (captured_) ImpellerDisplayListRelease(captured_);
     if (finished_) ImpellerDisplayListRelease(finished_);
     if (builder_) ImpellerDisplayListBuilderRelease(builder_);
 }
@@ -168,7 +200,8 @@ void Canvas::save() {
 }
 
 void Canvas::saveLayer(const Rect* bounds, float alpha) {
-    stack_.push_back({matrix_});
+    stack_.push_back({matrix_, true});
+    ++layers_;
     if (!builder_) return;
     Rect area;
     if (bounds) {
@@ -192,6 +225,7 @@ void Canvas::saveLayer(const Rect* bounds, float alpha) {
 void Canvas::restore() {
     if (stack_.empty()) return;
     matrix_ = stack_.back().matrix;
+    if (stack_.back().layer) --layers_;
     stack_.pop_back();
     if (builder_) ImpellerDisplayListBuilderRestore(builder_);
 }
@@ -208,31 +242,58 @@ void Canvas::clipRect(const Rect& r) {
 
 void Canvas::clipPath(const Path& p) {
     if (!builder_) return;
-    const auto native = nativePath(p);
+    // One rectangle, rounded rectangle or oval: Impeller's own clip for that shape.
+    const auto& shape = p.primitive;
+    const ImpellerRect box = nativeRect(shape.rect);
+    switch (shape.kind) {
+    case Path::Primitive::Kind::rect: ImpellerDisplayListBuilderClipRect(builder_, &box, kImpellerClipOperationIntersect); return;
+    case Path::Primitive::Kind::oval: ImpellerDisplayListBuilderClipOval(builder_, &box, kImpellerClipOperationIntersect); return;
+    case Path::Primitive::Kind::round_rect: {
+        float rx = shape.rx, ry = shape.ry;
+        clampRadii(shape.rect, rx, ry);
+        const ImpellerRoundingRadii radii = radiiOf(rx, ry);
+        ImpellerDisplayListBuilderClipRoundedRect(builder_, &box, &radii, kImpellerClipOperationIntersect);
+        return;
+    }
+    case Path::Primitive::Kind::none: break;
+    }
+    const ImpellerPath native = cachedPath(p);
     if (!native) { healthy_ = false; return; }
-    ImpellerDisplayListBuilderClipPath(builder_, native.get(), kImpellerClipOperationIntersect);
+    ImpellerDisplayListBuilderClipPath(builder_, native, kImpellerClipOperationIntersect);
 }
 
 void Canvas::drawPaint(const Paint& paint) {
+    ++drawn_;
     const auto native = nativePaint(paint);
     if (native && builder_) ImpellerDisplayListBuilderDrawPaint(builder_, native.get());
 }
 
 void Canvas::drawRect(const Rect& r, const Paint& paint) {
     if (paint.stroke && !paint.dashes.empty()) { drawPath(Path::Rect_(r), paint); return; }
+    ++drawn_;
     const auto native = nativePaint(paint);
     if (!native || !builder_) return;
     const ImpellerRect box = nativeRect(r.sorted());
     ImpellerDisplayListBuilderDrawRect(builder_, &box, native.get());
 }
 
+// Impeller's rounded rectangle (its own geometry, not a tessellated path).
 void Canvas::drawRoundRect(const Rect& r, float rx, float ry, const Paint& paint) {
-    if (rx <= 0 || ry <= 0) { drawRect(r, paint); return; }
-    drawPath(Path::RoundRect(r.sorted(), rx, ry), paint);
+    const Rect box = r.sorted();
+    clampRadii(box, rx, ry);
+    if (rx <= 0 || ry <= 0) { drawRect(box, paint); return; }
+    if (paint.stroke && !paint.dashes.empty()) { drawPath(Path::RoundRect(box, rx, ry), paint); return; }
+    ++drawn_;
+    const auto native = nativePaint(paint);
+    if (!native || !builder_) return;
+    const ImpellerRect rect = nativeRect(box);
+    const ImpellerRoundingRadii radii = radiiOf(rx, ry);
+    ImpellerDisplayListBuilderDrawRoundedRect(builder_, &rect, &radii, native.get());
 }
 
 void Canvas::drawOval(const Rect& r, const Paint& paint) {
     if (paint.stroke && !paint.dashes.empty()) { drawPath(Path::Oval(r), paint); return; }
+    ++drawn_;
     const auto native = nativePaint(paint);
     if (!native || !builder_) return;
     const ImpellerRect box = nativeRect(r.sorted());
@@ -248,28 +309,37 @@ void Canvas::drawPath(const Path& p, const Paint& paint) {
         if (!pieces.empty()) drawPath(pieces, solid);
         return;
     }
+    switch (p.primitive.kind) {
+    case Path::Primitive::Kind::rect: drawRect(p.primitive.rect, paint); return;
+    case Path::Primitive::Kind::round_rect: drawRoundRect(p.primitive.rect, p.primitive.rx, p.primitive.ry, paint); return;
+    case Path::Primitive::Kind::oval: drawOval(p.primitive.rect, paint); return;
+    case Path::Primitive::Kind::none: break;
+    }
+    ++drawn_;
     const auto native = nativePaint(paint);
     if (!native) return;
-    const auto shape = nativePath(p);
+    const ImpellerPath shape = cachedPath(p);
     if (!shape) { healthy_ = false; return; }
-    ImpellerDisplayListBuilderDrawPath(builder_, shape.get(), native.get());
+    ImpellerDisplayListBuilderDrawPath(builder_, shape, native.get());
 }
 
 void Canvas::drawLine(Point a, Point b, const Paint& paint) {
     if (!builder_) return;
     if (!paint.dashes.empty()) { Path line; line.addLine(a, b); drawPath(line, paint); return; }
+    ++drawn_;
     const auto native = nativePaint(paint);
     if (!native) return;
     const ImpellerPoint from{a.x, a.y}, to{b.x, b.y};
     ImpellerDisplayListBuilderDrawLine(builder_, &from, &to, native.get());
 }
 
-void Canvas::drawImageRect(const std::shared_ptr<Image>& image, const Rect& source, const Rect& dest, Sampling sampling, const Paint* paint) {
+void Canvas::drawImageRect(const std::shared_ptr<Image>& image, const Rect& source, const Rect& dest, Sampling sampling, const Paint* paint,
+                           bool reduce) {
     if (!image || !builder_ || source.empty() || dest.empty()) return;
     std::shared_ptr<Image> use = image;
     Rect from = source;
     // Drawn much smaller than it is: from a box-filtered reduction, as mipmapping would.
-    if (!sampling.nearest) {
+    if (reduce && !sampling.nearest) {
         const float device = dest.width() * matrix_.maxScale();
         if (device > 0 && source.width() / device >= 2) {
             const int level = std::min(8, static_cast<int>(std::floor(std::log2(source.width() / device))));
@@ -280,6 +350,7 @@ void Canvas::drawImageRect(const std::shared_ptr<Image>& image, const Rect& sour
             }
         }
     }
+    ++drawn_;
     const ImpellerTexture texture = use->texture();
     if (!texture) { healthy_ = false; return; }
     PaintHandle native;
@@ -294,6 +365,7 @@ void Canvas::drawImageRect(const std::shared_ptr<Image>& image, const Rect& sour
 
 void Canvas::drawParagraph(ImpellerParagraph paragraph, Point origin) {
     if (!builder_ || !paragraph) return;
+    ++drawn_;
     const ImpellerPoint at{origin.x, origin.y};
     ImpellerDisplayListBuilderDrawParagraph(builder_, paragraph, &at);
 }
@@ -319,6 +391,51 @@ ImpellerDisplayList Canvas::finish() {
     ImpellerDisplayListBuilderDrawDisplayList(builder_, finished_, 1);
     applyMatrix();
     return finished_;
+}
+
+bool Canvas::frostCapture() {
+    const auto list = finish();
+    if (!list) return false;
+    ImpellerDisplayListRetain(list);
+    if (captured_) ImpellerDisplayListRelease(captured_);
+    captured_ = list;
+    captured_drawn_ = drawn_;
+    return true;
+}
+
+bool Canvas::frostDraw(const Rect& bounds, float sigma, float opacity) {
+    if (!builder_ || !captured_ || bounds.empty() || !(sigma > 0)) return false;
+    if (opacity <= 0) return true;
+    const bool backdrop = drawn_ == captured_drawn_ && layers_ == 0;
+    ++drawn_;
+    const Matrix keep = matrix_;
+    resetMatrix(); // `bounds` and `sigma` are in pixels.
+    const ImpellerRect area = nativeRect(bounds.sorted());
+    Paint own;
+    own.color = {0, 0, 0, std::min(opacity, 1.0f)};
+    bool ok = false;
+    if (backdrop) {
+        // What is under the clip, blurred into a layer that is laid over it at `opacity`.
+        Handle<ImpellerImageFilter, ImpellerImageFilterRelease> blur(ImpellerImageFilterCreateBlurNew(sigma, sigma, kImpellerTileModeMirror));
+        PaintHandle paint = opacity < 1 ? nativePaint(own) : PaintHandle{};
+        if (blur && (opacity >= 1 || paint)) {
+            ImpellerDisplayListBuilderSaveLayer(builder_, &area, paint.get(), blur.get());
+            ImpellerDisplayListBuilderRestore(builder_);
+            ok = true;
+        }
+    } else {
+        // Something was drawn since (a dim): the captured scene again, blurred as a layer.
+        own.blur_sigma = sigma;
+        own.blur_tile = kImpellerTileModeMirror;
+        if (PaintHandle paint = nativePaint(own)) {
+            ImpellerDisplayListBuilderSaveLayer(builder_, &area, paint.get(), nullptr);
+            ImpellerDisplayListBuilderDrawDisplayList(builder_, captured_, 1);
+            ImpellerDisplayListBuilderRestore(builder_);
+            ok = true;
+        }
+    }
+    setMatrix(keep);
+    return ok;
 }
 
 std::shared_ptr<Image> Canvas::snapshot() {

@@ -1,9 +1,10 @@
 // The built-in Direct2D effects the launcher uses: Gaussian blur, colour matrix, saturation,
 // blend, 2D affine transform, arithmetic composite, point-specular lighting and composite. The
 // first ones run on the GPU with Impeller's own filters and blend modes; arithmetic composite,
-// point-specular lighting and a colour matrix on premultiplied values are per-pixel maths on the
-// CPU. An effect keeps its last result until a property or an input changes or another
-// resolution is requested.
+// point-specular lighting and a colour matrix on premultiplied values run on the GPU as the
+// renderer's own effect shaders (src/linux/impeller/shaders), with the same maths on the CPU
+// where those cannot run. An effect keeps its last result until a property or an input changes or
+// another resolution is requested.
 #include "d2d_internal.hpp"
 
 #include <algorithm>
@@ -102,7 +103,7 @@ ImageData fromFloats(const gx::IRect& area, const std::vector<float>& channels) 
 }
 
 // k1*in1*in0 + k2*in1 + k3*in0 + k4 on premultiplied values (in1 the foreground), as the launcher has always composed it.
-ImageData arithmetic(const ImageData& first, const ImageData& second, const D2D1_VECTOR_4F& k) {
+ImageData arithmeticCpu(const ImageData& first, const ImageData& second, const D2D1_VECTOR_4F& k) {
     const gx::IRect area = unite(areaOf(first), areaOf(second));
     if (area.empty()) return {};
     const Pixels a = pixelsOf(first), b = pixelsOf(second);
@@ -118,7 +119,7 @@ ImageData arithmetic(const ImageData& first, const ImageData& second, const D2D1
 }
 
 // A 5x4 matrix (Direct2D's layout) on the premultiplied values as they are.
-ImageData premultipliedMatrix(const ImageData& in, const D2D1_MATRIX_5X4_F& m, bool clamp) {
+ImageData premultipliedMatrixCpu(const ImageData& in, const D2D1_MATRIX_5X4_F& m, bool clamp) {
     const Pixels p = pixelsOf(in);
     const gx::IRect area = areaOf(in);
     if (!p.bytes) return {};
@@ -139,7 +140,7 @@ ImageData premultipliedMatrix(const ImageData& in, const D2D1_MATRIX_5X4_F& m, b
 }
 
 // SVG's feSpecularLighting with a point light: the alpha channel is the height map. The light is in grid pixels.
-ImageData pointSpecular(const ImageData& in, float lx, float ly, float lz, const D2D1_VECTOR_3F& color, float surface_scale, float constant,
+ImageData pointSpecularCpu(const ImageData& in, float lx, float ly, float lz, const D2D1_VECTOR_3F& color, float surface_scale, float constant,
                         float exponent) {
     const Pixels p = pixelsOf(in);
     const gx::IRect area = areaOf(in);
@@ -175,6 +176,72 @@ ImageData pointSpecular(const ImageData& in, float lx, float ly, float lz, const
     return fromFloats(area, out);
 }
 
+// ---- GPU kernels (the effect shaders) ----------------------------------------------------------
+
+// `program` with its images and uniforms over `area`, in grid pixels; empty when it cannot run.
+ImageData shade(const gx::IRect& area, gx::Program program, std::vector<std::shared_ptr<gx::Image>> samplers, std::vector<float> uniforms) {
+    if (area.empty() || !gx::program(program)) return {};
+    for (const auto& image : samplers)
+        if (!image) return {};
+    auto shader = std::make_shared<gx::Shader>();
+    shader->kind = gx::Shader::Kind::program;
+    shader->program = program;
+    shader->samplers = std::move(samplers);
+    shader->uniforms = std::move(uniforms);
+    return renderArea(area, [&](gx::Canvas& canvas) {
+        gx::Paint paint;
+        paint.color = {0, 0, 0, 1};
+        paint.blend = kImpellerBlendModeSource;
+        paint.shader = shader;
+        canvas.drawRect(area.toRect(), paint);
+    });
+}
+
+float flag(bool value) { return value ? 1.0f : 0.0f; }
+// An input's place in the grid as the shaders take it (left, top, width, height).
+void place(std::vector<float>& uniforms, const ImageData& data) {
+    const gx::IRect area = areaOf(data);
+    uniforms.insert(uniforms.end(), {static_cast<float>(area.left), static_cast<float>(area.top),
+                                     static_cast<float>(std::max(1, area.width())), static_cast<float>(std::max(1, area.height()))});
+}
+
+ImageData arithmetic(const ImageData& first, const ImageData& second, const D2D1_VECTOR_4F& k) {
+    const gx::IRect area = unite(areaOf(first), areaOf(second));
+    if (area.empty()) return {};
+    // A missing input samples nothing: the other one stands in for its sampler.
+    const auto& any = first.image ? first.image : second.image;
+    std::vector<float> uniforms;
+    place(uniforms, first.image ? first : second);
+    place(uniforms, second.image ? second : first);
+    uniforms.insert(uniforms.end(), {flag(first.image && first.image->upsideDown()), flag(second.image && second.image->upsideDown()),
+                                     flag(first.image != nullptr), flag(second.image != nullptr), k.x, k.y, k.z, k.w});
+    auto result = shade(area, gx::Program::arithmetic, {first.image ? first.image : any, second.image ? second.image : any}, std::move(uniforms));
+    return result.image ? result : arithmeticCpu(first, second, k);
+}
+
+ImageData premultipliedMatrix(const ImageData& in, const D2D1_MATRIX_5X4_F& m, bool clamp) {
+    if (!in.image) return {};
+    std::vector<float> uniforms;
+    place(uniforms, in);
+    uniforms.insert(uniforms.end(), {flag(in.image->upsideDown()), flag(clamp), 0, 0,
+                                     m._11, m._21, m._31, m._41, m._12, m._22, m._32, m._42,
+                                     m._13, m._23, m._33, m._43, m._14, m._24, m._34, m._44,
+                                     m._51, m._52, m._53, m._54});
+    auto result = shade(areaOf(in), gx::Program::premultiplied_matrix, {in.image}, std::move(uniforms));
+    return result.image ? result : premultipliedMatrixCpu(in, m, clamp);
+}
+
+ImageData pointSpecular(const ImageData& in, float lx, float ly, float lz, const D2D1_VECTOR_3F& color, float surface_scale, float constant,
+                        float exponent) {
+    if (!in.image) return {};
+    std::vector<float> uniforms;
+    place(uniforms, in);
+    uniforms.insert(uniforms.end(), {lx, ly, lz, flag(in.image->upsideDown()), surface_scale, constant, exponent, 0,
+                                     color.x, color.y, color.z, 0});
+    auto result = shade(areaOf(in), gx::Program::point_specular, {in.image}, std::move(uniforms));
+    return result.image ? result : pointSpecularCpu(in, lx, ly, lz, color, surface_scale, constant, exponent);
+}
+
 template <class T>
 bool read(const BYTE* data, UINT32 size, T& value) {
     if (!data || size != sizeof(T)) return false;
@@ -204,11 +271,19 @@ public:
         return cached_;
     }
     // Own settings and every input's content.
+    // The counters are small and sequential: each is mixed in (splitmix64), as XOR-ing them made
+    // another input's version collide with the old one and kept a stale result.
     uint64_t version() const {
-        uint64_t hash = version_;
+        const auto mix = [](uint64_t x) {
+            x += 0x9E3779B97F4A7C15ull;
+            x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9ull;
+            x = (x ^ (x >> 27)) * 0x94D049BB133111EBull;
+            return x ^ (x >> 31);
+        };
+        uint64_t hash = mix(version_);
         for (const auto& input : inputs_) {
             const auto* source = ImageSource::from(input.Get());
-            hash = (hash ^ (source ? source->version() : 0)) * 0x100000001B3ull + 0x9E3779B97F4A7C15ull;
+            hash = mix(hash ^ mix(source ? source->version() : 0));
         }
         return hash;
     }

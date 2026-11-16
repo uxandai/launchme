@@ -1,7 +1,6 @@
 // Exercises the Impeller kernel on real GL/Vulkan: uploads, drawing, text, readback, resize and
 // lifecycle. No account, application profile, network, or store actions are involved.
 #include "linux/impeller/kernel.hpp"
-#include "artwork/block_compression.hpp"
 #include "artwork/image_codec.hpp"
 #include <SDL3/SDL.h>
 #include <array>
@@ -93,19 +92,22 @@ int main(int argc, char** argv) {
     }
     const auto context = gx::context();
     check(LaunchmeImpellerGetAbiVersion() == LAUNCHME_IMPELLER_ABI, "extension ABI");
-    const std::array<uint8_t, 8> red{0, 0xf8, 0, 0, 0, 0, 0, 0};
-    check(!LaunchmeImpellerTextureNew(context, kLaunchmeImpellerBC1, 4, 4, red.data(), 7), "truncated block refused");
-    check(!LaunchmeImpellerTextureNew(context, kLaunchmeImpellerBC1, 5, 4, red.data(), 8), "unaligned dimensions refused");
-    check(!LaunchmeImpellerTextureNew(context, kLaunchmeImpellerBC1, 0, 4, red.data(), 8), "empty dimensions refused");
-    check(!LaunchmeImpellerTextureNew(context, static_cast<LaunchmeImpellerFormat>(99), 4, 4, red.data(), 8), "unknown format refused");
-    check(!LaunchmeImpellerTextureNew(nullptr, kLaunchmeImpellerBC1, 4, 4, red.data(), 8), "null context refused");
-    const bool bc = gx::supportsCompression(1);
-    std::cout << "BC1/BC3 capability: " << bc << '\n';
-    std::shared_ptr<gx::Image> image;
-    if (bc) {
-        image = gx::Image::fromCompressed(1, 4, 4, red.data(), red.size());
-        check(image != nullptr, "BC1 lazy image");
+    std::vector<uint8_t> red(4 * 4 * 4);
+    for (size_t i = 0; i < red.size(); i += 4) { red[i + 2] = 255; red[i + 3] = 255; } // B G R A
+    check(!LaunchmeImpellerTextureNew(context, kLaunchmeImpellerBGRA, 4, 4, red.data(), 63), "truncated pixels refused");
+    check(!LaunchmeImpellerTextureNew(context, kLaunchmeImpellerBGRA, 0, 4, red.data(), 64), "empty dimensions refused");
+    check(!LaunchmeImpellerTextureNew(context, static_cast<LaunchmeImpellerFormat>(99), 4, 4, red.data(), 64), "unknown format refused");
+    check(!LaunchmeImpellerTextureNew(nullptr, kLaunchmeImpellerBGRA, 4, 4, red.data(), 64), "null context refused");
+    {
+        // A texture's contents replaced in place (video frames) keep the handle.
+        const ImpellerTexture texture = LaunchmeImpellerTextureNew(context, kLaunchmeImpellerBGRA, 4, 4, red.data(), red.size());
+        check(texture != nullptr, "BGRA texture");
+        check(texture && LaunchmeImpellerTextureUpdate(context, texture, red.data(), red.size()), "texture contents replaced");
+        check(!texture || !LaunchmeImpellerTextureUpdate(context, texture, red.data(), 8), "update of another size refused");
+        ImpellerTextureRelease(texture);
     }
+    std::shared_ptr<gx::Image> image = gx::Image::fromPixels(4, 4, red);
+    check(image != nullptr, "BGRA lazy image");
     gx::ParagraphSpec spec;
     gx::TextStyle style;
     style.family = "DejaVu Sans";
@@ -165,23 +167,29 @@ int main(int argc, char** argv) {
         check(p.r > 200 && p.g < 40, "gradient starts red");
         p = actual.at(115 + 92, 200);
         check(p.g > 30 && p.r < 140, "gradient passes through premultiplied green (no hue shift)");
-        if (bc) {
-            p = actual.at(50, 150);
-            check(p.r > 240 && p.g < 8 && p.b < 8, "BC1 texture sampled red");
-        }
+        p = actual.at(50, 150);
+        check(p.r > 240 && p.g < 8 && p.b < 8, "BGRA texture sampled red");
         capture(rendered, "impeller-" + backend);
     }
-    if (bc) {
-        std::vector<uint8_t> alpha(4 * 4 * 4);
-        for (size_t i = 0; i < alpha.size(); i += 4) { alpha[i + 2] = 128; alpha[i + 3] = 128; }
-        const auto blocks = block_compression::encodeBc3(alpha.data(), 4, 4);
-        auto logo = gx::Image::fromCompressed(3, 4, 4, blocks.data(), blocks.size());
+    {
+        // Drawn far smaller than it is: through reductions made on the GPU (stripes average to grey).
+        std::vector<uint8_t> stripes(256 * 256 * 4);
+        for (int y = 0; y < 256; ++y)
+            for (int x = 0; x < 256; ++x) {
+                uint8_t* px = &stripes[(static_cast<size_t>(y) * 256 + x) * 4];
+                px[0] = px[1] = px[2] = x % 2 ? 255 : 0;
+                px[3] = 255;
+            }
+        auto big = gx::Image::fromPixels(256, 256, std::move(stripes));
         auto next = gx::beginFrame(window, 320, 240);
         next->clear({0, 0, 0, 1});
-        next->drawImageRect(logo, gx::Rect::XYWH(0, 0, 4, 4), gx::Rect::XYWH(0, 0, 4, 4), gx::Sampling{true}, nullptr);
+        next->drawImageRect(big, gx::Rect::XYWH(0, 0, 256, 256), gx::Rect::XYWH(0, 0, 16, 16), gx::Sampling{false}, nullptr);
+        const auto reduced = big->reduced(3);
+        check(reduced && reduced->width() == 32 && reduced->height() == 32 && reduced->onGpu(), "reduction made on the GPU");
         const Pixels result(next->snapshot());
-        check(result.ok() && result.at(1, 1).r > 110 && result.at(1, 1).r < 145 && result.at(1, 1).a == 255, "BC3 premultiplied alpha");
-        check(gx::present(window), "BC3 present");
+        const int grey = result.ok() ? result.at(8, 8).r : 0;
+        check(result.ok() && grey > 100 && grey < 155, "reduced drawing averages the stripes");
+        check(gx::present(window), "reduced present");
     }
     {
         // Path booleans and measuring, on the CPU.

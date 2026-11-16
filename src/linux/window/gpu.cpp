@@ -3,8 +3,10 @@
 // decides which backend runs and lets the windows reach it.
 //   LAUNCHME_RENDERER=vulkan|gl  picks one (default: Vulkan on a real GPU, then OpenGL; "vulkan"
 //                                also accepts a software device such as lavapipe).
-//   LAUNCHME_VSYNC=1             waits for the display's refresh at present (default off: the
-//                                launcher paces its frames itself, FrameClock).
+//   LAUNCHME_VSYNC=0|adaptive    OpenGL: 0 shows frames at once (tearing); adaptive waits for the
+//                                refresh unless the frame is late. Default: waits for it, as Direct2D
+//                                does on Windows, so FrameClock's ticks land on whole refreshes
+//                                instead of beating against them. Vulkan always waits (FIFO).
 //   LAUNCHME_GPU_DEBUG=1         frames shown per second and the time a present takes.
 #include "window_internal.hpp"
 #include "gpu.hpp"
@@ -31,7 +33,7 @@ std::string environment(const char* name) {
 struct State {
     Backend backend = Backend::none;
     bool decided = false;
-    bool vsync = false;
+    int swap_interval = 1; // SDL_GL_SetSwapInterval: 1 waits for the refresh, -1 adaptive, 0 not.
     SDL_GLContext gl = nullptr;
 };
 State& gpuState() { static State instance; return instance; }
@@ -52,7 +54,8 @@ bool createGl(SDL_Window* window) {
     const auto* version = get_string ? reinterpret_cast<const char*>(get_string(0x1F02)) : nullptr;  // GL_VERSION
     const auto* renderer = get_string ? reinterpret_cast<const char*>(get_string(0x1F01)) : nullptr; // GL_RENDERER
     if (!version || !renderer) return fail("the OpenGL context has no driver");
-    SDL_GL_SetSwapInterval(s.vsync ? 1 : 0);
+    // Adaptive vsync where the driver has it, else the plain kind.
+    if (!SDL_GL_SetSwapInterval(s.swap_interval) && s.swap_interval < 0) SDL_GL_SetSwapInterval(1);
     if (!lm_impeller::tryOpenGl()) return fail("Impeller refused the OpenGL context");
     note("OpenGL", std::string(renderer) + " (" + version + ")");
     return true;
@@ -62,7 +65,8 @@ void decide() {
     auto& s = gpuState();
     if (s.decided) return;
     s.decided = true;
-    s.vsync = environment("LAUNCHME_VSYNC") == "1";
+    const std::string vsync = environment("LAUNCHME_VSYNC");
+    s.swap_interval = vsync == "0" ? 0 : vsync == "adaptive" ? -1 : 1;
     const std::string wanted = environment("LAUNCHME_RENDERER");
     if (wanted != "gl" && lm_impeller::tryVulkan(wanted == "vulkan")) { s.backend = Backend::vulkan; return; }
     // OpenGL needs a window for its context: created with the first one.

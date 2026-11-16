@@ -79,18 +79,14 @@ public:
     static ImageSource* from(ID2D1Image* image);
 };
 
-// Pixels as a gx::Image (premultiplied BGRA, or BC1/BC3 blocks on the GPU); a bitmap a render
-// target draws into takes the render's result as its image.
+// Pixels as a gx::Image (premultiplied BGRA); a bitmap a render target draws into takes the
+// render's result as its image.
 class Bitmap final : public lm_com::Object<ID2D1Bitmap1>, public ImageSource {
 public:
     // Pixels from memory in `format` (nullptr: transparent). Fails for formats it cannot hold
-    // (block-compressed ones among them: createCompressed).
+    // (block-compressed ones among them: the launcher keeps BGRA artwork on Linux).
     static HRESULT create(D2D1_SIZE_U size, const void* data, UINT32 pitch, D2D1_PIXEL_FORMAT format, float dpiX, float dpiY,
                           ComPtr<Bitmap>& out);
-    // BC1/BC3 blocks straight into a GPU texture (blockCompressionSupported): an eighth (a quarter)
-    // of BGRA's memory. Fails without such a GPU, or for another format.
-    static HRESULT createCompressed(D2D1_SIZE_U size, const void* data, UINT32 pitch, D2D1_PIXEL_FORMAT format, float dpiX, float dpiY,
-                                    ComPtr<Bitmap>& out);
     static Bitmap* from(ID2D1Image* image);
 
     D2D1_SIZE_F STDMETHODCALLTYPE GetSize() const override;
@@ -130,8 +126,6 @@ private:
 };
 // The pixel format a bitmap or render target gets for a requested one (unknown parts filled in).
 D2D1_PIXEL_FORMAT resolveFormat(D2D1_PIXEL_FORMAT format);
-// A block-compressed format the GPU samples (BC1/BC3 on drivers that have them); never in memory.
-bool blockCompressionSupported(DXGI_FORMAT format);
 // Interpolation modes as sampling.
 gx::Sampling samplingFor(D2D1_INTERPOLATION_MODE mode);
 
@@ -174,6 +168,9 @@ public:
     static Canvas* from(ID2D1RenderTarget* target);
     // What was drawn so far (pushed clips and layers aside), rendered as an image.
     std::shared_ptr<gx::Image> snapshot();
+    // LaunchmeFrostCapture / LaunchmeFrostDraw (launchme_d2d.h).
+    bool frostCapture() { return canvas_ && canvas_->frostCapture(); }
+    bool frostDraw(const gx::Rect& bounds, float sigma, float opacity) { return canvas_ && canvas_->frostDraw(bounds, sigma, opacity); }
 
     HRESULT createBitmap(D2D1_SIZE_U size, const void* data, UINT32 pitch, const D2D1_BITMAP_PROPERTIES* properties, ID2D1Bitmap** bitmap);
     HRESULT createBitmap1(D2D1_SIZE_U size, const void* data, UINT32 pitch, const D2D1_BITMAP_PROPERTIES1* properties, ID2D1Bitmap1** bitmap);
@@ -383,8 +380,7 @@ public:
     HRESULT STDMETHODCALLTYPE CreateEffect(REFCLSID effectId, ID2D1Effect** effect) override { return createEffect(effectId, effect); }
     BOOL STDMETHODCALLTYPE IsDxgiFormatSupported(DXGI_FORMAT format) const override {
         return format == DXGI_FORMAT_B8G8R8A8_UNORM || format == DXGI_FORMAT_B8G8R8A8_UNORM_SRGB || format == DXGI_FORMAT_B8G8R8X8_UNORM ||
-               format == DXGI_FORMAT_R8G8B8A8_UNORM || format == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB || format == DXGI_FORMAT_A8_UNORM ||
-                blockCompressionSupported(format);
+               format == DXGI_FORMAT_R8G8B8A8_UNORM || format == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB || format == DXGI_FORMAT_A8_UNORM;
     }
     void STDMETHODCALLTYPE SetPrimitiveBlend(D2D1_PRIMITIVE_BLEND blend) override { setPrimitiveBlend(blend); }
     D2D1_PRIMITIVE_BLEND STDMETHODCALLTYPE GetPrimitiveBlend() const override { return primitiveBlend(); }

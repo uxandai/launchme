@@ -32,6 +32,5 @@ struct State {
 State& state();
 
 PaintHandle makeNativePaint(const Paint& paint); // canvas.cpp
-void trimImages(uint64_t frame);
 void releaseAllImages();
 } // namespace lm_impeller
