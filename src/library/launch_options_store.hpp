@@ -95,6 +95,9 @@ bool setPrefixRoot(const std::filesystem::path& root); // Empty: back to the def
 // The game's prefix: its options' prefix, else the one assigned to it, else a new <root>/<slug>
 // (another game's folder gets -2, -3...), remembered so a rename keeps the prefix.
 std::filesystem::path gamePrefix(const Game& game);
+// The prefix the game already has (its options' own, else the one assigned to it), without assigning
+// one; nullopt when it never had any. Uninstalling asks about this folder.
+std::optional<std::filesystem::path> existingPrefix(const std::string& key);
 // Keys of games whose own options name the tool ("default" listed when the global choice names it):
 // the warning before removing a tool.
 std::vector<std::string> gamesUsingTool(const std::string& tool_id);

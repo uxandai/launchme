@@ -3,6 +3,7 @@
 #include "platform/diagnostics.hpp"
 #include "platform/frame_clock.hpp"
 #include "platform/app_identity.hpp"
+#include "platform/profile_transfer.hpp"
 #include "platform/text_encoding.hpp"
 
 #include <Windows.h>
@@ -305,6 +306,7 @@ LRESULT CALLBACK windowProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lpara
         return TRUE;
     case WM_KEYDOWN:
         if (app) {
+            if (app->padKeyEcho(wparam)) return 0; // Steam's echo of a pad press the pad itself already made.
             if (wparam != VK_F8 && wparam != VK_F11) { app->noteUserInput(); app->noteDesktopInput(); }
             // The topmost modal layer (exit prompt, power menu, walkthrough, dialogs) takes the key first.
             if (app->modalKey(wparam, (lparam & (1LL << 30)) != 0)) return 0;
@@ -401,6 +403,7 @@ LRESULT CALLBACK windowProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lpara
         if (app) app->companionPaste();
         return 0;
     case WM_CHAR:
+        if (app && app->padCharEcho(static_cast<wchar_t>(wparam))) return 0;
         if (app && !app->exitPromptOpen() && !app->powerMenuOpen() && !app->tourOpen()) app->onCharacter(static_cast<wchar_t>(wparam));
         return 0;
     case WM_KEYUP:
@@ -493,7 +496,7 @@ LRESULT CALLBACK windowProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lpara
         if (app) app->pointerUp(message == WM_CAPTURECHANGED);
         return 0;
     case WM_SETCURSOR:
-        if (app && app->screensaverActive() && LOWORD(lparam) == HTCLIENT) { SetCursor(nullptr); return TRUE; }
+        if (app && (app->screensaverActive() || app->pointerIdle()) && LOWORD(lparam) == HTCLIENT) { SetCursor(nullptr); return TRUE; }
         if (app && LOWORD(lparam) == HTCLIENT) {
             POINT cursor{};
             GetCursorPos(&cursor);
@@ -581,6 +584,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show_command) {
     const HANDLE instance_mutex = singleInstance(data_folder, jump);
     if (!instance_mutex) return 0; // The running launcher came to the front (or took the Jump List command).
     struct MutexRelease { HANDLE handle; ~MutexRelease() { if (handle != INVALID_HANDLE_VALUE) { ReleaseMutex(handle); CloseHandle(handle); } } } release{instance_mutex};
+    // An import staged by Kopia i przenoszenie (or Playnite's) goes in now: nothing has read the files yet.
+    profile_transfer::applyPending(data_folder);
     // A start that fails says why (and logs it) instead of ending without a word.
     const auto startupFailure = [](const wchar_t* what, HRESULT code) {
         wchar_t text[512]{};
@@ -894,6 +899,7 @@ int main(int argc, char** argv) {
     diagnostics::install(data_folder);
     SingleInstance instance;
     if (!instance.acquire(data_folder, text_encoding::utf8Lenient(jump))) return 0; // The running launcher came to the front (or took the command).
+    profile_transfer::applyPending(data_folder); // A staged import goes in before anything reads the files.
     // A start that fails says why (and logs it) instead of ending without a word.
     const auto startupFailure = [](const wchar_t* what, const std::string& detail) {
         std::wstring text = what;

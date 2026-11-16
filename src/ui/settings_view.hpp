@@ -94,7 +94,8 @@ enum class Id { font, home_layout, ui_accent, accent, uninstalled, emulation, mu
                    // Linux: Biblioteka → Proton i Wine (src/app/compat_rows.cpp): the default tool, the
                    // installed tools and components, umu-launcher, downloads, the prefixes folder.
                    compat_default_tool, compat_defaults, compat_prefixes, compat_prefix_root, compat_umu, compat_tool,
-                   compat_source, compat_release, compat_steam_target, compat_source_refresh, compat_status,
+                   compat_source, compat_release, compat_steam_target, compat_auto_update,
+                   steam_game_mode, steam_game_tool, steam_game_switch, steam_game_options, compat_source_refresh, compat_status,
                    // The prefix manager and one prefix's page (Row::key: its path, UTF-8).
                    prefix_new, prefix_entry, prefix_name, prefix_tool, prefix_folder, prefix_size, prefix_games, prefix_create,
                    prefix_program, prefix_winetricks, prefix_run, prefix_kill, prefix_delete,
@@ -151,7 +152,12 @@ enum class Id { font, home_layout, ui_accent, accent, uninstalled, emulation, mu
                    // Search in Settings (src/app/settings_search.cpp): the field, and a found setting (Row::key its place in the index).
                    settings_search, settings_hit,
                    // Opcje układu → PSfive: how much darker the background picture is.
-                   psfive_dim };
+                   psfive_dim,
+                   // System → Kopia i przenoszenie (src/app/transfer.cpp): a part to export or import (Row::key its
+                   // slug), the password, export, open a backup, merge or replace, path rules, import, the job's
+                   // status; Playnite: where its library is, found on its own, an option (Row::key), import.
+                   transfer_part, transfer_password, transfer_export, transfer_import, transfer_mode, transfer_paths, transfer_apply,
+                   transfer_status, playnite_source, playnite_find, playnite_option, playnite_apply };
 inline bool hasOptionsButton(Id id) { return id == Id::plugin_enabled || id == Id::pc_platform; }
 // layout: drawn preview tiles in the row (one per home layout); Row::choice is the active one.
 // count: Row::value as a large number with a chevron; activating opens a sub-list.
@@ -172,6 +178,7 @@ enum class Page {
     // Linux: Proton i Wine; one download source's releases (key: its id); the prefix manager; one
     // prefix (key: its path); Wine/Proton options of a game (key: its game key) or the default (key empty).
     compat, compat_source, prefixes, prefix, launch_options,
+    steam_game, // Linux: a Steam game's own Proton version and launch options, as Steam keeps them (key: its game key).
     compat_stores, // Linux: store launchers installed in a prefix of their own (Battle.net, EA app...).
     game_shortcuts, // One game's shortcuts outside Launchme (key: its game key); Tryb TV's way to them.
     artwork_sources, // Media i dane → Źródła grafik: the galleries of "Zmień grafikę", each on or off.
@@ -186,7 +193,9 @@ enum class Page {
     library_visibility, library_views, launching, save_games, outside_shortcuts,
     drm_roots, // DRM-free → Katalogi: adding a folder and every folder with its removal.
     settings_search, // Search in every category's settings: the field and the settings found (src/app/settings_search.cpp).
-    appearance_all // Interfejs → Wszystkie opcje wyglądu: the classic list of every appearance setting (the studio has them as pictures).
+    appearance_all, // Interfejs → Wszystkie opcje wyglądu: the classic list of every appearance setting (the studio has them as pictures).
+    // System → Kopia i przenoszenie: export and its parts; a picked backup's import; Playnite's library read.
+    transfer, transfer_import, playnite
 };
 // A row drawn as tiles, with State::tile picking one of them.
 inline bool tiled(Control control) { return control == Control::sources || control == Control::pads; }
@@ -381,6 +390,7 @@ struct Row {
     std::wstring badge;
     std::string reset;
     std::wstring logo; // Emulacja's systems: their logo's file in assets/systems (src/library/system_logos.hpp).
+    float progress = -1; // 0..1: a running job's bar under the text (Kopia i przenoszenie); negative: none.
     // The list a picker shows for this row: its choices, or those of the focused source tile.
     const std::vector<Choice>& pickList(int tile) const {
         if (control == Control::sources && !tiles.empty()) return tiles[std::clamp(tile, 0, static_cast<int>(tiles.size()) - 1)].choices;

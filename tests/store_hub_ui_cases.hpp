@@ -253,6 +253,9 @@ int LauncherUiTest::storeHub(HWND window) {
         app.openStores();
         if (!app.desktopStorePage() || !app.plugin_page_.tiled) return 12331;
         if (!pumpFor(app, [&] { return !app.store_hub_.detecting && pictures(app); }) || !capture(app, L"stores-launchers-desktop.png")) return 12332;
+        app.plugin_page_.focus = rowOf(app, "steam"); app.pluginPageAccept();
+        if (!app.plugin_page_.dialog || !capture(app, L"stores-launcher-card-desktop.png")) return 12405;
+        app.back(); if (app.plugin_page_.dialog || !app.desktopStorePage()) return 12406;
         app.switchStoreTab(1);
         if (!pumpFor(app, [&] { return pictures(app); }) || !capture(app, L"stores-promos-desktop.png")) return 12333;
         app.back(); app.desktop_mode_ = false;

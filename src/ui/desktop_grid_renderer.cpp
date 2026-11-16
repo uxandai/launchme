@@ -122,11 +122,14 @@ void Renderer::drawDesktopGrid(const Layout& layout, const View& view) {
     target_->PushAxisAlignedClip(D2D1::RectF(m.left, layout.gridTop(), m.right, m.bottom), D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
     if (!cards_ || cards_->empty()) drawDesktopEmpty(layout, view);
     else if (layout.list) {
-        if (!view.continue_tiles.empty()) drawDesktopContinue(layout, view);
+        if (layout.continue_count > 0) drawDesktopContinue(layout, view);
         const auto [first, end] = layout.visibleRange(cards_->size(), view.scroll, 1);
-        for (size_t i = first; i < end; ++i) drawDesktopListRow(layout, view, i);
+        for (size_t i = first; i < end; ++i) {
+            if (layout.continueCard(i)) drawDesktopPoster(layout, view, i); // Kontynuuj grę: tiles above the rows too.
+            else drawDesktopListRow(layout, view, i);
+        }
     } else {
-        if (!view.continue_tiles.empty()) drawDesktopContinue(layout, view);
+        if (layout.continue_count > 0) drawDesktopContinue(layout, view);
         const auto [first, end] = layout.visibleRange(cards_->size(), view.scroll, 1);
         // The hovered poster lifts above its neighbours: drawn last.
         size_t lifted = SIZE_MAX;
@@ -171,55 +174,37 @@ bool Renderer::drawDesktopRecentImage(int slot, D2D1_RECT_F target, float radius
     return true;
 }
 
-// The last games played as wide tiles above Wszystkie gry: the picture, the name and where and when;
-// hovered, Graj in its corner.
+// A Kontynuuj grę tile's words over its picture: the name and where and when, over a dark fade at
+// the bottom; under the pointer Graj grows in from the corner.
+void Renderer::drawDesktopContinueText(const View& view, size_t index, Rect card, float hover, float alpha) {
+    if (index >= view.continue_tiles.size()) return;
+    const auto& tile = view.continue_tiles[index];
+    const float eased = smoothFade(hover);
+    if (auto* fade = desktopGradient(desktop_continue_fade_, gray(0, 0), gray(0, 0.78f * alpha), card.bottom - 74, card.bottom - 4)) {
+        target_->PushAxisAlignedClip(D2D1::RectF(card.left, card.bottom - 74, card.right, card.bottom), D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
+        target_->FillRoundedRectangle(D2D1::RoundedRect(box(card), 12, 12), fade);
+        target_->PopAxisAlignedClip();
+    }
+    const auto play = Layout::playButton(card);
+    const float text_right = card.right - 14 - (play.right - play.left + 10) * eased;
+    textLine(tile.name, card.left + 14, card.bottom - 34, std::max(1.0f, text_right - card.left - 14), desktop_strong_font_.Get(), gray(0.98f, alpha));
+    textLine(tile.detail, card.left + 14, card.bottom - 15, std::max(1.0f, text_right - card.left - 14), desktop_small_font_.Get(), gray(0.8f, alpha));
+    if (eased <= 0.01f) return;
+    const bool on_play = view.hover == Hit{Target::card_play, static_cast<int>(index)};
+    const float cx = (play.left + play.right) * 0.5f, cy = (play.top + play.bottom) * 0.5f, radius = (play.right - play.left) * 0.5f * (0.6f + 0.4f * eased);
+    brush(on_play ? uiAccent(eased * alpha) : gray(0, 0.62f * eased * alpha));
+    target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), radius, radius), solid_.Get());
+    const auto accent = uiAccent();
+    const bool light = 0.2126f * accent.r + 0.7152f * accent.g + 0.0722f * accent.b > 0.6f;
+    desktopGlyph(tile.installed ? glyph::play : glyph::download, cx + (tile.installed ? 1.0f : 0.0f), cy, 15 * (0.6f + 0.4f * eased),
+                 on_play && light ? gray(0.06f, eased * alpha) : gray(0.98f, eased * alpha));
+}
+
+// Kontynuuj grę's heading; its tiles are the first cards (drawDesktopPoster draws them wide).
 void Renderer::drawDesktopContinue(const Layout& layout, const View& view) {
     const float label_y = layout.continueLabelY(view.scroll);
     if (label_y > layout.gridTop() - 20)
         textLine(upper(tr(L"Kontynuuj grę")), layout.gridLeft() + 2, label_y, 400, desktop_label_font_.Get(), gray(0.6f));
-    for (int i = 0; i < layout.continue_count && i < static_cast<int>(view.continue_tiles.size()); ++i) {
-        const auto& tile = view.continue_tiles[static_cast<size_t>(i)];
-        const auto r = layout.continueTile(i, view.scroll);
-        if (r.bottom < layout.gridTop() || r.top > layout.height || tile.opacity < 0.01f) continue;
-        const bool over = (view.hover.target == Target::continue_tile || view.hover.target == Target::continue_play) && view.hover.index == i;
-        const float eased = smoothFade(tile.hover);
-        const float dy = 10.0f * (1.0f - tile.opacity) - 4.0f * eased; // Rises into place as it fades in; lifts under the pointer.
-        const Rect card{r.left, r.top + dy, r.right, r.bottom + dy};
-        ComPtr<ID2D1Layer> entrance;
-        const bool faded = tile.opacity < 0.995f && SUCCEEDED(target_->CreateLayer(nullptr, entrance.GetAddressOf()));
-        if (faded) target_->PushLayer(D2D1::LayerParameters(D2D1::InfiniteRect(), nullptr, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE, D2D1::IdentityMatrix(), tile.opacity), entrance.Get());
-        desktopShadow(card, 12, 0.45f + 0.55f * eased);
-        desktopFill(card, 12, card_bg);
-        const auto picture = box(card);
-        if (!drawDesktopRecentImage(tile.image, picture, 12, 1)) {
-            // Its square cover, dimmed across the tile until the wide picture arrives.
-            if (drawDesktopRecentImage(tile.cover, picture, 12, 0.55f)) desktopFill(card, 12, gray(0, 0.25f));
-        }
-        if (!tile.installed) desktopFill(card, 12, gray(0, 0.3f));
-        if (eased > 0.01f) desktopFill(card, 12, gray(1, 0.05f * eased)); // A touch brighter under the pointer.
-        // The name over a dark fade at the bottom.
-        if (auto* fade = desktopGradient(desktop_continue_fade_, gray(0, 0), gray(0, 0.78f), card.bottom - 74, card.bottom - 4)) {
-            target_->PushAxisAlignedClip(D2D1::RectF(card.left, card.bottom - 74, card.right, card.bottom), D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
-            target_->FillRoundedRectangle(D2D1::RoundedRect(picture, 12, 12), fade);
-            target_->PopAxisAlignedClip();
-        }
-        const auto play = Layout::playButton(card);
-        const float text_right = card.right - 14 - (play.right - play.left + 10) * eased;
-        textLine(tile.name, card.left + 14, card.bottom - 34, std::max(1.0f, text_right - card.left - 14), desktop_strong_font_.Get(), gray(0.98f));
-        textLine(tile.detail, card.left + 14, card.bottom - 15, std::max(1.0f, text_right - card.left - 14), desktop_small_font_.Get(), gray(0.8f));
-        desktopStroke(card, 12, eased > 0.01f ? uiAccent(0.85f * eased) : gray(1, 0.08f), 1.0f + 0.5f * eased);
-        if (eased > 0.01f) { // Graj grows in from the corner.
-            const bool on_play = over && view.hover.target == Target::continue_play;
-            const float cx = (play.left + play.right) * 0.5f, cy = (play.top + play.bottom) * 0.5f, radius = (play.right - play.left) * 0.5f * (0.6f + 0.4f * eased);
-            brush(on_play ? uiAccent(eased) : gray(0, 0.62f * eased));
-            target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), radius, radius), solid_.Get());
-            const auto accent = uiAccent();
-            const bool light = 0.2126f * accent.r + 0.7152f * accent.g + 0.0722f * accent.b > 0.6f;
-            desktopGlyph(tile.installed ? glyph::play : glyph::download, cx + (tile.installed ? 1.0f : 0.0f), cy, 15 * (0.6f + 0.4f * eased),
-                         on_play && light ? gray(0.06f, eased) : gray(0.98f, eased));
-        }
-        if (faded) target_->PopLayer();
-    }
 }
 
 // ---- The list ----------------------------------------------------------------------------------
@@ -308,6 +293,10 @@ void Renderer::drawDesktopPoster(const Layout& layout, const View& view, size_t 
     if (cell.bottom + caption_h < layout.gridTop() || cell.top > layout.height || card.opacity < 0.01f) return;
     const float hover = index < view.card_hover.size() ? view.card_hover[index] : 0.0f;
     const bool selected = index == selected_;
+    // The ring and its glow fade in on the chosen card and out on the one left (GameCard::emphasis).
+    const float picked = smoothFade(std::clamp(card.emphasis, 0.0f, 1.0f));
+    const bool ringed = picked > 0.01f;
+    const bool wide = layout.continueCard(index); // Kontynuuj grę: a wide tile, its text over the picture.
     const bool marked = index < view.marked.size() && view.marked[index];
     const float alpha = card.opacity;
     const float lift = 4 * smoothFade(hover);
@@ -315,7 +304,7 @@ void Renderer::drawDesktopPoster(const Layout& layout, const View& view, size_t 
     const Rect poster{rect.left, rect.top, rect.right, rect.bottom};
     const float previous_corner = squircle_corner_, previous_reference = corner_reference_;
     squircle_corner_ = 0.4f; corner_reference_ = 64;
-    const auto ring_shape = selected ? tileShape(box(inflate(poster, 3.5f + (focus_gap_ != AppSettings::FocusGap::none ? 2.5f : 0.0f))), tile_shape_) : ComPtr<ID2D1Geometry>{};
+    const auto ring_shape = ringed ? tileShape(box(inflate(poster, 3.5f + (focus_gap_ != AppSettings::FocusGap::none ? 2.5f : 0.0f))), tile_shape_) : ComPtr<ID2D1Geometry>{};
     // The poster's own shape, shadow and outline: tessellated once for this size, drawn at its place.
     const auto* shaped = posterShape(rect.right - rect.left, rect.bottom - rect.top);
     squircle_corner_ = previous_corner; corner_reference_ = previous_reference;
@@ -333,14 +322,14 @@ void Renderer::drawDesktopPoster(const Layout& layout, const View& view, size_t 
         const float shown = reveal(*glow_art);
         return rgb(std::lerp(0.94f, glow_art->accent.r, shown), std::lerp(0.96f, glow_art->accent.g, shown), std::lerp(0.97f, glow_art->accent.b, shown));
     }();
-    if (selected && view.poster_glow && alpha > 0.01f) {
+    if (ringed && view.poster_glow && alpha > 0.01f) {
         if (auto* blur = glow_art ? blurredArt(*glow_art) : nullptr) {
             ComPtr<ID2D1BitmapBrush> spread;
             const auto properties = D2D1::BitmapBrushProperties(D2D1_EXTEND_MODE_CLAMP, D2D1_EXTEND_MODE_CLAMP, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
             if (SUCCEEDED(target_->CreateBitmapBrush(blur, properties, &spread))) {
                 // Rings of the same picture, each a little larger and fainter: together a soft falloff.
                 const auto size = blur->GetSize();
-                const float strength = reveal(*glow_art) * alpha;
+                const float strength = reveal(*glow_art) * alpha * picked;
                 for (int step = 5; step >= 1; --step) {
                     const float grow = 5.0f * static_cast<float>(step);
                     const auto r = box(inflate(poster, grow));
@@ -352,11 +341,11 @@ void Renderer::drawDesktopPoster(const Layout& layout, const View& view, size_t 
             }
         }
         if (ring_shape) { // The outline's own halo, still (no pulse on a desktop).
-            brush(rgb(ring_tint.r, ring_tint.g, ring_tint.b, 0.10f * alpha)); target_->DrawGeometry(ring_shape.Get(), solid_.Get(), 13);
-            brush(rgb(ring_tint.r, ring_tint.g, ring_tint.b, 0.18f * alpha)); target_->DrawGeometry(ring_shape.Get(), solid_.Get(), 7);
+            brush(rgb(ring_tint.r, ring_tint.g, ring_tint.b, 0.10f * alpha * picked)); target_->DrawGeometry(ring_shape.Get(), solid_.Get(), 13);
+            brush(rgb(ring_tint.r, ring_tint.g, ring_tint.b, 0.18f * alpha * picked)); target_->DrawGeometry(ring_shape.Get(), solid_.Get(), 7);
         }
     }
-    const float shadow = alpha * (0.35f + 0.65f * std::max(hover, selected ? 0.5f : 0.0f));
+    const float shadow = alpha * (0.35f + 0.65f * std::max(hover, 0.5f * picked));
     D2D1_MATRIX_3X2_F base{};
     target_->GetTransform(&base);
     target_->SetTransform(D2D1::Matrix3x2F::Translation(rect.left, rect.top) * base);
@@ -392,7 +381,7 @@ void Renderer::drawDesktopPoster(const Layout& layout, const View& view, size_t 
             fillImage(*cover, local, 10, opacity, colourless, shape, true, realized);
         }
         if (art) fillImage(*art, local, 10, alpha * shown, colourless, shape, false, realized);
-    } else if (!(index < posters_.size() && posters_[index].decoding) && !(index < covers_.size() && covers_[index].decoding)) {
+    } else if (!wide && !(index < posters_.size() && posters_[index].decoding) && !(index < covers_.size() && covers_[index].decoding)) {
         desktopCenteredText(game.name, local.right * 0.5f, local.bottom * 0.38f, local.right - 24, desktop_title_font_.Get(), gray(0.92f, alpha), 4);
     }
     const bool installing = game.installation.active();
@@ -412,12 +401,12 @@ void Renderer::drawDesktopPoster(const Layout& layout, const View& view, size_t 
         else target_->DrawGeometry(shape, solid_.Get(), 1);
     }
     target_->SetTransform(base);
-    if (ring_shape && selected) {
+    if (ring_shape && ringed) {
         // The selection: a thin ring while the keyboard works elsewhere (sidebar, pane, search), a
         // thick one when the grid has the keyboard's focus.
         const bool keyboard_here = view.keyboard && view.zone == 1;
         const bool keyboard_away = view.keyboard && view.zone != 1;
-        const float strength = (keyboard_here ? 1.0f : keyboard_away ? 0.55f : 0.92f) * alpha;
+        const float strength = (keyboard_here ? 1.0f : keyboard_away ? 0.55f : 0.92f) * alpha * picked;
         brush(rgb(ring_tint.r, ring_tint.g, ring_tint.b, ring_tint.a * strength));
         target_->DrawGeometry(ring_shape.Get(), solid_.Get(), view.poster_glow ? (keyboard_away ? 2.0f : 3.0f) : keyboard_here ? 3.0f : keyboard_away ? 1.5f : 2.0f);
     }
@@ -482,6 +471,7 @@ void Renderer::drawDesktopPoster(const Layout& layout, const View& view, size_t 
             target_->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), 10 * scale, 10 * scale), solid_.Get(), 1.5f);
         }
     }
+    if (wide) { drawDesktopContinueText(view, index, poster, hover, alpha); return; }
     // Caption: the name, then where it comes from and what state it is in.
     const float name_y = cell.bottom + 15, meta_y = cell.bottom + 33;
     textLine(game.name, cell.left + 2, name_y, cell.right - cell.left - 4, desktop_strong_font_.Get(), palette::text((selected ? 1.0f : 0.88f) * alpha));

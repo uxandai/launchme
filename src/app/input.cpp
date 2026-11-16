@@ -2,6 +2,9 @@
 // short/hold gestures of Guide (Home) and Start (TAB), and the power menu.
 #include "launcher.hpp"
 #include "../ui/exit_prompt.hpp"
+#ifndef _WIN32
+#include "../platform/linux_hid.hpp"
+#endif
 
 #include <xinput.h>
 
@@ -301,6 +304,15 @@ void Launcher::controller() {
 
 void Launcher::controller(const PadReading& reading) {
     if (closing_) return;
+    const auto polled = GetTickCount64();
+#ifndef _WIN32
+    // Steam's desktop layout turns the pad into keys only while the client runs; looked for every 2 s.
+    if (!pad_echo_checked_ || polled - pad_echo_checked_ >= 2000) {
+        pad_echo_checked_ = polled;
+        pad_key_echo_.enable(linux_hid::processRunning("steam"));
+    }
+#endif
+    pad_key_echo_.pad(reading.connected, reading.buttons, reading.x, reading.y, reading.left_trigger, polled);
     const PadReading state = padCursor(reading); // Tryb TV's pad cursor takes the sticks and triggers it uses.
     const bool held_direction = state.connected && ((state.buttons & (XINPUT_GAMEPAD_DPAD_UP | XINPUT_GAMEPAD_DPAD_DOWN | XINPUT_GAMEPAD_DPAD_LEFT |
         XINPUT_GAMEPAD_DPAD_RIGHT)) || std::abs(static_cast<int>(state.x)) > 16000 || std::abs(static_cast<int>(state.y)) > 16000);
@@ -802,4 +814,20 @@ bool Launcher::modalPad(const PadReading& state, WORD buttons, ULONGLONG now) {
     }
     controller_direction_ = direction; controller_buttons_ = buttons;
     return true;
+}
+
+bool Launcher::padKeyEcho(WPARAM key) {
+    const auto now = GetTickCount64();
+    // Steam's key can come before the next poll sees the button: read the pad now before letting it through.
+    if (pad_key_echo_.enabled() && PadKeyEcho::padKey(key) && !pad_key_echo_.swallow(key, now)) {
+        const auto reading = controller_input_.read();
+        pad_key_echo_.pad(reading.connected, reading.buttons, reading.x, reading.y, reading.left_trigger, now);
+    }
+    pad_echo_char_ = pad_key_echo_.swallow(key, now);
+    return pad_echo_char_;
+}
+
+bool Launcher::padCharEcho(wchar_t character) {
+    if (!std::exchange(pad_echo_char_, false)) return false;
+    return character == L'\r' || character == L'\b' || character == L'\t' || character == 0x1B || character == L' ';
 }

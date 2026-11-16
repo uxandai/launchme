@@ -1,5 +1,15 @@
 #include "../src/app/hold_gesture.hpp"
+#include "../src/app/pad_key_echo.hpp"
 #include "../src/ui/power_menu.hpp"
+#ifdef _WIN32
+#include <Windows.h> // xinput.h needs it first.
+#endif
+#include <xinput.h>
+
+// Win32 virtual-key codes (tests/linux_compat has no VK_ names; on Windows those are macros).
+namespace {
+constexpr uintptr_t key_return = 0x0D, key_up = 0x26, key_down = 0x28, key_f5 = 0x74;
+}
 #include <iostream>
 
 int main() {
@@ -19,6 +29,27 @@ int main() {
     if (gesture.update(true, 5000) != Event::none || gesture.update(false, 5100) != Event::none) return 4;
     // ...and the next real press works normally.
     if (gesture.update(true, 6000) != Event::none || gesture.update(false, 6050) != Event::press) return 5;
+
+    // Steam's echo of a pad as keys (Linux, Steam running): dropped while the pad holds a button or a
+    // direction and just after a press; real keys alone, typing and keys pads never send pass.
+    {
+        PadKeyEcho echo;
+        echo.pad(true, XINPUT_GAMEPAD_DPAD_DOWN, 0, 0, false, 10000);
+        if (echo.swallow(key_down, 10010)) return 30; // Off without Steam.
+        echo.enable(true);
+        if (!echo.swallow(key_down, 10010) || !echo.swallow(key_down, 10500)) return 31; // Held: the press and its repeats.
+        echo.pad(true, 0, 0, 0, false, 10600);
+        echo.pad(true, XINPUT_GAMEPAD_A, 0, 0, false, 11000); // A tap: Steam's key may come after the pad already let go.
+        echo.pad(true, 0, 0, 0, false, 11050);
+        if (!echo.swallow(key_return, 11100) || echo.swallow(key_return, 11000 + PadKeyEcho::window + 1)) return 32; // Only just after the press.
+        if (echo.swallow('A', 10010) || echo.swallow(key_f5, 10010)) return 33; // Not a key a pad sends.
+        echo.pad(true, 0, 0, -30000, false, 20000); // The stick down.
+        if (!echo.swallow(key_down, 20010)) return 34;
+        echo.pad(true, 0, 0, 0, false, 20100);
+        if (echo.swallow(key_up, 21000)) return 35; // A keyboard later: its own.
+        echo.pad(false, XINPUT_GAMEPAD_A, 0, 0, false, 30000); // A pad gone holds nothing.
+        if (echo.swallow(key_return, 31000)) return 36;
+    }
 
     // Power menu: Tryb TV ⇄ the desktop window first, then leaving the launcher, the offered system
     // actions (red, a group of their own), Cancel last (apart again).

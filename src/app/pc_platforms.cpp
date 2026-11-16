@@ -9,6 +9,8 @@
 #include "../library/heroic.hpp"
 #include "../library/lutris.hpp"
 #include "../library/xdg_paths.hpp"
+#include "../library/launch_options_store.hpp"
+#include "../platform/wine_runner.hpp"
 #endif
 #include <algorithm>
 #include <map>
@@ -185,10 +187,16 @@ void Launcher::onStoreChange(std::unique_ptr<StoreChangeMessage> message) {
     if (!message->pc || !runtime_started_ || closing_) return;
     if (!message->uninstalled.empty()) {
         if (message->failed) showNotification(NotificationKind::error, tr(L"Nie udało się odinstalować gry"), message->uninstalled);
-        else showNotification(NotificationKind::launch, tr(L"Gra odinstalowana"), message->uninstalled);
+        else if (message->prefix_asked && !message->prefix_deleted)
+            showNotification(NotificationKind::error, tr(L"Gra odinstalowana, ale nie udało się usunąć prefiksu"), message->uninstalled);
+        else showNotification(NotificationKind::launch, message->prefix_asked ? tr(L"Gra i jej prefiks usunięte") : tr(L"Gra odinstalowana"), message->uninstalled);
     }
     refreshPcLibraries(); // Coalesced with a scan already running.
 }
+
+#ifdef _WIN32
+bool Launcher::askUninstallPrefix(const Game&, const GameAction&) { return false; } // Prefixes are Linux's (compat_workers.cpp).
+#endif
 
 bool Launcher::canUninstall(const Game& game) const {
     if (!isGame(game) || !game.installed || game.installation.active() || game.kind == GameKind::catalog || game.kind == GameKind::nonsteam) return false;
@@ -237,10 +245,16 @@ void Launcher::uninstallGame(const Game& game) {
     // and Steam's manifest folder too.
 }
 
-void Launcher::uninstallManagedGame(const Game& game, const GameAction& silent) {
+void Launcher::uninstallManagedGame(const Game& game, const GameAction& silent, const std::filesystem::path& prefix) {
     const bool xbox_own = xbox_account::ownInstall(game);
     if (!game.epic_managed && game.source != GameSource::amazon && !xbox_own && !silent) return;
-    work_.start([window = hwnd_, alive = alive_, game, silent, xbox_own, run = silent_uninstall_, root = userConfigDirectory()] {
+#ifndef _WIN32
+    // The prefix's processes and folder go after the game (its wineserver, then the files).
+    std::shared_ptr<const CompatLaunch> launch = prefix.empty() ? nullptr : launch_options_store::compatLaunch(game);
+#else
+    const std::shared_ptr<const void> launch;
+#endif
+    work_.start([window = hwnd_, alive = alive_, game, silent, xbox_own, run = silent_uninstall_, root = userConfigDirectory(), prefix, launch] {
         auto message = std::make_unique<StoreChangeMessage>();
         message->uninstalled = game.name;
         const auto cancel = [&] { return !alive->load(); };
@@ -257,6 +271,17 @@ void Launcher::uninstallManagedGame(const Game& game, const GameAction& silent) 
                 std::filesystem::remove(root / L"installed" / L"gog" / (text_encoding::wide(game.source_id) + L".path"), ec);
             }
         }
+        message->prefix_asked = !prefix.empty();
+#ifndef _WIN32
+        if (!prefix.empty() && !message->failed && !message->uninstalled.empty() && launch) {
+            CompatLaunch own = *launch;
+            own.prefix = prefix;
+            wine_runner::killPrefix(own);
+            message->prefix_deleted = wine_runner::deletePrefix(prefix) && launch_options_store::forgetPrefix(prefix);
+        }
+#else
+        (void)launch;
+#endif
         if (alive->load() && PostMessageW(window, store_change_message, 0, reinterpret_cast<LPARAM>(message.get()))) message.release();
     });
     showNotification(NotificationKind::launch, game.name, tr(L"Odinstalowywanie…"));

@@ -57,6 +57,7 @@ set(LAUNCHME_APP_SOURCES
     src/app/compat_settings.cpp
     src/app/compat_workers.cpp
     src/app/compat_rows.cpp
+    src/app/steam_game.cpp
     src/app/compat_activate.cpp
     src/app/ratings.cpp
     src/app/game_video.cpp
@@ -85,6 +86,7 @@ set(LAUNCHME_APP_SOURCES
     src/app/glance.cpp
     src/app/home_rows.cpp
     src/app/tarot.cpp
+    src/app/transfer.cpp
     src/app/game_case.cpp
     src/app/game_manual.cpp
     src/app/profile.cpp
@@ -328,6 +330,8 @@ set(LAUNCHME_APP_SOURCES
     src/library/view_options.cpp
     src/library/store_adapter.cpp
     src/library/custom_games.cpp
+    src/library/litedb_v7.cpp
+    src/library/playnite_import.cpp
     src/library/metadata_overrides.cpp
     src/library/play_journal.cpp
     src/library/achievement_history.cpp
@@ -392,6 +396,10 @@ set(LAUNCHME_APP_SOURCES
     src/platform/unicode_text.cpp
     src/platform/hashing.cpp
     src/platform/library_state.cpp
+    src/platform/zip_archive.cpp
+    src/platform/password_crypto.cpp
+    src/platform/profile_transfer.cpp
+    src/platform/profile_transfer_apply.cpp
     src/platform/launch.cpp
     src/platform/hdr_display.cpp
     src/library/game_log.cpp

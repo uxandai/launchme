@@ -61,6 +61,25 @@ std::filesystem::path restartTarget(const std::filesystem::path& app) {
 #endif
 }
 
+bool Launcher::restartForImport() {
+    const std::function<bool(const std::filesystem::path&)> restart = update_restart_ ? update_restart_ : std::function<bool(const std::filesystem::path&)>(restartInto);
+#ifdef _WIN32
+    wchar_t module[32768]{};
+    GetModuleFileNameW(nullptr, module, static_cast<DWORD>(std::size(module)));
+    const std::filesystem::path exe = module;
+#else
+    const auto image = updater::appImage();
+    const auto exe = image ? *image : system_info::executablePath();
+#endif
+    if (!restart(exe)) {
+        showNotification(NotificationKind::error, tr(L"Nie można uruchomić ponownie"), tr(L"Zamknij i uruchom Launchme samodzielnie: import wczyta się przy starcie."));
+        return false;
+    }
+    diagnostics::log("info", L"Restarting to apply an import");
+    beginClose();
+    return true;
+}
+
 void Launcher::initializeUpdates() {
     if (app_version_.empty()) app_version_ = diagnostics::version();
     if (update_app_dir_.empty()) update_app_dir_ = moduleFolder();

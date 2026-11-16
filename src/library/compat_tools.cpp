@@ -5,6 +5,7 @@
 #include "../net/http_download.hpp"
 #include "../net/json.hpp"
 #include "../platform/atomic_file.hpp"
+#include "../platform/file_io.hpp"
 #include "../platform/system.hpp"
 #include "../platform/text_encoding.hpp"
 #include "../platform/user_config.hpp"
@@ -352,7 +353,7 @@ std::vector<Tool> discover(const Roots& roots) {
     if (!roots.config.empty()) {
         for (const auto& folder : folders(toolsFolder(roots.config))) {
             const auto folder_name = name(folder);
-            if (folder_name == "components" || folder_name == "cache" || folder_name == "downloads") continue;
+            if (folder_name == "components" || folder_name == "cache" || folder_name == "downloads" || folder_name == "runtimes") continue;
             if (folder_name.starts_with("umu-launcher") && isFile(folder / "umu-run")) {
                 Tool tool;
                 tool.kind = Kind::umu;
@@ -751,6 +752,24 @@ bool installed(const Release& release, const std::vector<Tool>& tools) {
     });
 }
 
+std::optional<Release> autoUpdate(const ReleaseList& list, const std::vector<Tool>& tools) {
+    if (!list.available || list.releases.empty()) return std::nullopt;
+    const bool used = std::any_of(tools.begin(), tools.end(), [](const Tool& tool) { return tool.family == "GE-Proton" && tool.origin != Origin::umu; });
+    if (!used || installed(list.releases.front(), tools)) return std::nullopt;
+    return list.releases.front();
+}
+
+bool autoUpdateDue(const std::filesystem::path& config, int64_t now) {
+    const auto stamp = toolsFolder(config) / "cache" / "auto-update";
+    std::error_code ec;
+    std::filesystem::create_directories(stamp.parent_path(), ec);
+    const auto text = file_io::readText(stamp, 64);
+    int64_t last = 0;
+    try { last = text.empty() ? 0 : std::stoll(text); } catch (...) { last = 0; }
+    if (last > 0 && now >= last && now - last < 24 * 3600) return false;
+    return atomic_file::write(stamp, std::to_string(now));
+}
+
 std::string checksumFor(std::string_view text, std::string_view asset) {
     const auto hexDigest = [](std::string_view value) {
         return (value.size() == 64 || value.size() == 128) &&
@@ -959,6 +978,92 @@ InstallResult install(const Release& release, Target target, const Cancel& cance
     drop(); // Installed, or an archive no retry can install.
     if (result.error == Error::none) atomic_file::write(result.folder / marker_file, release.source + ":" + release.tag + "\n");
     return result;
+}
+
+std::vector<Runtime> parseRuntimes(std::string_view text) {
+    std::vector<Runtime> result;
+    const auto root = json::parse(text, 4 * 1024 * 1024);
+    if (!root || root->type != json::Value::Type::array) return result;
+    for (const auto& entry : root->elements) {
+        if (entry.type != json::Value::Type::object) continue;
+        Runtime item;
+        item.name = entry.get("name") ? entry.get("name")->stringOr() : std::string{};
+        if (item.name != eac_runtime && item.name != battleye_runtime) continue;
+        item.url = wide(entry.get("url") ? entry.get("url")->stringOr() : std::string{});
+        item.created = entry.get("created_at") ? entry.get("created_at")->stringOr() : std::string{};
+        const auto file = item.url.substr(item.url.find_last_of(L'/') + 1);
+        if (!item.url.starts_with(L"https://github.com/lutris/") || !githubUrl(item.url) || item.created.empty() || item.created.size() > 64 ||
+            !file.ends_with(L".tar.xz") || std::any_of(result.begin(), result.end(), [&](const Runtime& known) { return known.name == item.name; })) continue;
+        result.push_back(std::move(item));
+    }
+    return result;
+}
+
+fs::path runtimesFolder(const fs::path& config) { return toolsFolder(config) / "runtimes"; }
+
+fs::path installedRuntime(const fs::path& config, std::string_view name) {
+    if (name != eac_runtime && name != battleye_runtime) return {};
+    const auto folder = runtimesFolder(config) / std::string(name);
+    return isFile(folder / "version") ? folder : fs::path{};
+}
+
+Error installRuntime(std::string_view name, const fs::path& config, const Fetch& fetch, const Cancel& cancel) {
+    if ((name != eac_runtime && name != battleye_runtime) || config.empty() || !fetch) return Error::unsupported;
+    const auto cancelled = [&] { return cancel && cancel(); };
+    const auto list = fetch(runtimes_url);
+    if (cancelled()) return Error::cancelled;
+    if (list.status != 200 || list.truncated) return Error::network;
+    const auto runtimes = parseRuntimes(std::string_view(reinterpret_cast<const char*>(list.body.data()), list.body.size()));
+    const auto found = std::find_if(runtimes.begin(), runtimes.end(), [&](const Runtime& item) { return item.name == name; });
+    if (found == runtimes.end()) return Error::network;
+    const auto folder = runtimesFolder(config), target = folder / std::string(name);
+    if (file_io::readText(target / "version", 128) == found->created) return Error::none; // This version is there.
+    std::error_code ec;
+    fs::create_directories(folder, ec);
+    if (!isFolder(folder)) return Error::storage;
+    const auto downloads = toolsFolder(config) / "downloads";
+    fs::create_directories(downloads, ec);
+    if (!isFolder(downloads)) return Error::storage;
+    const auto lock_file = downloads / (std::string(name) + ".lock");
+    atomic_file::ExclusiveLock lock(lock_file);
+    if (!lock.locked()) return Error::busy;
+    struct UnlinkLock { fs::path file; ~UnlinkLock() { std::error_code ignored; fs::remove(file, ignored); } } unlink_lock{lock_file};
+    const auto archive = fetch(found->url);
+    if (cancelled()) return Error::cancelled;
+    if (archive.status != 200 || archive.truncated || archive.body.empty()) return Error::network;
+    const auto file = downloads / (std::string(name) + ".tar.xz.part");
+    struct Unlink { fs::path file; ~Unlink() { std::error_code ignored; fs::remove(file, ignored); } } unlink{file};
+    if (!atomic_file::write(file, std::span<const uint8_t>(archive.body))) return Error::storage;
+    const auto staging = folder / (".launchme-install-" + randomHex());
+    if (!fs::create_directory(staging, ec) || ec) return Error::storage;
+    const auto cleanup = [&] { std::error_code ignored; fs::remove_all(staging, ignored); };
+    if (const auto error = extractArchive(file, staging, [&] { return cancelled(); }, {}); error != Error::none) { cleanup(); return error; }
+    std::vector<fs::path> top;
+    for (fs::directory_iterator it(staging, ec), end; !ec && it != end; it.increment(ec)) top.push_back(it->path());
+    auto root = staging;
+    if (top.size() == 1 && fs::is_directory(fs::symlink_status(top.front(), ec))) root = top.front();
+    if (top.empty()) { cleanup(); return Error::layout; }
+    if (!atomic_file::write(root / "version", found->created)) { cleanup(); return Error::storage; }
+    // The older copy goes aside first, so a failed rename leaves it in place.
+    const auto old = folder / ("." + std::string(name) + ".old-" + randomHex());
+    const bool had = fs::exists(fs::symlink_status(target, ec));
+    if (had) { fs::rename(target, old, ec); if (ec) { cleanup(); return Error::storage; } }
+    fs::rename(root, target, ec);
+    if (ec) {
+        if (had) { std::error_code ignored; fs::rename(old, target, ignored); }
+        cleanup();
+        return Error::storage;
+    }
+    cleanup();
+    if (had) fs::remove_all(old, ec);
+    return Error::none;
+}
+
+Error installRuntime(std::string_view name, const Cancel& cancel) {
+    return installRuntime(name, systemRoots().config, [](const std::wstring& url) {
+        // GitHub's archive redirects to its asset host; the anti-cheat runtimes are tens of MB.
+        return httpGet(url, L"", url == runtimes_url ? 4u * 1024 * 1024 : 512u * 1024 * 1024);
+    }, cancel);
 }
 
 launch_options_catalog::Text originName(Origin origin) {

@@ -485,7 +485,22 @@ bool Launcher::hoverButton(float mouse_x, float mouse_y) const {
 }
 
 // Hover across screens, leaving the window, and the end of a mouse drag.
+// Tryb TV hides the pointer 3 s after the mouse stopped (a pad in hand); the desktop window never does.
+bool Launcher::pointerIdle() const {
+    return !desktop_mode_ && GetTickCount64() - pointer_moved_at_ >= 3000;
+}
+
 void Launcher::mouseMove(float mouse_x, float mouse_y) {
+    // Windows repeats WM_MOUSEMOVE without a move (a window shown or resized): only a real move shows the pointer.
+    if (mouse_x != pointer_last_x_ || mouse_y != pointer_last_y_) {
+        pointer_last_x_ = mouse_x; pointer_last_y_ = mouse_y;
+        pointer_moved_at_ = GetTickCount64();
+        if (pointer_hidden_) {
+            pointer_hidden_ = false;
+            POINT cursor{};
+            if (GetCursorPos(&cursor) && WindowFromPoint(cursor) == hwnd_) SetCursor(LoadCursorW(nullptr, IDC_ARROW));
+        }
+    }
     if (topModal() == Modal::aurelia) {
         if (desktop_mode_ && desktopModalMove(mouse_x, mouse_y)) return; // Drawn as a desktop dialog.
         const auto view = renderer_.viewport();

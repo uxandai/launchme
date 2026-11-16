@@ -162,6 +162,7 @@ public:
     static int profilePage(HWND window);
     static int aureliaIntegration(HWND window);
     static int amazonGames(HWND window);
+    static int transferSettings(HWND window);
     static int xboxAccount(HWND window);
     static int studioLibraries(HWND window);
     static int homeOptions(HWND window); // home_options_ui_cases.hpp
@@ -2345,6 +2346,7 @@ int LauncherUiTest::language(HWND window) {
 #include "plugin_achievements_ui_cases.hpp"
 #include "render_layering_ui_cases.hpp"
 #include "modal_layers_ui_cases.hpp"
+#include "transfer_ui_cases.hpp"
 
 int main(int argc, char** argv) {
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
@@ -2472,6 +2474,15 @@ int main(int argc, char** argv) {
         CoUninitialize();
         if (code) std::cerr << "Xbox account UI failed at checkpoint " << code << '\n';
         else std::cout << "Xbox account: helper offer, sign-in, Xbox app hand-off, own install dialog, uninstall and launch passed\n";
+        return code;
+    }
+    if (argc == 2 && std::string_view(argv[1]) == "--transfer") {
+        std::filesystem::create_directories(root);
+        const auto code = window ? LauncherUiTest::transferSettings(window) : 99;
+        if (window) DestroyWindow(window);
+        CoUninitialize();
+        if (code) std::cerr << "Kopia i przenoszenie UI failed at checkpoint " << code << '\n';
+        else std::cout << "Kopia i przenoszenie: parts, password, export, progress, import staging and Playnite passed\n";
         return code;
     }
     if (argc == 2 && std::string_view(argv[1]) == "--amazon") {

@@ -139,6 +139,11 @@ ReleaseList releases(const Source& source, const std::filesystem::path& cache_fo
                      const Platform& platform);
 // Whether a release is installed already (Launchme's marker, or a GE/UMU-Proton folder of its tag).
 bool installed(const Release& release, const std::vector<Tool>& tools);
+// Aktualizuj automatycznie (GE-Proton): the newest release of the list when it is not installed yet and
+// GE-Proton is in use here (one installed, not umu's own); nullopt otherwise or without a list.
+std::optional<Release> autoUpdate(const ReleaseList& list, const std::vector<Tool>& tools);
+// At most once a day: true when the stamp in <config>/compatibilitytools/cache is older (and renews it).
+bool autoUpdateDue(const std::filesystem::path& config, int64_t now);
 
 enum class Error { none, cancelled, network, checksum, archive, unsafe_archive, layout, storage, exists, busy, unsupported };
 enum class Target { launchme, steam }; // Steam: compatibilitytools.d (Proton tools only).
@@ -156,6 +161,22 @@ struct InstallResult {
 // partial download for the next attempt.
 InstallResult install(const Release& release, Target target, const Cancel& cancel, const OnProgress& progress);
 InstallResult install(const Release& release, Target target, const Cancel& cancel, const OnProgress& progress, const Roots& roots);
+// Anti-cheat runtimes without Steam, as Heroic gets them: Lutris' list (lutris.net/api/runtimes) names
+// eac_runtime and battleye_runtime, their archives on github.com/lutris. Installed into
+// <config>/compatibilitytools/runtimes/<name> (its single top folder stripped: the folder
+// PROTON_EAC_RUNTIME / PROTON_BATTLEYE_RUNTIME name) with the list's created_at in its `version` file.
+// Lutris publishes no checksums: only HTTPS GitHub archives of the lutris organisation are taken.
+inline constexpr std::string_view eac_runtime = "eac_runtime", battleye_runtime = "battleye_runtime";
+struct Runtime { std::string name; std::wstring url; std::string created; };
+inline const wchar_t* runtimes_url = L"https://lutris.net/api/runtimes";
+std::vector<Runtime> parseRuntimes(std::string_view json); // The two anti-cheat entries only.
+std::filesystem::path runtimesFolder(const std::filesystem::path& config);
+// Launchme's installed runtime folder; empty when missing.
+std::filesystem::path installedRuntime(const std::filesystem::path& config, std::string_view name);
+// The list, then the archive (or `fetch`'s answers in tests); an installed copy of the list's version stays.
+Error installRuntime(std::string_view name, const std::filesystem::path& config, const Fetch& fetch, const Cancel& cancel);
+Error installRuntime(std::string_view name, const Cancel& cancel);
+
 // Removes a removable tool (atomically renamed away first); false otherwise.
 bool remove(const Tool& tool, const Roots& roots);
 inline bool remove(const Tool& tool) { return remove(tool, systemRoots()); }

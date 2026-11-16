@@ -421,10 +421,13 @@ Result exchange(const std::filesystem::path& root, uint64_t account, const std::
     }
     return failed;
 }
+// Steam's per-game Proton settings are Linux's only; Windows keeps the collections' own exchange.
+Evaluation evaluate(const std::filesystem::path&, const std::string&) { return {{}, "unavailable"}; }
+bool endpoint(const std::filesystem::path& root) { return root.is_absolute() && steamEndpoint(root); }
 #else
-Result exchange(const std::filesystem::path& root, uint64_t account, const std::vector<Change>& changes) {
-    Result failed; failed.account = account; failed.error = "unavailable";
-    if (!root.is_absolute() || account <= 76561197960265728ULL || changes.size() > 16 || !steamEndpoint(root)) return failed;
+Evaluation evaluate(const std::filesystem::path& root, const std::string& expression) {
+    Evaluation failed; failed.error = "unavailable";
+    if (!root.is_absolute() || expression.empty() || expression.size() > max_reply / 2 || !steamEndpoint(root)) return failed;
     std::optional<std::string> listing;
     { Loopback connection; if (connection.connected()) listing = connection.get("/json/list"); }
     const auto parsed = listing ? json::parse(*listing, max_reply) : std::nullopt;
@@ -439,7 +442,7 @@ Result exchange(const std::filesystem::path& root, uint64_t account, const std::
     if (path.empty()) return failed;
     Loopback socket;
     if (!socket.connected() || !socket.upgrade(path)) return failed;
-    const auto payload = "{\"id\":1,\"method\":\"Runtime.evaluate\",\"params\":{\"expression\":" + quote(requestExpression(account, changes)) +
+    const auto payload = "{\"id\":1,\"method\":\"Runtime.evaluate\",\"params\":{\"expression\":" + quote(expression) +
         ",\"returnByValue\":true,\"awaitPromise\":true,\"timeout\":9000}}";
     if (payload.size() > max_reply || !socket.sendText(payload)) return failed;
     const auto deadline = GetTickCount64() + 10000;
@@ -451,14 +454,24 @@ Result exchange(const std::filesystem::path& root, uint64_t account, const std::
         if (!reply->get("id") || reply->get("id")->intOr() != 1) continue; // CDP events.
         const auto* result = reply->get("result");
         if (reply->get("error") || field(result, "exceptionDetails")) { failed.error = "unsupported"; return failed; }
-        // The bridge returns JSON text (stringified in the page): integer IDs stay exact.
+        // Expressions return JSON text (stringified in the page): integer IDs stay exact.
         const auto* body = field(field(result, "result"), "value");
         if (!body) return failed;
         if (body->type != json::Value::Type::string) { failed.error = "invalid-reply"; return failed; }
         socket.close();
-        return parseResult(account, changes, body->text);
+        return {body->text, {}};
     }
     return failed;
+}
+
+bool endpoint(const std::filesystem::path& root) { return root.is_absolute() && steamEndpoint(root); }
+
+Result exchange(const std::filesystem::path& root, uint64_t account, const std::vector<Change>& changes) {
+    Result failed; failed.account = account; failed.error = "unavailable";
+    if (account <= 76561197960265728ULL || changes.size() > 16) return failed;
+    const auto reply = evaluate(root, requestExpression(account, changes));
+    if (!reply.error.empty()) { failed.error = reply.error; return failed; }
+    return parseResult(account, changes, reply.value);
 }
 #endif
 }

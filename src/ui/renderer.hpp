@@ -196,8 +196,10 @@ public:
     void releasePreview(size_t index) { if (index < heroes_.size()) heroes_[index] = {}; if (index < logos_.size()) logos_[index] = {}; }
     // Flix artwork per card (src/ui/flix_renderer.cpp): the vertical poster, or in the first
     // row the landscape capsule (a background image stands in until it arrives).
-    void setPoster(size_t index, ImageBytes pixels, uint32_t short_edge = 0);
+    // `focus`: where a crop keeps its subject (the desktop grid's squares draw the cover here, cropped as Tryb TV does).
+    void setPoster(size_t index, ImageBytes pixels, uint32_t short_edge = 0, CropFocus focus = {});
     bool hasPoster(size_t index) const { return index < posters_.size() && posters_[index].loaded(); }
+    CropFocus posterFocus(size_t index) const { return index < posters_.size() ? posters_[index].focus : CropFocus{}; }
     void releasePoster(size_t index) { if (index < posters_.size()) posters_[index] = {}; }
     void setDisc(size_t index, ImageBytes pixels);
     // The case in the hand (game_case_held_renderer.cpp): the back of its box, by game; the manual's
@@ -1026,6 +1028,7 @@ private:
     void drawDesktopPoster(const desktop_ui::Layout& layout, const desktop_ui::View& view, size_t index);
     void drawDesktopListRow(const desktop_ui::Layout& layout, const desktop_ui::View& view, size_t index);
     void drawDesktopContinue(const desktop_ui::Layout& layout, const desktop_ui::View& view);
+    void drawDesktopContinueText(const desktop_ui::View& view, size_t index, desktop_ui::Rect card, float hover, float alpha);
     bool drawDesktopRecentImage(int slot, D2D1_RECT_F box, float radius, float opacity);
     void drawDesktopPane(const desktop_ui::Layout& layout, const desktop_ui::View& view);
     void drawDesktopBulk(const desktop_ui::Layout& layout, const desktop_ui::View& view);

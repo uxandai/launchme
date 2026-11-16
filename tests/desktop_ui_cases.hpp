@@ -60,14 +60,48 @@ int LauncherUiTest::desktop(HWND window) {
 
     // Ostatnio grane: the sidebar's three latest games (and Kontynuuj grę's); Ulubione keeps its two.
     if (app.desktop_recent_games_.size() != 3 || app.desktop_recent_games_[0].app_id != 7604 || entry("game:" + library_view::selectionKey(app.desktop_recent_games_[0])) < 0) return 7605;
-    // Kontynuuj grę stays out while the grid itself is sorted by Ostatnio grane (the same games first).
+    // Kontynuuj grę in either order, Ostatnio grane too.
     {
         const int sort = app.settings_.desktop_sort;
         app.settings_.desktop_sort = library_view::persistedOrder(library_view::Order::last_played);
-        if (app.desktopContinueShown()) return 7694;
+        if (!app.desktopContinueShown()) return 7694;
         app.settings_.desktop_sort = library_view::persistedOrder(library_view::Order::alphabetical);
         if (!app.desktopContinueShown()) return 7695;
         app.settings_.desktop_sort = sort;
+    }
+    // Its tiles are the grid's first cards (the latest first), not again among the posters below.
+    {
+        if (app.desktop_continue_count_ != 3 || app.desktopLayout().continue_count != 3 || app.cards_.size() != 18) return 7713;
+        if (app.cards_[0].game.app_id != 7604 || app.cards_[1].game.app_id != 7603 || app.cards_[2].game.app_id != 7602) return 7713;
+        size_t played = 0;
+        for (const auto& card : app.cards_) played += card.game.app_id == 7604;
+        if (played != 1) return 7713;
+        // The ring and glow are the cards': a click selects the tile itself; down from it the grid's
+        // nearest card, up from the grid's first row the tile above.
+        const auto L = app.desktopLayout();
+        const auto tile = L.poster(1, app.desktop_scroll_);
+        const auto hit = app.desktopHit((tile.left + tile.right) * 0.5f, tile.top + 12);
+        if (hit.target != Target::card || hit.index != 1) return 7714;
+        const auto corner = Layout::playButton(tile);
+        if (app.desktopHit((corner.left + corner.right) * 0.5f, (corner.top + corner.bottom) * 0.5f).target != Target::card_play) return 7714;
+        app.desktop_zone_ = 1;
+        app.desktopFocus(1);
+        app.desktopMove(0, 1, false);
+        const auto below = L.poster(app.selected_, app.desktop_scroll_);
+        if (L.continueCard(app.selected_) || below.left > tile.right || below.right < tile.left) return 7715;
+        app.desktopMove(0, -1, false);
+        if (app.selected_ != 1) return 7715;
+        settle();
+        // The selection's ring fades in and out (GameCard::emphasis), not at once.
+        app.desktopFocus(4);
+        app.last_frame_ -= std::chrono::milliseconds(16);
+        app.tick();
+        if (app.cards_[4].emphasis <= 0.0f || app.cards_[4].emphasis >= 0.99f || app.cards_[1].emphasis <= 0.01f) return 7708;
+        settle();
+        if (app.cards_[4].emphasis < 0.99f || app.cards_[1].emphasis > 0.01f) return 7708;
+        if (!capture(L"desktop-continue-selected.png")) return 7709;
+        app.desktopFocus(0);
+        settle();
     }
     app.desktopShowSection("favorites"); settle();
     if (app.cards_.size() != 2) return 7606;
@@ -174,8 +208,10 @@ int LauncherUiTest::desktop(HWND window) {
                 if (std::any_of(queue->begin(), queue->end(), [&](const auto& job) { return job.key == key; })) return true;
             return false;
         };
-        const auto& with_poster = app.cards_[1].game;
-        const auto& missing = app.cards_[2].game;
+        // The grid's posters after Kontynuuj grę's tiles.
+        const size_t first = app.desktop_continue_count_ + 1, second = first + 1;
+        const auto& with_poster = app.cards_[first].game;
+        const auto& missing = app.cards_[second].game;
         if (!queued(with_poster, Kind::poster) || queued(with_poster, Kind::cover) || queued(missing, Kind::cover)) return 7640;
         auto poster = std::make_unique<CoverMessage>(); poster->key = gameKey(with_poster); poster->generation = app.jobs_->generation.load();
         poster->kind = Kind::poster; poster->bytes = pngFixture(60, 60, 90);
@@ -183,7 +219,7 @@ int LauncherUiTest::desktop(HWND window) {
         auto miss = std::make_unique<CoverMessage>(); miss->key = gameKey(missing); miss->generation = app.jobs_->generation.load();
         miss->kind = Kind::poster; miss->cache_miss = true;
         app.onCover(std::move(miss));
-        if (!app.renderer_.hasPoster(1) || queued(with_poster, Kind::cover) || !queued(missing, Kind::cover)) return 7641;
+        if (!app.renderer_.hasPoster(first) || queued(with_poster, Kind::cover) || !queued(missing, Kind::cover)) return 7641;
         // Ordered from the view's middle rows outwards (the pane's own requests first).
         {
             const auto order = app.desktopArtRange().order;
@@ -201,14 +237,24 @@ int LauncherUiTest::desktop(HWND window) {
         app.frame_painting_ = false; app.paint_deferred_ = false;
         app.last_tick_ms_ = GetTickCount64() - 1000;
         if (app.deferPaint()) return 7645; // No frames run (a modal loop): paint at once.
+        // Squares: the cover is the cell's picture, cropped around its subject as Tryb TV crops it.
+        const int view = app.settings_.desktop_view;
+        app.settings_.desktop_view = 1;
+        auto square = std::make_unique<CoverMessage>(); square->key = gameKey(missing); square->generation = app.jobs_->generation.load();
+        square->kind = Kind::cover; square->bytes = pngFixture(90, 60, 40); square->focus = {0.2f, 0.7f};
+        app.onCover(std::move(square));
+        if (!app.renderer_.hasPoster(second) || std::abs(app.renderer_.posterFocus(second).x - 0.2f) > 0.001f || std::abs(app.renderer_.posterFocus(second).y - 0.7f) > 0.001f) return 7696;
+        app.settings_.desktop_view = view;
+        app.renderer_.releasePoster(second);
     }
 
     // Zmień grafikę from the grid opens on the art the grid shows (Plakat, not the square Okładka
     // of Tryb TV): the picked poster is the card's on return, and Ponów grafiki asks for posters too.
     {
         using Kind = CoverMessage::Kind;
-        app.desktopFocus(1);
-        const auto game = app.cards_[1].game;
+        const size_t pick = app.desktop_continue_count_ + 1; // A poster of the grid, after Kontynuuj grę's tiles.
+        app.desktopFocus(pick);
+        const auto game = app.cards_[pick].game;
         const auto key = gameKey(game);
         app.openArtworkBrowser(game);
         if (!app.artworkOpen() || app.artwork_state_.kind() != ArtworkKind::poster) return 7646;
@@ -391,7 +437,7 @@ int LauncherUiTest::desktop(HWND window) {
         app.settings_.desktop_theme = 3; app.settings_.cover_accent_rgb = 0;
         app.renderer_.setDesktopTheme(app.settings_.desktop_theme);
         app.renderer_.setCoverAccent(0);
-        app.desktopFocus(1); // A poster with its art: the outline takes its colour, the art glows behind.
+        app.desktopFocus(app.desktop_continue_count_ + 1); // A poster with its art: the outline takes its colour, the art glows behind.
         settle();
         if (!capture(L"desktop-theme-sand.png")) return 7687;
         app.settings_.desktop_poster_glow = false;
@@ -628,11 +674,17 @@ int LauncherUiTest::desktop(HWND window) {
     app.openPowerMenu();
     if (app.power_items_.size() < 3 || app.power_items_[0] != power_menu::Item::tv_mode) return 7629;
     app.closePowerMenu();
+    // Platformy unfolded here stays unfolded after Tryb TV, also when the launcher started in Tryb TV
+    // (its groups then as a fresh start leaves them: folded by default).
+    const auto platforms = static_cast<size_t>(desktop_ui::Group::platforms);
+    app.desktop_collapsed_[platforms] = false;
     app.setDesktopMode(false);
     if (app.desktopMode() || app.desktopActive()) return 7630;
     settle();
+    app.desktop_collapsed_[platforms] = true;
     app.setDesktopMode(true);
     settle();
     if (!app.desktopActive() || app.cards_.size() != 18) return 7631;
+    if (app.desktop_collapsed_[platforms]) return 7716;
     return 0;
 }

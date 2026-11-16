@@ -411,6 +411,7 @@ void Launcher::settingsActivate() {
         return;
     }
     if (row.id == Id::screensaver_start) { startScreensaver(); return; } // Also while it is switched off: a preview.
+    if (transferSetting(row)) return; // Kopia i przenoszenie (transfer.cpp).
     if (companionSetting(row)) return; // Towarzyszka's rows (companion_settings.cpp).
     if (row.id == Id::screenscraper_test) { testScreenScraper(); return; }
     if (row.id == Id::screenscraper_clear) { clearScreenScraper(); return; }

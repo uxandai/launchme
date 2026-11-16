@@ -127,7 +127,7 @@ std::vector<MenuItem> Launcher::desktopGroupItems(const Game& game, int group) {
         if (gameEmulatorEditable(game)) items.push_back({Action::emulator, gameEmulatorLabel(game), {}, glyph::game}); // Emulator per gra: the next choice.
         if (launchEditable(game)) // A game added by hand: the file, name and options are its own editor.
             items.push_back({Action::launch_options, game.source == GameSource::custom ? tr(L"Edytuj grę…") : tr(L"Opcje uruchamiania…"), {}, glyph::settings});
-        if (compatGame(game) && !gameKey(game).empty()) items.push_back({Action::compat_options, L"Proton / Wine…", {}, glyph::settings});
+        if (compatMenu(game)) items.push_back({Action::compat_options, L"Proton / Wine…", {}, glyph::settings});
     } else {
         const auto line = [&] { if (!items.empty() && !items.back().separator) { MenuItem separator; separator.separator = true; items.push_back(separator); } };
         // Not for a Steam game: Steam knows what it is.

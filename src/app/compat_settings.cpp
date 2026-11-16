@@ -202,6 +202,7 @@ bool Launcher::compatEditorApply(const custom_game_ui::State& ui, bool write, st
 }
 
 void Launcher::openGameCompatSettings(const Game& game) {
+    if (steamGameConfigurable(game)) { openSteamGameSettings(game); return; } // Steam keeps its games' own (steam_game.cpp).
     const auto key = gameKey(game);
     if (!compatGame(game) || key.empty()) return;
     dismissMenu();

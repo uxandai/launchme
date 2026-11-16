@@ -27,6 +27,13 @@ float Launcher::windowDpi() const { return dpiOf(hwnd_); }
 
 // ---- Mode ------------------------------------------------------------------------------------
 
+// The sidebar's groups as settings.ini remembers them: below Ostatnio grane folded until opened.
+void Launcher::desktopRestoreGroups() {
+    for (int i = 0; i < desktop_ui::group_count; ++i)
+        desktop_collapsed_[static_cast<size_t>(i)] = desktop_ui::foldedByDefault(static_cast<desktop_ui::Group>(i)) ?
+            !settings_.desktop_expanded.contains(desktop_ui::group_names[i]) : settings_.desktop_collapsed.contains(desktop_ui::group_names[i]);
+}
+
 void Launcher::setDesktopMode(bool desktop) {
     if (desktop == desktop_mode_ || closing_ || gameOverlayOpen()) return;
     // Every screen, menu and drawer closes the usual way first (Settings save, panels close their services).
@@ -51,6 +58,7 @@ void Launcher::setDesktopMode(bool desktop) {
     renderer_.setDesktopViewport(desktop);
     if (desktop) {
         desktop_search_focus_ = false; desktop_zone_ = 1;
+        desktopRestoreGroups(); // Also after a start in Tryb TV: the groups as last left.
         buildDesktopSidebar();
     } else quick_progress_ = menu_progress_ = friends_progress_ = category_menu_progress_ = 0;
     showCategory(desktop ? category_ : 0);

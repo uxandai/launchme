@@ -473,6 +473,24 @@ void helpers() {
     check(wine_runner::logName(launch) == "default", "no escaping log names");
 }
 
+// What made a prefix, and the warning when a game's tool is of the other kind.
+void prefixRunners(const fs::path& root) {
+    const auto wine = root / "made-by-wine", proton = root / "made-by-proton", empty = root / "not-yet";
+    fs::create_directories(wine / "drive_c" / "windows");
+    fs::create_directories(proton / "drive_c" / "windows");
+    fs::create_directories(empty);
+    std::ofstream(proton / "version") << "GE-Proton10-25\n";
+    std::ofstream(proton / "tracked_files") << "drive_c/windows/system32/d3d11.dll\n";
+    check(wine_runner::prefixRunner(wine) == wine_runner::Runner::wine, "a Wine prefix");
+    check(wine_runner::prefixRunner(proton) == wine_runner::Runner::proton, "a Proton prefix");
+    check(wine_runner::prefixRunner(empty) == wine_runner::Runner::none, "no prefix yet");
+    compat_tools::Tool ge; ge.kind = compat_tools::Kind::proton;
+    compat_tools::Tool staging; staging.kind = compat_tools::Kind::wine;
+    check(wine_runner::runnerMismatch(proton, staging) && wine_runner::runnerMismatch(wine, ge), "the other kind: warned");
+    check(!wine_runner::runnerMismatch(proton, ge) && !wine_runner::runnerMismatch(wine, staging), "the same kind: quiet");
+    check(!wine_runner::runnerMismatch(empty, staging) && !wine_runner::runnerMismatch(proton, std::nullopt), "unknown: quiet");
+}
+
 std::vector<uint8_t> shortcutBytes(const std::string& target, const std::u16string& folder, const std::u16string& arguments) {
     std::vector<uint8_t> bytes(76, 0);
     const auto put32 = [&](size_t at, uint32_t value) { for (int i = 0; i < 4; ++i) bytes[at + i] = static_cast<uint8_t>(value >> (8 * i)); };
@@ -680,6 +698,9 @@ void store(const fs::path& root) {
     const auto steam_launch = s::compatLaunch(steam);
     check(steam_launch->steam_app_id == 397540 && steam_launch->store == "steam" && steam_launch->prefix == prefixes / "default-2", "Steam game, reserved name");
     check(s::gamesUsingPrefix(prefixes / "borderlands-3-ultimate-edition") == std::vector<std::string>{"epic:Catnip"}, "prefix users");
+    check(s::existingPrefix("epic:Catnip") == prefixes / "borderlands-3-ultimate-edition" && !s::existingPrefix("gog:never-launched") &&
+          !s::existingPrefix({}), "an existing prefix, never a new one");
+    check(!s::existingPrefix("gog:never-launched"), "asking assigns nothing");
     mine.prefix = "/shared/ea";
     s::setGameOptions("epic:Catnip", mine);
     check(s::compatLaunch(game)->prefix == "/shared/ea" && s::gamePrefix(game) == "/shared/ea", "an own prefix wins");
@@ -865,6 +886,7 @@ int main() {
     scriptsAndPrograms();
     winetricks();
     helpers();
+    prefixRunners(root / "runners");
     shortcuts(root);
     catalog();
     store(root / "store");

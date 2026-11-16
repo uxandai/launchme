@@ -64,6 +64,15 @@ int main() {
     struct Cleanup { std::filesystem::path path; ~Cleanup() { std::error_code ec; std::filesystem::remove_all(path, ec); } } cleanup{root};
     const auto file = root / "settings.ini";
     {
+        // The desktop sidebar's folded and opened groups, every one of them (Platformy opened stays opened).
+        auto groups = config;
+        groups.desktop_collapsed = {"library", "recent"};
+        groups.desktop_expanded = {"platforms", "emulation", "collections", "developers"};
+        if (!saveAppSettings(groups, file)) return 160;
+        const auto read = loadAppSettings(file);
+        if (read.desktop_collapsed != groups.desktop_collapsed || read.desktop_expanded != groups.desktop_expanded) return 161;
+    }
+    {
         auto feed = config;
         feed.companion_feed_folder = L"C:\\Zdjęcia\\companion_feed";
         if (!AppSettings{}.companion_feed_folder.empty() || !saveAppSettings(feed, file) || loadAppSettings(file).companion_feed_folder != feed.companion_feed_folder ||

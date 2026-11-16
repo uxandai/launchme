@@ -277,8 +277,11 @@ Context context(const CompatLaunch& launch) {
     result.dxvk = compat_tools::component(tools, "DXVK");
     result.vkd3d = compat_tools::component(tools, "VKD3D-Proton");
     result.dxvk_nvapi = compat_tools::component(tools, "DXVK-NVAPI");
+    // Steam's runtime apps first; else the copies Launchme downloaded from Lutris' list (as Heroic).
     result.eac_runtime = compat_tools::steamApp(roots, L"Proton EasyAntiCheat Runtime");
+    if (result.eac_runtime.empty()) result.eac_runtime = compat_tools::installedRuntime(roots.config, compat_tools::eac_runtime);
     result.battleye_runtime = compat_tools::steamApp(roots, L"Proton BattlEye Runtime");
+    if (result.battleye_runtime.empty()) result.battleye_runtime = compat_tools::installedRuntime(roots.config, compat_tools::battleye_runtime);
     result.game_id = compat_tools::gameId(launch, roots.config);
     result.steam_game_id = text_encoding::utf8Lenient(system_info::environment(L"SteamGameId", 64).value_or(L""));
     const auto desktop = system_info::environment(L"XDG_CURRENT_DESKTOP", 256).value_or(L"");
@@ -934,6 +937,20 @@ bool prefixExists(const fs::path& prefix) {
     // Wine writes system.reg when its wineserver exits; drive_c/windows is there from the start.
     const auto real = winePrefix(prefix);
     return isFile(real / "system.reg") || isFolder(real / "drive_c" / "windows");
+}
+
+Runner prefixRunner(const fs::path& prefix) {
+    if (!prefixExists(prefix)) return Runner::none;
+    // Proton writes these into the compat data folder (the prefix's parent of pfx/, here the same folder).
+    if (isFile(prefix / "version") && (isFile(prefix / "tracked_files") || isFile(prefix / "config_info"))) return Runner::proton;
+    return Runner::wine;
+}
+
+bool runnerMismatch(const fs::path& prefix, const std::optional<compat_tools::Tool>& tool) {
+    if (!tool || (tool->kind != compat_tools::Kind::proton && tool->kind != compat_tools::Kind::wine)) return false;
+    const auto made = prefixRunner(prefix);
+    if (made == Runner::none) return false;
+    return (made == Runner::proton) != (tool->kind == compat_tools::Kind::proton);
 }
 
 bool deletePrefix(const fs::path& prefix) {

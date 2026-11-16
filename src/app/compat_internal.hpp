@@ -6,6 +6,7 @@
 #include "launcher.hpp"
 #include "../model/launch_options_catalog.hpp"
 #include "../platform/text_encoding.hpp"
+#include "../platform/wine_runner.hpp"
 
 #include <filesystem>
 #include <string>
@@ -28,6 +29,16 @@ inline LaunchOptions gameDefaults() {
     options.compat_tool = "default";
     options.prefix.clear();
     return options;
+}
+
+// The warning when a prefix made by Proton would run with a Wine build (or the other way round): `tool_id`
+// as stored ("default": the automatic choice). Empty when they agree or either is unknown.
+inline std::wstring runnerWarning(const std::vector<compat_tools::Tool>& tools, const std::string& tool_id, const std::filesystem::path& prefix) {
+    const auto tool = compat_tools::resolve(tools, tool_id);
+    if (!wine_runner::runnerMismatch(prefix, tool)) return {};
+    return wine_runner::prefixRunner(prefix) == wine_runner::Runner::proton ?
+        tr(L"Uwaga: ten prefiks utworzył Proton, a wybrana wersja to Wine. Może go uszkodzić: lepiej użyć osobnego prefiksu.") :
+        tr(L"Uwaga: ten prefiks utworzyło Wine, a wybrana wersja to Proton. Może go uszkodzić: lepiej użyć osobnego prefiksu.");
 }
 
 // The accordion's sections: the catalog's, with the DLL overrides (from Proton i Wine) of their own.

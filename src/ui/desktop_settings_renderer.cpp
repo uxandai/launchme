@@ -295,6 +295,11 @@ void Renderer::drawDesktopSettings() {
             textLine(item.badge, label_left, cy, b.right - 8 - label_left, desktop_small_font_.Get(), uiAccent(0.98f),
                      resettable ? DWRITE_TEXT_ALIGNMENT_LEADING : DWRITE_TEXT_ALIGNMENT_CENTER);
         }
+        if (item.progress >= 0) { // A job's bar under the row's text (Kopia i przenoszenie).
+            const float bar_left = text_left, bar_right = controls_left - 20, bar_top = r.bottom - 9;
+            desktopFill({bar_left, bar_top, bar_right, bar_top + 4}, 2, gray(1, 0.10f));
+            if (item.progress > 0) desktopFill({bar_left, bar_top, bar_left + (bar_right - bar_left) * std::clamp(item.progress, 0.0f, 1.0f), bar_top + 4}, 2, uiAccent(0.95f));
+        }
         if (item.dense && !selected) {
             // A dense row without the focus: the title, then what it sets in one dim line.
             const float title_y = item.detail.empty() ? cy : r.top + 15;
@@ -303,13 +308,17 @@ void Renderer::drawDesktopSettings() {
         } else if (tall || !item.description.empty()) {
             // Thin rows (DRM-free games) hold the title and one line of description, centred.
             const bool thin = !tall && state.at(settings_ui::Page::drm_games);
-            const float title_y = tall ? r.top + 30 : thin ? r.top + 17 : r.top + 24;
-            textLine(item.title, text_left, title_y, text_width, desktop_strong_font_.Get(), title_ink);
-            if (!item.description.empty()) {
-                const auto m = typeMetrics(desktop_small_font_.Get());
-                paragraph(item.description, text_left, title_y + 10 - (m.baseline - m.cap) + 2, text_width, desktop_small_font_.Get(), palette::muted(),
-                          tall || thin ? 1 : std::max(2, item.lines));
+            const int lines = tall || thin ? 1 : std::max(2, item.lines);
+            float title_y = tall ? r.top + 30 : thin ? r.top + 17 : r.top + 24;
+            const auto m = typeMetrics(desktop_small_font_.Get());
+            // The row is as tall as its description may be; a shorter one keeps the pair centred in it.
+            if (!tall && !thin && !item.description.empty()) {
+                const float used = paragraph(item.description, 0, 0, text_width, desktop_small_font_.Get(), {}, lines, false);
+                title_y += std::max(0.0f, static_cast<float>(lines) * m.line - used) * 0.5f;
             }
+            textLine(item.title, text_left, title_y, text_width, desktop_strong_font_.Get(), title_ink);
+            if (!item.description.empty())
+                paragraph(item.description, text_left, title_y + 10 - (m.baseline - m.cap) + 2, text_width, desktop_small_font_.Get(), palette::muted(), lines);
         } else textLine(item.title, text_left, cy, text_width, desktop_strong_font_.Get(), title_ink);
         const float toggle_on = i < static_cast<int>(context_->settings_toggles.size()) ?
                                 context_->settings_toggles[static_cast<size_t>(i)] : (item.checked ? 1.0f : 0.0f);

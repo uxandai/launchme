@@ -13,6 +13,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <string>
 #include <sys/stat.h>
 #include <sys/sysmacros.h>
@@ -22,6 +23,11 @@
 
 namespace fs = std::filesystem;
 using namespace compat_tools;
+
+std::string readText(const std::filesystem::path& file) {
+    std::ifstream input(file, std::ios::binary);
+    return std::string(std::istreambuf_iterator<char>(input), {});
+}
 
 namespace {
 int failures = 0;
@@ -256,6 +262,21 @@ void releaseParsing() {
     check(installed(release, {tool}), "installed by folder name");
     tool.path = "/x/other"; tool.release = "ge-proton:GE-Proton11-11";
     check(installed(release, {tool}) && !installed(release, {}), "installed by marker");
+
+    // Aktualizuj automatycznie: the newest GE-Proton when one is in use and the newest is missing.
+    ReleaseList ge_list;
+    ge_list.releases = parseReleases(ge, ge_json, {});
+    Tool older;
+    older.family = "GE-Proton"; older.path = "/x/GE-Proton9-20";
+    const auto next = autoUpdate(ge_list, {older});
+    check(next && next->tag == "GE-Proton11-11", "a newer GE-Proton is fetched");
+    Tool newest = older; newest.path = "/x/GE-Proton11-11";
+    check(!autoUpdate(ge_list, {older, newest}), "the newest already there");
+    Tool umu; umu.family = "GE-Proton"; umu.origin = Origin::umu;
+    Tool steam; steam.family = "Proton"; steam.path = "/x/Proton 10.0";
+    check(!autoUpdate(ge_list, {umu, steam}) && !autoUpdate(ge_list, {}), "no GE-Proton in use: nothing downloaded");
+    ReleaseList offline; offline.available = false;
+    check(!autoUpdate(offline, {older}), "no list: nothing");
 }
 
 void releaseCache(const fs::path& root) {
@@ -428,6 +449,56 @@ void archives(const fs::path& root) {
     check(extractArchive(file, root / "no-such-folder", {}, {}) == Error::storage, "no destination");
 }
 
+// EAC and BattlEye without Steam: Lutris' list, its GitHub archives only, installed and replaced by version.
+void runtimes(const fs::path& root) {
+    fs::create_directories(root);
+    const std::string list = R"([
+        {"id":1,"name":"wine-ge","created_at":"2020-01-01","architecture":"x86_64","url":"https://github.com/lutris/buildbot/releases/download/a/wine.tar.xz"},
+        {"id":22,"name":"eac_runtime","created_at":"2024-01-14T19:38:26Z","architecture":"all","url":"https://github.com/lutris/buildbot/releases/download/2022.06.23/eac_runtime-20240114.tar.xz"},
+        {"id":16,"name":"battleye_runtime","created_at":"2024-05-21T19:35:07Z","architecture":"all","url":"https://evil.example/battleeye_runtime.tar.xz"},
+        {"id":17,"name":"battleye_runtime","created_at":"2024-05-21T19:35:07Z","architecture":"all","url":"https://github.com/someone/x/releases/download/a/battleeye_runtime.tar.xz"}])";
+    const auto parsed = parseRuntimes(list);
+    check(parsed.size() == 1 && parsed[0].name == "eac_runtime" && parsed[0].created == "2024-01-14T19:38:26Z" &&
+          parsed[0].url.ends_with(L"eac_runtime-20240114.tar.xz"), "only Lutris' GitHub anti-cheat archives");
+    check(parseRuntimes("not json").empty() && parseRuntimes("{}").empty(), "not a list");
+
+    const auto archive = root / "eac.tar.xz";
+    check(tar(archive, {{"eac_runtime/", 'd'}, {"eac_runtime/v2/", 'd'}, {"eac_runtime/v2/lib64/", 'd'},
+                        {"eac_runtime/v2/lib64/easyanticheat_x64.so", 'f', "ELF"}}, ARCHIVE_FILTER_XZ), "runtime archive written");
+    std::vector<uint8_t> bytes;
+    { std::ifstream input(archive, std::ios::binary); bytes.assign(std::istreambuf_iterator<char>(input), {}); }
+    std::string answer = list;
+    int downloads = 0;
+    const Fetch fetch = [&](const std::wstring& url) {
+        HttpResponse response;
+        response.status = 200;
+        if (url == runtimes_url) response.body.assign(answer.begin(), answer.end());
+        else if (url.starts_with(L"https://github.com/lutris/")) { response.body = bytes; ++downloads; }
+        else response.status = 404;
+        return response;
+    };
+    const auto config = root / "runtime-config";
+    check(installedRuntime(config, eac_runtime).empty(), "nothing before");
+    check(installRuntime(eac_runtime, config, fetch, {}) == Error::none, "EAC runtime installed");
+    const auto folder = installedRuntime(config, eac_runtime);
+    check(folder == runtimesFolder(config) / "eac_runtime" && fs::is_regular_file(folder / "v2" / "lib64" / "easyanticheat_x64.so") &&
+          readText(folder / "version") == "2024-01-14T19:38:26Z", "its top folder stripped, its version kept");
+    check(installRuntime(eac_runtime, config, fetch, {}) == Error::none && downloads == 1, "the same version: no download");
+    answer.replace(answer.find("2024-01-14T19:38:26Z"), 20, "2025-02-02T10:00:00Z");
+    check(installRuntime(eac_runtime, config, fetch, {}) == Error::none && downloads == 2 && readText(folder / "version") == "2025-02-02T10:00:00Z" &&
+          fs::is_regular_file(folder / "v2" / "lib64" / "easyanticheat_x64.so"), "a newer version replaces it");
+    check(installRuntime(battleye_runtime, config, fetch, {}) == Error::network && installedRuntime(config, battleye_runtime).empty(),
+          "a runtime only on a foreign host: not installed");
+    check(installRuntime("wine-ge", config, fetch, {}) == Error::unsupported, "only the anti-cheat runtimes");
+    std::vector<std::string> left;
+    for (const auto& item : fs::directory_iterator(runtimesFolder(config))) left.push_back(item.path().filename().string());
+    check(left == std::vector<std::string>{"eac_runtime"}, "no staging, archive or old copy left");
+    Roots only;
+    only.config = config;
+    const auto tools = discover(only);
+    check(std::none_of(tools.begin(), tools.end(), [](const Tool& tool) { return tool.path.filename() == "runtimes"; }), "runtimes are not tools");
+}
+
 void installs(const fs::path& root) {
     Roots roots;
     roots.config = root / "install-config";
@@ -458,6 +529,10 @@ int main() {
     umuDatabase(root);
     archives(root / "archives");
     installs(root);
+    runtimes(root / "runtimes");
+    // Aktualizuj automatycznie looks at most once a day.
+    check(autoUpdateDue(root / "auto", 1000000) && !autoUpdateDue(root / "auto", 1000000 + 3600) && autoUpdateDue(root / "auto", 1000000 + 25 * 3600),
+          "auto-update once a day");
     std::error_code ignored;
     fs::remove_all(root, ignored);
     if (failures) { std::cerr << failures << " failure(s)\n"; return 1; }

@@ -118,11 +118,11 @@ desktop_ui::Hit Launcher::desktopHit(float x, float y) const {
     auto track = L.scrollTrack();
     track.left -= 4;
     if (L.maxScroll(cards_.size()) > 0 && track.contains(x, y)) return {Target::scrollbar, 0};
-    if (const int tile = L.hitContinue(desktop_scroll_, x, y); tile >= 0)
-        return {Layout::playButton(L.continueTile(tile, desktop_scroll_)).contains(x, y) ? Target::continue_play : Target::continue_tile, tile};
     const int card = L.hitCard(cards_.size(), desktop_scroll_, x, y);
     if (card >= 0) {
         const auto poster = L.poster(static_cast<size_t>(card), desktop_scroll_);
+        // Kontynuuj grę's tiles: Graj in the corner (it grows in under the pointer).
+        if (L.continueCard(static_cast<size_t>(card)) && Layout::playButton(poster).contains(x, y)) return {Target::card_play, card};
         const float hover = static_cast<size_t>(card) < desktop_card_hover_.size() ? desktop_card_hover_[static_cast<size_t>(card)] : 0.0f;
         const bool shown = hover > 0.3f || desktop_hover_ == Hit{Target::card, card} || desktop_hover_ == Hit{Target::card_play, card} ||
                            desktop_hover_ == Hit{Target::card_check, card};
@@ -200,14 +200,6 @@ void Launcher::desktopClick(float mouse_x, float mouse_y, bool double_click) {
         InvalidateRect(hwnd_, nullptr, FALSE);
         return;
     }
-    case Target::continue_tile:
-        if (!double_click) break;
-        desktop_pressed_ = {};
-        if (hit.index >= 0 && hit.index < static_cast<int>(desktop_recent_games_.size())) {
-            desktopRevealGame(library_view::selectionKey(desktop_recent_games_[static_cast<size_t>(hit.index)]));
-            desktopPickSelected();
-        }
-        return;
     case Target::search:
         desktopSearchFocus(true);
         desktopTextPress(desktopLayout().search().left + 36, x, desktopScale(), double_click, false); // Caret where it falls; drag selects.
@@ -374,11 +366,6 @@ void Launcher::desktopContextClick(float mouse_x, float mouse_y) {
         desktopOpenGameMenu(x, y, false);
         return;
     }
-    case Target::continue_tile: case Target::continue_play:
-        if (hit.index < 0 || hit.index >= static_cast<int>(desktop_recent_games_.size())) return;
-        desktopRevealGame(library_view::selectionKey(desktop_recent_games_[static_cast<size_t>(hit.index)]));
-        desktopOpenGameMenu(x, y, false);
-        return;
     case Target::sidebar_row: case Target::sidebar_add: {
         const auto rows = desktopRows();
         if (hit.index < 0 || hit.index >= static_cast<int>(rows.size())) return;
@@ -529,9 +516,6 @@ std::wstring Launcher::desktopTooltip(const desktop_ui::Hit& hit) const {
     case Target::library_add: return tr(L"Dodaj grę z dysku");
     case Target::library_refresh: return tr(L"Odśwież biblioteki (F5)");
     case Target::sidebar_settings: return tr(L"Otwórz w Ustawieniach");
-    case Target::continue_play:
-        if (hit.index >= 0 && hit.index < static_cast<int>(desktop_recent_games_.size())) return actionLabel(desktop_recent_games_[static_cast<size_t>(hit.index)]);
-        return {};
     case Target::companion_card: return std::wstring(tr(L"Porozmawiaj: ")) + companion::name(companionLook());
     case Target::companion_more: return tr(L"Więcej opcji");
     case Target::start_card: return tr(L"Pierwsze kroki: platformy, klucze, ROM-y, pierwsza gra");
@@ -587,7 +571,6 @@ desktop_ui::Rect Launcher::desktopTooltipAnchor(const desktop_ui::Hit& hit) cons
         const auto rows = desktopRows();
         return hit.index >= 0 && hit.index < static_cast<int>(rows.size()) ? L.headingCog(rows[static_cast<size_t>(hit.index)], desktop_sidebar_scroll_) : Rect{};
     }
-    case Target::continue_play: return Layout::playButton(L.continueTile(hit.index, desktop_scroll_));
     case Target::companion_card: return L.companionCard();
     case Target::start_card: return L.startCard();
     case Target::companion_more: return L.companionMore();

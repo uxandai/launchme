@@ -45,7 +45,7 @@ struct Context {
     bool lsfg_layer = false;                // lsfg-vk's Vulkan layer is installed (system, user or Flatpak).
     std::filesystem::path shell = "/bin/sh";
     std::optional<compat_tools::Tool> dxvk, vkd3d, dxvk_nvapi; // Installed components (plain Wine).
-    std::filesystem::path eac_runtime, battleye_runtime;       // Steam's runtime apps, when installed.
+    std::filesystem::path eac_runtime, battleye_runtime;       // Steam's runtime apps, else Launchme's (compat_tools::installedRuntime).
     std::string game_id = "umu-default";    // GAMEID (compat_tools::gameId).
     std::string steam_game_id;              // The launcher's own SteamGameId (Steam's Game Mode), kept.
     bool inside_gamescope = false;          // Steam's Game Mode: gamescope is not nested.
@@ -134,6 +134,13 @@ int protontricks(uint32_t app_id, const std::vector<std::string>& verbs, pid_t& 
 // Ends every process of the prefix (wineserver -k with the tool's wineserver); waits up to 5 s.
 bool killPrefix(const CompatLaunch& launch);
 bool prefixExists(const std::filesystem::path& prefix); // Its system.reg or drive_c/windows (also under pfx/).
+// What made a prefix: Proton (umu included) leaves its version and tracked_files beside the Wine
+// files of STEAM_COMPAT_DATA_PATH; a plain Wine prefix has only those. none: no prefix there yet.
+// Runner::umu is never returned (umu runs Proton).
+Runner prefixRunner(const std::filesystem::path& prefix);
+// The prefix was made by Proton and the tool is a Wine build, or the other way round: running it
+// may break the prefix (a different Wine, Proton's own DLL layout). Unknown either way: false.
+bool runnerMismatch(const std::filesystem::path& prefix, const std::optional<compat_tools::Tool>& tool);
 // Deletes a prefix folder (Reset: the next launch makes a new one). Refuses anything that is not a
 // prefix (no system.reg / drive_c, the home folder, /, a folder above the prefix root). false on failure.
 bool deletePrefix(const std::filesystem::path& prefix);

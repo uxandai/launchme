@@ -488,6 +488,14 @@ std::filesystem::path gamePrefix(const Game& game) {
     return prefix;
 }
 
+std::optional<std::filesystem::path> existingPrefix(const std::string& key) {
+    if (key.empty()) return std::nullopt;
+    const auto document = load();
+    if (const auto options = resolvedOptions(document, key); !options.prefix.empty()) return options.prefix;
+    if (const auto found = document.prefixes.find(key); found != document.prefixes.end() && !found->second.empty()) return found->second;
+    return std::nullopt;
+}
+
 std::vector<std::string> gamesUsingTool(const std::string& tool_id) {
     const auto document = load();
     std::vector<std::string> result;

@@ -237,6 +237,26 @@ void Launcher::compatInstall(const compat_tools::Release& release) {
     })) compat_.install.reset();
 }
 
+void Launcher::compatAutoUpdate(bool now) {
+    if (!settings_.compat_auto_update || compat_.install) return;
+    const auto alive = alive_; const auto hwnd = hwnd_;
+    work_.start([alive, hwnd, now] {
+        const auto roots = compat_tools::systemRoots();
+        if (!now && !compat_tools::autoUpdateDue(roots.config, static_cast<int64_t>(std::time(nullptr)))) return;
+        const auto* source = compat_tools::findSource("ge-proton");
+        if (!source) return;
+        auto release = compat_tools::autoUpdate(compat_tools::releases(*source), compat_tools::discover(roots));
+        if (!release || !alive->load()) return;
+        auto message = std::make_unique<RemoteMessage>();
+        message->run = [release = std::move(*release)](Launcher& app) {
+            if (!app.settings_.compat_auto_update || app.compat_.install) return;
+            app.showNotification(NotificationKind::download, release.name, tr(L"Nowy GE-Proton: pobieranie…"));
+            app.compatInstall(release);
+        };
+        if (PostMessageW(hwnd, remote_message, 0, reinterpret_cast<LPARAM>(message.get()))) message.release();
+    });
+}
+
 void Launcher::compatRefreshDatabase() {
     // umu-database: store games' protonfixes IDs (GAMEID / UMU_ID), fetched at most once a day.
     work_.start([] { compat_tools::refreshUmuDatabase(compat_tools::systemRoots().config); });
@@ -277,6 +297,40 @@ void Launcher::compatProvision(const Game& game) {
         };
         if (PostMessageW(hwnd, remote_message, 0, reinterpret_cast<LPARAM>(message.get()))) message.release();
     })) compat_.launch_after.clear();
+}
+
+std::string Launcher::compatMissingRuntime(const Game& game) const {
+    const auto launch = store::compatLaunch(game);
+    if (!launch) return {};
+    const auto tool = compat_tools::resolve(compat_tools::discover(), launch->options.compat_tool);
+    if (!tool || tool->kind != compat_tools::Kind::proton) return {}; // Only Proton reads them.
+    const auto roots = compat_tools::systemRoots();
+    if (launch->options.eac_runtime && compat_tools::steamApp(roots, L"Proton EasyAntiCheat Runtime").empty() &&
+        compat_tools::installedRuntime(roots.config, compat_tools::eac_runtime).empty()) return std::string(compat_tools::eac_runtime);
+    if (launch->options.battleye_runtime && compat_tools::steamApp(roots, L"Proton BattlEye Runtime").empty() &&
+        compat_tools::installedRuntime(roots.config, compat_tools::battleye_runtime).empty()) return std::string(compat_tools::battleye_runtime);
+    return {};
+}
+
+void Launcher::compatProvisionRuntime(const Game& game, const std::string& name) {
+    const std::wstring title = name == compat_tools::eac_runtime ? L"Easy Anti-Cheat Runtime" : L"BattlEye Runtime";
+    showNotification(NotificationKind::download, title, game.name + L" · " + tr(L"Pobieranie środowiska anti-cheat; gra uruchomi się sama."));
+    const auto alive = alive_; const auto hwnd = hwnd_;
+    work_.start([alive, hwnd, name, title, key = gameKey(game)] {
+        const auto error = compat_tools::installRuntime(name, [alive] { return !alive->load(); });
+        if (!alive->load()) return;
+        auto message = std::make_unique<RemoteMessage>();
+        message->run = [error, title, key](Launcher& app) {
+            if (error != compat_tools::Error::none) {
+                app.showNotification(NotificationKind::error, tr(L"Nie udało się pobrać ") + title, label(compat_tools::errorText(error)));
+                return;
+            }
+            for (const auto* games : {&app.public_library_, &app.private_category_.games})
+                for (const auto& game : *games)
+                    if (gameKey(game) == key) { const auto copy = game; app.launchGame(copy); return; }
+        };
+        if (PostMessageW(hwnd, remote_message, 0, reinterpret_cast<LPARAM>(message.get()))) message.release();
+    });
 }
 
 void Launcher::compatMeasure(const std::filesystem::path& prefix) {
@@ -495,5 +549,28 @@ void Launcher::compatInstallerFinished(const std::filesystem::path& prefix, cons
         showNotification(NotificationKind::download, name, tr(L"Dodano do biblioteki"));
         openCustomEditor(id); // Its name and artwork, at once.
     });
+}
+
+// Odinstaluj, then this: a game with a prefix on disk is asked whether it goes too. Another game still
+// using it is named in the question; the shared <root>/default of programs without a game is never offered.
+bool Launcher::askUninstallPrefix(const Game& game, const GameAction& silent) {
+    const auto key = gameKey(game);
+    const auto prefix = store::existingPrefix(key);
+    if (!prefix || !wine_runner::prefixExists(*prefix)) return false;
+    if (prefix->lexically_normal() == (store::prefixRoot() / L"default").lexically_normal()) return false;
+    uninstall_game_ = game;
+    uninstall_silent_ = silent;
+    uninstall_prefix_ = prefix->lexically_normal();
+    uninstall_prefix_users_.clear();
+    for (const auto& other : store::gamesUsingPrefix(*prefix)) {
+        if (other == key) continue;
+        const auto found = std::find_if(grouped_library_.begin(), grouped_library_.end(), [&](const Game& item) { return gameKey(item) == other; });
+        uninstall_prefix_users_.push_back(found != grouped_library_.end() ? found->name : wide(other));
+    }
+    prompt_kind_ = PromptKind::uninstall_prefix;
+    exit_prompt_ = 1; // "Zostaw prefiks": deleting it is a deliberate step.
+    audio_.context();
+    InvalidateRect(hwnd_, nullptr, FALSE);
+    return true;
 }
 #endif

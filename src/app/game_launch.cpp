@@ -233,6 +233,9 @@ void Launcher::launchGame(const Game& original, bool via_steam) {
 #ifndef _WIN32
     // A Windows game and no Proton or Wine on this computer: GE-Proton is downloaded, then it starts.
     if (action.kind == ActionKind::play && compatGame(active) && !compatToolReady(active)) { dismissMenu(); compatProvision(active); return; }
+    // Its anti-cheat runtime (EAC, BattlEye) without Steam: downloaded as Heroic does, then it starts.
+    if (action.kind == ActionKind::play && compatGame(active))
+        if (const auto runtime = compatMissingRuntime(active); !runtime.empty()) { dismissMenu(); compatProvisionRuntime(active, runtime); return; }
 #endif
     // A Steam game another remembered account installed: Steam restarts signed in to it first.
     if (action.kind == ActionKind::play && !beginSteamAccountSwitch(active)) return;

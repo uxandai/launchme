@@ -72,7 +72,7 @@ desktop_ui::Layout Launcher::desktopLayout() const {
     layout.pane_leaving = !desktopPaneOpen();
     layout.cell_aspect = settings_.desktop_view == 1 ? 1.0f : settings_.desktop_view == 2 ? 430.0f / 920.0f : 1.5f; // Landscape: the 920x430 capsules, uncropped.
     layout.list = settings_.desktop_view == 3;
-    layout.continue_count = desktopContinueShown() ? static_cast<int>(std::min<size_t>(3, desktop_recent_games_.size())) : 0;
+    layout.continue_count = static_cast<int>(std::min(desktop_continue_count_, cards_.size())); // rebuildDesktop put them first.
     return layout;
 }
 
@@ -291,6 +291,17 @@ std::vector<Game> Launcher::desktopGames() const {
 // place (the slots follow it); the focus follows its game.
 void Launcher::rebuildDesktop(bool preserve_background) {
     auto games = desktopGames();
+    // Kontynuuj grę: the last played lead as wide tiles, not again among the posters below.
+    desktop_continue_count_ = 0;
+    if (desktopContinueShown())
+        for (const auto& recent : desktop_recent_games_) {
+            const auto key = library_view::selectionKey(recent);
+            const auto found = std::find_if(games.begin() + static_cast<std::ptrdiff_t>(desktop_continue_count_), games.end(),
+                                            [&](const Game& game) { return library_view::selectionKey(game) == key; });
+            if (found == games.end()) continue; // Filtered out (Zainstalowane): no tile.
+            std::rotate(games.begin() + static_cast<std::ptrdiff_t>(desktop_continue_count_), found, found + 1);
+            if (++desktop_continue_count_ == 3) break;
+        }
     const bool same_slots = desktop_slots_ == renderer_.slotGeneration() && desktop_keys_.size() == cards_.size();
     std::unordered_map<std::string, size_t> previous;
     if (same_slots) for (size_t i = 0; i < desktop_keys_.size(); ++i) previous.emplace(desktop_keys_[i], i);
@@ -411,17 +422,25 @@ Launcher::DesktopArtRange Launcher::desktopArtRange() const {
     if (!count) return range;
     const auto layout = desktopLayout();
     const size_t columns = static_cast<size_t>(layout.columns());
-    const auto [first, end] = layout.visibleRange(count, desktop_scroll_target_, 0);
-    const size_t total_rows = (count + columns - 1) / columns;
+    // Kontynuuj grę's tiles are row 0 of their own: the grid's rows are counted after them.
+    const size_t tiles = std::min(count, layout.continueCards());
+    if (tiles == count) {
+        for (size_t i = 0; i < count; ++i) range.order.push_back(i);
+        range.first = range.keep_first = 0; range.end = range.keep_end = count;
+        return range;
+    }
+    const size_t grid = count - tiles;
+    const auto [first, end] = layout.gridRange(grid, desktop_scroll_target_, 0);
+    const size_t total_rows = (grid + columns - 1) / columns;
     const size_t first_row = std::min(first / columns, total_rows - 1), last_row = std::max(first_row, end ? (end - 1) / columns : 0);
     const size_t ahead = std::max<size_t>(2, last_row - first_row + 1), behind = 1;
     const size_t before = desktop_scroll_dir_ > 0 ? behind : ahead, after = desktop_scroll_dir_ > 0 ? ahead : behind;
     const size_t want_first_row = first_row > before ? first_row - before : 0;
     const size_t want_last_row = std::min(total_rows - 1, last_row + after);
     range.first = want_first_row * columns;
-    range.end = std::min(count, (want_last_row + 1) * columns);
+    range.end = std::min(grid, (want_last_row + 1) * columns);
     range.keep_first = range.first > columns * 2 ? range.first - columns * 2 : 0;
-    range.keep_end = std::min(count, range.end + columns * 2);
+    range.keep_end = std::min(grid, range.end + columns * 2);
     const float middle = (static_cast<float>(first_row) + static_cast<float>(last_row)) * 0.5f;
     const auto distance = [&](size_t i) {
         const size_t row = i / columns;
@@ -430,6 +449,19 @@ Launcher::DesktopArtRange Launcher::desktopArtRange() const {
     };
     for (size_t i = range.first; i < range.end; ++i) range.order.push_back(i);
     std::stable_sort(range.order.begin(), range.order.end(), [&](size_t a, size_t b) { return distance(a) < distance(b); });
+    if (tiles) { // Back to card indices; the tiles with the first rows (first when those are in view).
+        for (auto& i : range.order) i += tiles;
+        const bool top = range.first == 0;
+        range.first = top ? 0 : range.first + tiles;
+        range.end += tiles;
+        range.keep_first = range.keep_first == 0 ? 0 : range.keep_first + tiles;
+        range.keep_end += tiles;
+        if (top) {
+            std::vector<size_t> lead(tiles);
+            for (size_t i = 0; i < tiles; ++i) lead[i] = i;
+            range.order.insert(first_row == 0 ? range.order.begin() : range.order.end(), lead.begin(), lead.end());
+        }
+    }
     return range;
 }
 
@@ -457,10 +489,10 @@ void Launcher::desktopRequestArt() {
         const auto& game = cards_[i].game;
         const auto key = gameKey(game);
         const auto* art = art_.find(key);
-        const auto kind = desktopCellKind(); // Poster, cover (squares) or landscape: what the cell shows.
+        const auto kind = desktopCardKind(i); // Poster, cover (squares) or landscape (also Kontynuuj grę's tiles): what the cell shows.
         const auto& picture = art ? (kind == CoverMessage::Kind::cover ? art->cover : kind == CoverMessage::Kind::landscape ? art->landscape : art->poster) : ImageBytes{};
         const bool poster = static_cast<bool>(picture);
-        if (poster) renderer_.setPoster(i, picture, edge);
+        if (poster) renderer_.setPoster(i, picture, edge, kind == CoverMessage::Kind::cover ? art->focus : CropFocus{});
         else if (!renderer_.hasPoster(i)) requestArt(game, kind); // Shown: its bytes may be let go (low memory).
         ranks.emplace(artRequestKey(game, kind), static_cast<int>(place * 2));
         // The square cover in the cell's frame: only while its own art is missing (not in squares: that is the art).
@@ -593,13 +625,6 @@ bool Launcher::tickDesktop(float dt) {
         if (const auto columns = desktopLayout().columns(); columns != desktop_columns_) {
             if (desktop_columns_) desktopReflow();
             else desktop_columns_ = columns; // The first frame only notes them.
-        }
-        // Kontynuuj grę: the tile under the pointer lifts.
-        for (int i = 0; i < 3; ++i) {
-            const bool over = (desktop_hover_.target == Target::continue_tile || desktop_hover_.target == Target::continue_play) && desktop_hover_.index == i;
-            auto& hover = desktop_continue_hover_[static_cast<size_t>(i)];
-            const float target = over ? 1.0f : 0.0f;
-            if (std::abs(hover - target) > 0.004f) { hover += (target - hover) * ease(dt, 18.0f); paint = true; } else hover = target;
         }
         if (desktop_drop_flash_ > 0.0f) {
             desktop_drop_flash_ = std::max(0.0f, desktop_drop_flash_ - dt / 0.45f);
@@ -799,20 +824,16 @@ void Launcher::desktopView(desktop_ui::View& view) {
     view.scrollbar = desktop_scrollbar_;
     view.card_hover = desktop_card_hover_;
     if (settings_.desktop_view == 3) { view.list_played = &desktop_list_played_; view.list_playtime = &desktop_list_playtime_; }
-    if (desktopContinueShown())
-        for (size_t i = 0; i < desktop_recent_games_.size() && i < 3; ++i) {
-            const auto& game = desktop_recent_games_[i];
-            ContinueTile tile;
-            tile.name = game.name;
-            const auto where = activePlatformName(game);
-            tile.detail = (where.empty() ? std::wstring{} : where + L" · ") + playedWhen(game.last_played);
-            tile.image = static_cast<int>(3 + i);
-            tile.cover = static_cast<int>(i);
-            tile.installed = game.installed || game.kind == GameKind::nonsteam;
-            tile.hover = desktop_continue_hover_[i];
-            tile.opacity = std::clamp((desktop_arrived_ - 0.02f * static_cast<float>(i)) / 0.18f, 0.0f, 1.0f);
-            view.continue_tiles.push_back(std::move(tile));
-        }
+    // Kontynuuj grę: its cards (the first ones) drawn wide, where and when under the name.
+    for (size_t i = 0; i < desktop_continue_count_ && i < cards_.size(); ++i) {
+        const auto& game = cards_[i].game;
+        ContinueTile tile;
+        tile.name = game.name;
+        const auto where = activePlatformName(game);
+        tile.detail = (where.empty() ? std::wstring{} : where + L" · ") + playedWhen(game.last_played);
+        tile.installed = game.installed || game.kind == GameKind::nonsteam;
+        view.continue_tiles.push_back(std::move(tile));
+    }
     view.quick = desktop_quick_;
     view.meta = desktop_meta_;
     view.platform_badges = settings_.desktop_platform_badges;

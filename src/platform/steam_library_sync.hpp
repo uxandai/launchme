@@ -31,6 +31,12 @@ struct Result {
 // Existing loopback Steam CEF endpoint, owned by steamwebhelper.exe from this Steam installation.
 // Writes are performed by Steam's live collectionStore and confirmed against its native cache.
 Result exchange(const std::filesystem::path& steam_root, uint64_t account, const std::vector<Change>& changes);
+// Steam's own CEF port (127.0.0.1:8080, held by this installation's steamwebhelper) is open.
+bool endpoint(const std::filesystem::path& steam_root);
+// One expression in Steam's SharedJSContext, resolving to JSON text (Linux; Windows: unavailable).
+// error: "unavailable" (no port or page), "unsupported" (it threw), "invalid-reply" (not a string); empty when `value` holds it.
+struct Evaluation { std::string value, error; };
+Evaluation evaluate(const std::filesystem::path& steam_root, const std::string& expression);
 std::string requestExpression(uint64_t account, const std::vector<Change>& changes);
 Result parseResult(uint64_t account, const std::vector<Change>& changes, std::string_view json);
 }

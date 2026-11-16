@@ -335,6 +335,7 @@ struct StoreChangeMessage {
     bool pc = true; // PC store installations (uninstall registry, store manifests).
     std::wstring uninstalled; // A game Launchme uninstalled itself (Legendary): its name.
     bool failed = false;
+    bool prefix_asked = false, prefix_deleted = false; // Linux: its prefix was to go too, and went.
 };
 // Phone access (companion_remote.cpp): work its server thread hands to the UI thread.
 class Launcher;

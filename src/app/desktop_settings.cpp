@@ -23,7 +23,11 @@ settings_ui::Rect inflate(settings_ui::Rect r, float x, float y) { return {r.lef
 std::wstring desktopPlayedWhen(uint64_t seconds); // desktop.cpp
 
 // A store plugin page in the store's sheet (the same frame as the catalog); other plugin pages stay a TV screen in a sheet.
-bool Launcher::desktopStorePage() const { return desktop_mode_ && screen_ == ScreenMode::plugin_page && storeTabsShown(); }
+// The Stores' tabs, and a question one of them opens over itself (a launcher's card): the store's sheet either way.
+bool Launcher::desktopStorePage() const {
+    if (!desktop_mode_ || screen_ != ScreenMode::plugin_page) return false;
+    return storeTabsShown() || (stores_open_ && !friends_open_ && !plugin_drawer_active_ && plugin_page_.dialog && storeHubPage());
+}
 
 bool Launcher::desktopSheet() const {
     return desktopStorePage() || desktop_mode_ && (screen_ == ScreenMode::settings || screen_ == ScreenMode::details || screen_ == ScreenMode::artwork ||
@@ -103,9 +107,14 @@ float Launcher::desktopSheetViewHeight() const {
         const auto p = artworkSheet(view.width, view.height, desktopSheetDock()).panel();
         return std::max(0.0f, p.bottom - 60 - (p.top + sheet_header + 76));
     }
-    if (screen_ == ScreenMode::store || screen_ == ScreenMode::plugin_page) { // Below its field and state line.
+    if (screen_ == ScreenMode::store) { // Below its field and state line.
         const auto sheet = artworkSheet(view.width, view.height, desktopSheetDock());
         return std::max(0.0f, sheet.panel().bottom - 12 - storeGrid(sheet).top);
+    }
+    if (screen_ == ScreenMode::plugin_page) { // Below its field and state line, when it has them.
+        const auto sheet = artworkSheet(view.width, view.height, desktopSheetDock());
+        const bool search = !plugin_page_.dialog && !plugin_page_.rows.empty() && plugin_page_.rows.front().input;
+        return std::max(0.0f, sheet.panel().bottom - 12 - storePageTop(sheet, search, !plugin_page_.status.empty()));
     }
     if (screen_ == ScreenMode::glance) { // Below its tabs (desktop_pages_renderer.cpp).
         const auto p = artworkSheet(view.width, view.height, desktopSheetDock()).panel();
@@ -119,7 +128,7 @@ void Launcher::desktopPageActivate(const SheetHit& hit, bool double_click) {
     if (screen_ == ScreenMode::plugin_page) { // A store plugin page: the catalog's frame, its rows below.
         const bool search = !plugin_page_.rows.empty() && plugin_page_.rows.front().input;
         switch (hit.kind) {
-        case K::close: back(); return;
+        case K::close: case K::back: back(); return; // A card's Back and ✕ both return to its tab.
         case K::nav: switchStoreTab(hit.index - storeTabIndex()); return;
         case K::field: if (search) plugin_page_.focus = 0; return;
         case K::action:

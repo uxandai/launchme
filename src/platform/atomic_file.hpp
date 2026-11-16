@@ -6,6 +6,7 @@
 #include <csignal>
 #include <fcntl.h>
 #include <sys/file.h>
+#include <sys/stat.h>
 #include <stdio.h>
 #include <unistd.h>
 #endif
@@ -36,6 +37,11 @@ inline unsigned long processId() { return static_cast<unsigned long>(getpid()); 
 // rename(2) replaces atomically; without `replace`, link(2) fails on an existing target instead.
 inline bool rename(const std::filesystem::path& from, const std::filesystem::path& to, bool replace) {
     if (replace) return ::rename(from.c_str(), to.c_str()) == 0;
+    if (struct stat info{}; ::lstat(from.c_str(), &info) == 0 && S_ISDIR(info.st_mode)) {
+        // A folder cannot be linked: rename(2) only when nothing is at `to` (it would replace an empty folder).
+        if (struct stat target{}; ::lstat(to.c_str(), &target) == 0 || errno != ENOENT) return false;
+        return ::rename(from.c_str(), to.c_str()) == 0;
+    }
     if (::link(from.c_str(), to.c_str()) != 0) return false;
     ::unlink(from.c_str());
     return true;

@@ -240,7 +240,7 @@ void Renderer::setCover(size_t index, ImageBytes pixels, CropFocus focus, uint32
     createBitmap(cover);
 }
 
-void Renderer::setPoster(size_t index, ImageBytes pixels, uint32_t short_edge) {
+void Renderer::setPoster(size_t index, ImageBytes pixels, uint32_t short_edge, CropFocus focus) {
     if (index >= posters_.size()) return;
     Cover& poster = posters_[index];
     pixels = shared(std::move(pixels));
@@ -249,12 +249,13 @@ void Renderer::setPoster(size_t index, ImageBytes pixels, uint32_t short_edge) {
     // Rebinding the bytes already shown (another row's copy of the game, a rebuilt row) must not
     // drop the bitmap: it would decode and fade in again.
     if (poster.same(pixels)) {
-        rebindPicture(poster, pixels); poster.loose_edge = loose;
+        rebindPicture(poster, pixels); poster.loose_edge = loose; poster.focus = focus;
         redecode(poster, low_memory_ && !loose ? std::max(short_edge, poster.short_edge) : short_edge);
         return;
     }
     poster = {};
     bindPicture(poster, std::move(pixels));
+    poster.focus = focus;
     poster.short_edge = short_edge;
     poster.loose_edge = loose;
     createBitmap(poster);

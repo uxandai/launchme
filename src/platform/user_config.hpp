@@ -112,6 +112,9 @@ struct AppSettings {
     // The Stores' built-in tabs (src/app/store_hub.cpp): Launchery (install a store client or a front
     // end with one click) and Promocje (free games and discounts), before the store plugins' own.
     bool store_hub = true;
+    // Linux, Proton i Wine → GE-Proton: once a day the newest GE-Proton is downloaded when one is in use
+    // (games on the automatic version take it at once; pinned ones keep theirs).
+    bool compat_auto_update = true;
     // The home screen's Launchery row: the installed launchers of that tab as tiles. Off until the player
     // turns it on (Biblioteka → Ekran główny i kolekcje), like every other row there.
     bool show_launchers = false;

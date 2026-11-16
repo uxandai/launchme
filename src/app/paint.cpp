@@ -362,6 +362,30 @@ void Launcher::paint(bool overlay) {
         context.prompt_body = tr(L"Gra zostanie odinstalowana z tego komputera; jej wpis w bibliotece zostaje.");
         context.prompt_danger = true; // Never the primary-looking answer.
     }
+#ifndef _WIN32
+    if (exit_prompt_ && prompt_kind_ == PromptKind::steam_game_save) {
+        // Linux: Steam runs without its CEF port, so it would not take a game's change now.
+        context.prompt_question = std::wstring(tr(L"Steam jest włączony")) + L" · " + steam_game_.game.name;
+        context.prompt_labels = {std::wstring(tr(L"Włącz zapis na żywo")), std::wstring(tr(L"Zapisz po zamknięciu Steama")), std::wstring(tr(L"Anuluj"))};
+        context.prompt_body = tr(L"Steam nie ma otwartego portu CEF (8080), więc nie przyjmie zmiany od razu. Zapis na żywo tworzy plik .cef-enable-remote-debugging w folderze Steama i może wymagać restartu Steama. Do tego czasu zmiana poczeka i zapisze się, gdy zamkniesz Steam.");
+    }
+#endif
+    if (exit_prompt_ && prompt_kind_ == PromptKind::uninstall_prefix) {
+        // Linux: the game's prefix after Odinstaluj; another game that still uses it is named, and the
+        // answer that deletes it then says so ("Usuń mimo to"). "Zostaw prefiks" has the focus.
+        const bool shared = !uninstall_prefix_users_.empty();
+        context.prompt_question = std::wstring(tr(L"Usunąć też prefiks gry?")) + L" " + uninstall_game_.name;
+        context.prompt_labels = {std::wstring(shared ? tr(L"Usuń mimo to") : tr(L"Usuń prefiks")), std::wstring(tr(L"Zostaw prefiks")), std::wstring(tr(L"Anuluj"))};
+        std::wstring body = uninstall_prefix_.wstring() + L" · ";
+        if (shared) {
+            body += std::wstring(tr(L"Korzysta z niego jeszcze gier: ")) + std::to_wstring(uninstall_prefix_users_.size()) + L" (";
+            for (size_t i = 0; i < uninstall_prefix_users_.size() && i < 3; ++i) body += (i ? L", " : L"") + uninstall_prefix_users_[i];
+            body += uninstall_prefix_users_.size() > 3 ? L"…). " : L"). ";
+            body += tr(L"Dostaną nowy, pusty prefiks.");
+        } else body += tr(L"Zniknie dysk C: gry razem z zapisami, które gra trzyma w prefiksie.");
+        context.prompt_body = std::move(body);
+        context.prompt_danger = true;
+    }
     if (exit_prompt_ && prompt_kind_ == PromptKind::remove) {
         context.prompt_question = std::wstring(tr(L"Usunąć z biblioteki?")) + L" " + remove_game_.name;
         context.prompt_labels = {std::wstring(tr(L"Usuń z biblioteki")), std::wstring(tr(L"Edytuj grę…")), std::wstring(tr(L"Anuluj"))};

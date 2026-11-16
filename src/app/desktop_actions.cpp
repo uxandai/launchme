@@ -35,11 +35,6 @@ void Launcher::desktopActivate(const desktop_ui::Hit& hit) {
         if (hit.index >= 0 && hit.index < static_cast<int>(rows.size())) desktopGroupSettings(rows[static_cast<size_t>(hit.index)].group);
         return;
     }
-    case Target::continue_tile: case Target::continue_play:
-        if (hit.index < 0 || hit.index >= static_cast<int>(desktop_recent_games_.size())) return;
-        desktopRevealGame(library_view::selectionKey(desktop_recent_games_[static_cast<size_t>(hit.index)]));
-        if (hit.target == Target::continue_play) desktopLaunchSelected();
-        return;
     case Target::sidebar_row: {
         const auto rows = desktopRows();
         if (hit.index < 0 || hit.index >= static_cast<int>(rows.size()) || !rows[static_cast<size_t>(hit.index)].heading) return;

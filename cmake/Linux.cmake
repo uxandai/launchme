@@ -124,6 +124,10 @@ set(LAUNCHME_CORE_SOURCES
     src/platform/hashing.cpp
     src/platform/library_state.cpp
     src/platform/protected_file.cpp
+    src/platform/zip_archive.cpp
+    src/platform/password_crypto.cpp
+    src/platform/profile_transfer.cpp
+    src/platform/profile_transfer_apply.cpp
     src/platform/unicode_text.cpp
     src/platform/user_config.cpp
     src/platform/theme_preset.cpp
@@ -155,6 +159,7 @@ set(LAUNCHME_CORE_LIBS miniz launchme_qrcodegen Threads::Threads ICU::uc ICU::i1
 set(LAUNCHME_LINUX_PROCESS_SOURCES
     src/library/steam_accounts.cpp
     src/library/steam_registry.cpp
+    src/library/steam_game_config.cpp
     src/store/epic_legendary.cpp
     src/store/gog_install_native.cpp
     src/store/gog_comet.cpp
@@ -179,6 +184,8 @@ set(LAUNCHME_LINUX_IMAGE_SOURCES
     src/artwork/steamgriddb.cpp
     src/artwork/text_crop.cpp
     src/library/custom_games.cpp
+    src/library/litedb_v7.cpp
+    src/library/playnite_import.cpp
     src/net/companion_feed.cpp
     src/net/glance.cpp
     src/net/promos.cpp
@@ -330,6 +337,9 @@ endfunction()
 
 if(BUILD_TESTING)
     launchme_executable(game_fps_tests TEST game_fps_history_and_overlay_bar SOURCES tests/game_fps_tests.cpp)
+    launchme_executable(profile_transfer_tests TEST profile_export_import SOURCES tests/profile_transfer_tests.cpp)
+    launchme_executable(playnite_import_tests TEST playnite_library_import SOURCES tests/playnite_import_tests.cpp
+        DEFINES LAUNCHME_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     launchme_executable(failure_cache_tests TEST persistent_artwork_failure_cache SOURCES tests/failure_cache_tests.cpp)
     launchme_executable(protondb_tests TEST protondb_and_steam_deck_ratings SOURCES tests/protondb_tests.cpp)
     launchme_executable(system_requirements_tests TEST system_requirements_and_hardware_ratings SOURCES tests/system_requirements_tests.cpp)
@@ -354,6 +364,7 @@ if(BUILD_TESTING)
     launchme_executable(game_session_tests TEST game_session_music_lifecycle
         SOURCES tests/game_session_tests.cpp src/platform/game_activity.cpp src/platform/process_freeze.cpp)
     launchme_executable(process_linux_tests TEST linux_launch_job_and_steam_registry SOURCES tests/process_linux_tests.cpp)
+    launchme_executable(steam_game_config_tests TEST steam_game_proton_settings SOURCES tests/steam_game_config_tests.cpp)
 
     # Images:
     launchme_executable(text_crop_tests TEST text_aware_crop SOURCES tests/text_crop_tests.cpp)

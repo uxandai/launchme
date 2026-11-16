@@ -288,6 +288,11 @@ void Renderer::drawSettings() {
             textLine((resettable ? L"\u21BA  " : L"") + item.badge, b.left + 14, y, b.right - b.left - 28, toast_sub_font_.Get(), uiAccent(0.98f),
                      DWRITE_TEXT_ALIGNMENT_CENTER);
         }
+        if (item.progress >= 0) { // A job's bar under the row's text (Kopia i przenoszenie).
+            const float bar_left = text_left, bar_right = controls_left - 24, bar_top = r.bottom - 15;
+            fill({bar_left, bar_top, bar_right, bar_top + 4}, gray(1, 0.10f), 2);
+            if (item.progress > 0) fill({bar_left, bar_top, bar_left + (bar_right - bar_left) * std::clamp(item.progress, 0.0f, 1.0f), bar_top + 4}, uiAccent(0.95f), 2);
+        }
         // Each further line grows the centred group by half a line downwards: the tags follow it.
         const float tag_top = y + 24 + (item.description.empty() ? 0.0f : (description_lines - 1) * typeMetrics(body).line * 0.5f);
         float tag_left = text_left;

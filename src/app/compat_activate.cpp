@@ -62,6 +62,7 @@ bool Launcher::compatResetOption(const Row& row) {
 
 bool Launcher::compatSettingsActivate(const Row& row) {
     if (!compatSettingsPage()) return false;
+    if (settings_state_.at(Page::steam_game)) return steamGameActivate(row);
     const auto* frame = settings_state_.top();
     const std::string page_key = frame ? frame->key : std::string{};
     // A picker: the first press opens the list, the second applies the focused entry.
@@ -159,6 +160,11 @@ bool Launcher::compatSettingsActivate(const Row& row) {
         compatLoadReleases(row.key, false);
         openSettingsPage(Page::compat_source, row.key);
         return true;
+    case Id::compat_auto_update:
+        settings_.compat_auto_update = !settings_.compat_auto_update;
+        settingsChanged(); buildSettingsRows(); audio_.context();
+        if (settings_.compat_auto_update) compatAutoUpdate(true);
+        return true;
     case Id::compat_steam_target:
         compat_.steam_target = !compat_.steam_target;
         buildSettingsRows(); audio_.context();
@@ -221,6 +227,8 @@ bool Launcher::compatSettingsActivate(const Row& row) {
             info.compat_tool = narrow(choice.key);
             store::setPrefixInfo(path, info);
             compat_.prefixes = store::prefixes();
+            if (const auto warning = runnerWarning(compat_.tools, store::effectiveTool({}, path), path); !warning.empty())
+                showNotification(NotificationKind::error, path.filename().wstring(), warning);
         });
     }
     case Id::prefix_folder: {
@@ -401,6 +409,11 @@ bool Launcher::compatSettingsActivate(const Row& row) {
         if (row.control == Control::choice)
             return pick([&](const Choice& choice) {
                 compatSaveOptions(page_key, [&](LaunchOptions& options) { return catalog::setValue(options, option->id, narrow(choice.key)); });
+                // A game's version of the other kind than the one that made its prefix: said at once (the row keeps saying it).
+                if (row.key == "compat_tool" && !page_key.empty())
+                    if (const auto prefix = store::existingPrefix(page_key))
+                        if (const auto warning = runnerWarning(compat_.tools, store::effectiveTool(page_key, *prefix), *prefix); !warning.empty())
+                            showNotification(NotificationKind::error, compat_.game.name, warning);
             });
         if (row.control == Control::toggle) {
             if (row.locked) { navigationBoundary(); return true; }

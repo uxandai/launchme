@@ -106,6 +106,11 @@ inline StoreGrid storeGrid(const Sheet& sheet) {
     grid.row_h = grid.poster_h + StoreGrid::caption + StoreGrid::gap;
     return grid;
 }
+// Where a store plugin page's rows start: below the search field (with its state line), below the state
+// line alone, or right under the header when the page has neither (the Stores' built-in tabs).
+inline float storePageTop(const Sheet& sheet, bool field, bool state) {
+    return sheet.header().bottom + (field ? 92.0f : state ? 54.0f : 18.0f);
+}
 // Tryb TV's Urządzenia, kadrowanie and plugin pages inside a desktop sheet: its body below the header
 // holds the screen's own layout on a compact canvas (Renderer::desktopEmbedViewport).
 inline Sheet embedSheet(float width, float height) { Sheet sheet; sheet.width = width; sheet.height = height; sheet.max_width = 1240; sheet.max_height = 900; return sheet; }

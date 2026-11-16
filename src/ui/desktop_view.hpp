@@ -215,8 +215,7 @@ enum class Target {
     sidebar_toggle, pane_resize, pane_close, view_mode, pane_achievements, pane_cloud,
     pane_protondb, // Linux: ProtonDB and Steam Deck ratings, opening ProtonDB's page.
     pane_hardware, // The hardware check above Opis: unfolds this PC against the game's requirements.
-    sidebar_settings, // A heading's cog (Biblioteka, Platformy, Emulacja): its place in Ustawienia.
-    continue_tile, continue_play // Kontynuuj grę above Wszystkie gry: a tile (selects its game) and its Graj.
+    sidebar_settings // A heading's cog (Biblioteka, Platformy, Emulacja): its place in Ustawienia.
 };
 struct Hit {
     Target target = Target::none;
@@ -255,13 +254,11 @@ struct Pane {
     size_t marked = 0; // More than one: the bulk actions.
 };
 // Kontynuuj grę: the last games played, as wide tiles above Wszystkie gry.
+// Kontynuuj grę: the first cards drawn as wide tiles (their picture, hover, selection and glow are the
+// cards' own); what the tile says over its picture.
 struct ContinueTile {
     std::wstring name, detail; // Its name; where and when it was played.
-    int image = -1;            // Its landscape picture's slot (Renderer::desktop_recent_).
-    int cover = -1;            // Its square cover's slot: stands in until the picture arrives.
     bool installed = true;
-    float hover = 0;   // The pointer over it, eased: it lifts and shows Graj.
-    float opacity = 1; // Fading in with the grid.
 };
 struct EmptyState {
     wchar_t icon = 0;
@@ -489,7 +486,7 @@ struct Layout {
     float cell_aspect = 1.5f; // A cell's height over its width: 1.5 posters, 1 squares, 430/920 landscape (the capsules' own).
     bool pane_open = true; // No game selected (or its ✕ pressed): no pane, the grid takes its room.
     bool list = false;     // Widok → Lista: one game per row (a small cover, its name and columns).
-    int continue_count = 0; // Kontynuuj grę's tiles above the grid (0: none), scrolling with it.
+    int continue_count = 0; // Kontynuuj grę: the first cards drawn as wide tiles above the grid (0: none), scrolling with it.
     float pane_t = 1;      // The pane sliding in (0 … 1) over the grid, which takes its final width at once.
     bool pane_leaving = false; // Its ✕: it slides out over a grid already as wide as without it.
 
@@ -586,22 +583,34 @@ struct Layout {
         for (int i = 0; i < continue_count; ++i) if (continueTile(i, scroll).contains(x, y)) return i;
         return -1;
     }
+    // Cards [0, continue_count) are Kontynuuj grę's tiles; the grid's cells follow from card continue_count.
+    size_t continueCards() const { return static_cast<size_t>(std::max(0, continue_count)); }
+    bool continueCard(size_t index) const { return index < continueCards(); }
     Rect poster(size_t index, float scroll) const {
+        if (continueCard(index)) return continueTile(static_cast<int>(index), scroll);
+        index -= continueCards();
         const auto c = static_cast<size_t>(columns());
         const float x = gridLeft() + static_cast<float>(index % c) * (cellWidth() + gap_x);
         const float y = gridTop() + 8 + continueHeight() + static_cast<float>(index / c) * rowStep() - scroll;
         return {x, y, x + cellWidth(), y + posterHeight()};
     }
-    Rect cell(size_t index, float scroll) const { auto r = poster(index, scroll); r.bottom += captionHeight(); return r; }
+    Rect cell(size_t index, float scroll) const { auto r = poster(index, scroll); if (!continueCard(index)) r.bottom += captionHeight(); return r; }
     // The list's small square cover at a row's left.
     static Rect listThumb(Rect row) { const float s = row.bottom - row.top - 12; return {row.left + 10, row.top + 6, row.left + 10 + s, row.top + 6 + s}; }
     float contentHeight(size_t count) const {
+        count -= std::min(count, continueCards());
         const size_t rows = (count + columns() - 1) / columns();
         return rows ? 8 + continueHeight() + rows * rowStep() - gapY() + 32 : continueHeight();
     }
     float viewHeight() const { return height - gridTop(); }
     float maxScroll(size_t count) const { return std::max(0.0f, contentHeight(count) - viewHeight()); }
     std::pair<size_t, size_t> visibleRange(size_t count, float scroll, size_t extra_rows = 1) const {
+        // The grid's own cards after Kontynuuj grę's; its tiles with the first rows.
+        const size_t tiles = std::min(count, continueCards());
+        const auto [first, end] = gridRange(count - tiles, scroll, extra_rows);
+        return {first == 0 ? 0 : first + tiles, std::min(count, end + tiles)};
+    }
+    std::pair<size_t, size_t> gridRange(size_t count, float scroll, size_t extra_rows) const {
         const auto c = static_cast<size_t>(columns());
         const float step = rowStep();
         const float band = continueHeight();
@@ -614,11 +623,13 @@ struct Layout {
     int hitCard(size_t count, float scroll, float x, float y) const {
         const auto m = main();
         if (x < gridLeft() || x >= gridRight() || y < gridTop() || y >= m.bottom) return -1;
+        if (const int tile = hitContinue(scroll, x, y); tile >= 0 && static_cast<size_t>(tile) < count) return tile;
+        const size_t tiles = std::min(count, continueCards());
         const auto c = static_cast<size_t>(columns());
         const auto column = static_cast<size_t>((x - gridLeft()) / (cellWidth() + gap_x));
         const float local = y - gridTop() - 8 - continueHeight() + scroll;
         if (local < 0 || column >= c) return -1;
-        const auto index = static_cast<size_t>(local / rowStep()) * c + column;
+        const auto index = tiles + static_cast<size_t>(local / rowStep()) * c + column;
         return index < count && cell(index, scroll).contains(x, y) ? static_cast<int>(index) : -1;
     }
     static Rect playButton(Rect p) {
@@ -627,6 +638,7 @@ struct Layout {
     }
     static Rect checkBox(Rect p) { return {p.left + 9, p.top + 9, p.left + 33, p.top + 33}; }
     float reveal(size_t index, size_t count, float scroll) const {
+        if (continueCard(index)) return 0; // Kontynuuj grę's tiles: with their heading, at the top.
         const auto r = cell(index, scroll);
         if (r.top < gridTop() + 4) scroll -= gridTop() + 4 - r.top;
         else if (r.bottom > height - 12) scroll += r.bottom - (height - 12);

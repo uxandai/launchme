@@ -57,7 +57,7 @@ void Launcher::onCover(std::unique_ptr<CoverMessage> cover) {
     if (cover->cache_miss) {
         // The disk lane has no poster for this game (a download was queued): in the desktop grid
         // its square cover stands in meanwhile.
-        if (cover->kind == desktopCellKind() && cover->kind != CoverMessage::Kind::cover && desktopActive() && desktop_poster_missing_.insert(cover->key).second) desktopRequestArt();
+        if (desktopWantsKind(cover->key, cover->kind) && cover->kind != CoverMessage::Kind::cover && desktopActive() && desktop_poster_missing_.insert(cover->key).second) desktopRequestArt();
         return;
     }
     if (cover->kind == CoverMessage::Kind::badge) {
@@ -85,13 +85,14 @@ void Launcher::onCover(std::unique_ptr<CoverMessage> cover) {
         if (cover->kind == CoverMessage::Kind::landscape && shelfWideCard(0) && gameKey(cards_[0].game) == cover->key) bindLibraryLandscape(0, true);
         if (xmbActive() && settings_.xmb_posters && cover->kind == CoverMessage::Kind::poster)
             for (size_t i = 0; i < cards_.size(); ++i) if (gameKey(cards_[i].game) == cover->key) bindXmbArt(i, true);
-        if (desktopActive() && cover->kind == desktopCellKind()) {
+        if (desktopActive() && desktopWantsKind(cover->key, cover->kind)) {
             // The desktop grid's wanted rows: the poster (or capsule) replaces its stand-in.
             desktop_poster_missing_.erase(cover->key);
             const auto range = desktopArtRange();
             const auto edge = desktopArtEdge();
             for (size_t i = range.keep_first; i < range.keep_end; ++i)
-                if (gameKey(cards_[i].game) == cover->key) renderer_.setPoster(i, cover->kind == CoverMessage::Kind::poster ? asset.poster : asset.landscape, edge);
+                if (desktopCardKind(i) == cover->kind && gameKey(cards_[i].game) == cover->key)
+                    renderer_.setPoster(i, cover->kind == CoverMessage::Kind::poster ? asset.poster : asset.landscape, edge);
         }
         if (libraryListPlus() && cover->kind == CoverMessage::Kind::poster && selected_ < cards_.size() && gameKey(cards_[selected_].game) == cover->key)
             bindLibraryPoster(selected_, true);
@@ -131,7 +132,7 @@ void Launcher::onCover(std::unique_ptr<CoverMessage> cover) {
     const uint32_t edge = desktop ? desktopArtEdge() : 0;
     if (desktop && cover->kind == CoverMessage::Kind::cover && desktopCellKind() == CoverMessage::Kind::cover) // Squares: the cover is the cell's art.
         for (size_t i = range.keep_first; i < range.keep_end && i < cards_.size(); ++i)
-            if (gameKey(cards_[i].game) == cover->key) renderer_.setPoster(i, asset.cover, edge);
+            if (desktopCardKind(i) == CoverMessage::Kind::cover && gameKey(cards_[i].game) == cover->key) renderer_.setPoster(i, asset.cover, edge, asset.focus);
     for (size_t i = 0; i < cards_.size(); ++i) {
         if (desktop && i != selected_ && (i < range.keep_first || i >= range.keep_end)) continue;
         if (desktop && cover->kind == CoverMessage::Kind::cover && i != selected_ && renderer_.hasPoster(i)) continue;

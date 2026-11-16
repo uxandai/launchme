@@ -76,6 +76,9 @@ std::wstring Launcher::settingsPageTitle(const settings_ui::PageFrame* frame) co
     case Page::sounds: return tr(L"Dźwięki interfejsu");
     case Page::screensaver: return tr(L"Wygaszacz ekranu");
     case Page::fps_limiter: return tr(L"FPS i limiter");
+    case Page::transfer: return tr(L"Kopia i przenoszenie");
+    case Page::transfer_import: return tr(L"Wczytaj kopię");
+    case Page::playnite: return tr(L"Import z Playnite");
     case Page::companion_model: return tr(L"Model AI");
     case Page::companion_voice: return tr(L"Głos (ElevenLabs)");
     case Page::companion_remote: return tr(L"Dostęp z telefonu");
@@ -102,6 +105,12 @@ std::wstring Launcher::settingsPageTitle(const settings_ui::PageFrame* frame) co
         return tr(L"Prefiks");
 #endif
     }
+    case Page::steam_game:
+#ifndef _WIN32
+        return L"Proton · Steam: " + steam_game_.game.name;
+#else
+        return {};
+#endif
     case Page::launch_options:
 #ifndef _WIN32
         if (!frame->key.empty()) return L"Proton / Wine: " + compat_.game.name;
@@ -859,6 +868,11 @@ void Launcher::buildSettingsRows() {
         for (auto& row : companionSettingsRows()) add(std::move(row)); // Her rows bring their own sections.
         break;
     case settings_ui::Category::system: {
+        if (transferPage()) {
+            transferMeasure(); // The parts' sizes, once.
+            for (auto& row : transferSettingsRows()) add(std::move(row)); // They bring their own sections.
+            break;
+        }
         if (settings_state_.at(Page::fps_limiter)) {
             {
                 static constexpr std::array<const wchar_t*, 3> fps{trKey(L"Wyłączony"), trKey(L"Średnie FPS"), trKey(L"FPS i 1% low")};
@@ -1031,6 +1045,9 @@ void Launcher::buildSettingsRows() {
         pageRow(Page::screensaver, tr(L"Wygaszacz ekranu"), tr(L"Grafiki gier, gdy launcher jest bezczynny: styl, czas i podgląd."),
                 settings_.screensaver ? tr(L"Po ") + std::to_wstring(screensaver::normalizedMinutes(settings_.screensaver_minutes)) + tr(L" min") :
                                         std::wstring(tr(L"Wyłączony")));
+        pageRow(Page::transfer, tr(L"Kopia i przenoszenie"),
+                tr(L"Eksport i import ustawień, biblioteki, grafik i kluczy do pliku ZIP; import z Playnite."),
+                transfer_.restart_ready ? std::wstring(tr(L"Import gotowy")) : std::wstring{});
         // Experimental features are features too: the same list, their descriptions say what is new.
         add({Id::quick_resume, Control::toggle, tr(L"Szybkie wznawianie"),
             tr(L"Wstrzymaj grę w jej menu i wróć do niej później. Gry online mogą się rozłączyć."), {}, settings_.quick_resume});

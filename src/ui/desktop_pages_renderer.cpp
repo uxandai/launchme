@@ -322,26 +322,33 @@ void Renderer::drawDesktopStoreChrome(const desktop_ui::Sheet& sheet, const desk
         desktopButton(search, 1, hovered({Kind::action, 0}), view.pressed == SheetHit{Kind::action, 0}, !query.empty(), 0, tr(L"Szukaj"));
         desktopHot({Kind::action, 0}, search);
     }
-    if (!state.empty()) textLine(state, left + 2, field.bottom + 20, right - left - 4, desktop_small_font_.Get(), palette::muted());
+    if (!state.empty()) textLine(state, left + 2, field_shown ? field.bottom + 20 : h.bottom + 27, right - left - 4, desktop_small_font_.Get(), palette::muted());
 }
 
-// A store plugin page in the store's sheet: the shared frame, then its rows as a native list.
+// A store plugin page in the store's sheet: the shared frame, then its rows as a native list. A page
+// that is a question (a launcher's card in Launchery) takes the sheet with its title and Back instead
+// of the tabs; its rows are the same native list.
 void Renderer::drawDesktopStorePage() {
     const auto& view = *context_->desktop_sheet;
     desktop_hotspots_.clear();
     const auto sheet = artworkSheet(viewport_.width, viewport_.height, sheetDock());
     const auto& page = *context_->plugin_page;
-    const bool search = !page.rows.empty() && page.rows.front().input;
-    drawDesktopStoreChrome(sheet, view, page.query, page.query.size(), search ? page.rows.front().title : std::wstring{}, page.status, search);
+    const bool search = !page.dialog && !page.rows.empty() && page.rows.front().input;
     const auto p = sheet.panel();
-    const auto grid = storeGrid(sheet);
     const float left = p.left + 24, right = p.right - 24;
-    target_->PushAxisAlignedClip(D2D1::RectF(p.left + 1, grid.top - 10, p.right - 1, p.bottom - 1), D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
+    if (page.dialog) {
+        drawDesktopSheetFrame(sheet, view, page.title, true);
+        desktopHot({Kind::back}, sheet.back());
+        desktopHot({Kind::close}, sheet.close());
+        if (!page.status.empty()) textLine(page.status, left + 2, sheet.header().bottom + 27, right - left - 4, desktop_font_.Get(), palette::muted());
+    } else drawDesktopStoreChrome(sheet, view, page.query, page.query.size(), search ? page.rows.front().title : std::wstring{}, page.status, search);
+    const float top = storePageTop(sheet, search, !page.status.empty());
+    target_->PushAxisAlignedClip(D2D1::RectF(p.left + 1, top - 10, p.right - 1, p.bottom - 1), D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
     for (size_t i = 0; i < page.rows.size(); ++i) {
         const auto& row = page.rows[i];
         if (row.input) continue;
-        const float y = grid.top + row.top - view.scroll, h = row.height();
-        if (y + h < grid.top - 10 || y > p.bottom) continue;
+        const float y = top + row.top - view.scroll, h = row.height();
+        if (y + h < top - 10 || y > p.bottom) continue;
         if (row.heading) {
             textLine(row.title, left + 4, y + h * 0.5f + 6, right - left - 8, desktop_strong_font_.Get(), palette::muted());
             continue;
@@ -362,8 +369,8 @@ void Renderer::drawDesktopStorePage() {
         if (focused) desktopStroke(r, 10, uiAccent(), 2.0f);
         float x = left + 14;
         if (!row.game_key.empty() || !row.download_id.empty()) {
-            const float size = !row.download_id.empty() ? 88.0f : 62.0f, top = r.top + ((r.bottom - r.top) - size) * 0.5f;
-            const Rect art{x, top, x + size, top + size};
+            const float size = !row.download_id.empty() ? 88.0f : 62.0f, art_top = r.top + ((r.bottom - r.top) - size) * 0.5f;
+            const Rect art{x, art_top, x + size, art_top + size};
             desktopFill(art, 8, rgb(0.12f, 0.15f, 0.18f));
             if (i < covers_.size()) fillImage(covers_[i], box(art), 8, reveal(covers_[i]), false);
             x += size + 16;

@@ -77,12 +77,14 @@
 #include "../platform/discord.hpp"
 #include "../platform/sensors.hpp"
 #include "hold_gesture.hpp"
+#include "pad_key_echo.hpp"
 #include "worker_messages.hpp"
 #include "launcher_queues.hpp"
 #include "launcher_backends.hpp"
 #include "screensaver_state.hpp"
 #include "tour_state.hpp"
 #include "update_state.hpp"
+#include "transfer_state.hpp"
 #include "companion_state.hpp"
 #include "library_preview.hpp"
 #include "profile_scan.hpp"
@@ -97,6 +99,7 @@
 #include "../library/compat_tools.hpp"
 #include "../library/launch_options_store.hpp"
 #include "compat_state.hpp"
+#include "steam_game_state.hpp"
 #endif
 #include "store_hub_state.hpp"
 
@@ -162,6 +165,8 @@ public:
     // Screensaver (src/app/screensaver.cpp). Keyboard and mouse messages pass this gate
     // first; true = swallowed (it is running, or the input that ended it is still arriving).
     bool screensaverActive() const { return saver_.active; }
+    // Tryb TV: the mouse pointer hides after a few seconds without moving (a pad in hand); it comes back with the mouse.
+    bool pointerIdle() const;
     bool launchAnimationActive() const { return launch_animation_started_.has_value(); }
     bool screensaverInput(UINT message, WPARAM wparam, LPARAM lparam);
     // User-added games: Settings → Library editor panel (src/app/my_games.cpp).
@@ -585,6 +590,20 @@ public:
     std::vector<settings_ui::Row> companionModelRows() const;    // Provider, model, credentials, test.
     std::vector<settings_ui::Row> companionRemoteRows() const;   // Phone access: the switch and its addresses.
     bool companionSetting(const settings_ui::Row& row);          // Enter on one of those rows; true when handled.
+    // Kopia i przenoszenie (transfer.cpp): its pages' rows, Enter on them, the background job.
+    bool transferPage() const;
+    std::vector<settings_ui::Row> transferSettingsRows() const;
+    bool transferSetting(const settings_ui::Row& row);
+    void transferMeasure();
+    void transferProgress(uint32_t generation, uint64_t done, uint64_t total);
+    void transferFinished(uint32_t generation, const profile_transfer::Result& result, bool staged);
+    void transferExport(const std::filesystem::path& folder);
+    void transferStage();
+    void transferPickBackup();
+    void transferReadPlaynite(const std::filesystem::path& source);
+    void transferStagePlaynite();
+    void announceImport();   // The first start after an import: a notification.
+    bool restartForImport(); // Starts Launchme again (updates.cpp) and closes this one.
     // Her reactions to the launcher (src/app/companion_events.cpp): the game hooks of
     // game_sessions.cpp and library_view.cpp report what happened; pumpCompanionEvents lets her
     // say one remark at a time in the home bubble while the player is looking.
@@ -1306,6 +1325,7 @@ private:
     // restarts; the new version shows its changes once (Modal::whats_new).
     using UpdateState = launcher_state::UpdateState; // update_state.hpp
     UpdateState update_;
+    launcher_state::TransferState transfer_; // Kopia i przenoszenie (transfer.cpp).
     std::wstring app_version_;                      // diagnostics::version(); tests set their own.
     std::filesystem::path update_app_dir_;          // Where launchme.exe lives; tests use a folder of theirs.
     std::function<HttpResponse(const std::wstring&)> update_get_;  // Tests: GitHub's answers.
@@ -1597,6 +1617,11 @@ private:
     // A direction held while a dialog, menu or screen opens is latched until released, so it
     // does not run on into the new layer; then controllerInput() acts on the reading.
     void controller(const PadReading& state);
+public:
+    // WM_KEYDOWN / WM_CHAR from Steam's echo of the pad: true when dropped (main.cpp).
+    bool padKeyEcho(WPARAM key);
+    bool padCharEcho(wchar_t character);
+private:
     void controllerInput(const PadReading& state);
     int pad_layer_ = -1;
     bool pad_direction_latched_ = false, pad_direction_held_ = false;
@@ -2005,6 +2030,13 @@ private:
     // A game that runs a Windows program on Linux (a store's, a .exe added by hand or found in a
     // DRM-free folder): its Wine/Proton options apply. Always false on Windows.
     bool compatGame(const Game& game) const;
+    // Linux: a Steam game whose own Proton version and launch options Launchme edits where Steam keeps
+    // them (steam_game.cpp); false on Windows. compatMenu: the game's menu has "Proton / Wine…".
+    bool steamGameConfigurable(const Game& game) const;
+    bool compatMenu(const Game& game) const;
+    void openSteamGameSettings(const Game& game);
+    // Changes waiting for Steam to close: at start and after a queued change, written once it is gone.
+    void steamGamePendingWatch();
     // Linux: Ustawienia → Biblioteka → Proton i Wine with a game's own options open (its menu's
     // "Proton / Wine…"); Back from that page leaves Settings.
     void openGameCompatSettings(const Game& game);
@@ -2044,8 +2076,14 @@ private:
     // A Windows game's Proton or Wine is on this computer (its own, the default, or any found).
     bool compatToolReady(const Game& game) const;
     void compatRefreshDatabase(); // umu-database's CSV (protonfixes IDs of store games), once a day.
+    // GE-Proton → Aktualizuj automatycznie: the newest release downloaded when one is in use (once a day; `now`: at once).
+    void compatAutoUpdate(bool now = false);
     // None is: the newest GE-Proton is downloaded (as from Settings) and the game starts after it.
     void compatProvision(const Game& game);
+    // The anti-cheat runtime (compat_tools::eac_runtime / battleye_runtime) the game's options ask for
+    // that neither Steam nor Launchme has; empty when none is missing.
+    std::string compatMissingRuntime(const Game& game) const;
+    void compatProvisionRuntime(const Game& game, const std::string& name); // Downloads it, then starts the game.
 #endif
     // A game added without the editor (from an installer): saved and in the library; its id, or
     // empty when the list cannot be saved.
@@ -2715,19 +2753,27 @@ private:
     // The same three-button prompt also asks whether downloaded videos follow a new video folder.
     // remove: "Usuń z biblioteki" of a user-added game (remove_game_); its file stays on disk.
     // delete_collection: an own collection's trash (Ustawienia → Biblioteka → Kolekcje); its key.
-    enum class PromptKind { exit, move_videos, uninstall, remove, restore_saves, delete_collection, exclude, forget_search };
+    enum class PromptKind { exit, move_videos, uninstall, uninstall_prefix, steam_game_save, remove, restore_saves, delete_collection, exclude, forget_search };
     Game remove_game_;
     Game exclude_game_; // PromptKind::exclude: Wyklucz grę, asked first (Biblioteka → Co pokazywać → Wykluczone).
     std::string delete_collection_key_;
     Game uninstall_game_; // PromptKind::uninstall: the game Launchme itself would remove (Legendary, GOG silently).
     GameAction uninstall_silent_; // ...and for a GOG game, its Inno uninstaller with the silent switches.
+    // Linux, PromptKind::uninstall_prefix: the game's Wine/Proton prefix, asked about after Odinstaluj,
+    // and the titles of the other games that still use it (a shared prefix).
+    std::filesystem::path uninstall_prefix_;
+    std::vector<std::wstring> uninstall_prefix_users_;
+    // Linux: the question about the game's prefix, when it has one on disk; false: nothing to ask
+    // (Windows, no prefix), the caller uninstalls at once.
+    bool askUninstallPrefix(const Game& game, const GameAction& silent);
     // Szczegóły → … → Odinstaluj (also the game's menu): Steam's own dialog, GOG's Inno uninstaller
     // silently after Launchme's question, the uninstaller another installer registered in Windows
     // (EA, Ubisoft, Battle.net, Amazon…), Legendary for games Launchme installed, else the store
     // client. Never a guess.
     bool canUninstall(const Game& game) const;
     void uninstallGame(const Game& game);
-    void uninstallManagedGame(const Game& game, const GameAction& silent = {}); // After the question, on a worker.
+    // After the question, on a worker; `prefix` (Linux) is deleted too once the game is gone.
+    void uninstallManagedGame(const Game& game, const GameAction& silent = {}, const std::filesystem::path& prefix = {});
     // Injectable: UI tests never read this PC's uninstall registry or start a real uninstaller.
     std::function<std::vector<InstalledProgram>()> installed_programs_ = installedPrograms;
     std::function<UninstallResult(const GameAction&, void*, const std::function<bool()>&)> silent_uninstall_ = runSilentUninstaller;
@@ -3137,6 +3183,13 @@ private:
     // Ustawienia → Proton i Wine (compat_workers.cpp): what workers found and are doing.
     using CompatSettings = launcher_state::CompatSettings; // compat_state.hpp
     CompatSettings compat_;
+    // A Steam game's own Proton page (steam_game.cpp).
+    launcher_state::SteamGameSettings steam_game_;
+    void steamGameLoad();
+    void steamGameRows();
+    bool steamGameActivate(const settings_ui::Row& row);
+    void steamGameApply(steam_game_config::Pending change);
+    void steamGameAnswer(int index); // PromptKind::steam_game_save.
     using ProtonDbEntry = launcher_state::ProtonDbEntry;
     std::map<std::string, ProtonDbEntry> protondb_;  // By game key, once fetched.
     std::set<std::string> protondb_requested_;
@@ -3236,6 +3289,10 @@ private:
     // Short/hold gestures (src/app/input.cpp). Keyboard TAB = pad Start/Options
     // (friends / audio panel), keyboard Home = pad Guide/PS (menu / power).
     HoldGesture tab_key_, home_key_, pad_start_, pad_guide_;
+    // Linux with Steam running: its desktop layout echoes the pad as keys (src/app/pad_key_echo.hpp).
+    PadKeyEcho pad_key_echo_;
+    ULONGLONG pad_echo_checked_ = 0; // When Steam's process was last looked for.
+    bool pad_echo_char_ = false;     // The key just dropped makes a WM_CHAR too (Enter, Tab, Esc…): drop it as well.
     // Power menu: selected row while open, rows offered on this machine.
     std::optional<int> power_menu_;
     std::vector<power_menu::Item> power_items_;
@@ -3382,6 +3439,10 @@ private:
     ULONGLONG controller_repeat_ = 0;
     ULONGLONG pad_last_seen_ = 0;
     ULONGLONG mouse_transition_until_ = 0;
+    // pointerIdle(): when the mouse last moved and where (client pixels); hidden_ while it is hidden.
+    ULONGLONG pointer_moved_at_ = 0;
+    float pointer_last_x_ = -1, pointer_last_y_ = -1;
+    bool pointer_hidden_ = false;
 
     // ---- Desktop mode (src/app/desktop.cpp, desktop_window.cpp) ----
     // Off until initialize() reads Settings: the UI tests build a Launcher without it and see Tryb TV.
@@ -3406,7 +3467,6 @@ private:
     bool desktop_narrow_valid_ = false;
     float desktop_pane_anim_ = 1;     // The pane 0 out … 1 in, easing to desktopPaneOpen().
     bool desktop_pane_valid_ = false;
-    std::array<float, 3> desktop_continue_hover_{};
     int desktop_columns_ = 0;         // The grid's columns last laid out: a change asks for the new posters' art.
     Spring desktop_active_y_;
     bool desktop_active_y_valid_ = false;
@@ -3463,6 +3523,13 @@ private:
         return settings_.desktop_view == 1 || settings_.desktop_view == 3 ? CoverMessage::Kind::cover :
                settings_.desktop_view == 2 ? CoverMessage::Kind::landscape : CoverMessage::Kind::poster;
     }
+    // A card's own picture: Kontynuuj grę's tiles (the first desktop_continue_count_ cards) the wide one.
+    CoverMessage::Kind desktopCardKind(size_t index) const { return index < desktop_continue_count_ ? CoverMessage::Kind::landscape : desktopCellKind(); }
+    bool desktopWantsKind(const std::string& key, CoverMessage::Kind kind) const {
+        if (kind == desktopCellKind()) return true;
+        for (size_t i = 0; i < desktop_continue_count_ && i < cards_.size(); ++i) if (kind == desktopCardKind(i) && gameKey(cards_[i].game) == key) return true;
+        return false;
+    }
     void desktopOpenViewMenu();
     void desktopSetView(int view);
     bool desktopPaneOpen() const { return !cards_.empty() && !desktop_pane_closed_; }
@@ -3497,6 +3564,8 @@ private:
     std::vector<Game> desktop_recent_games_;          // The last three played: the sidebar's and Kontynuuj grę's.
     int desktopActiveEntry() const;
     bool desktopContinueShown() const;
+    void desktopRestoreGroups(); // desktop_collapsed_ from settings_ (a start in the desktop window, a switch to it).
+    size_t desktop_continue_count_ = 0; // Kontynuuj grę: how many of cards_ lead as its wide tiles (rebuildDesktop).
     void desktopBindRecentArt();
     void desktopRecentArtArrived(const std::string& key, CoverMessage::Kind kind, const ImageBytes& image);
     std::vector<std::string> desktop_recent_keys_;    // The games of Renderer::desktop_recent_'s slots.

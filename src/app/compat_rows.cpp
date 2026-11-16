@@ -70,6 +70,7 @@ void Launcher::compatSettingsRows() {
     const PageFrame overview{Page::compat};
     const auto* frame = settings_state_.top() ? settings_state_.top() : &overview;
     if (!compat_.tools_loaded) compatLoadTools();
+    if (frame->page == Page::steam_game) { steamGameRows(); return; } // A Steam game's own (steam_game.cpp).
     std::wstring next_section;
     const auto section = [&](std::wstring title) { next_section = std::move(title); };
     const auto add = [&](Row row) -> Row& {
@@ -192,6 +193,10 @@ void Launcher::compatSettingsRows() {
         if (!source) break;
         const auto found = compat_.releases.find(source->id);
         if (found == compat_.releases.end() && !compat_.releases_loading.contains(source->id)) compatLoadReleases(source->id, false);
+        if (std::string_view(source->id) == "ge-proton")
+            add({Id::compat_auto_update, Control::toggle, tr(L"Aktualizuj automatycznie"),
+                 tr(L"Raz dziennie pobiera nowe wydanie, gdy używasz GE-Protona. Gry z wersją automatyczną od razu go używają, wybrane wersje zostają."),
+                 {}, settings_.compat_auto_update});
         if (source->kind == compat_tools::Kind::proton)
             add({Id::compat_steam_target, Control::toggle, tr(L"Instaluj także dla Steama"),
                  tr(L"Do compatibilitytools.d Steama: ta wersja będzie też do wyboru we właściwościach gier Steam."), {}, compat_.steam_target});
@@ -284,6 +289,7 @@ void Launcher::compatSettingsRows() {
             Row row{Id::prefix_tool, Control::choice, tr(L"Wersja Protona / Wine"),
                 tr(L"Gry w tym prefiksie używają jej, gdy nie wybrały własnej. Zmiana głównej wersji (np. Wine 9 → 10) aktualizuje prefiks.")};
             toolChoices(row, entry.info.compat_tool, tr(L"Domyślna: ") + compatToolName(store::defaultTool()));
+            if (const auto warning = runnerWarning(compat_.tools, store::effectiveTool({}, path), path); !warning.empty()) row.description = warning;
             row.key = frame->key;
             add(std::move(row));
         }
@@ -418,6 +424,8 @@ void Launcher::compatSettingsRows() {
                     const auto prefix_tool = store::prefixInfo(prefix).compat_tool;
                     fallback = chosen(prefix_tool) ? tr(L"Jak prefiks: ") + compatToolName(prefix_tool) :
                                                      tr(L"Domyślna: ") + compatToolName(store::defaultTool());
+                    if (const auto warning = runnerWarning(compat_.tools, store::effectiveTool(gameKey(compat_.game), prefix), prefix); !warning.empty())
+                        row.description = warning;
                 } else fallback = compatToolName("default");
                 toolChoices(row, options.compat_tool, std::move(fallback));
                 row.detail = row.value;

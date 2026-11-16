@@ -101,7 +101,7 @@ context_menu::Rows Launcher::menuRows() const {
         context_menu::Rows rows{false, 0, false, true, !gameFolder(game).empty(), canExclude(game), !hideableCopies(game).empty()};
         rows.uninstall = canUninstall(game) && sessionState(game) == SessionState::none; // Never while it runs.
         rows.launch = launchEditable(game);
-        rows.compat = compatGame(game) && !gameKey(game).empty();
+        rows.compat = compatMenu(game);
         rows.shortcuts = shortcutAvailable(game, ShortcutPlace::desktop) || shortcutAvailable(game, ShortcutPlace::menu) ||
                          shortcutAvailable(game, ShortcutPlace::steam);
         rows.aurelia = aurelia_active_ && aurelia::validGame(game);
@@ -382,9 +382,27 @@ void Launcher::exitPromptAccept() {
         const int index = static_cast<int>(choice); // 0 uninstall, 1 open its folder first, 2 cancel.
         const auto game = std::exchange(uninstall_game_, Game{});
         const auto silent = std::exchange(uninstall_silent_, GameAction{});
-        if (index == 0) uninstallManagedGame(game, silent);
+        if (index == 0) { if (!askUninstallPrefix(game, silent)) uninstallManagedGame(game, silent); }
         else if (index == 1 && game.install_directory.is_absolute())
             execute_(hwnd_, GameAction{game.install_directory.wstring(), {}, {}, ActionKind::open_client});
+        return;
+    }
+    if (prompt_kind_ == PromptKind::steam_game_save) {
+        prompt_kind_ = PromptKind::exit;
+#ifndef _WIN32
+        steamGameAnswer(static_cast<int>(choice)); // 0 live from Steam's next start, 1 after Steam closes, 2 nothing.
+#endif
+        return;
+    }
+    if (prompt_kind_ == PromptKind::uninstall_prefix) {
+        prompt_kind_ = PromptKind::exit;
+        const int index = static_cast<int>(choice); // 0 the prefix goes too, 1 it stays, 2 nothing happens.
+        const auto game = std::exchange(uninstall_game_, Game{});
+        const auto silent = std::exchange(uninstall_silent_, GameAction{});
+        const auto prefix = std::exchange(uninstall_prefix_, {});
+        uninstall_prefix_users_.clear();
+        if (index == 0) uninstallManagedGame(game, silent, prefix);
+        else if (index == 1) uninstallManagedGame(game, silent);
         return;
     }
     if (prompt_kind_ == PromptKind::remove) {

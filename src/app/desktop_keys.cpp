@@ -232,7 +232,24 @@ void Launcher::desktopMove(int dx, int dy, bool extend) {
     }
     const int columns = L.columns();
     const int count = static_cast<int>(cards_.size()), current = static_cast<int>(selected_);
-    const int column = current % columns;
+    // Kontynuuj grę's tiles are a row of their own above the grid: the grid's columns count after them.
+    const int tiles = static_cast<int>(std::min(L.continueCards(), cards_.size()));
+    const bool on_tile = current < tiles;
+    const int column = on_tile ? current : (current - tiles) % columns;
+    const int last_column = on_tile ? tiles - 1 : columns - 1;
+    // Up or down across the tiles' edge: the card nearest below or above, by its middle.
+    const auto nearest = [&](int from, int to) {
+        const auto r = L.poster(static_cast<size_t>(current), 0);
+        const float middle = (r.left + r.right) * 0.5f;
+        int best = from;
+        float best_distance = 1e9f;
+        for (int i = from; i < to && i < count; ++i) {
+            const auto c = L.poster(static_cast<size_t>(i), 0);
+            const float distance = std::abs((c.left + c.right) * 0.5f - middle);
+            if (distance < best_distance) { best_distance = distance; best = i; }
+        }
+        return best;
+    };
     if (dx < 0 && column == 0 && !extend) {
         desktop_zone_ = 0;
         const auto rows = desktopRows();
@@ -241,9 +258,12 @@ void Launcher::desktopMove(int dx, int dy, bool extend) {
         InvalidateRect(hwnd_, nullptr, FALSE);
         return;
     }
-    if (dx > 0 && (column == columns - 1 || current + 1 >= count) && !extend) { desktop_zone_ = 2; desktop_pane_focus_ = 0; InvalidateRect(hwnd_, nullptr, FALSE); return; }
-    if (dy < 0 && current < columns && !extend) { desktopSearchFocus(true); return; }
-    const int next = std::clamp(current + dx + dy * columns, 0, count - 1);
+    if (dx > 0 && (column == last_column || current + 1 >= count) && !extend) { desktop_zone_ = 2; desktop_pane_focus_ = 0; InvalidateRect(hwnd_, nullptr, FALSE); return; }
+    if (dy < 0 && (on_tile || (!tiles && current < columns)) && !extend) { desktopSearchFocus(true); return; }
+    int next = std::clamp(current + dx + dy * columns, 0, count - 1);
+    if (dy > 0 && on_tile) next = tiles < count ? nearest(tiles, tiles + columns) : current;
+    else if (dy < 0 && tiles && current - tiles < columns) next = nearest(0, tiles);
+    else if (!on_tile && dx < 0 && next < tiles) next = current;
     if (next == current) { navigationBoundary(); return; }
     if (extend) desktopMarkRange(desktop_anchor_, static_cast<size_t>(next));
     else { desktop_marked_.clear(); desktop_anchor_ = static_cast<size_t>(next); }

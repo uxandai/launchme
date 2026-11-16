@@ -193,9 +193,7 @@ bool Launcher::initialize(HWND hwnd) {
     if (desktop_mode_) {
         desktop_section_ = settings_.desktop_section.empty() ? std::string("all") : settings_.desktop_section;
         desktop_restore_key_ = settings_.desktop_game;
-        for (int i = 0; i < desktop_ui::group_count; ++i) // Below Ostatnio grane: folded until opened (and remembered).
-            desktop_collapsed_[static_cast<size_t>(i)] = desktop_ui::foldedByDefault(static_cast<desktop_ui::Group>(i)) ?
-                !settings_.desktop_expanded.contains(desktop_ui::group_names[i]) : settings_.desktop_collapsed.contains(desktop_ui::group_names[i]);
+        desktopRestoreGroups();
     } else if (settings_.windowed) { toggleFullscreen(); settings_dirty_ = false; }
     else placeOnTvMonitor();
     if (settings_.autostart) applyAutostart(true); // The EXE may have moved since it was switched on.
@@ -311,10 +309,13 @@ bool Launcher::initialize(HWND hwnd) {
     startGameIndex();
     companionRemoteSync(); // Phone access, when switched on.
     restoreFrozenGames();
+    announceImport();    // What a staged import brought in (applied by main before this).
     initializeUpdates(); // The previous update's old files away, its changes shown once; then a look for a newer one.
 #ifndef _WIN32
     shortcutProgram(false); // The shortcuts' helper follows Launchme when it moved (a new AppImage).
     compatRefreshDatabase();
+    compatAutoUpdate();
+    steamGamePendingWatch(); // Steam games' changes still waiting for Steam to close.
 #endif
     if (desktop_mode_) { applyWindowMode(); buildDesktopSidebar(); } // The window's style and place; ShowWindow follows in main.cpp.
     if (!settings_.tour_done && !settings_.aurelia_intro_done) openAurelia(nullptr, true);
@@ -500,6 +501,12 @@ void Launcher::tick() {
     pollTray();
     pollReturnFocus();
     pollStartupForeground(GetTickCount64());
+    if (!pointer_hidden_ && pointerIdle() && GetForegroundWindow() == hwnd_) {
+        // The mouse rests over Tryb TV: WM_SETCURSOR comes only with a move, so the pointer goes now.
+        pointer_hidden_ = true;
+        POINT cursor{};
+        if (GetCursorPos(&cursor) && WindowFromPoint(cursor) == hwnd_) SetCursor(nullptr);
+    }
     pollOverlayReturn();
     startRatings();
     pollLibrarySave();

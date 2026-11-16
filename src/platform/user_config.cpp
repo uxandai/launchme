@@ -137,7 +137,7 @@ namespace {
 struct FlagSetting { std::string_view key; bool AppSettings::* field; };
 constexpr FlagSetting flag_settings[] = {
     {"show_emulation", &AppSettings::show_emulation}, {"home_rows_migrated", &AppSettings::home_rows_migrated},
-    {"tarot", &AppSettings::tarot}, {"store_hub", &AppSettings::store_hub}, {"show_launchers", &AppSettings::show_launchers},
+    {"tarot", &AppSettings::tarot}, {"store_hub", &AppSettings::store_hub}, {"compat_auto_update", &AppSettings::compat_auto_update}, {"show_launchers", &AppSettings::show_launchers},
     {"hide_while_playing", &AppSettings::hide_while_playing},
     {"shelves_hero_facts", &AppSettings::shelves_hero_facts},
     {"wallpaper_snitch", &AppSettings::wallpaper_snitch},
@@ -565,7 +565,8 @@ AppSettings parseAppSettings(std::string_view text) {
             while (!value.empty()) {
                 const auto comma = value.find(',');
                 const auto group = trim(value.substr(0, comma));
-                if (group == "library" || group == "platforms" || group == "emulation" || group == "collections" || group == "publishers" || group == "developers")
+                if (group == "library" || group == "recent" || group == "platforms" || group == "emulation" || group == "collections" || group == "publishers" ||
+                    group == "developers")
                     (key == "desktop_collapsed" ? settings.desktop_collapsed : settings.desktop_expanded).emplace(group);
                 value = comma == std::string_view::npos ? std::string_view{} : value.substr(comma + 1);
             }
@@ -1028,6 +1029,7 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
     output << "glance=" << settings.glance << '\n';
     output << "tarot=" << settings.tarot << '\n';
     output << "store_hub=" << settings.store_hub << '\n';
+    output << "compat_auto_update=" << settings.compat_auto_update << '\n';
     output << "show_launchers=" << settings.show_launchers << '\n';
     output << "companion=" << settings.companion << '\n';
     output << "companion_look=" << settings.companion_look << '\n';
@@ -1148,14 +1150,15 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
                << settings.desktop_window[2] << ',' << settings.desktop_window[3] << '\n';
     output << "desktop_collapsed=";
     first = true;
-    for (const auto* group : {"library", "platforms", "emulation", "collections", "publishers", "developers"}) if (settings.desktop_collapsed.contains(group)) {
+    // Every group in both lists: which of them starts folded is desktop_ui::foldedByDefault's choice.
+    for (const auto* group : {"library", "recent", "platforms", "emulation", "collections", "publishers", "developers"}) if (settings.desktop_collapsed.contains(group)) {
         if (!first) output << ',';
         output << group;
         first = false;
     }
     output << "\ndesktop_expanded=";
     first = true;
-    for (const auto* group : {"publishers", "developers"}) if (settings.desktop_expanded.contains(group)) {
+    for (const auto* group : {"library", "recent", "platforms", "emulation", "collections", "publishers", "developers"}) if (settings.desktop_expanded.contains(group)) {
         if (!first) output << ',';
         output << group;
         first = false;

@@ -112,6 +112,13 @@ int LauncherUiTest::detailsMedia(HWND window) {
     // Desktop: the sections under the columns; a screenshot opens the viewer, a click closes it;
     // a similar game opens its page.
     app.desktop_mode_ = true; app.screen_ = ScreenMode::shelves; app.buildDesktopSidebar(); app.rebuildCards(true); settle();
+    { // A wide cover whose square crop (Kadruj) is its right end, opaque only there: Podobne gry show that end.
+        auto message = std::make_unique<CoverMessage>();
+        message->key = gameKey(app.public_library_[4]); message->generation = app.jobs_->generation.load();
+        message->kind = CoverMessage::Kind::cover; message->bytes = pngFixture(220, 128, 32, false, WICRect{96, 0, 32, 32});
+        message->focus = {1.0f, 0.5f};
+        app.onCover(std::move(message));
+    }
     fill(game);
     app.openDetails(game); settle();
     if (app.screen_ != ScreenMode::details || !app.detailsMediaReady()) return 22024;

@@ -193,8 +193,8 @@ switches, lsfg-vk, NVIDIA and wrapper options), is `launch_options_catalog::opti
 | `dxvk_frame_rate` | proton | `DXVK_FRAME_RATE=<fps>` and `VKD3D_FRAME_RATE=<fps>` |
 | `install_dxvk` | proton (Wine) | DXVK's DLLs in the prefix, `WINEDLLOVERRIDES=…;d3d8,d3d9,d3d10core,d3d11,dxgi=n,b` |
 | `install_vkd3d` | proton (Wine) | VKD3D-Proton's DLLs, `WINEDLLOVERRIDES=…;d3d12,d3d12core=n,b` |
-| `eac_runtime` | proton | `PROTON_EAC_RUNTIME=<library>/steamapps/common/Proton EasyAntiCheat Runtime` |
-| `battleye_runtime` | proton | `PROTON_BATTLEYE_RUNTIME=<library>/steamapps/common/Proton BattlEye Runtime` |
+| `eac_runtime` | proton | `PROTON_EAC_RUNTIME=<library>/steamapps/common/Proton EasyAntiCheat Runtime`, else `<config>/compatibilitytools/runtimes/eac_runtime` |
+| `battleye_runtime` | proton | `PROTON_BATTLEYE_RUNTIME=<library>/steamapps/common/Proton BattlEye Runtime`, else `<config>/compatibilitytools/runtimes/battleye_runtime` |
 | `dll_overrides` | proton | `WINEDLLOVERRIDES=<value>` (Wine: after Launchme's own; Proton appends it to its own) |
 | `locale` | proton | `HOST_LC_ALL=<locale>`; Wine: `LC_ALL=<locale>` |
 | `log` | proton | `PROTON_LOG=1 PROTON_LOG_DIR=<config>/logs/wine/<game>` (+ `UMU_LOG=1`); Wine: Wine's own `WINEDEBUG`, `DXVK_LOG_PATH`; off (Wine): `WINEDEBUG=-all DXVK_LOG_LEVEL=none` |
@@ -257,6 +257,35 @@ read as overrides of whatever differs from the default:
  "prefixes":{"epic:Catnip":"/home/u/Games/launchme/prefixes/borderlands-3"},"version":2}
 ```
 
+## Steam games
+
+A Steam game's menu also has "Proton / Wine…": its own Proton version and launch options, edited where Steam keeps
+them (`src/library/steam_game_config.hpp`, `src/app/steam_game.cpp`). The prefix stays Steam's (`compatdata/<appid>`).
+
+- Steam running with its CEF port (127.0.0.1:8080, held by this installation's steamwebhelper): through
+  SharedJSContext, `SteamClient.Apps.SetAppLaunchOptions` / `SpecifyCompatTool` (as Decky's plugins call them), read
+  back with `RegisterForAppDetails`; Steam's own list of tools comes from `GetAvailableCompatTools`.
+- Steam running without it: the first change asks. "Turn on live saving" creates `<steam>/.cef-enable-remote-debugging`
+  (as Decky's installer does; Steam reads it when it starts); either answer queues the change in
+  `<config>/steam_game_pending.txt`, written once Steam closes (a worker looks every few seconds).
+- Steam closed: `userdata/<account>/config/localconfig.vdf` (`apps/<appid>/LaunchOptions`) and `config/config.vdf`
+  (`CompatToolMapping/<appid>`, priority 250), each copied to `<file>.launchme-backup` first.
+- Switches compose the launch options: variables before `%command%` (`PROTON_ENABLE_NVAPI=1`, `PROTON_ENABLE_WAYLAND=1`,
+  `PROTON_ENABLE_HDR=1`, `VKD3D_CONFIG=dxr`, `PROTON_USE_WINED3D=1`, `PROTON_NO_ESYNC=1`, `PROTON_NO_FSYNC=1`,
+  `PROTON_LOG=1`), wrappers just before it (`gamemoderun`, `mangohud`); the whole line stays editable.
+- Offline tool names: compatibilitytool.vdf's key, Valve's Proton by folder (`Proton 9.0` → `proton_9`).
+
+## Prefix safety
+
+- Uninstalling a managed game asks whether to delete its prefix too (not the shared `default` one), and names the
+  other games still using it; they get a new, empty prefix.
+- A prefix Proton made (`version` plus `tracked_files` or `config_info`) chosen with Wine, or the reverse, shows a
+  warning on the game's version row and the prefix page (`wine_runner::runnerMismatch`).
+- GE-Proton → Update automatically (on by default): once a day, when a GE-Proton is installed (not umu's own), the
+  newest release is downloaded; games on the automatic version use it, pinned ones keep theirs.
+- Steam running on Linux (Steam Deck desktop mode): Steam's desktop layout echoes pad presses as keys; those keys,
+  while a pad button is held or within 250 ms of a press, are dropped (`PadKeyEcho`).
+
 ## Prefix tools
 
 | Function | What it runs |
@@ -301,4 +330,6 @@ read as overrides of whatever differs from the default:
   wineserver ends; umu/Proton wait for that themselves.
 - `.lnk` targets on other drives are resolved through `dosdevices`; network targets are not.
 - DXVK for plain Wine is copied, never removed: switching it off only drops its DLL overrides.
-- EAC/BattlEye use Steam's runtime apps only (installed through Steam); Launchme does not download them.
+- EAC/BattlEye: Steam's runtime apps first. Without them, the first launch of a game that asks for one downloads it as
+  Heroic does: Lutris' list (`lutris.net/api/runtimes`), archives only from `https://github.com/lutris/`, no checksum
+  (Lutris publishes none), then the game starts (`compat_tools::installRuntime`).
