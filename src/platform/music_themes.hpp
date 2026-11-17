@@ -7,10 +7,11 @@
 // saved by its id (settings.ini: music_track), so the list may grow or shrink without moving a
 // saved choice. Files of the chosen sound folder follow these in the settings list.
 struct MusicTheme { const wchar_t* name; const wchar_t* file; const char* id; };
-inline constexpr std::array<MusicTheme, 3> music_themes{{
+inline constexpr std::array<MusicTheme, 4> music_themes{{
     {trKey(L"Brak"), nullptr, "none"},
     {L"Launchme \u2014 Horizons", L"HorizonsTheme.mp3", "horizons"},
     {L"Launchme \u2014 Exploratory Silence", L"ExploratorySilenceTheme.mp3", "exploratory-silence"},
+    {L"Launchme — Quiet Exploration", L"QuietExplorationTheme.mp3", "quiet-exploration"},
 }};
 inline constexpr int default_music_theme = 1; // Launchme — Horizons.
 inline int musicThemeIndex(std::string_view id) {
