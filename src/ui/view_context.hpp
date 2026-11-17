@@ -227,6 +227,7 @@ struct ViewContext {
     bool guide_overlay = false;
     float guide_opacity = 1;
     bool fps_widget = false, fps_low = false, fps_graph = false;
+    bool fps_frametime = false, fps_frametime_spike = false;
     int hud_layout = 0;               // 0: a list, 1: a strip.
     bool hud_label_colors = false;
     float hud_scale = 1.0f;           // AppSettings::hud_size / 100.
@@ -601,4 +602,8 @@ struct ViewContext {
     std::optional<FocusRing> focus_ring;
     // Set while the screensaver runs: it covers everything (src/ui/screensaver_renderer.cpp).
     const screensaver::View* screensaver = nullptr;
+    // Startup video (src/app/boot_video.cpp): 1 while playing, fading to 0 at its end.
+    float boot_video_alpha = 0;
+    bool boot_video_fill = false;
+    uint32_t artwork_preview_id = 0; // Active video preview asset in the artwork / boot video picker.
 };

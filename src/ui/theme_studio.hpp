@@ -13,13 +13,13 @@
 // launcher's part is src/app/theme_studio*.cpp, the drawing src/ui/theme_studio_renderer.cpp.
 namespace theme_ui {
 using Rect = settings_ui::Rect;
-enum class Tab { layout, wallpaper, tiles, colors, fonts, other, looks };
+enum class Tab { layout, wallpaper, tiles, colors, fonts, startup, other, looks };
 // TODO: the Looks tab (Wyglądy: Cofnij zmiany, Zapisz wygląd, the saved looks) is hidden for now. Its state, rows,
 // drawing, the preset files and the tests stay; set this to true to bring it back as the last tab.
 inline constexpr bool looks_tab_shown = false;
-inline constexpr int tab_count = looks_tab_shown ? 7 : 6;
+inline constexpr int tab_count = looks_tab_shown ? 8 : 7;
 inline constexpr const wchar_t* tab_names[] = {trKey(L"Układ"), trKey(L"Tapeta"), trKey(L"Kafelki"), trKey(L"Kolory"),
-                                               trKey(L"Czcionki"), trKey(L"Inne"), trKey(L"Wyglądy")};
+                                               trKey(L"Czcionki"), trKey(L"Rozruch"), trKey(L"Inne"), trKey(L"Wyglądy")};
 
 // cards: a strip of pictures, one chosen; toggle: a switch; slider: − track +; action: a button.
 enum class Kind { cards, toggle, slider, action };

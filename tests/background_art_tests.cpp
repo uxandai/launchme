@@ -6,14 +6,17 @@
 #include "../src/artwork/text_crop.hpp"
 #include "../src/net/http.hpp"
 #include "../src/platform/atomic_file.hpp"
+#include "../src/store/nintendo_trailer.hpp"
 #include "../src/store/steam_app_match.hpp"
 #include "image_fixture.hpp"
 
 #include <Windows.h>
 
+#include <array>
 #include <atomic>
 #include <cmath>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 
 namespace {
@@ -110,6 +113,91 @@ int main() {
     if (steamAppForTitle(L"Hades", metadata, "epic%3Ahades", answer) != 1145360 || calls != 2) return 26;
     if (steamAppForTitle(L"Hades III", metadata, "epic%3Ahades3", answer) || calls != 3) return 27;
     if (steamAppForTitle(L"Hades III", metadata, "epic%3Ahades3", answer) || calls != 3) return 28; // The miss is remembered.
+
+    // Nintendo Switch & Switch 2 trailers: platform-aware match, Switch 2 Edition label stripping,
+    // rejection of DLC / upgrade packs / bundles / sequels, Title ID resolution and MP4 clip fallback.
+    {
+        const std::string nintendo_hits = R"json({"hits":[
+            {"title":"Xenoblade Chronicles™ 3 – Nintendo Switch™ 2 Edition Upgrade Pack","platformCode":"NINTENDO_SWITCH_2","nsuid":"70050000075214","isUpgrade":true,
+             "productGallery":[{"resourceType":"video","publicId":"/store/software/switch2/70050000075214/Video/upgradebad"}]},
+            {"title":"Xenoblade Chronicles™ 3 Expansion Pass","platformCode":"NINTENDO_SWITCH","nsuid":"70070000014643","dlcType":"Bundle",
+             "productGallery":[{"resourceType":"video","publicId":"/store/software/switch/70070000014643/Video/bundlebad"}]},
+            {"title":"Xenoblade Chronicles™ 3","platformCode":"NINTENDO_SWITCH","nsuid":"70010000053336","isUpgrade":false,
+             "productGallery":[{"resourceType":"image","publicId":"img1"},{"resourceType":"video","publicId":"/store/software/switch/70010000053336/Video/sw1good"}]},
+            {"title":"Xenoblade Chronicles™ 3 – Nintendo Switch™ 2 Edition","platformCode":"NINTENDO_SWITCH_2","nsuid":"70010000122696","isUpgrade":false,
+             "productGallery":[{"resourceType":"video","publicId":"/store/software/switch2/70010000122696/Video/sw2good"}]}
+        ]})json";
+        if (matchNintendoTrailerId(L"Xenoblade Chronicles 3", false, nintendo_hits) !=
+            "store/software/switch/70010000053336/Video/sw1good") return 36;
+        if (matchNintendoTrailerId(L"Xenoblade Chronicles 3", true, nintendo_hits) !=
+            "store/software/switch2/70010000122696/Video/sw2good") return 37;
+        if (!matchNintendoTrailerId(L"Xenoblade Chronicles 2", false, nintendo_hits).empty()) return 38;
+        if (!matchNintendoTrailerId(L"Twins", false, R"json({"hits":[
+            {"title":"Twins","platformCode":"NINTENDO_SWITCH","nsuid":"70010000000001","productGallery":[{"resourceType":"video","publicId":"/store/software/switch/70010000000001/Video/a"}]},
+            {"title":"Twins","platformCode":"NINTENDO_SWITCH","nsuid":"70010000000002","productGallery":[{"resourceType":"video","publicId":"/store/software/switch/70010000000002/Video/b"}]}
+        ]})json").empty()) return 39;
+        if (nintendoTrailerClipUrl("/store/software/switch2/70010000095431/Video/abc123", true) !=
+            L"https://assets.nintendo.com/video/upload/so_10,du_30,h_480,ac_none/store/software/switch2/70010000095431/Video/abc123.mp4") return 40;
+        if (!nintendoTrailerClipUrl("../bad/Video/abc", true).empty()) return 41;
+
+        // A Switch 2 dump named only by its 16-hex Title ID resolves the title via the European eShop,
+        // then fetches the clip (falling back from a short <24 KB so_10 tail to du_30) and trims across stores.
+        Game dump;
+        dump.kind = GameKind::nonsteam;
+        dump.source = GameSource::custom;
+        dump.platform = L"Switch 2";
+        dump.name = L"[0400C3F00006E000]";
+        dump.rom = root / L"roms" / L"switch2" / L"0400C3F00006E800" / L"exefs" / L"main";
+        dump.app_id = 777;
+        dump.shortcut_id = (uint64_t(777) << 32) | 0x02000000ULL;
+
+        int shop_calls = 0, algolia_calls = 0, clip_calls = 0;
+        const auto nintendo_http = [&](const std::wstring& url, const std::wstring&, size_t) {
+            HttpResponse r;
+            r.status = 200;
+            if (url.find(L"searching.nintendo-europe.com") != std::wstring::npos &&
+                url.find(L"application_id_s:0400c3f00006e000") != std::wstring::npos) {
+                ++shop_calls;
+                const std::string body = R"json({"response":{"docs":[{"title":"Mario Kart World","application_id_s":"0400c3f00006e000"}]}})json";
+                r.body.assign(body.begin(), body.end());
+            } else if (url.find(L"u3b6gr4ua3-dsn.algolia.net") != std::wstring::npos &&
+                       url.find(L"Mario%20Kart%20World") != std::wstring::npos) {
+                ++algolia_calls;
+                const std::string body = R"json({"hits":[{"title":"Mario Kart™ World","platformCode":"NINTENDO_SWITCH_2","nsuid":"70010000095431",
+                    "productGallery":[{"resourceType":"video","publicId":"/store/software/switch2/70010000095431/Video/mkwclip"}]}]})json";
+                r.body.assign(body.begin(), body.end());
+            } else {
+                r.status = 404;
+            }
+            return r;
+        };
+        const auto media = root / L"media";
+        std::filesystem::create_directories(media / L"steam" / L"videos");
+        const auto old_steam = media / L"steam" / L"videos" / L"620.clip.mp4";
+        {
+            std::ofstream out(old_steam, std::ios::binary);
+            out << std::string(40 * 1024, 's');
+        }
+        std::filesystem::last_write_time(old_steam, std::filesystem::file_time_type::clock::now() - std::chrono::hours(2));
+
+        const auto clip_download = [&](const std::wstring& url, const std::filesystem::path& target) {
+            ++clip_calls;
+            std::filesystem::create_directories(target.parent_path());
+            std::string mp4(url.find(L"so_10,") != std::wstring::npos ? 4096 : 30 * 1024, '\0');
+            mp4[3] = 20;
+            std::memcpy(mp4.data() + 4, "ftyp", 4);
+            std::ofstream(target, std::ios::binary).write(mp4.data(), static_cast<std::streamsize>(mp4.size()));
+            HttpResponse r;
+            r.status = 200;
+            return r;
+        };
+        const auto saved_clip = nintendoTrailerFile(dump, root, media, 35 * 1024, nintendo_http, clip_download);
+        if (saved_clip.empty() || !std::filesystem::exists(saved_clip) || shop_calls != 1 || algolia_calls != 1 || clip_calls != 2) return 42;
+        if (std::filesystem::exists(old_steam)) return 43; // Shared trailer limit trimmed the older Steam clip.
+        // Cached on disk: a second focus touches neither Algolia nor the CDN.
+        if (nintendoTrailerFile(dump, root, media, 35 * 1024, nintendo_http, clip_download) != saved_clip ||
+            shop_calls != 1 || algolia_calls != 1 || clip_calls != 2) return 44;
+    }
 
     // A Steam game's art comes from Steam's own library cache before SteamGridDB (no request at all:
     // HTTP is cancelled). Steam keeps it in hash-named subfolders; the portrait capsule wins the cover.

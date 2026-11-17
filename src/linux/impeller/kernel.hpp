@@ -241,7 +241,7 @@ private:
 class Image;
 
 // The effect shaders built into the renderer (src/linux/impeller/shaders, effects.cpp).
-enum class Program { point_specular, premultiplied_matrix, arithmetic };
+enum class Program { point_specular, premultiplied_matrix, arithmetic, upscale };
 
 struct Shader {
     enum class Kind { linear, radial, conical, image, program };

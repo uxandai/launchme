@@ -68,6 +68,7 @@ ComPtr<IShellLinkW> link(const std::wstring& exe, const std::wstring& command, c
 void Launcher::jumpCommand(const std::wstring& command) {
     if (command.empty()) return;
     if (command.starts_with(L"achievement-test")) { testAchievementToast(command); return; }
+    if (command != L"tv") cancelBootVideo();
     jump_pending_ = command;
     jump_pending_since_ = GetTickCount64();
     pollJumpList();

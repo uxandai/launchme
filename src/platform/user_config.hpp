@@ -355,6 +355,8 @@ struct AppSettings {
     std::vector<std::string> hud_pins;
     // Ustawienia -> FPS i limiter. The limiter loads a library into the game, so it is opt-in.
     bool fps_graph = false;           // Frame-time graph in the FPS widget and on the game's screen.
+    bool fps_frametime = false;       // Mean frame time in ms (FT) in the FPS widget and on the game's screen.
+    bool fps_frametime_spike = false; // Also show the slowest frame (max ms) from the last second.
     bool fps_limiter = false;
     int fps_limit = 0;                // 0: none; else frames per second.
     bool fps_limit_precise = true;    // Smoother pacing for a little more CPU.
@@ -438,6 +440,22 @@ struct AppSettings {
     // Where it shows: snitch's backdrop, Settings and the menu screens, Zmień grafikę, and home tiles
     // without a picture of their own (XMB categories, Wszystkie, Glance...).
     bool wallpaper_snitch = true, wallpaper_menus = true, wallpaper_artwork = true, wallpaper_tiles = true;
+    // Interfejs → Tło i szkło: spatial upscaler for non-4K backgrounds and wallpapers in Tryb TV
+    // (AMD FSR 1.0 EASU + RCAS on Windows, 5-tap Catmull-Rom + CAS on Linux).
+    bool wallpaper_upscale = true;
+    // Media i dane → Okładki → Tła gier w 4K: keeps up to 3840×2160 in the disk cache and prefers 4K
+    // Steam / SteamGridDB heroes over local 1920×620 copies.
+    bool backgrounds_4k = false;
+    // Interfejs → Start (src/app/boot_video.cpp): a startup video from SteamDeckRepo or disk, kept in
+    // <config>\boot_videos; empty: none. boot_video_random picks any stored video on startup.
+    std::filesystem::path boot_video_file;
+    uint32_t boot_video_id = 0;
+    std::wstring boot_video_title;
+    bool boot_video_random = false;
+    bool boot_video_fill = false; // false: fit whole frame (16:10 intact); true: cover-fill 16:9 screen.
+    // Interfejs → Start: the CRT bow + vertical light trail when closing (src/ui/exit_renderer.cpp).
+    bool exit_animation = true;
+    uint32_t exit_color_rgb = 0x57D1F0; // 0 = interface accent (ui_accent_rgb / desktop_accent_rgb).
     // Tryb TV: Wszystkie, Glance, Tarot and Towarzyszka (with Dodaj grę) as tiles of the first row in
     // every layout, leading or closing it; layout: each layout's own way (floating widgets).
     enum class HomeTiles { layout, first, last };

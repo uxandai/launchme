@@ -14,6 +14,7 @@ struct Reading {
     Status status = Status::disabled;
     double fps = 0, low = 0;
     std::vector<float> graph; // Frame times in ms, oldest first, evenly spread over the last six seconds.
+    double frametime_ms = 0, frametime_max_ms = 0; // Mean and slowest single frame (ms) in the last second.
     bool operator==(const Reading&) const = default;
 };
 
@@ -73,10 +74,14 @@ public:
         }
         if (!best || best_count < 2) return {Status::collecting};
         const auto& frames = *best;
-        const double span = frames.back() - frames[frames.size() - best_count];
+        const size_t first_recent = frames.size() - best_count;
+        const double span = frames.back() - frames[first_recent];
         if (span < 0.2) return {Status::collecting};
         Reading result{Status::ready, (best_count - 1) / span};
         result.graph = graphOf(frames);
+        result.frametime_ms = span * 1000.0 / static_cast<double>(best_count - 1);
+        for (size_t i = first_recent + 1; i < frames.size(); ++i)
+            result.frametime_max_ms = std::max(result.frametime_max_ms, (frames[i] - frames[i - 1]) * 1000.0);
         std::vector<double> intervals;
         for (size_t i = 1; i < frames.size(); ++i)
             if (frames[i - 1] >= now - 60) intervals.push_back(frames[i] - frames[i - 1]);

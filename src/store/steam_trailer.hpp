@@ -27,8 +27,12 @@ std::vector<std::wstring> dashVideoSegments(std::string_view mpd, std::wstring_v
 // A media segment for the joined file: only its moof/mdat boxes (no styp/sidx), its decode time
 // moved so the clip starts at 0 (origin: the first segment's time, set by the first call).
 std::vector<uint8_t> rebaseDashSegment(std::span<const uint8_t> segment, std::optional<uint64_t>& origin);
-// Oldest-played trailers go until the folder fits limit_bytes (played ones are touched).
+// Oldest-played trailers go until the folders together fit limit_bytes (played ones are touched).
+void trimTrailers(std::span<const std::filesystem::path> folders, uint64_t limit_bytes);
 void trimTrailers(const std::filesystem::path& videos, uint64_t limit_bytes);
-// <folder>\steam\videos\<AppID>.clip.mp4; the folder is trimmed to limit_bytes after a download.
+// Shared gate so browsing past several games downloads at most one store trailer at a time.
+bool tryBeginTrailerDownload();
+void endTrailerDownload();
+// <folder>\steam\videos\<AppID>.clip.mp4; trailer folders are trimmed to limit_bytes after a download.
 std::filesystem::path steamTrailerFile(uint32_t app_id, const std::filesystem::path& config_root, const std::filesystem::path& folder,
                                        uint64_t limit_bytes = 250ull * 1024 * 1024, const TrailerDownload& download = {});

@@ -18,7 +18,9 @@ namespace {
     X(flix_size) X(flix_category_all) X(flix_category_tabs) X(flix_rail) \
     X(metro_category_tabs) X(xmb_platform_badge) X(metro_title_corner) X(metro_3d) X(metro_light) X(snitch_colour_icons) X(psfive_size) X(psfive_clock) X(psfive_dim) X(psfive_details) \
     X(psfive_category_tabs) X(home_tab_icons) X(wallpaper) X(wallpaper_file) X(wallpaper_id) X(wallpaper_snitch) \
-    X(wallpaper_menus) X(wallpaper_artwork) X(wallpaper_tiles)
+    X(wallpaper_menus) X(wallpaper_artwork) X(wallpaper_tiles) X(wallpaper_upscale) \
+    X(boot_video_file) X(boot_video_id) X(boot_video_title) X(boot_video_random) X(boot_video_fill) \
+    X(exit_animation) X(exit_color_rgb)
 } // namespace
 
 void copyLook(const AppSettings& from, AppSettings& to) {

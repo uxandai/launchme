@@ -146,7 +146,7 @@ enum class Id { font, home_layout, ui_accent, accent, uninstalled, emulation, mu
                    // Okna i podpowiedzi → Wygląd podpowiedzi (AppSettings::hint_style).
                    hint_style,
                    // Biblioteka → Uruchamianie: FPS widget's one-time ETW permission (src/platform/etw_access.cpp).
-                   fps_access, fps_graph, fps_limiter, fps_limit, fps_limit_precise, fps_limit_mode, fps_badges, hud_enabled, hud_layout, hud_label_colors, hud_size, cpu_temp_source, hud_pin, fps_game_limit, fps_limiter_status,
+                   fps_access, fps_graph, fps_frametime, fps_frametime_spike, fps_limiter, fps_limit, fps_limit_precise, fps_limit_mode, fps_badges, hud_enabled, hud_layout, hud_label_colors, hud_size, cpu_temp_source, hud_pin, fps_game_limit, fps_limiter_status,
                    // Sterowanie → Przycisk Guide: Guide in a game opens on the widgets.
                    guide_open_widgets,
                    // Search in Settings (src/app/settings_search.cpp): the field, and a found setting (Row::key its place in the index).
@@ -157,7 +157,12 @@ enum class Id { font, home_layout, ui_accent, accent, uninstalled, emulation, mu
                    // slug), the password, export, open a backup, merge or replace, path rules, import, the job's
                    // status; Playnite: where its library is, found on its own, an option (Row::key), import.
                    transfer_part, transfer_password, transfer_export, transfer_import, transfer_mode, transfer_paths, transfer_apply,
-                   transfer_status, playnite_source, playnite_find, playnite_option, playnite_apply };
+                   transfer_status, playnite_source, playnite_find, playnite_option, playnite_apply,
+                   // Interfejs → Start: startup video (SteamDeckRepo / disk) and exit animation.
+                   boot_video_pick, boot_video_clear, boot_video_random, boot_video_fill, boot_video_preview,
+                   exit_animation, exit_color,
+                   // Interfejs → Tło i szkło / Media i dane → Okładki: non-4K background upscaler and 4K background downloads.
+                   wallpaper_upscale, backgrounds_4k };
 inline bool hasOptionsButton(Id id) { return id == Id::plugin_enabled || id == Id::pc_platform; }
 // layout: drawn preview tiles in the row (one per home layout); Row::choice is the active one.
 // count: Row::value as a large number with a chevron; activating opens a sub-list.
@@ -265,6 +270,12 @@ inline constexpr std::array<uint32_t, 8> button_colors{0xF5F5F5, 0, 0x0070D1, 0x
 inline constexpr std::array<const wchar_t*, 8> button_color_names{
     trKey(L"Biały (domyślny)"), trKey(L"Jak akcent interfejsu"), L"PlayStation Blue", L"Xbox Green", L"Switch Red", L"Wii Blue",
     trKey(L"Fioletowy"), trKey(L"Pomarańczowy")};
+// Exit animation's vertical light trail: All games' cyan by default, the interface accent (0) or a console colour.
+inline constexpr std::array<uint32_t, 9> exit_colors{0x57D1F0, 0, 0xF5F5F5, 0x0070D1, 0x52B043, 0xE60012, 0x8E6CFF, 0xFF8A2A, 0xF5C542};
+inline constexpr std::array<const wchar_t*, 9> exit_color_names{
+    trKey(L"Cyjan (domyślny)"), trKey(L"Jak akcent interfejsu"), trKey(L"Biały"), L"PlayStation Blue", L"Xbox Green", L"Switch Red",
+    trKey(L"Fioletowy"), trKey(L"Pomarańczowy"), trKey(L"Złoty")};
+inline constexpr std::array<const wchar_t*, 2> boot_video_fits{trKey(L"Dopasuj"), trKey(L"Wypełnij ekran")};
 // Indexed like AppSettings::ButtonIdle.
 // The desktop window's colours (AppSettings::desktop_theme, desktop_theme.hpp).
 inline constexpr std::array<const wchar_t*, 9> desktop_themes{trKey(L"Grafit (domyślny)"), trKey(L"Granat"), trKey(L"Las"), trKey(L"Piasek"), trKey(L"Śliwka"),

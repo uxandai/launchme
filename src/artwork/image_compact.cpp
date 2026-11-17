@@ -5,15 +5,18 @@
 #include "../platform/atomic_file.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <cwctype>
 #include <fstream>
 
 namespace {
+std::atomic_bool keep_4k_backgrounds{false};
 struct Box { uint32_t width, height; };
-// What the launcher draws at most (a 2560 px wide window, shelves, Flix, XMB, details).
+// What the launcher draws at most (a 2560 px wide window by default, or 3840×2160 with 4K backgrounds on).
 Box limit(ImageRole role) {
     switch (role) {
-    case ImageRole::background: return {2560, 1440};
+    case ImageRole::background:
+        return keep_4k_backgrounds.load(std::memory_order_relaxed) ? Box{3840, 2160} : Box{2560, 1440};
     case ImageRole::landscape: return {1280, 720};
     case ImageRole::cover: return {1024, 1024};
     case ImageRole::poster: return {800, 1200};
@@ -28,6 +31,9 @@ std::wstring lower(std::wstring text) {
 
 std::vector<uint8_t> readFile(const std::filesystem::path& file) { return file_io::readBytes(file, 64 * 1024 * 1024); }
 }
+
+void setBackgrounds4k(bool enabled) { keep_4k_backgrounds.store(enabled, std::memory_order_relaxed); }
+bool backgrounds4k() { return keep_4k_backgrounds.load(std::memory_order_relaxed); }
 
 double compactScale(uint32_t width, uint32_t height, ImageRole role) {
     if (!width || !height) return 1.0;
@@ -101,6 +107,24 @@ size_t releaseShrunkenBackgrounds(const std::filesystem::path& root, const std::
             if (!item->is_regular_file(file) || !imageRoleFor(item->path(), role) || role != ImageRole::background) continue;
             const auto [width, height] = cropImageSize(item->path());
             if (width != 2560 || height <= 0 || height >= 1440 || manualTextCrop(item->path())) continue;
+            auto focus = item->path(); focus.replace_extension(L".focus");
+            if (std::filesystem::remove(item->path(), file)) { ++removed; std::filesystem::remove(focus, file); }
+        }
+    }
+    return removed;
+}
+
+size_t releaseSub4kBackgrounds(const std::filesystem::path& root, const std::function<bool()>& keep_going) {
+    size_t removed = 0;
+    for (const auto* folder : {L"heroes", L"stores"}) {
+        std::error_code ec;
+        for (auto item = std::filesystem::recursive_directory_iterator(root / folder, ec); !ec && item != std::filesystem::recursive_directory_iterator(); item.increment(ec)) {
+            if (!keep_going()) return removed;
+            std::error_code file;
+            ImageRole role{};
+            if (!item->is_regular_file(file) || !imageRoleFor(item->path(), role) || role != ImageRole::background) continue;
+            const auto [width, height] = cropImageSize(item->path());
+            if (width <= 0 || height <= 0 || width >= 3000 || manualTextCrop(item->path())) continue;
             auto focus = item->path(); focus.replace_extension(L".focus");
             if (std::filesystem::remove(item->path(), file)) { ++removed; std::filesystem::remove(focus, file); }
         }

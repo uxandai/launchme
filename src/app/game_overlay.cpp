@@ -129,6 +129,7 @@ LRESULT Launcher::hudMessage(HWND window, UINT message, WPARAM wparam, LPARAM lp
     if (message == WM_PAINT && hud_window_) {
         ViewContext context;
         context.fps_widget = settings_.game_fps; context.fps_low = settings_.game_fps_low; context.fps_graph = settings_.fps_graph;
+        context.fps_frametime = settings_.fps_frametime; context.fps_frametime_spike = settings_.fps_frametime_spike;
         context.game_fps = overlay_snapshot_.fps;
         context.dashboard.sensors = sensors_;
         context.hud_pins = settings_.hud_pins;
@@ -182,10 +183,14 @@ void Launcher::updateHud() {
     for (const auto& pin : pins) signature += std::wstring(pin.begin(), pin.end()) + L',';
     signature += std::to_wstring(static_cast<int>(overlay_snapshot_.fps.status)) + L',' +
         std::to_wstring(static_cast<int>(overlay_snapshot_.fps.fps + 0.5)) + L',' + std::to_wstring(static_cast<int>(overlay_snapshot_.fps.low + 0.5)) + L',' +
+        std::to_wstring(static_cast<int>(overlay_snapshot_.fps.frametime_ms * 10 + 0.5)) + L',' +
+        std::to_wstring(static_cast<int>(overlay_snapshot_.fps.frametime_max_ms * 10 + 0.5)) + L',' +
         std::to_wstring(sensors_.cpu.value_or(-1)) + L',' + std::to_wstring(sensors_.gpu.value_or(-1)) + L',' +
         std::to_wstring(sensors_.ram_used.value_or(-1) / 64) + L',' + std::to_wstring(sensors_.vram_used.value_or(-1) / 64);
     for (const auto& badge : hudBadges()) signature += L',' + badge;
-    signature += L';' + std::to_wstring(settings_.hud_layout) + std::to_wstring(settings_.hud_label_colors) + L',' + std::to_wstring(settings_.hud_size);
+    signature += L';' + std::to_wstring(settings_.hud_layout) + std::to_wstring(settings_.hud_label_colors) +
+        std::to_wstring(settings_.fps_frametime) + std::to_wstring(settings_.fps_frametime_spike) +
+        std::to_wstring(settings_.game_fps_low) + L',' + std::to_wstring(settings_.hud_size);
     if (settings_.fps_graph) { // A new curve every half second.
         uint32_t hash = 17;
         for (const float value : overlay_snapshot_.fps.graph) hash = hash * 31 + static_cast<uint32_t>(value * 4);

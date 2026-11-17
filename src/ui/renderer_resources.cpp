@@ -345,7 +345,7 @@ void Renderer::discardTarget() {
     for (auto& animation : artwork_animations_) { animation.bitmap.Reset(); animation.brush.Reset(); }
     hero_shown_.bitmap.Reset(); hero_leaving_ = {}; hero_mix_ = 1; // The shown picture comes back from its slot.
     video_bitmap_.Reset(); video_blur_.Reset(); // The next video frame creates them again.
-    wallpaper_.bitmap.Reset(); wallpaper_.brush.Reset(); wallpaper_video_.Reset();
+    wallpaper_.bitmap.Reset(); wallpaper_.brush.Reset(); wallpaper_video_.Reset(); boot_video_.Reset();
     psfive_shot_full_.bitmap.Reset(); psfive_shot_full_.brush.Reset();
     for (auto* list : {&psfive_shots_, &psfive_similar_}) for (auto& image : *list) { image.bitmap.Reset(); image.brush.Reset(); }
     cinematic_hero_.Reset(); cinematic_previous_hero_.Reset();
@@ -366,6 +366,7 @@ void Renderer::discardTarget() {
     box3d_.reset();
 #endif
     crtRelease();
+    upscaleRelease();
     for (auto& thumbnail : artwork_thumbnails_) { thumbnail.bitmap.Reset(); thumbnail.brush.Reset(); }
     file_browser_preview_.bitmap.Reset(); file_browser_preview_.brush.Reset();
     notification_cover_.bitmap.Reset(); notification_cover_.brush.Reset();

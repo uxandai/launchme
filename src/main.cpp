@@ -135,6 +135,14 @@ LRESULT CALLBACK windowProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lpara
     // Screensaver: while it runs, and for the rest of the input that ends it, keyboard
     // and mouse messages never reach the screen beneath.
     if (app && app->screensaverInput(message, wparam, lparam)) return 0;
+    if (app && app->bootVideoActive()) {
+        if ((message == WM_KEYDOWN && (wparam == VK_ESCAPE || wparam == VK_BACK || wparam == VK_RETURN || wparam == VK_SPACE) && !(lparam & (1LL << 30))) ||
+            message == WM_LBUTTONDOWN || message == WM_RBUTTONDOWN || message == WM_XBUTTONUP)
+            app->dismissBootVideo();
+        if ((message >= WM_KEYFIRST && message <= WM_KEYLAST) ||
+            (message >= WM_MOUSEFIRST && message <= WM_MOUSELAST)) return 0;
+        if (message == WM_SETCURSOR && LOWORD(lparam) == HTCLIENT) { SetCursor(nullptr); return TRUE; }
+    }
     if (app && app->launchAnimationActive()) {
         // Back hides the starting game's picture; every other key and click waits for its end.
         if ((message == WM_KEYDOWN && (wparam == VK_ESCAPE || wparam == VK_BACK) && !(lparam & (1LL << 30))) ||

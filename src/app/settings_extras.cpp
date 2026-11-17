@@ -3,6 +3,7 @@
 // details, the large game menu and Metro's light theme.
 #include "launcher.hpp"
 #include "../artwork/artwork_sources.hpp"
+#include "../artwork/image_compact.hpp"
 
 using namespace settings_ui;
 
@@ -27,12 +28,17 @@ bool Launcher::settingsExtraToggle(const Row& row) {
         settingsChanged(); audio_.context();
         return true;
     }
-    if (row.id == Id::fps_graph || row.id == Id::fps_limiter || row.id == Id::fps_limit_precise || row.id == Id::fps_badges ||
+    if (row.id == Id::fps_graph || row.id == Id::fps_frametime || row.id == Id::fps_frametime_spike ||
+        row.id == Id::fps_limiter || row.id == Id::fps_limit_precise || row.id == Id::fps_badges ||
         row.id == Id::hud_label_colors || row.id == Id::hud_enabled) {
-        auto& flag = row.id == Id::fps_graph ? settings_.fps_graph : row.id == Id::fps_limiter ? settings_.fps_limiter :
+        auto& flag = row.id == Id::fps_graph ? settings_.fps_graph :
+                     row.id == Id::fps_frametime ? settings_.fps_frametime :
+                     row.id == Id::fps_frametime_spike ? settings_.fps_frametime_spike :
+                     row.id == Id::fps_limiter ? settings_.fps_limiter :
                      row.id == Id::fps_badges ? settings_.fps_badges : row.id == Id::hud_label_colors ? settings_.hud_label_colors :
                      row.id == Id::hud_enabled ? settings_.hud_enabled : settings_.fps_limit_precise;
         flag = !flag;
+        next_hud_at_ = 0;
         settingsChanged(); audio_.context(); // The limiter's rows appear and go; the monitor follows the switch.
         return true;
     }
@@ -53,12 +59,47 @@ bool Launcher::settingsExtraToggle(const Row& row) {
         settingsChanged(); audio_.context(); // Visual only.
         return true;
     }
+    if (row.id == Id::boot_video_random || row.id == Id::exit_animation || row.id == Id::wallpaper_upscale) {
+        auto& flag = row.id == Id::boot_video_random ? settings_.boot_video_random :
+                     row.id == Id::wallpaper_upscale ? settings_.wallpaper_upscale : settings_.exit_animation;
+        flag = !flag;
+        settingsChanged(); audio_.context();
+        return true;
+    }
+    if (row.id == Id::backgrounds_4k) {
+        settings_.backgrounds_4k = !settings_.backgrounds_4k;
+        setBackgrounds4k(settings_.backgrounds_4k);
+        if (settings_.backgrounds_4k) {
+            const auto alive = alive_;
+            const auto hwnd = hwnd_;
+            work_.start([alive, hwnd] {
+                SetThreadPriority(GetCurrentThread(), THREAD_MODE_BACKGROUND_BEGIN);
+                const auto removed = releaseSub4kBackgrounds(userConfigDirectory(), [&] { return alive->load(); });
+                SetThreadPriority(GetCurrentThread(), THREAD_MODE_BACKGROUND_END);
+                if (!alive->load() || !removed) return;
+                auto message = std::make_unique<RemoteMessage>();
+                message->run = [](Launcher& app) {
+                    for (const auto& game : app.grouped_library_) app.invalidateArtwork(game, CoverMessage::Kind::hero);
+                    app.requestVisibleArt();
+                };
+                if (PostMessageW(hwnd, remote_message, 0, reinterpret_cast<LPARAM>(message.get()))) message.release();
+            });
+        }
+        settingsChanged(); audio_.context();
+        return true;
+    }
     return false;
 }
 
 // A choice picked from these rows' lists; false: not one of them.
 bool Launcher::settingsExtraChoose(const Row& row) {
     if (emulationSettingsChoose(row)) return true; // Gry emulowane (emulation_library.cpp).
+    if (row.id == Id::boot_video_fill) {
+        settings_.boot_video_fill = settings_state_.choice != 0;
+        settings_state_.editing = false;
+        settingsChanged();
+        return true;
+    }
     if (row.id == Id::studio_min_games) { // Najmniej gier of a studio (studio_libraries.cpp).
         settings_.studio_min_games = studio_min_counts[static_cast<size_t>(std::clamp(settings_state_.choice, 0, static_cast<int>(studio_min_counts.size()) - 1))];
         settings_state_.editing = false;
@@ -128,5 +169,12 @@ bool Launcher::settingsExtraActivate(const Row& row) {
         settings_state_.selected[settings_state_.category] = std::max(0, settings_state_.row() - 1); // Its row is gone.
         return true;
     }
+    if (row.id == Id::boot_video_pick) { openBootVideoBrowser(); return true; }
+    if (row.id == Id::boot_video_clear) {
+        clearBootVideo();
+        settings_state_.selected[settings_state_.category] = std::max(0, settings_state_.row() - 1);
+        return true;
+    }
+    if (row.id == Id::boot_video_preview) { previewBootVideo(); return true; }
     return false;
 }

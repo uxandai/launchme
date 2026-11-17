@@ -169,6 +169,7 @@ void Launcher::themeBuildOptions() {
                 toggle(Id::wallpaper_artwork, L"W „Zmień grafikę”", s.wallpaper_artwork);
             }
         }
+        if (!desktop_mode_) toggle(Id::wallpaper_upscale, L"Wyostrzanie teł poniżej 4K", s.wallpaper_upscale);
         slider(Id::glass, L"Efekt szkła", s.glass, percent(s.glass));
         slider(Id::background_grid, L"Siatka na tle", s.background_grid, percent(s.background_grid));
         {
@@ -202,6 +203,23 @@ void Launcher::themeBuildOptions() {
         int chosen = 0;
         for (size_t i = 0; i < fonts.size(); ++i) { list.push_back({fonts[i]}); if (s.font_family == fonts[i]) chosen = static_cast<int>(i); }
         cards(Id::font, Look::font, L"Czcionka", chosen, std::move(list));
+        break;
+    }
+    case theme_ui::Tab::startup: {
+        if (!desktop_mode_) {
+            const bool any_stored = hasStoredBootVideos();
+            const bool active_video = (!s.boot_video_file.empty() && any_stored) || (s.boot_video_random && any_stored);
+            action(Id::boot_video_pick, L"Wideo startowe", bootVideoLabel(true));
+            options.back().trash = !s.boot_video_file.empty() || s.boot_video_random;
+            if (any_stored) toggle(Id::boot_video_random, L"Losuj przy uruchomieniu", s.boot_video_random);
+            if (active_video) {
+                cards(Id::boot_video_fill, Look::text, L"Kadr wideo startowego", s.boot_video_fill ? 1 : 0,
+                      names(boot_video_fits, boot_video_fits.size()));
+                action(Id::boot_video_preview, L"Podgląd wideo", tr(L"Odtwórz"));
+            }
+        }
+        toggle(Id::exit_animation, L"Animacja wyłączenia", s.exit_animation);
+        if (s.exit_animation) colors(Id::exit_color, L"Kolor animacji wyłączenia", s.exit_color_rgb, exit_colors, exit_color_names);
         break;
     }
     case theme_ui::Tab::looks: break; // Its rows are Cofnij, Zapisz and the saved looks (theme_studio.hpp).
@@ -371,15 +389,20 @@ void Launcher::themeAction(int option) {
     if (option < 0 || option >= static_cast<int>(state.options.size())) return;
     const auto id = state.options[static_cast<size_t>(option)].id;
     Row row{id, Control::action, {}, {}};
-    if (id == Id::wallpaper_pick && !desktop_mode_) { // The picker is a screen of its own: the studio waits and comes back.
+    if ((id == Id::wallpaper_pick || id == Id::boot_video_pick) && !desktop_mode_) { // The picker is a screen of its own: the studio waits and comes back.
         themeTouch();
         state.resume = true; state.open = false;
-        openWallpaperBrowser();
+        if (id == Id::boot_video_pick) openBootVideoBrowser();
+        else openWallpaperBrowser();
         if (screen_ != ScreenMode::artwork) { state.resume = false; state.open = true; }
         InvalidateRect(hwnd_, nullptr, FALSE);
         return;
     }
-    if (id == Id::wallpaper_pick) {
+    if (id == Id::boot_video_preview) {
+        previewBootVideo();
+        return;
+    }
+    if (id == Id::wallpaper_pick || id == Id::boot_video_pick) {
         themeStudio(false);
         settingsExtraActivate(row);
         return;
@@ -402,15 +425,20 @@ void Launcher::themeApplyLook(const AppSettings& look) {
     themeRefreshHome(layout != previous);
 }
 
-// Tapeta's bin: the wallpaper off, as the settings' "Bez tapety".
+// Tapeta / Wideo startowe bin: clears the active item.
 void Launcher::themeClearWallpaper() {
     auto& state = theme_;
-    Row row{Id::wallpaper_clear, Control::action, {}, {}};
-    settingsExtraActivate(row);
+    if (state.row >= 0 && state.row < static_cast<int>(state.options.size()) &&
+        state.options[static_cast<size_t>(state.row)].id == Id::boot_video_pick) {
+        clearBootVideo();
+    } else {
+        Row row{Id::wallpaper_clear, Control::action, {}, {}};
+        settingsExtraActivate(row);
+        audio_.context();
+    }
     state.active = -1; state.card = 0;
     themeBuildOptions();
     themeEnsureVisible();
-    audio_.context();
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 

@@ -313,8 +313,9 @@ struct ArtworkBrowserMessage {
     std::shared_ptr<const animated_image::Frames> animation;
     CropFocus focus;
     std::wstring error;
-    // The wallpaper picker: the stored wallpaper (apply, local) or preview (preview), and whether it is a video.
-    bool wallpaper = false, video = false;
+    // The wallpaper / startup video picker: the stored file (apply, local) or preview (preview).
+    bool wallpaper = false, boot_video = false, video = false;
+    std::wstring title;
     std::filesystem::path file;
 };
 struct StoreMessage {

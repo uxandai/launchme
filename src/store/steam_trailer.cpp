@@ -7,6 +7,7 @@
 #include "../platform/text_encoding.hpp"
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -188,17 +189,26 @@ std::vector<uint8_t> rebaseDashSegment(std::span<const uint8_t> segment, std::op
     return result;
 }
 
-void trimTrailers(const std::filesystem::path& videos, uint64_t limit_bytes) {
+namespace {
+std::atomic_bool trailer_downloading{false};
+}
+
+bool tryBeginTrailerDownload() { return !trailer_downloading.exchange(true); }
+void endTrailerDownload() { trailer_downloading.store(false); }
+
+void trimTrailers(std::span<const std::filesystem::path> folders, uint64_t limit_bytes) {
     struct Item { std::filesystem::path file; std::filesystem::file_time_type played; uint64_t size; };
     std::vector<Item> items;
     uint64_t total = 0;
-    std::error_code ec;
-    for (const auto& entry : std::filesystem::directory_iterator(videos, ec)) {
-        std::error_code item;
-        if (!entry.is_regular_file(item) || entry.path().extension() != L".mp4") continue;
-        const auto size = entry.file_size(item);
-        items.push_back({entry.path(), entry.last_write_time(item), size});
-        total += size;
+    for (const auto& videos : folders) {
+        std::error_code ec;
+        for (const auto& entry : std::filesystem::directory_iterator(videos, ec)) {
+            std::error_code item;
+            if (!entry.is_regular_file(item) || entry.path().extension() != L".mp4") continue;
+            const auto size = entry.file_size(item);
+            items.push_back({entry.path(), entry.last_write_time(item), size});
+            total += size;
+        }
     }
     std::sort(items.begin(), items.end(), [](const Item& a, const Item& b) { return a.played < b.played; });
     for (const auto& item : items) {
@@ -206,6 +216,11 @@ void trimTrailers(const std::filesystem::path& videos, uint64_t limit_bytes) {
         std::error_code removed;
         if (std::filesystem::remove(item.file, removed)) total -= item.size;
     }
+}
+
+void trimTrailers(const std::filesystem::path& videos, uint64_t limit_bytes) {
+    const std::array folders{videos};
+    trimTrailers(folders, limit_bytes);
 }
 
 std::filesystem::path steamTrailerFile(uint32_t app_id, const std::filesystem::path& config_root, const std::filesystem::path& folder,
@@ -244,9 +259,8 @@ std::filesystem::path steamTrailerFile(uint32_t app_id, const std::filesystem::p
         if (!details.empty()) atomic_file::write(failed, std::to_string(unixMs())); // No trailer on the page.
         return {};
     }
-    static std::atomic_bool downloading{false}; // One trailer at a time.
-    if (downloading.exchange(true)) return {};
-    struct Release { std::atomic_bool& flag; ~Release() { flag.store(false); } } release{downloading};
+    if (!tryBeginTrailerDownload()) return {};
+    struct Release { ~Release() { endTrailerDownload(); } } release;
     HttpResponse response;
     if (!url.empty()) response = download ? download(url, target)
                                           : httpDownloadFile(url, L"Accept: video/mp4\r\n", target, 160 * 1024 * 1024, 5 * 60 * 1000, false);
@@ -286,7 +300,8 @@ std::filesystem::path steamTrailerFile(uint32_t app_id, const std::filesystem::p
     { std::ifstream input(target, std::ios::binary); input.read(head, 8); }
     if (std::filesystem::file_size(target, ec) > 1024 && std::memcmp(head + 4, "ftyp", 4) == 0) {
         video_manifest::add(folder, target);
-        trimTrailers(videos, limit_bytes); // Oldest-played go first; this one is the newest.
+        const std::array trailer_folders{videos, folder / L"nintendo" / L"videos"};
+        trimTrailers(trailer_folders, limit_bytes); // Oldest-played go first; this one is the newest.
         return target;
     }
     std::filesystem::remove(target, ec);

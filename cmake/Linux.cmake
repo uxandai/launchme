@@ -145,6 +145,7 @@ set(LAUNCHME_CORE_SOURCES
     src/store/gog_install.cpp
     src/store/gog_service.cpp
     src/store/gog_vault.cpp
+    src/store/nintendo_trailer.cpp
     src/store/steam_app_match.cpp
     src/store/steam_trailer.cpp
     src/store/launchers.cpp

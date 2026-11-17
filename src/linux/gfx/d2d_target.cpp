@@ -300,6 +300,32 @@ void Canvas::fillOpacityMask(ID2D1Bitmap* mask, ID2D1Brush* brush, const D2D1_RE
     canvas->restoreToCount(restore_to);
 }
 
+bool Canvas::upscaleDraw(ID2D1Bitmap* bitmap, const D2D1_RECT_F& dest, float opacity) {
+    auto* own = Bitmap::from(bitmap);
+    if (!own || !(opacity > 0) || !canvas_ || !gx::program(gx::Program::upscale)) return false;
+    const gx::Matrix matrix = world();
+    if (!invertible(matrix) || matrix.skewX() != 0 || matrix.skewY() != 0 || matrix.hasPerspective()) return false;
+    std::shared_ptr<gx::Image> image = own->image();
+    if (!image || image->width() < 64 || image->height() < 64) return false;
+    const gx::Rect device = matrix.mapRect(toGx(dest).sorted());
+    if (device.empty()) return true;
+    auto shader = std::make_shared<gx::Shader>();
+    shader->kind = gx::Shader::Kind::program;
+    shader->program = gx::Program::upscale;
+    shader->samplers = {image};
+    shader->uniforms = {device.left, device.top, device.width(), device.height(),
+                        static_cast<float>(image->width()), static_cast<float>(image->height()),
+                        image->upsideDown() ? 1.0f : 0.0f, std::clamp(opacity, 0.0f, 1.0f)};
+    gx::Paint paint;
+    paint.color = {0, 0, 0, 1};
+    paint.blend = blendFor(blend_);
+    paint.shader = std::move(shader);
+    canvas_->resetMatrix();
+    canvas_->drawRect(device, paint);
+    canvas_->setMatrix(matrix);
+    return true;
+}
+
 void Canvas::drawBitmap(ID2D1Bitmap* bitmap, const D2D1_RECT_F* destination, FLOAT opacity, D2D1_INTERPOLATION_MODE mode,
                         const D2D1_RECT_F* source, const D2D1_MATRIX_4X4_F* perspective) {
     auto* own = Bitmap::from(bitmap);
@@ -556,4 +582,9 @@ bool LaunchmeFrostCapture(ID2D1RenderTarget* target) {
 bool LaunchmeFrostDraw(ID2D1RenderTarget* target, const D2D1_RECT_F& bounds, float sigma, float opacity) {
     auto* canvas = lm_d2d::Canvas::from(target);
     return canvas && canvas->frostDraw(lm_impeller::Rect::LTRB(bounds.left, bounds.top, bounds.right, bounds.bottom), sigma, opacity);
+}
+
+bool LaunchmeUpscaleDraw(ID2D1RenderTarget* target, ID2D1Bitmap* bitmap, const D2D1_RECT_F& dest, float opacity) {
+    auto* canvas = lm_d2d::Canvas::from(target);
+    return canvas && canvas->upscaleDraw(bitmap, dest, opacity);
 }

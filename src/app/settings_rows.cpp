@@ -324,6 +324,10 @@ void Launcher::buildSettingsRows() {
                     tr(L"Przyciemniona za galerią zamiast czarnego tła."), {}, settings_.wallpaper_artwork});
             }
             section(tr(L"Szkło i siatka"));
+            if (!desktop_mode_)
+                add({Id::wallpaper_upscale, Control::toggle, tr(L"Wyostrzanie teł poniżej 4K"),
+                     tr(L"Skaluje tła gier i tapety niższej rozdzielczości w trybie TV (AMD FSR 1 na Windows, 5-tap + CAS na Linuksie)."),
+                     {}, settings_.wallpaper_upscale});
             // Glass under panels, the grid over background videos and the darkening under drawers.
             add({Id::glass, Control::slider, tr(L"Efekt szkła"),
                 tr(L"Rozmycie pod oknami, menu, szufladami i Ustawieniami. 0%: pełne panele."), percent(settings_.glass), false,
@@ -492,6 +496,31 @@ void Launcher::buildSettingsRows() {
         choiceRow(Id::hint_style, tr(L"Wygląd podpowiedzi"),
                   tr(L"Klawisze i przyciski pada w podpowiedziach, także przy paskach kategorii: szklane albo białe z ciemnym napisem."),
                   hint_styles, static_cast<int>(settings_.hint_style));
+        section(tr(L"Start i wyjście"));
+        if (!desktop_mode_) {
+            const bool any_stored = hasStoredBootVideos();
+            const bool active_video = (!settings_.boot_video_file.empty() && any_stored) || (settings_.boot_video_random && any_stored);
+            add({Id::boot_video_pick, Control::action, tr(L"Wideo startowe"), bootVideoDescription(), bootVideoLabel(false)});
+            if (!settings_.boot_video_file.empty() || settings_.boot_video_random)
+                add({Id::boot_video_clear, Control::action, tr(L"Bez wideo startowego"),
+                     tr(L"Wyłącza animację uruchamiania; pobrane pliki zostają na dysku."), tr(L"Usuń")});
+            if (any_stored)
+                add({Id::boot_video_random, Control::toggle, tr(L"Losuj przy uruchomieniu"),
+                     tr(L"Każdy start trybu TV wybiera losową animację spośród pobranych lub dodanych z dysku."), {}, settings_.boot_video_random});
+            if (active_video) {
+                choiceRow(Id::boot_video_fill, tr(L"Kadr wideo startowego"),
+                          tr(L"Dopasuj zachowuje pełny kadr 16:10 ze Steam Decka; Wypełnij rozciąga na cały ekran 16:9."),
+                          boot_video_fits, settings_.boot_video_fill ? 1 : 0);
+                add({Id::boot_video_preview, Control::action, tr(L"Podgląd wideo"),
+                     tr(L"Odtwarza wybraną animację startową na pełnym ekranie."), tr(L"Odtwórz")});
+            }
+        }
+        add({Id::exit_animation, Control::toggle, tr(L"Animacja wyłączenia"),
+             tr(L"Wygaszanie ekranu ze smugą światła przy zamykaniu programu. Wyłączona: natychmiastowe zamknięcie."), {}, settings_.exit_animation});
+        if (settings_.exit_animation)
+            accentRow(Id::exit_color, tr(L"Kolor animacji wyłączenia"),
+                      tr(L"Kolor pionowej smugi światła przy zamykaniu programu."),
+                      settings_.exit_color_rgb, exit_colors, exit_color_names);
         break;
     }
 #ifndef _WIN32
@@ -660,7 +689,7 @@ void Launcher::buildSettingsRows() {
             }
             // Downloaded videos (app/game_video.cpp): ES-DE's own play where they are and are never copied.
             add({Id::video_folder, Control::action, tr(L"Folder filmów"),
-                videoFolder().wstring() + tr(L" · filmy ScreenScraper i zwiastuny Steam; układ jak downloaded_media ES-DE."),
+                videoFolder().wstring() + tr(L" · filmy ScreenScraper oraz zwiastuny Steam i Nintendo; układ jak downloaded_media ES-DE."),
                 tr(L"Zmień")});
             if (!settings_.video_folder.empty())
                 add({Id::video_folder_reset, Control::action, tr(L"Domyślny folder filmów"),
@@ -712,6 +741,9 @@ void Launcher::buildSettingsRows() {
         section(tr(L"Okładki"));
         add({Id::bulk_covers, Control::action, tr(L"Pobierz brakujące okładki"),
             tr(L"Kwadratowe, pionowe i poziome. Tylko brakujące."), tr(L"Otwórz")});
+        add({Id::backgrounds_4k, Control::toggle, tr(L"Tła gier w 4K"),
+            tr(L"Pobiera i zachowuje tła gier w rozdzielczości do 4K (3840×2160) ze Steam i SteamGridDB zamiast 1440p i lokalnych kopii 1920×620."),
+            {}, settings_.backgrounds_4k});
         {
             const auto enabled = std::count_if(artwork_sources::all.begin(), artwork_sources::all.end(), [&](ArtworkProvider provider) {
                 return !settings_.artwork_sources_off.contains(artwork_sources::slug(provider));
@@ -723,8 +755,8 @@ void Launcher::buildSettingsRows() {
         section(tr(L"Filmy w tle"));
         add({Id::game_videos, Control::toggle, tr(L"Autoodtwarzanie filmów z emulatorów"),
             tr(L"Po chwili na grze z emulatora jej film z ES-DE lub ScreenScraper zastępuje tło, a muzyka cichnie."), {}, settings_.game_videos});
-        add({Id::steam_trailers, Control::toggle, tr(L"Zwiastuny gier Steam"),
-            tr(L"To samo dla gier Steam i gier PC z innych sklepów (zwiastun tej samej gry ze Steam): 30 s ze sklepu (od 10. sekundy, 480p, bez dźwięku), pobierane raz."), {}, settings_.steam_trailers});
+        add({Id::steam_trailers, Control::toggle, tr(L"Zwiastuny gier Steam i Nintendo"),
+            tr(L"To samo dla gier Steam, gier PC z innych sklepów oraz Switch i Switch 2 (z nintendo.com): 30 s ze sklepu (od 10. sekundy, 480p, bez dźwięku), pobierane raz."), {}, settings_.steam_trailers});
         pageRow(Page::videos, tr(L"Opcje filmów"),
                 settings_.steam_trailers ? std::wstring(tr(L"Opóźnienie, miejsce na zwiastuny i folder filmów.")) : std::wstring(tr(L"Opóźnienie i folder filmów.")),
                 std::to_wstring(video_delays[delay_index]) + L" s");
@@ -895,6 +927,13 @@ void Launcher::buildSettingsRows() {
                     break;
                 default: break;
                 }
+                add({Id::fps_frametime, Control::toggle, tr(L"Czas klatki (ms)"),
+                    tr(L"Średni czas pojedynczej klatki w milisekundach (np. 8.3 ms przy 120 FPS) w kaflu FPS i na ekranie gry."),
+                    {}, settings_.fps_frametime});
+                if (settings_.fps_frametime)
+                    add({Id::fps_frametime_spike, Control::toggle, tr(L"Skoki czasu klatki (max ms)"),
+                        tr(L"Obok średniego czasu pokazuje najwolniejszą klatkę z ostatniej sekundy, żeby od razu wyłapać mikroprzycięcia."),
+                        {}, settings_.fps_frametime_spike});
                 add({Id::fps_graph, Control::toggle, tr(L"Wykres czasu klatek"),
                     tr(L"Ostatnie sześć sekund w kaflu FPS i w widgecie na ekranie gry: skoki oznaczają przycięcia."), {}, settings_.fps_graph});
             }

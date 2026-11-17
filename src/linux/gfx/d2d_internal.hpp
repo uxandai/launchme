@@ -168,9 +168,10 @@ public:
     static Canvas* from(ID2D1RenderTarget* target);
     // What was drawn so far (pushed clips and layers aside), rendered as an image.
     std::shared_ptr<gx::Image> snapshot();
-    // LaunchmeFrostCapture / LaunchmeFrostDraw (launchme_d2d.h).
+    // LaunchmeFrostCapture / LaunchmeFrostDraw / LaunchmeUpscaleDraw (launchme_d2d.h).
     bool frostCapture() { return canvas_ && canvas_->frostCapture(); }
     bool frostDraw(const gx::Rect& bounds, float sigma, float opacity) { return canvas_ && canvas_->frostDraw(bounds, sigma, opacity); }
+    bool upscaleDraw(ID2D1Bitmap* bitmap, const D2D1_RECT_F& dest, float opacity);
 
     HRESULT createBitmap(D2D1_SIZE_U size, const void* data, UINT32 pitch, const D2D1_BITMAP_PROPERTIES* properties, ID2D1Bitmap** bitmap);
     HRESULT createBitmap1(D2D1_SIZE_U size, const void* data, UINT32 pitch, const D2D1_BITMAP_PROPERTIES1* properties, ID2D1Bitmap1** bitmap);

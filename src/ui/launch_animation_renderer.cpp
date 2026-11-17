@@ -18,7 +18,7 @@ void Renderer::drawLaunchAnimation() {
     // Still, and framed exactly as the screen beneath frames it: the same wallpaper placement (the crop focus the
     // owner set in Kadrowanie, the same cover-fit and zoom), so the picture does not jump when it fades in.
     if (auto* hero = slot(heroes_)) drawWallpaper(hero->bitmap.Get(), alpha, 0, hero->focus);
-    else if (auto* art = slot(posters_) ? slot(posters_) : slot(covers_)) drawWallpaper(blurredArt(*art), alpha * 0.75f);
+    else if (auto* art = slot(posters_) ? slot(posters_) : slot(covers_)) drawWallpaper(blurredArt(*art), alpha * 0.75f, 0, {}, 1, -1);
     // A touch dimmed, darker towards the bottom where the text sits.
     brush(D2D1::ColorF(0, 0, 0, launch_animation::dim * alpha));
     target_->FillRectangle(D2D1::RectF(0, 0, width, height), solid_.Get());

@@ -452,6 +452,12 @@ void Launcher::controllerInput(const PadReading& state) {
         }
         return;
     }
+    if (bootVideoActive()) {
+        constexpr WORD skip_mask = XINPUT_GAMEPAD_A | XINPUT_GAMEPAD_B | XINPUT_GAMEPAD_X | XINPUT_GAMEPAD_Y |
+                                   XINPUT_GAMEPAD_START | XINPUT_GAMEPAD_BACK;
+        if ((buttons & skip_mask) & ~controller_buttons_) dismissBootVideo();
+        swallow(); return;
+    }
     if (launchAnimationActive()) {
         // B hides the starting game's picture (once it is past the press that started it).
         if ((buttons & XINPUT_GAMEPAD_B) && !(controller_buttons_ & XINPUT_GAMEPAD_B)) dismissLaunchAnimation();

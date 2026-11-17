@@ -18,7 +18,7 @@ using namespace render_detail;
 
 // One centred cover-fit for every still wallpaper. The slow Details zoom is
 // continuous across navigation; layouts never lift or drift the picture.
-void Renderer::drawWallpaper(ID2D1Bitmap* image, float opacity, float offset, CropFocus focus, float zoom) {
+void Renderer::drawWallpaper(ID2D1Bitmap* image, float opacity, float offset, CropFocus focus, float zoom, int upscale_slot) {
     if (!image || opacity <= 0.001f) return;
     const auto pixels = image->GetSize();
     const float scale = std::max(viewport_.width / pixels.width, viewport_.height / pixels.height) *
@@ -27,7 +27,9 @@ void Renderer::drawWallpaper(ID2D1Bitmap* image, float opacity, float offset, Cr
     // The focus (centred by default) at the screen's centre, never past the picture's edges.
     const float x = std::clamp(viewport_.width * 0.5f - focus.x * width, viewport_.width - width, 0.0f) + offset;
     const float y = std::clamp(viewport_.height * 0.5f - focus.y * height, viewport_.height - height, 0.0f);
-    target_->DrawBitmap(image, D2D1::RectF(x, y, x + width, y + height), opacity, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
+    const auto dest = D2D1::RectF(x, y, x + width, y + height);
+    if (upscale_slot >= 0) drawUpscaledBitmap(image, dest, opacity, upscale_slot);
+    else target_->DrawBitmap(image, dest, opacity, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
 }
 
 void Renderer::drawWallpapers(const Wallpaper& under, const Wallpaper& over) {
@@ -35,15 +37,15 @@ void Renderer::drawWallpapers(const Wallpaper& under, const Wallpaper& over) {
     ComPtr<ID2D1DeviceContext> context;
     if (lower && upper) target_.As(&context);
     if (!context) {
-        if (lower) drawWallpaper(under.image, under.opacity, 0, under.focus, under.zoom);
-        if (upper) drawWallpaper(over.image, over.opacity, 0, over.focus, over.zoom);
+        if (lower) drawWallpaper(under.image, under.opacity, 0, under.focus, under.zoom, 1);
+        if (upper) drawWallpaper(over.image, over.opacity, 0, over.focus, over.zoom, 0);
         return;
     }
     // In a layer of their own, added together: (1 - f)·A + f·B, then laid over the screen once.
     target_->PushLayer(D2D1::LayerParameters(), nullptr);
     context->SetPrimitiveBlend(D2D1_PRIMITIVE_BLEND_ADD);
-    drawWallpaper(under.image, under.opacity, 0, under.focus, under.zoom);
-    drawWallpaper(over.image, over.opacity, 0, over.focus, over.zoom);
+    drawWallpaper(under.image, under.opacity, 0, under.focus, under.zoom, 1);
+    drawWallpaper(over.image, over.opacity, 0, over.focus, over.zoom, 0);
     context->SetPrimitiveBlend(D2D1_PRIMITIVE_BLEND_SOURCE_OVER);
     target_->PopLayer();
 }

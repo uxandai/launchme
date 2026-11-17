@@ -10,10 +10,11 @@ namespace {
 #include "effect_shaders.inc"
 
 struct Blob { const unsigned char* data; size_t size; const char* name; };
-constexpr std::array<Blob, 3> blobs{{
+constexpr std::array<Blob, 4> blobs{{
     {point_specular_shader, sizeof(point_specular_shader), "point_specular"},
     {premultiplied_matrix_shader, sizeof(premultiplied_matrix_shader), "premultiplied_matrix"},
     {arithmetic_shader, sizeof(arithmetic_shader), "arithmetic"},
+    {upscale_shader, sizeof(upscale_shader), "upscale"},
 }};
 
 struct Loaded {

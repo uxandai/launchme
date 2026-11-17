@@ -144,6 +144,11 @@ constexpr FlagSetting flag_settings[] = {
     {"wallpaper_menus", &AppSettings::wallpaper_menus},
     {"wallpaper_artwork", &AppSettings::wallpaper_artwork},
     {"wallpaper_tiles", &AppSettings::wallpaper_tiles},
+    {"wallpaper_upscale", &AppSettings::wallpaper_upscale},
+    {"backgrounds_4k", &AppSettings::backgrounds_4k},
+    {"boot_video_random", &AppSettings::boot_video_random},
+    {"boot_video_fill", &AppSettings::boot_video_fill},
+    {"exit_animation", &AppSettings::exit_animation},
     {"add_game_tile", &AppSettings::add_game_tile},
     {"psfive_details", &AppSettings::psfive_details},
     {"details_media", &AppSettings::details_media},
@@ -166,6 +171,8 @@ constexpr FlagSetting flag_settings[] = {
     {"hud_enabled", &AppSettings::hud_enabled},
     {"hud_label_colors", &AppSettings::hud_label_colors},
     {"fps_graph", &AppSettings::fps_graph},
+    {"fps_frametime", &AppSettings::fps_frametime},
+    {"fps_frametime_spike", &AppSettings::fps_frametime_spike},
     {"fps_badges", &AppSettings::fps_badges},
     {"fps_limiter", &AppSettings::fps_limiter},
     {"fps_limit_precise", &AppSettings::fps_limit_precise},
@@ -376,6 +383,28 @@ bool parseExtraSetting(AppSettings& settings, std::string_view key, std::string_
         uint32_t id = 0;
         const auto [end, error] = std::from_chars(value.data(), value.data() + value.size(), id);
         if (error == std::errc{} && end == value.data() + value.size()) settings.wallpaper_id = id;
+        return true;
+    }
+    if (key == "boot_video_file") { settings.boot_video_file = std::filesystem::path(text_encoding::wideLenient(value)); return true; }
+    if (key == "boot_video_title") {
+        auto title = text_encoding::wideLenient(value);
+        if (title.size() > 120) title.resize(120);
+        settings.boot_video_title = std::move(title);
+        return true;
+    }
+    if (key == "boot_video_id") {
+        uint32_t id = 0;
+        const auto [end, error] = std::from_chars(value.data(), value.data() + value.size(), id);
+        if (error == std::errc{} && end == value.data() + value.size()) settings.boot_video_id = id;
+        return true;
+    }
+    if (key == "exit_color") {
+        if (value == "accent") settings.exit_color_rgb = 0;
+        else if (value.size() == 7 && value.front() == '#') {
+            uint32_t rgb = 0;
+            const auto result = std::from_chars(value.data() + 1, value.data() + 7, rgb, 16);
+            if (result.ec == std::errc{} && result.ptr == value.data() + 7) settings.exit_color_rgb = rgb ? rgb : 0x010101;
+        }
         return true;
     }
     if (key == "home_tiles") {
@@ -993,6 +1022,18 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
     output << "wallpaper_menus=" << settings.wallpaper_menus << '\n';
     output << "wallpaper_artwork=" << settings.wallpaper_artwork << '\n';
     output << "wallpaper_tiles=" << settings.wallpaper_tiles << '\n';
+    output << "boot_video_file=" << text_encoding::utf8Lenient(settings.boot_video_file.wstring()) << '\n';
+    output << "boot_video_id=" << settings.boot_video_id << '\n';
+    {
+        std::wstring title = settings.boot_video_title;
+        std::erase_if(title, [](wchar_t ch) { return ch == L'\r' || ch == L'\n'; });
+        output << "boot_video_title=" << text_encoding::utf8Lenient(title) << '\n';
+    }
+    output << "boot_video_random=" << settings.boot_video_random << '\n';
+    output << "boot_video_fill=" << settings.boot_video_fill << '\n';
+    output << "exit_animation=" << settings.exit_animation << '\n';
+    output << "exit_color=";
+    if (settings.exit_color_rgb) hex_color(settings.exit_color_rgb); else output << "accent\n";
     output << "home_tiles=" << (settings.home_tiles == AppSettings::HomeTiles::first ? "first" :
                                 settings.home_tiles == AppSettings::HomeTiles::last ? "last" : "layout") << '\n';
     output << "add_game_tile=" << settings.add_game_tile << '\n';
@@ -1023,6 +1064,8 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
     output << "panel_borders=" << settings.panel_borders << '\n';
     output << "screen_transitions=" << settings.screen_transitions << '\n';
     output << "glass=" << std::clamp(settings.glass, 0.0f, 1.0f) << '\n';
+    output << "wallpaper_upscale=" << settings.wallpaper_upscale << '\n';
+    output << "backgrounds_4k=" << settings.backgrounds_4k << '\n';
     output << "crt=" << settings.crt << "\ncrt_mask=" << std::clamp(settings.crt_mask, 0, 4)
            << "\ncrt_warp_x=" << settings.crt_warp_x << "\ncrt_warp_y=" << settings.crt_warp_y
            << "\ncrt_mask_level=" << settings.crt_mask_level << "\ncrt_scanlines=" << settings.crt_scanlines
@@ -1178,6 +1221,8 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
     for (size_t i = 0; i < settings.hud_pins.size(); ++i) output << (i ? "," : "") << settings.hud_pins[i];
     output << '\n';
     output << "fps_graph=" << settings.fps_graph << '\n'
+           << "fps_frametime=" << settings.fps_frametime << '\n'
+           << "fps_frametime_spike=" << settings.fps_frametime_spike << '\n'
            << "fps_limiter=" << settings.fps_limiter << '\n'
            << "fps_limit=" << settings.fps_limit << '\n'
            << "fps_limit_precise=" << settings.fps_limit_precise << '\n'

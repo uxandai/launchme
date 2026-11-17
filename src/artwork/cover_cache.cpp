@@ -197,7 +197,7 @@ std::vector<uint8_t> localSteamFile(uint32_t app_id, const std::filesystem::path
     std::sort(found.begin(), found.end());
     for (const auto& [rank, path] : found) {
         (void)rank;
-        if (auto image = readImage(path, 8 * 1024 * 1024); !image.empty()) return image;
+        if (auto image = readImage(path, 16 * 1024 * 1024); !image.empty()) return image;
     }
     return {};
 }
@@ -378,7 +378,8 @@ std::vector<uint8_t> artworkForGame(const Game& game, ArtworkKind kind,
         const auto files = kind == ArtworkKind::poster ? std::vector<const wchar_t*>{L"library_600x900_2x.jpg", L"library_600x900.jpg"} :
                            kind == ArtworkKind::cover ? std::vector<const wchar_t*>{L"library_600x900_2x.jpg", L"library_600x900.jpg", L"header.jpg"} :
                            kind == ArtworkKind::landscape ? std::vector<const wchar_t*>{L"header.jpg", L"capsule_616x353.jpg"} :
-                           kind == ArtworkKind::hero ? std::vector<const wchar_t*>{L"library_hero.jpg"} :
+                           kind == ArtworkKind::hero ? (backgrounds4k() ? std::vector<const wchar_t*>{L"library_hero_2x.jpg", L"library_hero.jpg"} :
+                                                                          std::vector<const wchar_t*>{L"library_hero.jpg"}) :
                            kind == ArtworkKind::logo ? std::vector<const wchar_t*>{L"logo.png"} : std::vector<const wchar_t*>{};
         for (const auto* name : files) {
             auto bytes = get(L"https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/" + std::to_wstring(app) + L"/" + name,
@@ -466,14 +467,23 @@ std::vector<uint8_t> heroForSteamApp(uint32_t app_id, const std::wstring& title,
     const auto heroes = cache.parent_path() / L"heroes";
     const auto file = heroes / (std::to_wstring(app_id) + L".v2.hd.img");
     if (auto bytes = readImage(file); !bytes.empty()) return bytes;
-    // Steam's library hero (1920×620) is already on disk; otherwise SGDB at full resolution
-    // (preferably 3840 px): the decoder keeps what covers the screen.
-    auto image = localSteamFile(app_id, steam_root, {L"library_hero.jpg"});
+    const bool prefer_4k = backgrounds4k();
+    // Steam's 2x library hero (3840×1240) wins when already cached on disk; with 4K backgrounds on,
+    // Steam's CDN 2x hero and SGDB's ≥3000 px heroes come before the local 1920×620 copy.
+    auto image = localSteamFile(app_id, steam_root, {L"library_hero_2x.jpg"});
+    if (!isImage(image) && !prefer_4k) image = localSteamFile(app_id, steam_root, {L"library_hero.jpg"});
+    if (!isImage(image) && prefer_4k)
+        image = get(L"https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/" + std::to_wstring(app_id) + L"/library_hero_2x.jpg",
+                    false, 16 * 1024 * 1024);
     if (!isImage(image)) image = heroAsset(app_id, L"steam");
     if (!isImage(image)) {
         const auto game_id = gameIdForTitle(app_id, title, cache);
         if (game_id) image = heroAsset(game_id, L"game");
     }
+    if (!isImage(image) && prefer_4k) image = localSteamFile(app_id, steam_root, {L"library_hero.jpg"});
+    if (!isImage(image))
+        image = get(L"https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/" + std::to_wstring(app_id) + L"/library_hero.jpg",
+                    false, 8 * 1024 * 1024);
     if (!isImage(image)) image = storeScreenshotForSteamApp(app_id);
     if (!isImage(image)) return {};
     if (!atomicBytes(file, image.data(), image.size())) { retryable_artwork_error = true; return {}; }

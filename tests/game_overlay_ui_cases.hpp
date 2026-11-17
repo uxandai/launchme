@@ -140,7 +140,7 @@ int LauncherUiTest::gameOverlay(HWND window) {
         app.power_menu_ = row; app.overlayKey(VK_RETURN);
         return true;
     };
-    if (app.hud_menu_rows_.size() != 12 || hudRow(HudAction::master) != 0 || hudRow(HudAction::pin, "fps") != 1 ||
+    if (app.hud_menu_rows_.size() != 14 || hudRow(HudAction::master) != 0 || hudRow(HudAction::pin, "fps") != 1 ||
         app.hud_menu_rows_.back().action != HudAction::close || !app.hud_menu_rows_.back().gap) return 9860;
     if (!capture(L"game-guide-hud-options.png")) return 1811;
     if (!hudPick(HudAction::pin, "fps") || !hudPick(HudAction::pin, "cpu")) return 9861; // The dialog stays open.
@@ -184,7 +184,7 @@ int LauncherUiTest::gameOverlay(HWND window) {
     if (!hudPick(HudAction::master) || app.settings_.hud_enabled || app.hud_menu_rows_.size() != 3 ||
         app.settings_.hud_pins != std::vector<std::string>{"fps", "cpu"} || *app.power_menu_ != 0) return 9876;
     if (!capture(L"game-guide-hud-options-off.png")) return 9877;
-    if (!hudPick(HudAction::master) || !app.settings_.hud_enabled || app.hud_menu_rows_.size() != 12) return 9878;
+    if (!hudPick(HudAction::master) || !app.settings_.hud_enabled || app.hud_menu_rows_.size() != 14) return 9878;
     app.settings_.hud_pins.clear(); app.settings_.hud_layout = 0; app.settings_.hud_label_colors = false; app.settings_.fps_graph = false;
     if (!hudPick(HudAction::close)) return 9879;
     if (!app.gameOverlayOpen() || app.powerMenuOpen() || app.hud_menu_) return 9868;

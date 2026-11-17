@@ -25,10 +25,12 @@ public:
 
     // `device` (Windows: an ID3D11Device made with video support; null elsewhere): the video is
     // decoded on that GPU and its frames come through nextFrame/transfer instead of frame().
-    bool open(const std::filesystem::path& file, double volume, void* device = nullptr);
+    // `loop = false`: plays once through and raises ended() when finished.
+    bool open(const std::filesystem::path& file, double volume, void* device = nullptr, bool loop = true);
     void stop();
     bool active() const;
     bool failed() const { return error_->load(); }
+    bool ended() const { return ended_->load(); }
     void setVolume(double volume);
     // Holds the picture (and the sound) where it is, decoding nothing meanwhile; false plays on from there.
     void setPaused(bool paused);
@@ -46,5 +48,6 @@ private:
     struct Impl; // The platform's engine and frame buffers.
     std::unique_ptr<Impl> impl_;
     std::shared_ptr<std::atomic_bool> error_ = std::make_shared<std::atomic_bool>(false);
+    std::shared_ptr<std::atomic_bool> ended_ = std::make_shared<std::atomic_bool>(false);
     bool paused_ = false; // open() and stop() reset it.
 };

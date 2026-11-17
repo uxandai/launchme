@@ -504,7 +504,7 @@ constexpr Entry entries[] = {
     {L"Źródło", L"Fonte"},
     {L"Autoodtwarzanie filmów z emulatorów", L"Reproduzir automaticamente vídeos de jogos de emuladores"},
     {L"Folder filmów", L"Pasta de vídeos"},
-    {L" · filmy ScreenScraper i zwiastuny Steam; układ jak downloaded_media ES-DE.", L" · vídeos do ScreenScraper e trailers do Steam; organizados como o downloaded_media do ES-DE."},
+    {L" · filmy ScreenScraper oraz zwiastuny Steam i Nintendo; układ jak downloaded_media ES-DE.", L" · vídeos do ScreenScraper e trailers do Steam e da Nintendo; organizados como o downloaded_media do ES-DE."},
     {L"Przenieść pobrane filmy?", L"Mover os vídeos baixados?"},
     {L"Przenieś", L"Mover"},
     {L"Zostaw w starym folderze", L"Deixar na pasta antiga"},
@@ -550,8 +550,8 @@ constexpr Entry entries[] = {
     {L"Sprawdź", L"Testar"},
     {L"Wyczyść dane ScreenScraper", L"Limpar dados do ScreenScraper"},
     {L"Zapomina identyfikacje ROM-ów i przerwy; przy następnym starcie gry są sprawdzane od nowa.", L"Esquece as identificações de ROMs e as pausas; os jogos são verificados novamente na próxima inicialização."},
-    {L"Zwiastuny gier Steam", L"Trailers de jogos Steam"},
-    {L"To samo dla gier Steam i gier PC z innych sklepów (zwiastun tej samej gry ze Steam): 30 s ze sklepu (od 10. sekundy, 480p, bez dźwięku), pobierane raz.", L"O mesmo para jogos Steam e jogos de PC de outras lojas (o trailer do Steam do mesmo jogo): 30 s do trailer da loja (a partir do segundo 10, 480p, sem som), baixados uma vez."},
+    {L"Zwiastuny gier Steam i Nintendo", L"Trailers de jogos Steam e Nintendo"},
+    {L"To samo dla gier Steam, gier PC z innych sklepów oraz Switch i Switch 2 (z nintendo.com): 30 s ze sklepu (od 10. sekundy, 480p, bez dźwięku), pobierane raz.", L"O mesmo para jogos Steam, jogos de PC de outras lojas e Switch e Switch 2 (de nintendo.com): 30 s do trailer da loja (a partir do segundo 10, 480p, sem som), baixados uma vez."},
     {L"Miejsce na zwiastuny", L"Espaço para trailers"},
     {L"Po przekroczeniu znikają najdawniej oglądane.", L"Acima disso, os não assistidos há mais tempo saem primeiro."},
     {L"Zmniejszono cache grafik o ", L"Cache de arte reduzido em "},
@@ -2908,6 +2908,12 @@ constexpr Entry entries[] = {
     {L"Wszyscy dostawcy", L"Todos os provedores"},
     {L"Wszystko gotowe", L"Tudo pronto"},
     {L"Zamknij panel gry", L"Fechar o painel do jogo"},
+    {L"Wyostrzanie teł poniżej 4K", L"Aprimoramento de fundos abaixo de 4K"},
+    {L"Skaluje tła gier i tapety niższej rozdzielczości w trybie TV (AMD FSR 1 na Windows, 5-tap + CAS na Linuksie).",
+     L"Dimensiona fundos de jogos e papéis de parede de menor resolução no modo TV (AMD FSR 1 no Windows, 5-tap + CAS no Linux)."},
+    {L"Tła gier w 4K", L"Fundos de jogos em 4K"},
+    {L"Pobiera i zachowuje tła gier w rozdzielczości do 4K (3840×2160) ze Steam i SteamGridDB zamiast 1440p i lokalnych kopii 1920×620.",
+     L"Baixa e mantém fundos de jogos em até 4K (3840×2160) do Steam e do SteamGridDB em vez de 1440p e cópias locais de 1920×620."},
 };
 } // namespace
 

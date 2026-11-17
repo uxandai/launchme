@@ -81,7 +81,7 @@ void Renderer::drawThemeCard(const theme_ui::Option& option, int index, float le
                 target_->FillGeometry(path.Get(), solid_.Get());
             }
         } else {
-            brush(option.id == Id::button_color && card.color == 0 ? uiAccent() : colorOf(card.color));
+            brush((option.id == Id::button_color || option.id == Id::exit_color) && card.color == 0 ? uiAccent() : colorOf(card.color));
             target_->FillEllipse(circle, solid_.Get());
         }
         brush(chosen ? gray(1, 0.95f) : gray(1, 0.3f));
@@ -513,6 +513,11 @@ void Renderer::drawThemeStudio() {
             target_->PushLayer(D2D1::LayerParameters(D2D1::InfiniteRect(), mask.Get()), nullptr);
             target_->DrawBitmap(theme_scene_bitmap_.Get(), rect.rect, 1.0f, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
             if (state.scene_in < 1.0f) { brush(D2D1::ColorF(0.01f, 0.012f, 0.016f, 1.0f - smoothFade(std::clamp((state.scene_in - 0.2f) / 0.8f, 0.0f, 1.0f)))); target_->FillRectangle(rect.rect, solid_.Get()); }
+            if (state.current() == theme_ui::Tab::startup && !state.bar && state.row >= 0 && state.row < static_cast<int>(state.options.size())) {
+                const auto& focused_opt = state.options[static_cast<size_t>(state.row)];
+                if (focused_opt.id == Id::exit_color || (focused_opt.id == Id::exit_animation && focused_opt.on))
+                    drawExitPreview(rect.rect);
+            }
             target_->PopLayer();
         }
         brush(gray(1, 0.14f)); target_->DrawRoundedRectangle(rect, solid_.Get(), 1.0f);

@@ -76,7 +76,13 @@ void Launcher::buildHudMenu() {
             const bool shown = std::find(settings_.hud_pins.begin(), settings_.hud_pins.end(), pin.id) != settings_.hud_pins.end();
             add(HudAction::pin, tr(pin.name), pin.icon, false, pin.id, shown);
         }
-        if (settings_.game_fps) add(HudAction::graph, tr(L"Wykres klatek"), 0xE9D2, false, {}, settings_.fps_graph);
+        if (settings_.game_fps) {
+            add(HudAction::fps_low, tr(L"1% low"), 0xE9D9, false, {}, settings_.game_fps_low);
+            add(HudAction::frametime, tr(L"Czas klatki (ms)"), 0xE916, false, {}, settings_.fps_frametime);
+            if (settings_.fps_frametime)
+                add(HudAction::frametime_spike, tr(L"Skoki czasu klatki (max ms)"), 0xE9D2, false, {}, settings_.fps_frametime_spike);
+            add(HudAction::graph, tr(L"Wykres klatek"), 0xE9D2, false, {}, settings_.fps_graph);
+        }
         add(HudAction::layout, tr(L"Układ"), 0xE8A9, false, {}, -1, settings_.hud_layout == 1 ? tr(L"Pasek") : tr(L"Lista"));
         add(HudAction::colors, tr(L"Kolorowe etykiety"), 0xE790, false, {}, settings_.hud_label_colors);
         add(HudAction::size, tr(L"Rozmiar widgetu"), 0xE8E9, false, {}, -1, std::to_wstring(std::clamp(settings_.hud_size, 50, 100)) + L"%");
@@ -148,6 +154,9 @@ void Launcher::hudMenuApply(int direction) {
         if (changed) toggleHudPin(item.key);
         break;
     }
+    case HudAction::fps_low: changed = flip(settings_.game_fps_low); break;
+    case HudAction::frametime: changed = flip(settings_.fps_frametime); break;
+    case HudAction::frametime_spike: changed = flip(settings_.fps_frametime_spike); break;
     case HudAction::graph: changed = flip(settings_.fps_graph); break;
     case HudAction::colors: changed = flip(settings_.hud_label_colors); break;
     case HudAction::limiter: changed = flip(settings_.fps_limiter); break;

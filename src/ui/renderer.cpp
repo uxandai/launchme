@@ -341,6 +341,8 @@ void Renderer::releaseGraphics() {
     controller_art_stroke_.Reset(); companion_stroke_.Reset(); tarot_stroke_.Reset();
     factory_.Reset();
 #ifdef _WIN32
+    crt_registered_ = nullptr;
+    upscale_registered_ = nullptr;
     swap_failed_ = false; // The next target tries the swap chain again.
 #endif
 }
@@ -479,7 +481,8 @@ void Renderer::paint(const std::vector<GameCard>& cards, size_t selected, bool s
             target_->SetTransform(D2D1::Matrix3x2F::Scale(viewport_.scale, viewport_.scale));
             target_->Clear(color(0, 0, 0));
             if (!exit_snapshot) drawScreensaver(*context.screensaver);
-            if (context.exit_progress >= 0) drawExitTransition(context.exit_progress);
+            if (context.boot_video_alpha > 0.001f) drawBootVideo(context.boot_video_alpha, context.boot_video_fill);
+        if (context.exit_progress >= 0) drawExitTransition(context.exit_progress);
             const auto submitted = std::chrono::steady_clock::now();
             const auto result = finishFrame(target_->EndDraw());
             if (profiling_) {
@@ -660,6 +663,7 @@ void Renderer::paint(const std::vector<GameCard>& cards, size_t selected, bool s
                 drawScreensaver(*context.screensaver);
             }
         }
+        if (context.boot_video_alpha > 0.001f) drawBootVideo(context.boot_video_alpha, context.boot_video_fill);
         if (context.exit_progress >= 0) drawExitTransition(context.exit_progress);
         crtFinish();
         const auto submitted = std::chrono::steady_clock::now();

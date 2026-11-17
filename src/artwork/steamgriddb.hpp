@@ -6,18 +6,18 @@
 
 struct GridAsset {
     uint32_t id = 0;
-    std::wstring url, thumbnail, author;
+    std::wstring url, thumbnail, author, title;
     int width = 0, height = 0;
-    std::wstring preview; // A video wallpaper's short moving preview (MP4), played before it is downloaded.
+    std::wstring preview; // A video wallpaper's or boot video's moving preview, played before it is chosen.
     bool animated = false; // SteamGridDB's animated grid or hero: `url` is an animated WebP (animated_image.hpp).
 };
 // "Zmień grafikę" galleries: SteamGridDB, or for emulated shortcuts the media ScreenScraper
 // lists for the identified ROM (artwork/screenscraper_art.hpp) and ES-DE's downloaded media; the
 // stores and databases of artwork_sources.hpp; and the wallpaper sources of wallpaper_sources.hpp
 // (pictures: Wallhaven, Danbooru; videos: MotionBGs, Steam's animated profile backgrounds, the player's
-// Wallpaper Engine video subscriptions).
+// Wallpaper Engine video subscriptions); steamdeckrepo: startup/suspend animations (boot_video_sources.hpp).
 enum class ArtworkProvider { steamgriddb, screenscraper, esde, steam, gog, xbox, nintendo, gametdb, titledb, thegamesdb, wikimedia,
-                             wallhaven, danbooru, motionbgs, steam_backgrounds, wallpaper_engine,
+                             wallhaven, danbooru, motionbgs, steam_backgrounds, wallpaper_engine, steamdeckrepo,
                              local }; // local: the files the player added from disk (Zmień grafikę → Z dysku…)
 struct GridPage {
     std::vector<GridAsset> assets;

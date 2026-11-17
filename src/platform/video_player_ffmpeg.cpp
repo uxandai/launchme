@@ -95,9 +95,10 @@ struct VideoPlayer::Impl {
     std::vector<uint8_t> ready;
     uint32_t ready_width = 0, ready_height = 0;
     bool fresh = false;
+    bool loop = true;
     std::atomic<uint32_t> max_width{1280};
 
-    void run(const std::shared_ptr<std::atomic_bool>& error);
+    void run(const std::shared_ptr<std::atomic_bool>& error, const std::shared_ptr<std::atomic_bool>& ended);
     bool waitUntil(std::chrono::steady_clock::time_point when) {
         std::unique_lock lock(mutex);
         return !wake.wait_until(lock, when, [&] { return stopping; });
@@ -124,7 +125,7 @@ struct VideoPlayer::Impl {
     }
 };
 
-void VideoPlayer::Impl::run(const std::shared_ptr<std::atomic_bool>& error) {
+void VideoPlayer::Impl::run(const std::shared_ptr<std::atomic_bool>& error, const std::shared_ptr<std::atomic_bool>& ended) {
     using clock = std::chrono::steady_clock;
     Owned<AVPacket> packet(av_packet_alloc());
     Owned<AVFrame> frame(av_frame_alloc()), software(av_frame_alloc()); // software: a VA-API frame copied back.
@@ -206,6 +207,13 @@ void VideoPlayer::Impl::run(const std::shared_ptr<std::atomic_bool>& error) {
                 if (!decoder || avcodec_send_packet(decoder, nullptr) < 0) continue;
                 if (!drain(decoder, decoder == video.get())) return;
             }
+            if (!loop) {
+                if (!pass_frames) { error->store(true); return; }
+                for (int i = 0; i < 120 && !stopped() && sound && SDL_GetAudioStreamQueued(sound) > 0; ++i)
+                    if (!waitUntil(clock::now() + std::chrono::milliseconds(16))) return;
+                ended->store(true);
+                return;
+            }
             if (!pass_frames || av_seek_frame(input.get(), -1, input->start_time != AV_NOPTS_VALUE ? input->start_time : 0, AVSEEK_FLAG_BACKWARD) < 0) {
                 error->store(true); return; // Nothing to show, or no way back to the start.
             }
@@ -237,11 +245,13 @@ void* VideoPlayer::device() const { return nullptr; }
 bool VideoPlayer::nextFrame(uint32_t&, uint32_t&, uint32_t) { return false; }
 bool VideoPlayer::transfer(void*, uint32_t, uint32_t) { return false; }
 
-bool VideoPlayer::open(const std::filesystem::path& file, double volume, void*) {
+bool VideoPlayer::open(const std::filesystem::path& file, double volume, void*, bool loop) {
     stop();
     error_ = std::make_shared<std::atomic_bool>(false);
+    ended_ = std::make_shared<std::atomic_bool>(false);
     av_log_set_level(AV_LOG_ERROR); // Not the decoders' notes on recoverable quirks (MP3 padding, ...).
     auto& impl = *impl_;
+    impl.loop = loop;
     AVFormatContext* opened = nullptr;
     if (avformat_open_input(&opened, file.c_str(), nullptr, nullptr) < 0) return false;
     impl.input.reset(opened);
@@ -267,7 +277,7 @@ bool VideoPlayer::open(const std::filesystem::path& file, double volume, void*) 
         setVolume(volume);
         SDL_ResumeAudioStreamDevice(impl.sound);
     }
-    impl.worker = std::thread([&impl, error = error_] { impl.run(error); });
+    impl.worker = std::thread([&impl, error = error_, ended = ended_] { impl.run(error, ended); });
     return true;
 }
 

@@ -50,16 +50,23 @@ void Launcher::stopWallpaperVideo() {
     renderer_.clearWallpaperVideo();
 }
 
-void Launcher::showWallpaperPreview(const std::filesystem::path& file) {
+void Launcher::showWallpaperPreview(const std::filesystem::path& file, double volume, uint32_t asset_id) {
     if (file.empty()) return;
     wallpaper_preview_ = file;
+    wallpaper_preview_active_id_ = asset_id;
+    wallpaper_preview_volume_ = std::clamp(volume, 0.0, 1.0);
+    if (wallpaper_preview_volume_ > 0.0) audio_.duckMusic(true);
     stopWallpaperVideo(); // tickWallpaper opens the preview on its next frame.
-    renderer_.setWallpaperImage({});
+    if (!artwork_state_.boot_video) renderer_.setWallpaperImage({});
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
 void Launcher::stopWallpaperPreview() {
     wallpaper_preview_id_ = 0;
+    wallpaper_preview_active_id_ = 0;
+    const bool had_sound = wallpaper_preview_volume_ > 0.0;
+    wallpaper_preview_volume_ = 0.0;
+    if (had_sound) audio_.duckMusic(video_player_.active() && settings_.video_volume > 0);
     if (wallpaper_preview_.empty()) return;
     wallpaper_preview_.clear();
     stopWallpaperVideo();
@@ -79,7 +86,8 @@ void Launcher::tickWallpaper(bool& needs_paint) {
     if (wallpaper_playing_ != wanted) {
         stopWallpaperVideo();
         if (wallpaper_failed_ == wanted) return; // An unplayable file is not tried every frame.
-        if (!wallpaper_player_.open(wanted, 0.0)) { wallpaper_failed_ = wanted; return; }
+        const double volume = !wallpaper_preview_.empty() ? wallpaper_preview_volume_ : 0.0;
+        if (!wallpaper_player_.open(wanted, volume)) { wallpaper_failed_ = wanted; return; }
         wallpaper_playing_ = wanted;
     }
     if (wallpaper_player_.failed()) { wallpaper_failed_ = wanted; stopWallpaperVideo(); return; }

@@ -141,11 +141,13 @@ GridPage steam(const Game& game, ArtworkKind kind, const Context& context, const
     case ArtworkKind::landscape:
         out.add(secure(field(data, "header_image")), {}, L"Steam · header");
         out.add(cdn + L"capsule_616x353.jpg", {}, L"Steam · capsule");
-        out.add(cdn + L"library_hero.jpg", {}, L"Steam · hero");
+        out.add(cdn + L"library_hero_2x.jpg", cdn + L"library_hero.jpg", L"Steam · hero 2x", 3840, 1240);
+        out.add(cdn + L"library_hero.jpg", {}, L"Steam · hero", 1920, 620);
         shots();
         break;
     default: // hero
-        out.add(cdn + L"library_hero.jpg", {}, L"Steam · hero");
+        out.add(cdn + L"library_hero_2x.jpg", cdn + L"library_hero.jpg", L"Steam · hero 2x", 3840, 1240);
+        out.add(cdn + L"library_hero.jpg", {}, L"Steam · hero", 1920, 620);
         out.add(secure(field(data, "background_raw")), {}, L"Steam · background");
         shots();
         break;
@@ -500,6 +502,7 @@ const char* slug(ArtworkProvider provider) {
     case ArtworkProvider::motionbgs: return "motionbgs";
     case ArtworkProvider::steam_backgrounds: return "steam_backgrounds";
     case ArtworkProvider::wallpaper_engine: return "wallpaper_engine";
+    case ArtworkProvider::steamdeckrepo: return "steamdeckrepo";
     case ArtworkProvider::local: return "local";
     }
     return "";
@@ -522,6 +525,7 @@ const wchar_t* name(ArtworkProvider provider) {
     case ArtworkProvider::motionbgs: return L"MotionBGs";
     case ArtworkProvider::steam_backgrounds: return L"Steam";
     case ArtworkProvider::wallpaper_engine: return L"Wallpaper Engine (Video)";
+    case ArtworkProvider::steamdeckrepo: return L"Steam Deck Repo";
     case ArtworkProvider::local: return tr(L"Lokalne");
     }
     return L"";

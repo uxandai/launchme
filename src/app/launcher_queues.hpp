@@ -159,11 +159,13 @@ struct ArtworkBrowserJob {
     Game game;
     ArtworkKind kind = ArtworkKind::cover;
     int page = 0;
+    int category = 0;
     GridSource source;
     GridAsset asset;
     std::wstring query;
     ArtworkProvider provider = ArtworkProvider::steamgriddb;
-    bool wallpaper = false; // The wallpaper picker's job (wallpaper_sources.hpp).
+    bool wallpaper = false;  // The wallpaper picker's job (wallpaper_sources.hpp).
+    bool boot_video = false; // The startup video picker's job (boot_video_sources.hpp).
     uint32_t steam_app_id = 0; // The game's Steam AppID when known (artwork_sources::Context).
 };
 struct ArtworkBrowserQueue {

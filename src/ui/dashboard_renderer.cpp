@@ -17,6 +17,12 @@ bool online(const SteamFriend& person) { return person.status > 0 || !person.gam
 constexpr float tile_padding = 20.0f;
 constexpr int hot_celsius = 85; // Shown in the soft warning red used for destructive actions.
 std::wstring fpsNumber(double value) { return value > 0 ? std::to_wstring(static_cast<int>(std::lround(value))) : L"—"; }
+std::wstring frametimeNumber(double ms) {
+    if (!(ms > 0)) return L"—";
+    wchar_t buf[32]{};
+    swprintf_s(buf, L"%.1f", std::clamp(ms, 0.0, 999.9));
+    return buf;
+}
 const wchar_t* fpsStatus(game_fps::Status value) {
     switch (value) {
     case game_fps::Status::denied: return tr(L"Brak uprawnień ETW");
@@ -120,7 +126,16 @@ void Renderer::drawDashboardTile(int index, float drawer_left, bool focus_frame)
         const auto& reading = context_->game_fps;
         if (reading.status == game_fps::Status::ready) {
             value = fpsNumber(reading.fps) + L" FPS";
-            if (context_->fps_low) caption = L"1% LOW  " + fpsNumber(reading.low);
+            const double ms = reading.frametime_ms > 0 ? reading.frametime_ms : (reading.fps > 0 ? 1000.0 / reading.fps : 0.0);
+            if (context_->fps_frametime && ms > 0) {
+                caption = frametimeNumber(ms) + L" ms";
+                if (context_->fps_frametime_spike && reading.frametime_max_ms > 0)
+                    caption += L" (max " + frametimeNumber(reading.frametime_max_ms) + L")";
+            }
+            if (context_->fps_low) {
+                if (!caption.empty()) caption += L"  ·  ";
+                caption += L"1% LOW  " + fpsNumber(reading.low);
+            }
         } else value = fpsStatus(reading.status);
     } else if (index >= dashboard::tile_count) {
         const auto& widget = context_->plugin_widgets[index - dashboard::tile_count];
@@ -235,13 +250,25 @@ bool Renderer::paintHud(const ViewContext& context) {
                 lines.push_back({L"VRAM", sensors::formatMemory(context.dashboard.sensors.vram_used, context.dashboard.sensors.vram_total), false, false, id, false, L"88 / 88 GB"});
             } else if (id == "fps" && context.fps_widget) {
                 const auto& reading = context.game_fps;
-                Line line{L"FPS", reading.status == game_fps::Status::ready ? fpsNumber(reading.fps) : std::wstring(L"—")};
-                if (reading.status == game_fps::Status::ready && context.fps_low && reading.low > 0) line.value += L"   1% " + fpsNumber(reading.low);
-                line.graph = context.fps_graph; // The curve appears a few seconds into the game: its place is there from the start.
-                line.graph_ready = context.fps_graph && reading.status == game_fps::Status::ready;
+                const bool ready = reading.status == game_fps::Status::ready;
+                Line line{L"FPS", ready ? fpsNumber(reading.fps) : std::wstring(L"—")};
+                if (ready && context.fps_low && reading.low > 0) line.value += L"   1% " + fpsNumber(reading.low);
+                const bool graph_here = context.fps_graph && !context.fps_frametime;
+                line.graph = graph_here; // The curve appears a few seconds into the game: its place is there from the start.
+                line.graph_ready = graph_here && ready;
                 line.reserve = context.fps_low ? L"888   1% 888" : L"888";
                 line.id = id;
                 lines.push_back(std::move(line));
+                if (context.fps_frametime) {
+                    const double ms = reading.frametime_ms > 0 ? reading.frametime_ms : (reading.fps > 0 ? 1000.0 / reading.fps : 0.0);
+                    std::wstring ft_val = ready && ms > 0 ? frametimeNumber(ms) + L" ms" : std::wstring(L"—");
+                    if (ready && context.fps_frametime_spike && reading.frametime_max_ms > 0)
+                        ft_val += L"   max " + frametimeNumber(reading.frametime_max_ms);
+                    const bool hitch = ready && std::max(ms, context.fps_frametime_spike ? reading.frametime_max_ms : 0.0) > 33.3;
+                    lines.push_back({L"FT", std::move(ft_val), hitch, context.fps_graph, "ft",
+                                     context.fps_graph && ready,
+                                     context.fps_frametime_spike ? L"88.8 ms   max 88.8" : L"88.8 ms"});
+                }
             } else if (id == "cpu" || id == "gpu") {
                 const auto celsius = id == "cpu" ? context.dashboard.sensors.cpu : context.dashboard.sensors.gpu;
                 lines.push_back({id == "cpu" ? L"CPU" : L"GPU", sensors::format(celsius), celsius && *celsius >= hot_celsius, false, id, false, L"888 °C"});
@@ -258,6 +285,7 @@ bool Renderer::paintHud(const ViewContext& context) {
             const auto labelInk = [&](const Line& line) -> D2D1_COLOR_F {
                 if (!context.hud_label_colors) return gray(0.70f);
                 if (line.id == "fps") return D2D1::ColorF(0.46f, 0.88f, 0.56f);
+                if (line.id == "ft") return D2D1::ColorF(0.38f, 0.86f, 0.88f);
                 if (line.id == "cpu") return D2D1::ColorF(0.46f, 0.71f, 1.0f);
                 if (line.id == "gpu") return D2D1::ColorF(0.74f, 0.58f, 1.0f);
                 if (line.id == "ram") return D2D1::ColorF(1.0f, 0.75f, 0.38f);
@@ -296,7 +324,13 @@ bool Renderer::paintHud(const ViewContext& context) {
                     left += chip;
                 }
             } else {
-                constexpr float width = 250, row = 34, pad = 12;
+                constexpr float row = 34, pad = 12;
+                float width = 250;
+                for (const auto& line : lines) {
+                    const float needed = 2 * pad + 66 + std::max(textAdvance(line.value, friend_status_font_.Get()),
+                                                                 textAdvance(line.reserve, friend_status_font_.Get())) + 8;
+                    width = std::max(width, needed);
+                }
                 constexpr float graph_height = 44, chip_row = 34;
                 float height = static_cast<float>(lines.size()) * row + 2 * pad;
                 for (const auto& line : lines) if (line.graph) height += graph_height + 6;

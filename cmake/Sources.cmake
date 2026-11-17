@@ -67,6 +67,7 @@ set(LAUNCHME_APP_SOURCES
     src/artwork/identified_artwork.cpp
     src/artwork/artwork_sources.cpp
     src/artwork/wallpaper_sources.cpp
+    src/artwork/boot_video_sources.cpp
     src/app/wallpaper.cpp
     src/app/settings_extras.cpp
     src/app/psfive_details.cpp
@@ -74,6 +75,8 @@ set(LAUNCHME_APP_SOURCES
     src/ui/psfive_details_renderer.cpp
     src/ui/details_media_renderer.cpp
     src/ui/wallpaper_renderer.cpp
+    src/ui/upscale_filter.cpp
+    src/ui/upscale_renderer.cpp
     src/ui/menu_dialog_renderer.cpp
     src/artwork/bulk_covers.cpp
     src/app/store.cpp
@@ -192,6 +195,7 @@ set(LAUNCHME_APP_SOURCES
     src/plugins/manager.cpp
     src/plugins/achievements.cpp
     src/app/artwork_browser.cpp
+    src/app/boot_video.cpp
     src/app/animated_art.cpp
     src/app/plugin_achievements.cpp
     src/app/pc_platforms.cpp
@@ -247,6 +251,7 @@ set(LAUNCHME_APP_SOURCES
     src/app/quick_resume.cpp
     src/app/recent_searches.cpp
     src/store/game_details.cpp
+    src/store/nintendo_trailer.cpp
     src/store/steam_trailer.cpp
     src/store/steam_app_match.cpp
     src/ui/renderer.cpp

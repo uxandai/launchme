@@ -359,12 +359,18 @@ void Launcher::beginClose() {
     removeTrayIcon();
     close_started_ = last_frame_ = std::chrono::steady_clock::now();
     pending_launch_ = false;
+    cancelBootVideo();
     cancelGameFocus();
     cancelEnterHold(); cancelTabHold(); pointerUp(true);
     controller_input_.stopRumble();
     audio_.cancelPendingMusic(); audio_.stopMusic();
     POINT cursor{};
     if (GetCursorPos(&cursor) && WindowFromPoint(cursor) == hwnd_) SetCursor(nullptr);
+    if (!settings_.exit_animation) {
+        exit_progress_ = 1.0f;
+        close_ready_ = PostMessageW(hwnd_, WM_CLOSE, 0, 0) != FALSE;
+        return;
+    }
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 

@@ -46,8 +46,12 @@ void Launcher::paint(bool overlay) {
     std::tie(context.desktop_text_begin, context.desktop_text_end) = desktopTextSelection();
     GameDetails local_preview, local_details;
     if (closing_) context.exit_progress = exit_progress_;
+    context.boot_video_alpha = boot_video_alpha_;
+    context.boot_video_fill = settings_.boot_video_fill;
     context.fps_widget = settings_.game_fps;
     context.fps_graph = settings_.fps_graph;
+    context.fps_frametime = settings_.fps_frametime;
+    context.fps_frametime_spike = settings_.fps_frametime_spike;
     context.hud_layout = settings_.hud_layout;
     context.hud_label_colors = settings_.hud_label_colors;
     context.hud_scale = settings_.hud_size / 100.0f;
@@ -298,6 +302,7 @@ void Launcher::paint(bool overlay) {
             metadata::apply(*own, local_details);
         }
     context.artwork_browser = artworkOpen() ? &artwork_state_ : nullptr;
+    context.artwork_preview_id = wallpaper_preview_active_id_;
     context.details_loading = details_loading_ && details_.description.empty() && details_.error.empty();
     context.detail_action = detail_action_;
     if (detailsMediaReady()) {

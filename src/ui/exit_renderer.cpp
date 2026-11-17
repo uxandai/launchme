@@ -12,7 +12,21 @@ float ease(float value) {
     const float t = std::clamp(value, 0.0f, 1.0f);
     return t * t * (3 - 2 * t);
 }
-D2D1_COLOR_F light(float alpha) { return D2D1::ColorF(0.34f, 0.82f, 0.94f, alpha); }
+D2D1_COLOR_F exitLight(uint32_t rgb, float alpha) {
+    return D2D1::ColorF(((rgb >> 16) & 255) / 255.0f, ((rgb >> 8) & 255) / 255.0f, (rgb & 255) / 255.0f, alpha);
+}
+D2D1_COLOR_F exitCore(uint32_t rgb, float alpha) {
+    const float r = ((rgb >> 16) & 255) / 255.0f, g = ((rgb >> 8) & 255) / 255.0f, b = (rgb & 255) / 255.0f;
+    return D2D1::ColorF(std::lerp(r, 1.0f, 0.84f), std::lerp(g, 1.0f, 0.84f), std::lerp(b, 1.0f, 0.84f), alpha);
+}
+}
+
+void Renderer::setExitColor(uint32_t rgb) {
+    const uint32_t clean = rgb ? rgb : 0x57D1F0;
+    if (clean == exit_color_) return;
+    exit_color_ = clean;
+    exit_line_.Reset();
+    exit_glow_.Reset();
 }
 
 void Renderer::beginScreenForeground() {
@@ -259,14 +273,16 @@ void Renderer::drawExitTransition(float progress) {
     const float top = height * 0.13f, bottom = height * 0.87f;
     const float y = std::lerp(top, bottom, ease((t - 0.06f) / 0.86f));
     if (!exit_line_) {
-        const D2D1_GRADIENT_STOP data[] = {{0, light(0)}, {0.16f, light(1)}, {0.84f, light(1)}, {1, light(0)}};
+        const auto c = [&](float a) { return exitLight(exit_color_, a); };
+        const D2D1_GRADIENT_STOP data[] = {{0, c(0)}, {0.16f, c(1)}, {0.84f, c(1)}, {1, c(0)}};
         ComPtr<ID2D1GradientStopCollection> stops;
         if (SUCCEEDED(target_->CreateGradientStopCollection(data, 4, stops.GetAddressOf())))
             target_->CreateLinearGradientBrush(D2D1::LinearGradientBrushProperties({x, top}, {x, bottom}),
                 stops.Get(), exit_line_.GetAddressOf());
     }
     if (!exit_glow_) {
-        const D2D1_GRADIENT_STOP data[] = {{0, light(1)}, {0.18f, light(0.65f)}, {0.48f, light(0.19f)}, {1, light(0)}};
+        const auto c = [&](float a) { return exitLight(exit_color_, a); };
+        const D2D1_GRADIENT_STOP data[] = {{0, c(1)}, {0.18f, c(0.65f)}, {0.48f, c(0.19f)}, {1, c(0)}};
         ComPtr<ID2D1GradientStopCollection> stops;
         if (SUCCEEDED(target_->CreateGradientStopCollection(data, 4, stops.GetAddressOf())))
             target_->CreateRadialGradientBrush(D2D1::RadialGradientBrushProperties({x, y}, {0, 0}, 1, 1),
@@ -293,6 +309,62 @@ void Renderer::drawExitTransition(float progress) {
             target_->FillRectangle(D2D1::RectF(x - r, y - r, x + r, y + r), exit_glow_.Get());
         }
     }
-    brush(D2D1::ColorF(0.91f, 0.98f, 1.0f, alpha * 0.96f));
+    brush(exitCore(exit_color_, alpha * 0.96f));
+    target_->FillEllipse(D2D1::Ellipse({x, y}, 3.4f * scale, 3.4f * scale), solid_.Get());
+}
+
+void Renderer::drawExitPreview(D2D1_RECT_F box) {
+    const float cycle = std::fmod(elapsed_, 2.4f);
+    // 0..1.05 s: the exit sweep; 1.05..1.45 s: dark pause; 1.45..2.1 s: scene comes back; 2.1..2.4 s: live home.
+    if (cycle >= 2.1f) return;
+    const float t = std::clamp(cycle / 1.05f, 0.0f, 1.0f);
+    const float back = cycle <= 1.45f ? 0.0f : ease((cycle - 1.45f) / 0.65f);
+    const float dim = ease(t / 0.90f) * (1.0f - back);
+    if (dim > 0.001f) {
+        brush(D2D1::ColorF(0, 0, 0, dim));
+        target_->FillRectangle(box, solid_.Get());
+    }
+    const float alpha = ease(t / 0.14f) * (1.0f - ease((t - 0.72f) / 0.24f)) * (1.0f - back);
+    if (alpha <= 0.001f) return;
+    const float height = box.bottom - box.top, x = (box.left + box.right) * 0.5f;
+    const float scale = height / 900.0f;
+    const float top = box.top + height * 0.13f, bottom = box.top + height * 0.87f;
+    const float y = std::lerp(top, bottom, ease((t - 0.06f) / 0.86f));
+    if (!exit_line_) {
+        const auto c = [&](float a) { return exitLight(exit_color_, a); };
+        const D2D1_GRADIENT_STOP data[] = {{0, c(0)}, {0.16f, c(1)}, {0.84f, c(1)}, {1, c(0)}};
+        ComPtr<ID2D1GradientStopCollection> stops;
+        if (SUCCEEDED(target_->CreateGradientStopCollection(data, 4, stops.GetAddressOf())))
+            target_->CreateLinearGradientBrush(D2D1::LinearGradientBrushProperties({x, top}, {x, bottom}),
+                stops.Get(), exit_line_.GetAddressOf());
+    }
+    if (!exit_glow_) {
+        const auto c = [&](float a) { return exitLight(exit_color_, a); };
+        const D2D1_GRADIENT_STOP data[] = {{0, c(1)}, {0.18f, c(0.65f)}, {0.48f, c(0.19f)}, {1, c(0)}};
+        ComPtr<ID2D1GradientStopCollection> stops;
+        if (SUCCEEDED(target_->CreateGradientStopCollection(data, 4, stops.GetAddressOf())))
+            target_->CreateRadialGradientBrush(D2D1::RadialGradientBrushProperties({x, y}, {0, 0}, 1, 1),
+                stops.Get(), exit_glow_.GetAddressOf());
+    }
+    if (exit_line_) {
+        exit_line_->SetStartPoint({x, top}); exit_line_->SetEndPoint({x, bottom});
+        for (const auto [width, strength] : {std::pair{22.0f, 0.012f}, {11.0f, 0.030f}, {5.5f, 0.065f}, {1.5f, 0.28f}}) {
+            exit_line_->SetOpacity(alpha * strength);
+            target_->DrawLine({x, top}, {x, bottom}, exit_line_.Get(), width * scale);
+        }
+    }
+    if (exit_glow_) {
+        exit_glow_->SetCenter({x, y});
+        exit_glow_->SetRadiusX(60 * scale); exit_glow_->SetRadiusY(110 * scale);
+        exit_glow_->SetOpacity(alpha * 0.75f);
+        target_->DrawLine({x, std::max(top, y - 110 * scale)}, {x, y}, exit_glow_.Get(), 2.8f * scale);
+        for (const float radius : {56.0f, 18.0f}) {
+            const float r = radius * scale;
+            exit_glow_->SetRadiusX(r); exit_glow_->SetRadiusY(r);
+            exit_glow_->SetOpacity(alpha * (radius > 20 ? 0.36f : 0.72f));
+            target_->FillRectangle(D2D1::RectF(x - r, y - r, x + r, y + r), exit_glow_.Get());
+        }
+    }
+    brush(exitCore(exit_color_, alpha * 0.96f));
     target_->FillEllipse(D2D1::Ellipse({x, y}, 3.4f * scale, 3.4f * scale), solid_.Get());
 }

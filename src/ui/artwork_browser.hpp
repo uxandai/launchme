@@ -14,6 +14,9 @@ inline constexpr std::array<const wchar_t*, 6> names{trKey(L"Kwadrat"), trKey(L"
                                                       trKey(L"Plakat"), trKey(L"Kafel poziomy"), trKey(L"Płyta")};
 // The wallpaper picker (Interfejs → Tapeta) in the same screen: pictures, then videos.
 inline constexpr std::array<const wchar_t*, 2> wallpaper_names{trKey(L"Zdjęcia"), trKey(L"Animowane")};
+// The startup video picker (Interfejs → Start → Wideo startowe): SteamDeckRepo + local collection.
+inline constexpr std::array<const wchar_t*, 4> boot_video_names{trKey(L"Popularne"), trKey(L"Na czasie"),
+                                                                trKey(L"Krótkie"), trKey(L"Pobrane")};
 inline const wchar_t* providerName(ArtworkProvider provider) { return artwork_sources::name(provider); }
 inline int category(ArtworkKind kind) {
     for (int i = 0; i < static_cast<int>(kinds.size()); ++i) if (kinds[i] == kind) return i;
@@ -51,8 +54,10 @@ struct State {
     int provider_row = 0;
     // "Kadruj" right of "Szukaj" (square artwork and backgrounds); Back is the top-left circle.
     bool crop_focus = false, back_focus = false;
-    // Interfejs → Tapeta: the same screen picks the wallpaper; its rail holds Zdjęcia and Animowane.
+    // Interfejs → Tapeta / Start → Wideo startowe: the same screen picks a wallpaper or startup video.
     bool wallpaper = false;
+    bool boot_video = false;
+    bool picker() const { return wallpaper || boot_video; }
     // The page arrows under "Z dysku…" with the pad/keyboard focus: -1 the previous page, 1 the next; 0 none.
     int page_focus = 0;
     // The rail has the focus on one of its buttons rather than on a type.
@@ -60,17 +65,23 @@ struct State {
     // Neither the gallery nor the search row (field, "Kadruj" or "Źródło") has the focus: the rail has it.
     bool railFocus() const { return !gallery && !search_focus && !provider_focus && !crop_focus; }
     bool emulated() const { return game.kind == GameKind::nonsteam && game.platform != L"PC"; }
-    int railCount() const { return wallpaper ? static_cast<int>(wallpaper_names.size()) : static_cast<int>(kinds.size()); }
-    const wchar_t* railName(int index) const {
-        return wallpaper ? wallpaper_names[static_cast<size_t>(std::clamp(index, 0, 1))] : names[static_cast<size_t>(std::clamp(index, 0, 5))];
+    int railCount() const {
+        return boot_video ? static_cast<int>(boot_video_names.size()) :
+               wallpaper ? static_cast<int>(wallpaper_names.size()) : static_cast<int>(kinds.size());
     }
-    ArtworkKind kind() const { return wallpaper ? ArtworkKind::hero : kinds[static_cast<size_t>(std::clamp(category, 0, 5))]; }
-    bool videoWallpapers() const { return wallpaper && category == 1; }
+    const wchar_t* railName(int index) const {
+        return boot_video ? boot_video_names[static_cast<size_t>(std::clamp(index, 0, 3))] :
+               wallpaper ? wallpaper_names[static_cast<size_t>(std::clamp(index, 0, 1))] :
+                           names[static_cast<size_t>(std::clamp(index, 0, 5))];
+    }
+    ArtworkKind kind() const { return picker() ? ArtworkKind::hero : kinds[static_cast<size_t>(std::clamp(category, 0, 5))]; }
+    bool videoWallpapers() const { return (wallpaper && category == 1) || boot_video; }
     // The types the player has set an artwork for (a filled dot on the list and on the "Z dysku" board, else an empty one).
     std::array<bool, 6> custom{};
     bool hasLocal() const { return std::find(choices.begin(), choices.end(), ArtworkProvider::local) != choices.end(); }
     // The sources offered for the type in view: Płyta has ScreenScraper (and the player's own files).
     std::vector<ArtworkProvider> shown() const {
+        if (boot_video) return {category == 3 ? ArtworkProvider::local : ArtworkProvider::steamdeckrepo};
         if (wallpaper || kind() != ArtworkKind::disc) return choices;
         std::vector<ArtworkProvider> list{ArtworkProvider::screenscraper};
         if (hasLocal()) list.push_back(ArtworkProvider::local);
@@ -79,12 +90,13 @@ struct State {
     bool providerChoice() const { return shown().size() > 1; }
     // The gallery's source: Płyta always ScreenScraper; otherwise the chosen one while it is offered.
     ArtworkProvider activeProvider() const {
+        if (boot_video) return category == 3 ? ArtworkProvider::local : ArtworkProvider::steamdeckrepo;
         if (!wallpaper && kind() == ArtworkKind::disc) return provider == ArtworkProvider::local && hasLocal() ? ArtworkProvider::local : ArtworkProvider::screenscraper;
         if (std::find(choices.begin(), choices.end(), provider) != choices.end()) return provider;
         return choices.empty() ? ArtworkProvider::steamgriddb : choices.front();
     }
     // "Kadruj": the cover's square or the part of the background a screen shows (src/app/crop.cpp).
-    bool croppable() const { return !wallpaper && (kind() == ArtworkKind::cover || kind() == ArtworkKind::hero); }
+    bool croppable() const { return !picker() && (kind() == ArtworkKind::cover || kind() == ArtworkKind::hero); }
     Layout layout(float width, float height) const;
 };
 struct Layout {
@@ -203,6 +215,6 @@ struct Layout {
     }
 };
 inline Layout State::layout(float width, float height) const {
-    return {width, height, kind(), providerChoice(), static_cast<int>(shown().size()), railCount(), !wallpaper};
+    return {width, height, kind(), providerChoice(), static_cast<int>(shown().size()), railCount(), !picker()};
 }
 }

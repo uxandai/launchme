@@ -1,5 +1,6 @@
 #include "launcher.hpp"
 #include "launcher_internal.hpp"
+#include "../artwork/image_compact.hpp"
 #include "../platform/diagnostics.hpp"
 #include "../platform/text_encoding.hpp"
 #include "../ui/carousel.hpp"
@@ -198,6 +199,7 @@ bool Launcher::initialize(HWND hwnd) {
     else placeOnTvMonitor();
     if (settings_.autostart) applyAutostart(true); // The EXE may have moved since it was switched on.
     audio_.setMusicLevel(settings_.music_volume);
+    prepareBootVideo();
     initializeMusic(); // Decode boot first, in parallel with renderer and library startup.
     if (!renderer_.initialize(hwnd)) {
         diagnostics::log("error", "Renderer initialization failed (Direct2D/DirectWrite/WIC): graphics driver or system components");
@@ -249,6 +251,8 @@ bool Launcher::initialize(HWND hwnd) {
     renderer_.setFocusGap(settings_.focus_gap);
     renderer_.setGlow(settings_.glow_level, settings_.glow_pulse, settings_.glow_trace);
     renderer_.setBackgroundGrid(settings_.background_grid, settings_.background_grid_style);
+    renderer_.setWallpaperUpscale(settings_.wallpaper_upscale);
+    setBackgrounds4k(settings_.backgrounds_4k);
     renderer_.setTileShape(settings_.tile_shape);
     renderer_.setPanelBorders(settings_.panel_borders);
     renderer_.setGlass(settings_.glass);
@@ -320,6 +324,7 @@ bool Launcher::initialize(HWND hwnd) {
     if (desktop_mode_) { applyWindowMode(); buildDesktopSidebar(); } // The window's style and place; ShowWindow follows in main.cpp.
     if (!settings_.tour_done && !settings_.aurelia_intro_done) openAurelia(nullptr, true);
     else if (!desktop_mode_ && !settings_.tour_done) startTour(); // First start: the walkthrough over the loading home screen.
+    if (tour_.open || aurelia_ui_.open || whats_new_.open) cancelBootVideo();
     profiler_.startup(FrameProfiler::Startup::initialized);
     return true;
 }
@@ -392,7 +397,10 @@ void Launcher::onAudio(std::unique_ptr<AudioMessage> message) {
     audio_.setCue(cue, std::move(message->clip));
     if (cue == SoundCue::boot) {
         if (preview) audio_.boot();
-        else if (!boot_played_) { if (desktop_mode_) audio_.skipBoot(); else audio_.boot(); } // The desktop window starts silently.
+        else if (!boot_played_) {
+            if (desktop_mode_) audio_.skipBoot();
+            else if (!bootVideoActive()) audio_.boot();
+        } // The desktop window starts silently; boot video holds music until it ends.
         boot_played_ = true;
     } else if (preview) {
         if (cue == SoundCue::toast) audio_.toast();
@@ -962,6 +970,7 @@ void Launcher::tick() {
     if (screensaverActive()) needs_paint = true;
     tickVideo(needs_paint); // After the screensaver: it stops the video the moment it starts.
     tickWallpaper(needs_paint); // A video wallpaper's frames while it is seen (src/app/wallpaper.cpp).
+    tickBootVideo(dt, needs_paint); // Startup video in Tryb TV (src/app/boot_video.cpp).
     tickAnimatedArt(needs_paint); // The focused card's animated artwork (src/app/animated_art.cpp).
     if (artworkOpen() && renderer_.artworkAnimationDue()) needs_paint = true; // Zmień grafikę's moving tiles.
     tickPsfiveDetails(dt, needs_paint); // PSfive's details sliding in under the row (src/app/psfive_details.cpp).

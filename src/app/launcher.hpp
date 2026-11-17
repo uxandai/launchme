@@ -901,6 +901,9 @@ public:
     // The frame clock's bound for this launcher's ticks (FrameClock::limit): fewer wake-ups while
     // the screen stands still or a game is in front.
     int frameLimit() const { return frame_limit_; }
+    bool bootVideoActive() const { return !boot_video_pending_.empty() || boot_video_playing_; }
+    bool bootVideoVisible() const { return bootVideoActive() || boot_video_alpha_ > 0.001f; }
+    void dismissBootVideo();
 #ifdef _WIN32
     void controllerDeviceChanged(HANDLE device) { controller_input_.deviceChanged(device); controller_rescan_->request(); }
 #endif
@@ -1669,7 +1672,7 @@ private:
     void powerMenuAccept();
     void powerMenuClick(float x, float y);
     // The widget on the game's screen: its options in the power menu's layer (src/app/hud_menu.cpp).
-    enum class HudAction { master, pin, graph, layout, colors, size, limiter, limit, mode, close, suspend_game, close_game };
+    enum class HudAction { master, pin, fps_low, frametime, frametime_spike, graph, layout, colors, size, limiter, limit, mode, close, suspend_game, close_game };
     enum class MenuKind { hud, game_close }; // What the layer shows: the widget options, or the close menu of the game behind Guide.
     struct HudMenuRow { HudAction action; std::wstring label; wchar_t icon; bool gap; std::string key; int toggle = -1; std::wstring value; bool danger = false; }; // toggle: -1 none, 0 off, 1 on; value: shown with arrows.
     static constexpr int hud_menu_window = 8; // Rows shown at once; more scroll.
@@ -2183,13 +2186,36 @@ private:
     void pickLocalWallpaper();
     void applyWallpaper();
     void stopWallpaperVideo();
-    void showWallpaperPreview(const std::filesystem::path& file);
+    void showWallpaperPreview(const std::filesystem::path& file, double volume = 0.0, uint32_t asset_id = 0);
     void stopWallpaperPreview();
+    void syncBootVideoPreview();
     void tickWallpaper(bool& needs_paint);
     std::wstring wallpaperLabel() const;
     std::wstring wallpaperDescription() const;
     VideoPlayer wallpaper_player_;
     std::vector<uint8_t> wallpaper_frame_;
+    double wallpaper_preview_volume_ = 0.0;
+    // Interfejs → Start → Wideo startowe (src/app/boot_video.cpp): startup video from SteamDeckRepo / disk.
+    void openBootVideoBrowser();
+    void pickLocalBootVideo();
+    void clearBootVideo();
+    void prepareBootVideo();
+    void previewBootVideo();
+    void cancelBootVideo();
+    void finishBootVideo();
+    void tickBootVideo(float dt, bool& needs_paint);
+    bool hasStoredBootVideos() const;
+    double bootVideoVolume() const;
+    std::filesystem::path chooseBootVideoFile() const;
+    std::wstring bootVideoLabel(bool compact = false) const;
+    std::wstring bootVideoDescription() const;
+    VideoPlayer boot_video_player_;
+    std::vector<uint8_t> boot_video_frame_;
+    std::filesystem::path boot_video_pending_;
+    bool boot_video_playing_ = false;
+    bool boot_video_from_preview_ = false;
+    float boot_video_alpha_ = 0.0f;
+    std::chrono::steady_clock::time_point boot_video_started_{};
     // Animated SteamGridDB picks (src/app/animated_art.cpp): the card with the focus (in the desktop
     // window the one under the pointer first) plays its animated cover, poster or background after
     // a short rest; the still comes back when the focus leaves.
@@ -2211,6 +2237,7 @@ private:
     std::chrono::steady_clock::time_point animated_art_since_{};
     std::filesystem::path wallpaper_playing_, wallpaper_preview_, wallpaper_failed_;
     uint32_t wallpaper_preview_id_ = 0;
+    uint32_t wallpaper_preview_active_id_ = 0;
     // 0.4.9's settings rows (src/app/settings_extras.cpp); false: not theirs.
     bool settingsExtraToggle(const settings_ui::Row& row);
     bool settingsExtraChoose(const settings_ui::Row& row);
@@ -2842,14 +2869,15 @@ private:
     std::wstring screenscraper_status_; // Last "Sprawdź połączenie" answer, shown under that row.
     bool screenscraper_testing_ = false;
     VideoPlayer video_player_;
-    bool video_silent_ = false; // The playing video is a muted Steam trailer.
+    bool video_silent_ = false; // The playing video is a muted store trailer.
     std::string video_key_;
     std::chrono::steady_clock::time_point video_since_{};
     bool video_requested_ = false;
     uint32_t video_generation_ = 0;
     std::vector<uint8_t> video_frame_;
     const Game* videoCandidate() const;
-    bool trailerByTitle(const Game& game) const; // Another store's PC game: the Steam trailer of its title.
+    bool trailerByTitle(const Game& game) const;        // Another store's PC game: the Steam trailer of its title.
+    bool nintendoSwitchTrailer(const Game& game) const; // Switch / Switch 2: nintendo.com first, before ScreenScraper and Steam.
     void tickVideo(bool& needs_paint);
     void stopVideo();
     bool ratings_started_ = false;

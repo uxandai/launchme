@@ -17,16 +17,18 @@
 using Microsoft::WRL::ComPtr;
 
 namespace {
-// Errors come on the engine's threads: only a flag crosses over.
+// Errors and natural end come on the engine's threads: only flags cross over.
 class Notify : public Microsoft::WRL::RuntimeClass<Microsoft::WRL::RuntimeClassFlags<Microsoft::WRL::ClassicCom>, IMFMediaEngineNotify> {
 public:
-    explicit Notify(std::shared_ptr<std::atomic_bool> error) : error_(std::move(error)) {}
+    Notify(std::shared_ptr<std::atomic_bool> error, std::shared_ptr<std::atomic_bool> ended)
+        : error_(std::move(error)), ended_(std::move(ended)) {}
     STDMETHODIMP EventNotify(DWORD event, DWORD_PTR, DWORD) override {
         if (event == MF_MEDIA_ENGINE_EVENT_ERROR) error_->store(true);
+        else if (event == MF_MEDIA_ENGINE_EVENT_ENDED) ended_->store(true);
         return S_OK;
     }
 private:
-    std::shared_ptr<std::atomic_bool> error_;
+    std::shared_ptr<std::atomic_bool> error_, ended_;
 };
 }
 
@@ -50,10 +52,11 @@ VideoPlayer::~VideoPlayer() {
 
 bool VideoPlayer::active() const { return impl_->engine_ != nullptr; }
 
-bool VideoPlayer::open(const std::filesystem::path& file, double volume, void* device) {
+bool VideoPlayer::open(const std::filesystem::path& file, double volume, void* device, bool loop) {
     auto& engine_ = impl_->engine_; auto& wic_ = impl_->wic_; auto& started_ = impl_->started_;
     stop();
     error_ = std::make_shared<std::atomic_bool>(false);
+    ended_ = std::make_shared<std::atomic_bool>(false);
     if (!started_) {
         if (FAILED(MFStartup(MF_VERSION))) return false;
         started_ = true;
@@ -63,7 +66,7 @@ bool VideoPlayer::open(const std::filesystem::path& file, double volume, void* d
     ComPtr<IMFAttributes> attributes;
     if (FAILED(CoCreateInstance(CLSID_MFMediaEngineClassFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&factory))) ||
         FAILED(MFCreateAttributes(&attributes, 3))) return false;
-    auto notify = Microsoft::WRL::Make<Notify>(error_);
+    auto notify = Microsoft::WRL::Make<Notify>(error_, ended_);
     if (!notify || FAILED(attributes->SetUnknown(MF_MEDIA_ENGINE_CALLBACK, notify.Get())) ||
         FAILED(attributes->SetUINT32(MF_MEDIA_ENGINE_VIDEO_OUTPUT_FORMAT, DXGI_FORMAT_B8G8R8A8_UNORM))) return false;
     // With the renderer's device: decoded by the GPU's video engine and drawn into its textures
@@ -89,7 +92,7 @@ bool VideoPlayer::open(const std::filesystem::path& file, double volume, void* d
     const HRESULT source = extended->SetSourceFromByteStream(stream.Get(), name);
     SysFreeString(name);
     if (FAILED(source)) return fail();
-    engine->SetLoop(TRUE);
+    engine->SetLoop(loop ? TRUE : FALSE);
     engine->SetVolume(std::clamp(volume, 0.0, 1.0));
     engine->SetMuted(volume <= 0.0);
     if (FAILED(engine->Play())) return fail();

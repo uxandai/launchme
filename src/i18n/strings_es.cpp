@@ -504,7 +504,7 @@ constexpr Entry entries[] = {
     {L"Źródło", L"Fuente"},
     {L"Autoodtwarzanie filmów z emulatorów", L"Reproducir automáticamente videos de juegos de emuladores"},
     {L"Folder filmów", L"Carpeta de videos"},
-    {L" · filmy ScreenScraper i zwiastuny Steam; układ jak downloaded_media ES-DE.", L" · videos de ScreenScraper y tráileres de Steam; organizados como downloaded_media de ES-DE."},
+    {L" · filmy ScreenScraper oraz zwiastuny Steam i Nintendo; układ jak downloaded_media ES-DE.", L" · videos de ScreenScraper y tráileres de Steam y Nintendo; organizados como downloaded_media de ES-DE."},
     {L"Przenieść pobrane filmy?", L"¿Mover los videos descargados?"},
     {L"Przenieś", L"Mover"},
     {L"Zostaw w starym folderze", L"Dejarlos en la carpeta antigua"},
@@ -550,8 +550,8 @@ constexpr Entry entries[] = {
     {L"Sprawdź", L"Probar"},
     {L"Wyczyść dane ScreenScraper", L"Borrar datos de ScreenScraper"},
     {L"Zapomina identyfikacje ROM-ów i przerwy; przy następnym starcie gry są sprawdzane od nowa.", L"Olvida las identificaciones de ROM y las pausas; los juegos se comprueban de nuevo en el próximo inicio."},
-    {L"Zwiastuny gier Steam", L"Tráileres de juegos de Steam"},
-    {L"To samo dla gier Steam i gier PC z innych sklepów (zwiastun tej samej gry ze Steam): 30 s ze sklepu (od 10. sekundy, 480p, bez dźwięku), pobierane raz.", L"Lo mismo para juegos de Steam y juegos de PC de otras tiendas (el tráiler de Steam del mismo juego): 30 s del tráiler de la tienda (desde el segundo 10, 480p, sin sonido), descargados una vez."},
+    {L"Zwiastuny gier Steam i Nintendo", L"Tráileres de juegos de Steam y Nintendo"},
+    {L"To samo dla gier Steam, gier PC z innych sklepów oraz Switch i Switch 2 (z nintendo.com): 30 s ze sklepu (od 10. sekundy, 480p, bez dźwięku), pobierane raz.", L"Lo mismo para juegos de Steam, juegos de PC de otras tiendas y Switch y Switch 2 (de nintendo.com): 30 s del tráiler de la tienda (desde el segundo 10, 480p, sin sonido), descargados una vez."},
     {L"Miejsce na zwiastuny", L"Espacio para tráileres"},
     {L"Po przekroczeniu znikają najdawniej oglądane.", L"Al superarlo, se eliminan primero los que llevan más tiempo sin verse."},
     {L"Zmniejszono cache grafik o ", L"Caché de arte reducida en "},
@@ -2908,6 +2908,12 @@ constexpr Entry entries[] = {
     {L"Wszyscy dostawcy", L"Todos los proveedores"},
     {L"Wszystko gotowe", L"Todo listo"},
     {L"Zamknij panel gry", L"Cerrar el panel del juego"},
+    {L"Wyostrzanie teł poniżej 4K", L"Reescalado de fondos inferiores a 4K"},
+    {L"Skaluje tła gier i tapety niższej rozdzielczości w trybie TV (AMD FSR 1 na Windows, 5-tap + CAS na Linuksie).",
+     L"Reescala fondos de juegos y pantallas de menor resolución en el modo TV (AMD FSR 1 en Windows, 5-tap + CAS en Linux)."},
+    {L"Tła gier w 4K", L"Fondos de juegos en 4K"},
+    {L"Pobiera i zachowuje tła gier w rozdzielczości do 4K (3840×2160) ze Steam i SteamGridDB zamiast 1440p i lokalnych kopii 1920×620.",
+     L"Descarga y conserva fondos de juegos hasta en 4K (3840×2160) de Steam y SteamGridDB en lugar de 1440p y copias locales de 1920×620."},
 };
 } // namespace
 

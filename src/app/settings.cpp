@@ -6,6 +6,7 @@
 #include "../platform/music_themes.hpp"
 #include "../platform/sound_cues.hpp"
 #include "../library/screenscraper_config.hpp"
+#include "../artwork/image_compact.hpp"
 #include "../platform/text_encoding.hpp"
 
 #include <algorithm>
@@ -167,6 +168,8 @@ void Launcher::settingsChanged(bool shelves) {
     renderer_.setFocusGap(settings_.focus_gap);
     renderer_.setGlow(settings_.glow_level, settings_.glow_pulse, settings_.glow_trace);
     renderer_.setBackgroundGrid(settings_.background_grid, settings_.background_grid_style);
+    renderer_.setWallpaperUpscale(settings_.wallpaper_upscale);
+    setBackgrounds4k(settings_.backgrounds_4k);
     renderer_.setTileShape(settings_.tile_shape);
     renderer_.setPanelBorders(settings_.panel_borders);
     renderer_.setGlass(settings_.glass);
@@ -646,6 +649,7 @@ void Launcher::settingsChoose(const Row& row) {
         settings_.screensaver_minutes = screensaver::minute_choices[std::clamp<size_t>(settings_state_.choice, 0, screensaver::minute_choices.size() - 1)];
     else if (row.id == Id::ui_accent) settings_.ui_accent_rgb = choice.color;
     else if (row.id == Id::button_color) settings_.button_rgb = choice.color;
+    else if (row.id == Id::exit_color) settings_.exit_color_rgb = choice.color;
     else if (row.id == Id::desktop_accent) settings_.desktop_accent_rgb = choice.color ? choice.color : AppSettings{}.desktop_accent_rgb;
     else if (row.id == Id::desktop_button) settings_.desktop_button_rgb = choice.color;
     else if (row.id == Id::desktop_theme) settings_.desktop_theme = std::clamp(settings_state_.choice, 0, static_cast<int>(desktop_themes.size()) - 1);

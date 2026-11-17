@@ -1,6 +1,7 @@
 // Manual check (not in CTest): video_player_live_test.exe <video file>
 // Plays the file muted for a few seconds and reports the frames VideoPlayer copied out.
 #include "../src/platform/video_player.hpp"
+#include "../src/store/nintendo_trailer.hpp"
 #include "../src/store/steam_trailer.hpp"
 #include "../src/artwork/image_compact.hpp"
 #include <fstream>
@@ -39,6 +40,21 @@ int main(int argc, char**) {
         file = steamTrailerFile(static_cast<uint32_t>(_wtoi(wide[2])), scratch, scratch);
         std::wcout << L"trailer=" << file.wstring() << L'\n';
         if (file.empty()) { LocalFree(wide); CoUninitialize(); return 6; }
+    }
+    // --switch / --switch2 <Title>: the Nintendo store trailer clip first, then playback.
+    if ((file == L"--switch" || file == L"--switch2") && wide_count > 2) {
+        const auto scratch = std::filesystem::temp_directory_path() / L"launchme-trailer-live";
+        Game game;
+        game.kind = GameKind::nonsteam;
+        game.source = GameSource::custom;
+        game.platform = file == L"--switch2" ? L"Switch 2" : L"Switch";
+        game.name = wide[2];
+        const auto h = static_cast<uint32_t>(std::hash<std::wstring>{}(game.platform + L":" + game.name)) | 1u;
+        game.app_id = h;
+        game.shortcut_id = (static_cast<uint64_t>(h) << 32) | 0x02000000ULL;
+        file = nintendoTrailerFile(game, scratch, scratch);
+        std::wcout << L"trailer=" << file.wstring() << L'\n';
+        if (file.empty()) { LocalFree(wide); CoUninitialize(); return 7; }
     }
     int result = 0;
     {

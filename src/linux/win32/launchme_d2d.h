@@ -10,3 +10,5 @@
 // at `opacity`. Both false when the target cannot (then the copy is the way).
 bool LaunchmeFrostCapture(ID2D1RenderTarget* target);
 bool LaunchmeFrostDraw(ID2D1RenderTarget* target, const D2D1_RECT_F& bounds, float sigma, float opacity);
+// Tryb TV's 5-tap Catmull-Rom + CAS background upscaler (src/linux/impeller/shaders/upscale.frag).
+bool LaunchmeUpscaleDraw(ID2D1RenderTarget* target, ID2D1Bitmap* bitmap, const D2D1_RECT_F& dest, float opacity);

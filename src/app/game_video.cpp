@@ -1,11 +1,15 @@
 // Game videos: a game focused for a while (AppSettings::video_delay) plays its video behind the
 // shelf in place of its background, with the music ducked: emulated games their ES-DE video, else
-// ScreenScraper's; Steam games (steam_trailers) their store trailer, and PC games from other stores
-// the Steam trailer of the same game (steam_app_match.hpp). Moving on, a menu, a launch,
+// ScreenScraper's; Steam games (steam_trailers) their store trailer, PC games from other stores
+// the Steam trailer of the same game (steam_app_match.hpp), and Switch / Switch 2 games their
+// nintendo.com trailer before ScreenScraper and Steam. Moving on, a menu, a launch,
 // the screensaver or losing the foreground stops it at once.
 #include "launcher.hpp"
+#include "../artwork/esde_art.hpp"
 #include "../artwork/screenscraper_art.hpp"
+#include "../library/emulation_scan.hpp"
 #include "../net/http.hpp"
+#include "../store/nintendo_trailer.hpp"
 #include "../store/steam_trailer.hpp"
 #include "../store/steam_app_match.hpp"
 #include "../artwork/cover_cache.hpp"
@@ -27,6 +31,7 @@ const Game* Launcher::videoCandidate() const {
     if (desktop_mode_ && (screen_ != ScreenMode::shelves || desktop_menu_)) return nullptr;
     if (menu_open_ || cards_.empty() || IsIconic(hwnd_) || GetForegroundWindow() != hwnd_) return nullptr;
     const auto& game = cards_[screen_ == ScreenMode::details ? 0 : std::min(selected_, cards_.size() - 1)].game;
+    if (settings_.steam_trailers && nintendoSwitchTrailer(game)) return &game;
     if (settings_.game_videos && game.kind == GameKind::nonsteam && game.platform != L"PC" && game.app_id) return &game;
     if (settings_.steam_trailers && steamArtwork(game) && game.kind == GameKind::steam && game.app_id) return &game;
     if (settings_.steam_trailers && trailerByTitle(game)) return &game;
@@ -39,6 +44,11 @@ bool Launcher::trailerByTitle(const Game& game) const {
     if (steamArtwork(game) || !isGame(game) || game.visibility != GameVisibility::public_game || gameKey(game).empty()) return false;
     if (game.kind == GameKind::nonsteam && game.platform != L"PC") return false; // Emulated: its own videos.
     return game.source != GameSource::multimc && !placeholderGameName(game.name) && !game.name.empty();
+}
+
+bool Launcher::nintendoSwitchTrailer(const Game& game) const {
+    return nintendoSwitchGame(game) && game.visibility == GameVisibility::public_game &&
+           !gameKey(game).empty() && !placeholderGameName(game.name) && !game.name.empty();
 }
 
 void Launcher::stopVideo() {
@@ -65,16 +75,38 @@ void Launcher::tickVideo(bool& needs_paint) {
         const auto folder = videoFolder();
         const uint64_t space = uint64_t(std::max(100, settings_.trailer_space_mb)) * 1024 * 1024;
         const bool by_title = trailerByTitle(*game);
+        const bool switch_trailer = settings_.steam_trailers && nintendoSwitchTrailer(*game);
+        const bool game_videos = settings_.game_videos;
         // A verified Steam link of another store's game: RAWG's store link ("Zidentyfikuj grę").
         uint32_t linked = 0;
-        if (by_title) if (const auto found = rawg_metadata_.find(key); found != rawg_metadata_.end()) linked = found->second.steam_app_id;
-        work_.start([alive = alive_, hwnd = hwnd_, generation, key, game = *game, folder, space, by_title, linked] {
+        if (by_title || switch_trailer)
+            if (const auto found = rawg_metadata_.find(key); found != rawg_metadata_.end()) linked = found->second.steam_app_id;
+        work_.start([alive = alive_, hwnd = hwnd_, generation, key, game = *game, folder, space, by_title, switch_trailer, game_videos, linked] {
             auto message = std::make_unique<VideoMessage>();
             message->generation = generation;
             message->key = key;
             const auto root = userConfigDirectory();
             // No HttpBudget here: a first video download may take minutes (downloadVideo).
-            if (by_title) {
+            if (switch_trailer) {
+                // Local ES-DE video on disk first; among online sources nintendo.com leads before ScreenScraper and Steam.
+                if (game_videos && !game.rom.empty()) message->file = esdeVideoFile(game.platform, game.name, game.rom);
+                if (message->file.empty()) {
+                    message->file = nintendoTrailerFile(game, root, folder, space);
+                    if (!message->file.empty()) message->silent = true;
+                }
+                if (message->file.empty() && game_videos) message->file = gameVideoFile(game, root, folder);
+                if (message->file.empty()) {
+                    uint32_t app = linked;
+                    if (!app) if (const auto source = selectedArtworkSource(game, coverCacheDirectory()); source.steam) app = source.id;
+                    if (!app) {
+                        auto title = emulation_scan::displayTitle(artworkTitle(game));
+                        if (title.empty()) title = artworkTitle(game);
+                        app = steamAppForTitle(title, root / L"metadata", gameCacheKey(game));
+                    }
+                    if (app) message->file = steamTrailerFile(app, root, folder, space);
+                    message->silent = true;
+                }
+            } else if (by_title) {
                 uint32_t app = linked;
                 if (!app) if (const auto source = selectedArtworkSource(game, coverCacheDirectory()); source.steam) app = source.id;
                 if (!app) app = steamAppForTitle(artworkTitle(game), root / L"metadata", gameCacheKey(game));

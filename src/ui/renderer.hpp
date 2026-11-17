@@ -9,6 +9,7 @@
 #include "box3d.hpp"
 #include "crt_view.hpp"
 #include "crt_filter.hpp"
+#include "upscale_filter.hpp"
 #include "view_context.hpp"
 #include "controller_art.hpp"
 #include "text_layout_cache.hpp"
@@ -64,6 +65,7 @@ public:
     void setFontFamily(std::wstring family);
     void setCoverAccent(uint32_t rgb) { cover_accent_ = rgb; }
     void setUiAccent(uint32_t rgb) { ui_accent_ = rgb ? rgb : AppSettings{}.ui_accent_rgb; }
+    void setExitColor(uint32_t rgb);
     // Settings → Interfejs → Kolor przycisków: the focused button's fill (0 = the interface accent)
     // and the tint of the others; captions take dark or light ink, whichever contrasts more.
     void setButtonTheme(uint32_t focus_rgb, AppSettings::ButtonIdle idle) { button_rgb_ = focus_rgb; button_idle_ = idle; }
@@ -78,6 +80,7 @@ public:
     void setBackgroundGrid(float level, AppSettings::GridStyle style = AppSettings::GridStyle::dots) {
         background_grid_ = std::clamp(level, 0.0f, 1.0f); background_grid_style_ = style;
     }
+    void setWallpaperUpscale(bool enabled) { wallpaper_upscale_ = enabled; }
     void setTileShape(AppSettings::TileShape shape) { tile_shape_ = shape; }
     // Dostosuj wygląd → Inne → Filtr CRT (Tryb TV only): the whole frame through crt_filter.cpp.
     void setCrt(const crt_view::Settings& crt) { crt_ = crt; }
@@ -236,6 +239,10 @@ public:
     bool wallpaperVisible() const { return wallpaper_drawn_; }
     bool hasWallpaperVideo() const { return wallpaper_video_ != nullptr; }
     bool hasWallpaper() const;
+    // Interfejs → Start → Wideo startowe (src/app/boot_video.cpp): full-screen startup animation.
+    void setBootVideoFrame(const uint8_t* bgra, uint32_t width, uint32_t height);
+    void clearBootVideo();
+    bool hasBootVideoFrame() const { return boot_video_ != nullptr; }
     // Metro's light theme (Opcje układu → Jasny motyw): a white page with dark text.
     void setMetroLight(bool light) { metro_light_ = light; }
     // PSfive's details under the row (psfive_details_renderer.cpp): screenshots, similar games'
@@ -552,7 +559,9 @@ private:
                     IDWriteTextFormat* title_font, D2D1_COLOR_F title_ink, IDWriteTextFormat* body_font,
                     D2D1_COLOR_F body_ink, int max_lines = 2, bool top_aligned = false, float gap = text_group_gap);
     void drawBackground();
-    void drawWallpaper(ID2D1Bitmap* image, float opacity, float offset = 0, CropFocus focus = {}, float zoom = 1);
+    void drawWallpaper(ID2D1Bitmap* image, float opacity, float offset = 0, CropFocus focus = {}, float zoom = 1, int upscale_slot = 0);
+    void drawUpscaledBitmap(ID2D1Bitmap* image, const D2D1_RECT_F& dest, float opacity, int slot_index = 0);
+    void upscaleRelease();
     // Two wallpapers mixed as one picture (a cross-fade): their opacities add up instead of the
     // upper one covering the lower, so half-way the screen never dims through to the background.
     struct Wallpaper { ID2D1Bitmap* image = nullptr; float opacity = 0; CropFocus focus{}; float zoom = 1; };
@@ -615,6 +624,8 @@ private:
     HRESULT endScreenForeground();
     void drawScreenTransition(float progress, ID2D1Bitmap* ui_frame = nullptr); // Screen entrance: fade-in, zoom and subtle 4-edge lens bow.
     void drawExitTransition(float progress); // Frozen frame, subtle bow and one descending light.
+    void drawExitPreview(D2D1_RECT_F box);   // Dostosuj wygląd → Start: looping exit preview inside the monitor.
+    void drawBootVideo(float alpha, bool fill);
     void drawPicker(const std::wstring& title, const std::vector<std::wstring>& labels, int selected);
     void drawPowerMenu(); // Zasilanie in Tryb TV (power_menu::Geometry).
     void drawRowSwitch(float right, float center_y, bool on); // The widget options' switch (Tryb TV).
@@ -1189,6 +1200,18 @@ private:
     Microsoft::WRL::ComPtr<ID2D1Image> crt_output_;
     ID2D1Factory* crt_registered_ = nullptr; // The factory the effect is registered with.
 #endif
+    bool wallpaper_upscale_ = AppSettings{}.wallpaper_upscale;
+#ifdef _WIN32
+    struct UpscaleSlot {
+        Microsoft::WRL::ComPtr<ID2D1Effect> effect;
+        upscale_filter::Constants* constants = nullptr;
+        upscale_filter::Constants sent{};
+        UINT32 generation = 0;
+        ID2D1Bitmap* source = nullptr;
+    };
+    std::array<UpscaleSlot, 2> upscale_slots_{};
+    ID2D1Factory* upscale_registered_ = nullptr;
+#endif
     AppSettings::GridStyle background_grid_style_ = AppSettings{}.background_grid_style;
     // Focus outline of covers and tiles: the pulse phase (steady at its middle without pulsing),
     // the halo alpha scale and a halo stroke width (wider above 100%, never narrower than 60%).
@@ -1332,6 +1355,8 @@ private:
     // Tapeta: its picture, its video's latest frame, where it shows, whether this frame drew it.
     Cover wallpaper_;
     Microsoft::WRL::ComPtr<ID2D1Bitmap> wallpaper_video_;
+    Microsoft::WRL::ComPtr<ID2D1Bitmap> boot_video_;
+    uint32_t exit_color_ = 0x57D1F0;
     struct WallpaperPlaces { bool snitch = true, menus = true, artwork = true, tiles = true; } wallpaper_places_;
     bool wallpaper_drawn_ = false;
     bool metro_light_ = false;

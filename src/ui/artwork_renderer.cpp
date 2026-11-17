@@ -65,8 +65,9 @@ void Renderer::drawArtworkBrowser() {
     target_->Clear(D2D1::ColorF(0.022f, 0.024f, 0.030f));
     if (!context_->artwork_browser) return;
     const auto& state = *context_->artwork_browser;
-    // The wallpaper (or, in the wallpaper picker, the focused animated one's preview) dimmed behind the gallery.
-    if ((wallpaper_places_.artwork || state.wallpaper) && drawWallpaperBackdrop(1.0f)) {
+    // The wallpaper (or, in the wallpaper picker, the focused entry's preview) dimmed behind the gallery.
+    // Boot videos play inside their focused tile below rather than behind the whole screen.
+    if ((wallpaper_places_.artwork || state.wallpaper) && !(state.boot_video && context_->artwork_preview_id != 0) && drawWallpaperBackdrop(1.0f)) {
         brush(D2D1::ColorF(0.012f, 0.014f, 0.018f, state.wallpaper ? 0.58f : 0.74f));
         target_->FillRectangle(D2D1::RectF(0, 0, viewport_.width, viewport_.height), solid_.Get());
     }
@@ -105,7 +106,9 @@ void Renderer::drawArtworkBrowser() {
     }
     if (state.search_focus && state.query_selected && ink > 0)
         fill({text_left - 3, center(search) - 15, text_left + ink + 3, center(search) + 15}, uiAccent(0.35f), 4);
-    const std::wstring placeholder = state.wallpaper ? tr(L"Szukaj tapet, np. nature, cyberpunk, space") : tr(L"Nazwa gry, Steam AppID lub link SteamGridDB");
+    const std::wstring placeholder = state.boot_video ? tr(L"Szukaj animacji, np. cyberpunk, playstation, matrix") :
+                                     state.wallpaper ? tr(L"Szukaj tapet, np. nature, cyberpunk, space") :
+                                     tr(L"Nazwa gry, Steam AppID lub link SteamGridDB");
     textLine(state.query.empty() ? placeholder : state.query, text_left, center(search),
              text_right - text_left, menu_font_.Get(), shade(state.query.empty() ? 0.45f : 0.92f));
     if (state.search_focus && !state.query_selected) line(text_left + ink + 2, center(search) - 14, text_left + ink + 2, center(search) + 14, shade(0.92f), 1.6f);
@@ -155,7 +158,7 @@ void Renderer::drawArtworkBrowser() {
         const bool active = state.category == i, focus = active && type_focus;
         textLine(tr(state.railName(i)), r.left + 25, center(r), r.right - r.left - 74,
                  category_font_.Get(), focus ? shade(0.08f) : active ? shade(0.95f) : shade(0.57f));
-        if (!state.wallpaper) drawSetDot(r.right - 28, center(r), state.custom[static_cast<size_t>(i)], focus ? shade(0.08f) : shade(0.85f));
+        if (!state.picker()) drawSetDot(r.right - 28, center(r), state.custom[static_cast<size_t>(i)], focus ? shade(0.08f) : shade(0.85f));
     }
     // "Z dysku…" opens the type/file panel.
     const auto caption = [&](settings_ui::Rect r, const std::wstring& label, bool focus) {
@@ -198,7 +201,21 @@ void Renderer::drawArtworkBrowser() {
         const auto& asset = state.assets[i];
         fill(r, shade(0.06f));
         const bool selected = state.gallery && state.selected == i;
-        if (i < artwork_thumbnails_.size() && artwork_thumbnails_[i].bitmap) {
+        const bool live_video = state.boot_video && selected && context_->artwork_preview_id == asset.id && wallpaper_video_;
+        if (live_video) {
+            const auto size = wallpaper_video_->GetPixelSize();
+            if (size.width && size.height) {
+                const float margin = 5.0f;
+                const float sw = static_cast<float>(size.width), sh = static_cast<float>(size.height);
+                const float scale = std::min((r.right - r.left - margin * 2) / sw, (r.bottom - r.top - margin * 2) / sh);
+                const float w = sw * scale, h = sh * scale;
+                const float x = (r.left + r.right - w) * 0.5f, y = (r.top + r.bottom - h) * 0.5f;
+                const auto source = D2D1::RectF(0, 0, sw, sh);
+                target_->DrawBitmap(wallpaper_video_.Get(), D2D1::RectF(x, y, x + w, y + h), 1.0f,
+                                    D2D1_BITMAP_INTERPOLATION_MODE_LINEAR, &source);
+                wallpaper_drawn_ = true;
+            }
+        } else if (i < artwork_thumbnails_.size() && artwork_thumbnails_[i].bitmap) {
             const auto& image = artwork_thumbnails_[i];
             const auto size = image.bitmap->GetPixelSize();
             const auto source = image.has_ink_bounds ? image.ink_bounds :
@@ -212,10 +229,17 @@ void Renderer::drawArtworkBrowser() {
                                  D2D1_BITMAP_INTERPOLATION_MODE_LINEAR, &source);
         }
         outline(r, selected ? shade(0.95f, 0.8f) : shade(1, 0.12f), selected ? 2.0f : 1.0f);
+        float badge_left = r.left + 10;
         if (asset.animated) { // It moves already; the label says so where the motion is slow.
-            const settings_ui::Rect badge{r.left + 10, r.top + 10, r.left + 120, r.top + 38};
+            const settings_ui::Rect badge{badge_left, r.top + 10, badge_left + 110, r.top + 38};
             fill(badge, shade(0.04f, 0.72f), 14);
             textLine(tr(L"Animowana"), badge.left, center(badge), badge.right - badge.left, toast_sub_font_.Get(), shade(0.95f), DWRITE_TEXT_ALIGNMENT_CENTER);
+            badge_left = badge.right + 6;
+        }
+        if (asset.width >= 3840 || asset.height >= 2160) {
+            const settings_ui::Rect badge{badge_left, r.top + 10, badge_left + 46, r.top + 38};
+            fill(badge, shade(0.04f, 0.72f), 14);
+            textLine(L"4K", badge.left, center(badge), badge.right - badge.left, toast_sub_font_.Get(), shade(0.95f), DWRITE_TEXT_ALIGNMENT_CENTER);
         }
         if (asset.id == state.applied_id) {
             const float x = r.right - 20, y = r.top + 20;
