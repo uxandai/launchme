@@ -200,6 +200,21 @@ int LauncherUiTest::lowMemory(HWND window) {
     const bool alongside = app.launcherHidden();
     app.foreground_window_ = [window] { return window; };
     const bool front = app.launcherHidden();
+    // Oszczędzaj zasoby za grą (opt-in, off by default): behind the game the launcher yields only with it.
+    {
+        app.foreground_window_ = [&] { return cover; };
+        if (AppSettings{}.background_yield || app.settings_.background_yield) return 9646;
+        app.background_since_ = GetTickCount64() - Launcher::background_delay_ms - 1;
+        app.pollMemory();
+        if (app.background_mode_) return 9647;
+        app.settings_.background_yield = true;
+        app.pollMemory(); app.background_since_ = GetTickCount64() - Launcher::background_delay_ms - 1; app.pollMemory();
+        if (!app.background_mode_) return 9648;
+        app.settings_.background_yield = false;
+        app.pollMemory();
+        if (app.background_mode_) return 9649;
+        app.foreground_window_ = [window] { return window; };
+    }
     DestroyWindow(cover); DestroyWindow(beside);
     app.game_sessions_.erase("test-session");
     if (!covered || alongside || front) return 9631;

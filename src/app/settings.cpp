@@ -882,6 +882,10 @@ void Launcher::settingsToggle(const Row& row) {
         applyLowMemory(); // Takes effect for artwork decoded from now on (src/app/memory.cpp).
         settingsChanged(); audio_.context(); return;
     }
+    else if (row.id == Id::background_yield) {
+        settings_.background_yield = !settings_.background_yield;
+        settingsChanged(); audio_.context(); return;
+    }
     else if (row.id == Id::texture_compression) {
         settings_.texture_compression = !settings_.texture_compression;
         applyLowMemory();

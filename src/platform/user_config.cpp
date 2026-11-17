@@ -189,6 +189,7 @@ constexpr FlagSetting flag_settings[] = {
     {"pc_sources_detected", &AppSettings::pc_sources_detected},
     {"autostart", &AppSettings::autostart},
     {"low_memory", &AppSettings::low_memory},
+    {"background_yield", &AppSettings::background_yield},
     {"desktop_platform_badges", &AppSettings::desktop_platform_badges},
     {"desktop_gray_uninstalled", &AppSettings::desktop_gray_uninstalled},
     {"desktop_maximized", &AppSettings::desktop_maximized},
@@ -865,6 +866,7 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
            << "pc_sources_detected=" << settings.pc_sources_detected << '\n'
            << "autostart=" << settings.autostart << '\n'
            << "low_memory=" << settings.low_memory << '\n'
+           << "background_yield=" << settings.background_yield << '\n'
            << "texture_compression=" << settings.texture_compression << '\n'
            << "tv_monitor=" << (settings.tv_monitor.find_first_of(L"\r\n") == std::wstring::npos ? text_encoding::utf8(settings.tv_monitor) : std::string()) << '\n'
          << "desktop_platform_badges=" << settings.desktop_platform_badges << '\n'

@@ -417,6 +417,10 @@ struct AppSettings {
     // while hidden, and everything given back while a game runs in front of the launcher
     // (src/app/memory.cpp).
     bool low_memory = true;
+    // System → Wydajność → Oszczędzaj zasoby za grą: with a game in front of the launcher (full screen
+    // on its monitor) it yields: below-normal priority, EcoQoS, 10 Hz, no video (src/app/memory.cpp).
+    // Opt-in: without it the launcher only slows down when minimized or in the tray.
+    bool background_yield = false;
     // System → Wydajność → Kompresja grafik (BC1): covers, posters and thumbnails kept on the GPU as BC1
     // blocks (an eighth of BGRA), logos as BC3 (a quarter); backgrounds too in the low memory mode.
     // The blocks are kept on disk (textures\), so a picture is compressed once. On by default

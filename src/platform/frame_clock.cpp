@@ -34,7 +34,11 @@ void FrameClock::update(HWND window, bool foreground) {
         }
     }
     const int active = std::clamp(refresh_hz_ ? refresh_hz_ : 60, 30, 240);
-    schedule_.rate(std::min(limit_, IsIconic(window) || !IsWindowVisible(window) ? 5 : foreground ? active : 30), now);
+    // A visible window keeps its full rate in the background too (the tray, a window beside it):
+    // what it shows still moves. Only a minimized or hidden one drops to 5 Hz; behind a game the
+    // launcher bounds itself (Launcher::frameLimit, System → Oszczędzaj zasoby za grą).
+    (void)foreground;
+    schedule_.rate(std::min(limit_, IsIconic(window) || !IsWindowVisible(window) ? 5 : active), now);
 }
 bool FrameClock::ready() const { return schedule_.ready(seconds()); }
 void FrameClock::consume() { schedule_.consume(seconds()); }

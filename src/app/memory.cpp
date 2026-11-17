@@ -1,7 +1,8 @@
 // System → Wydajność → Tryb niskiego zużycia RAM (AppSettings::low_memory): the renderer's artwork
 // policy, the artwork cache's budget and the browser window follow the setting; behind a game the
 // launcher gives its graphics and artwork back and builds them again when it is in front once more.
-// Behind a game, whatever the setting, it also yields its CPU and memory priority (pollBackgroundMode).
+// Behind a game, with Oszczędzaj zasoby za grą (opt-in), it also yields its CPU and memory priority
+// and its frame rate (pollBackgroundMode).
 #include "launcher.hpp"
 #include "../platform/memory_usage.hpp"
 
@@ -37,7 +38,7 @@ void Launcher::pollMemory() {
     const bool behind = launcherHidden();
     // Guide over games: the launcher is a Guide target at any moment, so it keeps its priority and
     // frame rate (the video may stop, nothing else).
-    pollBackgroundMode(behind && anyActiveSession() && !guideOverlayOn());
+    pollBackgroundMode(settings_.background_yield && behind && anyActiveSession() && !guideOverlayOn());
     const bool hidden = settings_.low_memory && behind;
     if (!hidden) {
         memory_hidden_since_ = 0;

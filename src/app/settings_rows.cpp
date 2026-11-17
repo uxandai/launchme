@@ -1064,6 +1064,9 @@ void Launcher::buildSettingsRows() {
             tr(L"Okładki i plakaty w pamięci karty graficznej 8 razy mniejsze, loga 4 razy, kosztem odrobiny jakości. W trybie niskiego zużycia RAM także tła."),
             {}, settings_.texture_compression});
 #endif
+        add({Id::background_yield, Control::toggle, tr(L"Oszczędzaj zasoby za grą"),
+            tr(L"Gdy gra działa na pełnym ekranie przed launcherem, launcher zwalnia do 10 klatek, obniża priorytet i zatrzymuje wideo."),
+            {}, settings_.background_yield});
         section(tr(L"Pomoc"));
         // The version, and the folder with the logs and crash reports a user can send.
         add({Id::about, Control::action, L"Launchme " + diagnostics::version(),
