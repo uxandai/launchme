@@ -93,6 +93,22 @@ template <typename Each> void trophies(std::string_view xml, Each each) {
 
 std::string ps3CommunicationId(const std::filesystem::path& rom, const std::filesystem::path& install) {
     std::error_code ec;
+    if (!rom.empty() && std::filesystem::is_regular_file(rom, ec)) {
+        auto ext = rom.extension().wstring();
+        for (auto& ch : ext) if (ch >= L'A' && ch <= L'Z') ch = static_cast<wchar_t>(ch - L'A' + L'a');
+        if (ext == L".iso") {
+            // ISO 9660 path tables and PS3_GAME/TROPDIR/NPWRxxxxx_00 directory records sit near the front of the image.
+            std::ifstream in(rom, std::ios::binary);
+            std::string head(2 * 1024 * 1024, '\0');
+            in.read(head.data(), static_cast<std::streamsize>(head.size()));
+            head.resize(static_cast<size_t>(in.gcount()));
+            for (size_t at = head.find("NPW"); at != std::string::npos && at + 12 <= head.size(); at = head.find("NPW", at + 1)) {
+                if (head[at + 3] >= 'A' && head[at + 3] <= 'Z' &&
+                    communicationId(text_encoding::wideLenient(std::string_view(head).substr(at, 12))))
+                    return head.substr(at, 12);
+            }
+        }
+    }
     for (const auto& start : {rom, install}) {
         if (start.empty()) continue;
         auto folder = std::filesystem::is_directory(start, ec) ? start : start.parent_path();

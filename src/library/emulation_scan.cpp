@@ -360,6 +360,7 @@ const Builtin builtin[] = {
     {L"psx", L".cue|.img|.chd|.ecm|.iso|.m3u|.mds|.pbp", L"mednafen_psx_hw_libretro", {}, {L"duckstation", L"retroarch"}},
     {L"ps2", disc, {}, {}, {L"pcsx2"}},
     {L"ps3", {}, {}, L"**/${title}/PS3_GAME/USRDIR/@(eboot.bin|iso.bin.edat)", {L"rpcs3"}},
+    {L"ps3", L".iso", {}, {}, {L"rpcs3"}},
     // EmuDeck's PS4 parsers: the shortcuts shadPS4 makes (ps4\shortcuts) and games kept as folders.
     {L"ps4", {}, {}, L"**/${title}@(.lnk|.LNK)", {L"shadps4"}},
     {L"ps4", {}, {}, L"**/${title}/@(eboot.bin|EBOOT.BIN)", {L"shadps4"}},
@@ -810,6 +811,9 @@ Result scan(const Setup& setup, bool show_hidden, const Cancelled& cancelled) {
             if (!title || title->empty()) continue;
             const auto& platform = rule.platform;
             const auto relative = file.lexically_relative(rule.folder);
+            if (rule.system == L"ps3" && lower(file.extension().wstring()) == L".iso" &&
+                std::any_of(relative.begin(), relative.end(), [](const std::filesystem::path& part) { return unicode_text::equalIgnoreCase(part.wstring(), L"PS3_GAME"); }))
+                continue;
             if (switch_rule && part_rank(file) >= 2 && std::distance(relative.begin(), relative.end()) > 1) {
                 const auto folder = rule.folder / *relative.begin();
                 const auto folder_key = romKey(folder);
@@ -968,14 +972,20 @@ std::wstring guessPlatform(const std::filesystem::path& file, const std::filesys
         input.read(reinterpret_cast<char*>(head.data()), head.size());
         if (head[0x18] == 0x5D && head[0x19] == 0x1C && head[0x1A] == 0x9E && head[0x1B] == 0xA3) return L"Wii";
         if (head[0x1C] == 0xC2 && head[0x1D] == 0x33 && head[0x1E] == 0x9F && head[0x1F] == 0x3D) return L"GameCube";
-        // ISO 9660's system identifier: 2048-byte sectors (DVD images) or raw 2352-byte CD sectors.
+        // PS3 Blu-ray disc header at sector 1 ("PlayStation3\0" followed by the disc ID).
+        input.clear(); input.seekg(0x0800);
+        std::array<char, 16> ps3{};
+        if (input.read(ps3.data(), ps3.size()) && std::string_view(ps3.data(), ps3.size()).starts_with("PlayStation3")) return L"PS3";
+        // ISO 9660's system and volume identifiers: 2048-byte sectors (DVD/BD images) or raw 2352-byte CD sectors.
         for (const std::streamoff at : {std::streamoff(0x8008), std::streamoff(0x9320)}) {
             input.clear(); input.seekg(at);
-            std::array<char, 32> system{};
-            if (!input.read(system.data(), system.size())) continue;
-            const std::string_view text(system.data(), system.size());
+            std::array<char, 64> pvd{};
+            if (!input.read(pvd.data(), pvd.size())) continue;
+            const std::string_view text(pvd.data(), 32), volume(pvd.data() + 32, 32);
+            if (at == 0x8008 && volume.starts_with("PS3VOLUME")) return L"PS3";
             if (text.starts_with("PSP GAME")) return L"PSP";
-            if (text.starts_with("PLAYSTATION")) return at == 0x9320 || size < 700ull * 1024 * 1024 ? L"PS1" : L"PS2";
+            if (text.starts_with("PLAYSTATION"))
+                return at == 0x9320 || size < 700ull * 1024 * 1024 ? L"PS1" : size > 9ull * 1024 * 1024 * 1024 ? L"PS3" : L"PS2";
         }
         input.clear(); input.seekg(0x10000);
         std::array<char, 20> xbox{};

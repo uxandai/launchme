@@ -1,30 +1,27 @@
 # Pinned, CPU-only local semantic memory. No runtime downloads or external service.
+# Fetched from NuGet's immutable flatcontainer (byte-identical win-x64 and linux-x64 1.23.2 binaries).
 include(FetchContent)
-if(WIN32)
 FetchContent_Declare(companion_ort
-    URL https://github.com/microsoft/onnxruntime/releases/download/v1.23.2/onnxruntime-win-x64-1.23.2.zip
-    URL_HASH SHA256=0b38df9af21834e41e73d602d90db5cb06dbd1ca618948b8f1d66d607ac9f3cd
+    URL https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime/1.23.2/microsoft.ml.onnxruntime.1.23.2.nupkg
+    DOWNLOAD_NAME onnxruntime-1.23.2.zip
+    URL_HASH SHA256=25fe172f7fcdf34f2b5b02c8b997f6b88abc282956849d4af4335af23d0c4e4a
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
 FetchContent_MakeAvailable(companion_ort)
+if(WIN32)
 add_library(companion_ort SHARED IMPORTED GLOBAL)
 set_target_properties(companion_ort PROPERTIES
-    IMPORTED_IMPLIB "${companion_ort_SOURCE_DIR}/lib/onnxruntime.lib"
-    IMPORTED_LOCATION "${companion_ort_SOURCE_DIR}/lib/onnxruntime.dll"
-    INTERFACE_INCLUDE_DIRECTORIES "${companion_ort_SOURCE_DIR}/include")
+    IMPORTED_IMPLIB "${companion_ort_SOURCE_DIR}/runtimes/win-x64/native/onnxruntime.lib"
+    IMPORTED_LOCATION "${companion_ort_SOURCE_DIR}/runtimes/win-x64/native/onnxruntime.dll"
+    INTERFACE_INCLUDE_DIRECTORIES "${companion_ort_SOURCE_DIR}/build/native/include")
 set(COMPANION_ORT_RUNTIME onnxruntime.dll) # Its name next to the program.
 else()
 # Linux (cmake/Linux.cmake): the same release's x64 build; programs find it next to them ($ORIGIN).
-FetchContent_Declare(companion_ort
-    URL https://github.com/microsoft/onnxruntime/releases/download/v1.23.2/onnxruntime-linux-x64-1.23.2.tgz
-    URL_HASH SHA256=1fa4dcaef22f6f7d5cd81b28c2800414350c10116f5fdd46a2160082551c5f9b
-    DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
-FetchContent_MakeAvailable(companion_ort)
 add_library(companion_ort SHARED IMPORTED GLOBAL)
 set_target_properties(companion_ort PROPERTIES
-    IMPORTED_LOCATION "${companion_ort_SOURCE_DIR}/lib/libonnxruntime.so.1.23.2"
+    IMPORTED_LOCATION "${companion_ort_SOURCE_DIR}/runtimes/linux-x64/native/libonnxruntime.so"
     IMPORTED_SONAME "libonnxruntime.so.1"
-    INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${companion_ort_SOURCE_DIR}/include"
-    INTERFACE_INCLUDE_DIRECTORIES "${companion_ort_SOURCE_DIR}/include")
+    INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${companion_ort_SOURCE_DIR}/build/native/include"
+    INTERFACE_INCLUDE_DIRECTORIES "${companion_ort_SOURCE_DIR}/build/native/include")
 set(COMPANION_ORT_RUNTIME libonnxruntime.so.1) # Its SONAME: what the loader looks for.
 endif()
 
@@ -100,9 +97,9 @@ function(companion_embedding_assets target)
     endif()
 endfunction()
 if(WIN32)
-    install(FILES "${companion_ort_SOURCE_DIR}/lib/onnxruntime.dll" DESTINATION . COMPONENT Runtime)
+    install(FILES "${companion_ort_SOURCE_DIR}/runtimes/win-x64/native/onnxruntime.dll" DESTINATION . COMPONENT Runtime)
 else()
-    install(FILES "${companion_ort_SOURCE_DIR}/lib/libonnxruntime.so.1.23.2" DESTINATION . RENAME libonnxruntime.so.1 COMPONENT Runtime)
+    install(FILES "${companion_ort_SOURCE_DIR}/runtimes/linux-x64/native/libonnxruntime.so" DESTINATION . RENAME libonnxruntime.so.1 COMPONENT Runtime)
 endif()
 install(FILES "${COMPANION_MODEL_DIR}/model.onnx" "${COMPANION_MODEL_DIR}/sentencepiece.bpe.model"
     DESTINATION assets/companion-embeddings COMPONENT Runtime)

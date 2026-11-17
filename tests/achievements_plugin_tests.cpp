@@ -193,6 +193,10 @@ int trophies(const std::filesystem::path& root) {
     CHECK(write(game / L"USRDIR" / L"EBOOT.BIN", std::string_view("eboot")));
     std::filesystem::create_directories(game / L"TROPDIR" / L"NPWR01234_00");
     CHECK(ps3CommunicationId(game / L"USRDIR" / L"EBOOT.BIN", {}) == "NPWR01234_00");
+    const auto ps3_iso = root / L"games" / L"MotorStorm.iso";
+    std::string iso_head(0x9000, '\0');
+    iso_head.replace(0x8800, 12, "NPWR01234_00");
+    CHECK(write(ps3_iso, std::string_view(iso_head)) && ps3CommunicationId(ps3_iso, {}) == "NPWR01234_00");
     const auto rpcs3 = root / L"rpcs3";
     const auto folder = rpcs3 / L"dev_hdd0" / L"home" / L"00000001" / L"trophy" / L"NPWR01234_00";
     CHECK(write(folder / L"TROPCONF.SFM", std::string_view(R"(<?xml version="1.0"?><trophyconf version="1.1"><npcommid>NPWR01234_00</npcommid><title-name>Game &amp; More</title-name>

@@ -4,6 +4,7 @@
 #include "../src/library/emulation_scan.hpp"
 #include "../src/platform/text_encoding.hpp"
 
+#include <algorithm>
 #include <fstream>
 #include <iostream>
 #include <string_view>
@@ -93,12 +94,16 @@ int main(int argc, char** argv) {
         // A ROM folder: two system folders with games.
         write(roms / L"snes" / L"Mario.sfc", "rom");
         if (!romFolder(roms) || romFolder(root / L"Programs")) return 47;
-        // PS4 (shadPS4), PS Vita (Vita3K) and ScummVM, as EmuDeck's parsers and launchers have them.
+        // PS3 (RPCS3: PS3_GAME folders and .iso disc dumps), PS4 (shadPS4), PS Vita (Vita3K) and ScummVM.
         {
             const auto emulators = root / L"AppData" / L"EmuDeck" / L"Emulators";
+            write(emulators / L"RPCS3" / L"rpcs3.exe", "exe");
             write(emulators / L"shadps4-qt" / L"shadPS4QtLauncher.exe", "exe");
             write(emulators / L"vita3k" / L"Vita3K.exe", "exe");
             write(root / L"Emulation" / L"tools" / L"launchers" / L"scummvm.ps1", "$emulatorFile = \"\"\r\n");
+            write(roms / L"ps3" / L"MotorStorm - Apocalypse (Europe) (En,Fr,Pl) (v02.00).iso", "iso");
+            write(roms / L"ps3" / L"Demon's Souls" / L"PS3_GAME" / L"USRDIR" / L"EBOOT.BIN", "elf");
+            write(roms / L"ps3" / L"Demon's Souls" / L"PS3_GAME" / L"USRDIR" / L"internal.iso", "iso");
             write(roms / L"ps4" / L"shortcuts" / L"Bloodborne.lnk", "lnk");
             write(roms / L"ps4" / L"CUSA00900" / L"eboot.bin", "elf");
             write(roms / L"psvita" / L"PCSE00000" / L"eboot.bin", "elf");
@@ -110,11 +115,28 @@ int main(int argc, char** argv) {
                 for (const auto& entry : result.games) if (entry.platform == platform && entry.name == title) return &entry;
                 return nullptr;
             };
+            const auto* motorstorm = game(L"PS3", L"MotorStorm - Apocalypse");
+            const auto* demons = game(L"PS3", L"Demon's Souls");
             const auto* bloodborne = game(L"PS4", L"Bloodborne");
             const auto* cusa = game(L"PS4", L"CUSA00900");
             const auto* vita = game(L"PS Vita", L"PCSE00000");
             const auto* monkey = game(L"Retro", L"monkey");
-            if (!bloodborne || !cusa || !vita || !monkey) return 48;
+            if (!motorstorm || !demons || result.system_counts.at(L"ps3") != 2 || !bloodborne || !cusa || !vita || !monkey) return 48;
+            if (motorstorm->play_action.target.find(L"rpcs3.exe") == std::wstring::npos ||
+                motorstorm->play_action.arguments != L"--no-gui \"" + (roms / L"ps3" / L"MotorStorm - Apocalypse (Europe) (En,Fr,Pl) (v02.00).iso").wstring() + L"\"")
+                return 89;
+            // Standalone PS3 Blu-ray .iso outside roms\ps3 (sector 1 header or PS3VOLUME PVD).
+            {
+                const auto bd_iso = root / L"Downloads" / L"MotorStorm.iso";
+                std::string image(0x8050, '\0');
+                image.replace(0x0800, 12, "PlayStation3");
+                write(bd_iso, image);
+                if (guessPlatform(bd_iso) != L"PS3") return 90;
+                std::fill(image.begin(), image.end(), '\0');
+                image.replace(0x8028, 9, "PS3VOLUME");
+                write(bd_iso, image);
+                if (guessPlatform(bd_iso) != L"PS3") return 91;
+            }
             // No EmuDeck launcher for shadPS4: its shortcut starts itself; the game's folder goes to the program.
             if (bloodborne->play_action.target != (roms / L"ps4" / L"shortcuts" / L"Bloodborne.lnk").wstring()) return 49;
             if (cusa->play_action.target.find(L"shadPS4QtLauncher.exe") == std::wstring::npos ||
