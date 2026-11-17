@@ -407,6 +407,7 @@ struct ViewContext {
     float exit_progress = -1; // -1 inactive, 0..1 one-shot fade to black.
     size_t frozen_games = 0;
     int power_menu = -1; // Selected row of power_labels; -1 = closed.
+    float power_entrance = 1; // 0..1 since it opened: it rises from below as it fades in.
     std::vector<std::wstring> power_labels;
     std::vector<bool> power_gaps, power_danger; // power_menu::gaps / danger of each row.
     std::vector<wchar_t> power_icons;           // power_menu::icon of each row.
@@ -514,6 +515,10 @@ struct ViewContext {
         // The focus frame gliding between screenshots and similar games (absolute rectangle).
         bool focus_glide = false;
         float shots_scroll = 0, similar_scroll = 0; // The strips' slide (psfive_details_layout.hpp).
+        std::vector<int> cards;        // The activity cards (psfive_details::Card), in order.
+        size_t card = 0;               // The focused one.
+        std::wstring playtime, last_played; // Czas gry: the hours, "Wczoraj".
+        bool text_view = false;        // The whole description over the screen (Opis opened).
         float similar_up = 0; // 0..1: the similar games moved up into the screenshots' place (none to show).
         float focus_left = 0, focus_top = 0, focus_right = 0, focus_bottom = 0;
     };

@@ -40,10 +40,10 @@ constexpr float logo_width = 420, logo_height = 150, logo_gap = 56;
 // text), then Menu and Widgets. Three categories and an optional overflow tab on the left.
 constexpr float tabs_left = 77, tab_gap = 48;
 constexpr size_t visible_tabs = 3;
-enum TopItem { top_widgets, top_menu };
-// The Widgets and Menu icons in the top bar are gone (the quick bar and the drawers open as on the other layouts);
-// their drawing, hit test and focus stay and fall silent at zero.
-constexpr int top_count = 0;
+// Beside the clock, as on the PS5: Szukaj and Ustawienia (the quick bar and the drawers open as
+// on the other layouts).
+enum TopItem { top_search, top_settings };
+constexpr int top_count = 2;
 // The clock's box fits a 12-hour "12:00 PM" (#3), right-aligned, so a 24-hour "14:05" sits at its end.
 constexpr float bar_margin = 72, clock_width = 150, clock_gap = 40, icon_radius = 26, icon_step = 70;
 

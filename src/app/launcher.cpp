@@ -965,6 +965,11 @@ void Launcher::tick() {
     tickAnimatedArt(needs_paint); // The focused card's animated artwork (src/app/animated_art.cpp).
     if (artworkOpen() && renderer_.artworkAnimationDue()) needs_paint = true; // Zmień grafikę's moving tiles.
     tickPsfiveDetails(dt, needs_paint); // PSfive's details sliding in under the row (src/app/psfive_details.cpp).
+    if (power_menu_.has_value() != power_was_open_) { // Zasilanie and the widget options: their entrance.
+        power_was_open_ = power_menu_.has_value();
+        if (power_was_open_) power_opened_at_ = std::chrono::steady_clock::now();
+    }
+    if (power_was_open_ && std::chrono::steady_clock::now() - power_opened_at_ < std::chrono::duration<float>(power_entrance_seconds + 0.05f)) needs_paint = true;
     tickDetailsMedia(dt, needs_paint);  // Szczegóły's screenshots and similar games (src/app/details_media.cpp).
     if (renderer_.marqueeActive() && GetForegroundWindow() == hwnd_) needs_paint = true; // A long focused name glides (fadingLine).
     // Card rows (controllers, companions, the TV layouts): their focus frame glides, pulses or

@@ -1,9 +1,10 @@
 // PSfive → Szczegóły pod rzędem (Opcje układu, on by default): Down from "Graj" / "…" raises a
-// sheet over the game's full-screen background, as the PS5's game hub: the description and the
-// facts (developer, publisher, release, genres, playtime), the Steam store's screenshots (of its
+// sheet over the game's full-screen background, as the PS5's game hub: a row of activity cards
+// (achievements, play time, the description, the facts), the Steam store's screenshots (of its
 // own app or the Steam app of the same title) and similar games from the library (the game
-// index's genres, tags, developers and series). Only the two strips take the focus; Up from the first goes
-// back to the buttons; the quick bar then opens from above the tabs (psfive.cpp).
+// index's genres, tags, developers and series). Down / Up go a section at a time and the page
+// scrolls to it; Up from the cards goes back to the buttons; the quick bar then opens from above
+// the tabs (psfive.cpp). Enter on Opis shows the whole description.
 #include "launcher.hpp"
 #include "../artwork/cover_cache.hpp"
 #include "../artwork/steamgriddb.hpp"
@@ -37,22 +38,49 @@ bool Launcher::psfiveHubWanted() const { return psfiveActive() && (psfiveActions
 
 float Launcher::psfiveDetailsLeft() const { return psfive_layout::tabs_left; }
 
+std::vector<psfive_details::Card> Launcher::psfiveCards() {
+    using psfive_details::Card;
+    std::vector<Card> cards;
+    if (selected_ >= cards_.size() || !isGame(cards_[selected_].game)) return cards;
+    const auto& game = cards_[selected_].game;
+    if (psfiveAchievements().second) cards.push_back(Card::achievements);
+    bool loading = false;
+    const auto& info = desktopDetails(game, loading);
+    if ((info.playtime_minutes && *info.playtime_minutes) || game.store_playtime_minutes || game.last_played) cards.push_back(Card::playtime);
+    cards.push_back(Card::description);
+    cards.push_back(Card::facts);
+    return cards;
+}
+
+// Unlocked and total: Steam's or the game index's, else a DRM-free game's local list or an
+// achievements plugin's (requested with the hub, as on Szczegóły).
+std::pair<uint32_t, uint32_t> Launcher::psfiveAchievements() {
+    if (selected_ >= cards_.size() || !isGame(cards_[selected_].game)) return {0, 0};
+    const auto& game = cards_[selected_].game;
+    bool loading = false;
+    const auto& info = desktopDetails(game, loading);
+    if (info.achievements_total) return {info.achievements_unlocked, info.achievements_total};
+    if (const auto* local = localAchievements(game); local && local->list.total) return {local->list.unlocked, local->list.total};
+    if (const auto* known = pluginAchievements(game); known && known->list.total) return {known->list.unlocked, known->list.total};
+    return {0, 0};
+}
+
 float Launcher::psfiveRaise() const {
     const float height = renderer_.viewport().height;
     const float hub = psfive_layout::hubEase(psfive_hub_);
     const float peeked = height - psfive_details::peek * hub;
     const float t = std::clamp(psfive_details_progress_, 0.0f, 1.0f), rise = t * t * (3 - 2 * t); // As drawn (smoothFade).
-    return psfive_layout::hub_lift * hub + (peeked - psfive_details::sheetTop(height, hub, rise));
+    return psfive_layout::hub_lift * hub + (peeked - psfive_details::sheetTop(height, hub, rise)) + psfive_details_scroll_;
 }
 
 void Launcher::psfiveOpenDetails() {
     if (!psfiveButtons() || selected_ >= cards_.size()) { navigationBoundary(); return; }
-    psfive_shot_view_ = false;
+    psfive_shot_view_ = psfive_text_view_ = false;
     psfive_focus_glide_ = false;
     psfiveLoadDetails(cards_[selected_].game);
-    // The focus goes to the first strip (screenshots, else similar games); the cards above it are read, not focused.
-    // While the screenshots load it waits on the cards (no frame) and moves when they arrive (psfiveShotsArrived).
-    psfive_details_ = !psfive_shot_full_urls_.empty() ? 1 : psfive_shots_loading_ || psfive_similar_games_.empty() ? 0 : 2;
+    // The focus goes to the activity cards right under the buttons, on their first.
+    psfive_details_ = 0;
+    psfive_card_ = 0;
     audio_.navigate();
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
@@ -60,13 +88,16 @@ void Launcher::psfiveOpenDetails() {
 void Launcher::psfiveCloseDetails(bool to_buttons) {
     if (psfive_details_ < 0) return;
     psfive_details_ = -1;
-    psfive_shot_view_ = false;
+    psfive_shot_view_ = psfive_text_view_ = false;
     if (to_buttons && psfiveButtons()) psfive_action_ = std::max(0, psfive_action_);
     if (hwnd_) InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
 void Launcher::psfiveDetailsBack() {
-    if (psfive_shot_view_) { psfive_shot_view_ = false; audio_.navigate(); InvalidateRect(hwnd_, nullptr, FALSE); return; }
+    if (psfive_shot_view_ || psfive_text_view_) {
+        psfive_shot_view_ = psfive_text_view_ = false;
+        audio_.navigate(); InvalidateRect(hwnd_, nullptr, FALSE); return;
+    }
     psfiveCloseDetails(true);
     audio_.navigate();
 }
@@ -162,8 +193,8 @@ void Launcher::psfiveShotsArrived(uint32_t generation, std::vector<std::wstring>
     for (size_t i = 0; i < kept.size(); ++i) renderer_.setPsfiveShot(i, shareImage(std::move(kept[i])));
     psfive_shot_ = std::min(psfive_shot_, kept.empty() ? size_t{0} : kept.size() - 1);
     psfive_similar_bound_.fill(false); // Their slots were made again.
-    // Arrived: the screenshots take the focus kept on the cards while they loaded; none: the similar games do.
-    if (psfive_details_ == 0 || psfive_details_ == 1) psfive_details_ = !kept.empty() ? 1 : psfive_similar_games_.empty() ? 0 : 2;
+    // None after all while their strip had the focus: the similar games (else the cards) take it.
+    if (psfive_details_ == 1 && kept.empty()) psfive_details_ = psfive_similar_games_.empty() ? 0 : 2;
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
@@ -195,15 +226,16 @@ void Launcher::psfiveViewShot() {
 }
 
 void Launcher::psfiveDetailsVertical(int amount) {
-    if (psfive_shot_view_) { navigationBoundary(); return; }
-    // Only the strips take the focus: screenshots, then similar games; Up from the first goes back to the buttons.
+    if (psfive_shot_view_ || psfive_text_view_) { navigationBoundary(); return; }
+    // A section at a time: the cards, the screenshots (while there are or may be some), the similar games.
     const bool shots = !psfive_shot_full_urls_.empty(), similar = !psfive_similar_games_.empty();
     int next = psfive_details_;
     if (amount > 0) {
-        if (next <= 1 && similar && (next == 1 || !shots)) next = 2;
-        else if (next == 0 && shots) next = 1;
+        if (next == 0 && shots) next = 1;
+        else if (next <= 1 && similar) next = 2;
     } else {
         if (next == 2 && shots) next = 1;
+        else if (next >= 1) next = 0;
         else { psfiveCloseDetails(true); audio_.navigate(); return; }
     }
     if (next == psfive_details_) { navigationBoundary(); return; }
@@ -213,25 +245,29 @@ void Launcher::psfiveDetailsVertical(int amount) {
 }
 
 void Launcher::psfiveDetailsHorizontal(int amount) {
-    if (!amount) return;
+    if (!amount || psfive_text_view_) { if (psfive_text_view_) navigationBoundary(); return; }
+    const auto step = [&](size_t& index, size_t count) {
+        const int next = std::clamp(static_cast<int>(index) + (amount < 0 ? -1 : 1), 0, std::max(0, static_cast<int>(count) - 1));
+        if (next == static_cast<int>(index)) return false;
+        index = static_cast<size_t>(next);
+        return true;
+    };
+    bool moved = false;
     if (psfive_details_ == 1 || psfive_shot_view_) {
-        const int count = static_cast<int>(psfive_shot_full_urls_.size());
-        const int next = std::clamp(static_cast<int>(psfive_shot_) + (amount < 0 ? -1 : 1), 0, std::max(0, count - 1));
-        if (next == static_cast<int>(psfive_shot_)) { navigationBoundary(); return; }
-        psfive_shot_ = static_cast<size_t>(next);
-        if (psfive_shot_view_) psfiveViewShot();
-    } else if (psfive_details_ == 2) {
-        const int count = static_cast<int>(psfive_similar_games_.size());
-        const int next = std::clamp(static_cast<int>(psfive_similar_) + (amount < 0 ? -1 : 1), 0, std::max(0, count - 1));
-        if (next == static_cast<int>(psfive_similar_)) { navigationBoundary(); return; }
-        psfive_similar_ = static_cast<size_t>(next);
-    } else { navigationBoundary(); return; }
+        moved = step(psfive_shot_, psfive_shot_full_urls_.size());
+        if (moved && psfive_shot_view_) psfiveViewShot();
+    } else if (psfive_details_ == 2) moved = step(psfive_similar_, psfive_similar_games_.size());
+    else if (psfive_details_ == 0) moved = step(psfive_card_, psfiveCards().size());
+    if (!moved) { navigationBoundary(); return; }
     audio_.navigate();
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
 void Launcher::psfiveDetailsAccept() {
-    if (psfive_shot_view_) { psfive_shot_view_ = false; audio_.context(); InvalidateRect(hwnd_, nullptr, FALSE); return; }
+    if (psfive_shot_view_ || psfive_text_view_) {
+        psfive_shot_view_ = psfive_text_view_ = false;
+        audio_.context(); InvalidateRect(hwnd_, nullptr, FALSE); return;
+    }
     if (psfive_details_ == 1) { psfiveViewShot(); return; }
     if (psfive_details_ == 2 && psfive_similar_ < psfive_similar_games_.size()) {
         const auto game = psfive_similar_games_[psfive_similar_];
@@ -239,20 +275,37 @@ void Launcher::psfiveDetailsAccept() {
         openDetails(game);
         return;
     }
-    if (selected_ < cards_.size()) { // The information: the game's full Szczegóły.
-        const auto game = cards_[selected_].game;
-        psfiveCloseDetails(false);
-        openDetails(game);
+    if (selected_ >= cards_.size()) return;
+    const auto cards = psfiveCards();
+    const auto card = psfive_card_ < cards.size() ? cards[psfive_card_] : psfive_details::Card::facts;
+    if (card == psfive_details::Card::description) { // The whole description over the screen.
+        psfive_text_view_ = true;
+        audio_.context();
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        return;
     }
+    // The others: the game's full Szczegóły (achievements: their list over it).
+    const auto game = cards_[selected_].game;
+    psfiveCloseDetails(false);
+    openDetails(game);
+    if (card == psfive_details::Card::achievements) openAchievements();
 }
 
 // A click on a screenshot or a similar game (the sheet's strips); true when it took the click.
 bool Launcher::psfiveDetailsClick(float x, float y) {
     if (!psfiveDetailsShown()) return false;
-    if (psfive_shot_view_) { psfive_shot_view_ = false; InvalidateRect(hwnd_, nullptr, FALSE); return true; }
+    if (psfive_shot_view_ || psfive_text_view_) { psfive_shot_view_ = psfive_text_view_ = false; InvalidateRect(hwnd_, nullptr, FALSE); return true; }
     const auto view = renderer_.viewport();
     const float hub = psfive_layout::hubEase(psfive_hub_), left = psfiveDetailsLeft();
     const float top = psfive_details::sheetTop(view.height, hub, psfive_details_progress_) - psfive_details_scroll_;
+    const auto cards = psfiveCards();
+    for (size_t i = 0; i < cards.size(); ++i)
+        if (const auto r = psfive_details::card(i, view.width, top, left); r.contains(x, y) && r.top >= psfive_details::open_top - 20) {
+            const bool again = psfive_details_ == 0 && psfive_card_ == i;
+            psfive_details_ = 0; psfive_card_ = i;
+            if (again) psfiveDetailsAccept(); else { audio_.navigate(); InvalidateRect(hwnd_, nullptr, FALSE); }
+            return true;
+        }
     for (size_t i = 0; i < psfive_shot_full_urls_.size(); ++i)
         if (psfive_details::shot(i, psfive_shots_scroll_, top, left).contains(x, y) && x >= left - 1) {
             const bool again = psfive_details_ == 1 && psfive_shot_ == i;
@@ -300,18 +353,31 @@ void Launcher::tickPsfiveDetails(float dt, bool& needs_paint) {
     if (psfive_hub_ > 0 && settings_.psfive_details && selected_ < cards_.size() && psfiveButtons()) {
         if (gameKey(cards_[selected_].game) != psfive_details_key_) psfiveLoadDetails(cards_[selected_].game);
         if (preview_.request(cards_[selected_].game, account_)) needs_paint = true;
+        requestFocusedAchievements(cards_[selected_].game); // Local and plugin achievements (once per game).
     }
     if (std::abs(psfive_details_progress_ - target) > 0.001f) {
         psfive_details_progress_ += (target - psfive_details_progress_) * ease;
         if (std::abs(psfive_details_progress_ - target) <= 0.001f) psfive_details_progress_ = target;
         needs_paint = true;
     }
-    psfive_details_scroll_ = 0; // Everything fits on the screen (psfive_details_layout.hpp).
+    // The page scrolls a section at a time (a critically damped spring, as the hub).
+    {
+        const float wanted = shown ? psfive_details::sectionScroll(psfive_details_, psfive_similar_up_) : 0.0f;
+        if (psfive_page_motion_.value != wanted || psfive_page_motion_.velocity != 0) {
+            psfive_page_motion_.step(wanted, dt, 15.0f, 1.0f);
+            if (psfive_page_motion_.settled(wanted, 0.3f)) psfive_page_motion_.snap(wanted);
+            needs_paint = true;
+        }
+        // The frame rides with the page (its own glide only between items).
+        if (psfive_focus_glide_) { const float moved = psfive_page_motion_.value - psfive_details_scroll_; psfive_focus_box_[1] -= moved; psfive_focus_box_[3] -= moved; }
+        psfive_details_scroll_ = psfive_page_motion_.value;
+    }
     if (!shown) { psfive_focus_glide_ = false; return; }
     // The focus frame glides between the screenshots and the similar games, as the tiles' outline does.
     const auto view = renderer_.viewport();
     const float left = psfiveDetailsLeft();
-    const float top = psfive_details::sheetTop(view.height, psfive_layout::hubEase(psfive_hub_), psfive_details_progress_);
+    const float progress = std::clamp(psfive_details_progress_, 0.0f, 1.0f), rise = progress * progress * (3 - 2 * progress); // As drawn.
+    const float top = psfive_details::sheetTop(view.height, psfive_layout::hubEase(psfive_hub_), rise) - psfive_details_scroll_;
     // The strips slide to keep their focused item in view, and the frame slides with its strip.
     const float shot_step = psfive_details::shot_width + psfive_details::shot_gap;
     const float similar_step = psfive_details::similar_size + psfive_details::similar_gap;
@@ -328,7 +394,10 @@ void Launcher::tickPsfiveDetails(float dt, bool& needs_paint) {
         psfive_focus_box_[0] -= moved; psfive_focus_box_[2] -= moved;
     }
     std::optional<settings_ui::Rect> focus;
-    if (psfive_details_ == 1 && psfive_shot_ < psfive_shot_full_urls_.size()) focus = psfive_details::shot(psfive_shot_, psfive_shots_scroll_, top, left);
+    if (const auto cards = psfiveCards(); psfive_details_ == 0 && !cards.empty()) {
+        psfive_card_ = std::min(psfive_card_, cards.size() - 1);
+        focus = psfive_details::card(psfive_card_, view.width, top, left);
+    } else if (psfive_details_ == 1 && psfive_shot_ < psfive_shot_full_urls_.size()) focus = psfive_details::shot(psfive_shot_, psfive_shots_scroll_, top, left);
     else if (psfive_details_ == 2 && psfive_similar_ < psfive_similar_games_.size()) focus = psfive_details::similar(psfive_similar_, psfive_similar_scroll_, top, left, psfive_similar_up_);
     if (!focus) psfive_focus_glide_ = false;
     else if (!psfive_focus_glide_) { psfive_focus_box_ = {focus->left, focus->top, focus->right, focus->bottom}; psfive_focus_glide_ = true; needs_paint = true; }

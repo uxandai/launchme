@@ -552,10 +552,10 @@ private:
                     IDWriteTextFormat* title_font, D2D1_COLOR_F title_ink, IDWriteTextFormat* body_font,
                     D2D1_COLOR_F body_ink, int max_lines = 2, bool top_aligned = false, float gap = text_group_gap);
     void drawBackground();
-    void drawWallpaper(ID2D1Bitmap* image, float opacity, float offset = 0, CropFocus focus = {});
+    void drawWallpaper(ID2D1Bitmap* image, float opacity, float offset = 0, CropFocus focus = {}, float zoom = 1);
     // Two wallpapers mixed as one picture (a cross-fade): their opacities add up instead of the
     // upper one covering the lower, so half-way the screen never dims through to the background.
-    struct Wallpaper { ID2D1Bitmap* image = nullptr; float opacity = 0; CropFocus focus{}; };
+    struct Wallpaper { ID2D1Bitmap* image = nullptr; float opacity = 0; CropFocus focus{}; float zoom = 1; };
     void drawWallpapers(const Wallpaper& under, const Wallpaper& over);
     // The focused game's background (src/ui/background_renderer.cpp): a new picture waits until
     // the focus has stayed on it for hero_settle_detail and its bitmap is ready, then cross-fades
@@ -1303,6 +1303,12 @@ private:
     // The cross-fade from hero_leaving_ to hero_shown_, linear 0..1 (1: settled). It advances with
     // the frame clock or with detail_'s growth, whichever is more (a test sets detail_ directly).
     float hero_mix_ = 1;
+    // PSfive: a new game's background comes in slightly enlarged and settles (hero_zoom_seconds);
+    // the details' depth enlarges every picture a little more (set by drawPsfive around drawBackground).
+    ID2D1Bitmap* hero_zoom_bitmap_ = nullptr; // Compared only, never used.
+    std::chrono::steady_clock::time_point hero_zoom_at_{};
+    static constexpr float hero_zoom_seconds = 0.9f;
+    float depth_zoom_ = 1;
     // The wallpaper behind home tiles: faded in and out (it waits while the focused game's own background loads).
     float home_wallpaper_mix_ = 0, home_wallpaper_target_ = 0;
     std::chrono::steady_clock::time_point home_wallpaper_at_{};
@@ -1335,6 +1341,7 @@ private:
     Cover psfive_shot_full_;
     void drawPsfiveDetails();
     void drawPsfiveDetailsVeil(); // Under the logo and buttons.
+    void drawPsfiveTextView(const std::wstring& title, const std::wstring& text);
     // A screenshot full screen (PSfive's sheet, Szczegóły): its full picture, else the strip's.
     void drawShotViewer(size_t shot, size_t shots);
     // Szczegóły's strips under the cards (details_media_renderer.cpp): Tryb TV's, and the desktop

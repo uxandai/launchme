@@ -897,6 +897,7 @@ constexpr Entry entries[] = {
     {L"Czas gry: ", L"Play time: "},
     {L"Osiągnięcia: ", L"Achievements: "},
     {L"Czas gry", L"Play time"},
+    {L"odblokowane", L"unlocked"},
     {L"Osiągnięcia", L"Achievements"},
     {L" godz.", L" h"},
     {L"Plakat", L"Poster"},

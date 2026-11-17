@@ -37,12 +37,34 @@ void Renderer::drawPsfive() {
             const float shrink = 1.0f - (1.0f - hub) * (1.0f - hub);
             card.size = std::lerp(card.size, corner.right - corner.left, shrink);
         } else {
-            card.y -= psfive_layout::row_leave * hub;
-            card.opacity *= std::clamp(1.0f - 1.6f * hub, 0.0f, 1.0f);
+            // Tiles farther from the focused one lag a little: the row leaves and comes back one after
+            // another, the nearest first on the way back.
+            const float distance = std::abs(static_cast<float>(i) - static_cast<float>(selected_));
+            const float own = std::clamp(hub * (1.0f + 0.12f * std::min(distance, 6.0f)), 0.0f, 1.0f);
+            card.y -= psfive_layout::row_leave * own;
+            card.opacity *= std::clamp(1.0f - 1.6f * own, 0.0f, 1.0f);
         }
         return card;
     };
+    depth_zoom_ = 1.0f + 0.03f * opened; // Deeper in the details: the picture a little closer…
     drawBackground();
+    depth_zoom_ = 1;
+    if (opened > 0.01f) { // …and blurred, as the PS5's game hub does as it scrolls.
+        Microsoft::WRL::ComPtr<ID2D1RectangleGeometry> all;
+        if (SUCCEEDED(factory_->CreateRectangleGeometry(D2D1::RectF(0, 0, width, height), all.GetAddressOf())) && frostCapture(all.Get(), 18))
+            frostDraw(all.Get(), opened);
+    }
+    // The left side darker, under the logo and buttons: legible over any picture.
+    {
+        Microsoft::WRL::ComPtr<ID2D1GradientStopCollection> stops;
+        Microsoft::WRL::ComPtr<ID2D1LinearGradientBrush> side;
+        const D2D1_GRADIENT_STOP side_stops[] = {{0, D2D1::ColorF(0.01f, 0.012f, 0.016f, 0.55f)}, {0.45f, D2D1::ColorF(0.01f, 0.012f, 0.016f, 0.22f)},
+                                                 {1, D2D1::ColorF(0.01f, 0.012f, 0.016f, 0)}};
+        if (SUCCEEDED(target_->CreateGradientStopCollection(side_stops, 3, stops.GetAddressOf())) &&
+            SUCCEEDED(target_->CreateLinearGradientBrush(D2D1::LinearGradientBrushProperties(D2D1::Point2F(0, 0), D2D1::Point2F(width * 0.55f, 0)),
+                                                         stops.Get(), side.GetAddressOf())))
+            target_->FillRectangle(D2D1::RectF(0, 0, width * 0.55f, height), side.Get());
+    }
     if (psfive_shade_) {
         psfive_shade_->SetEndPoint(D2D1::Point2F(0, height));
         target_->FillRectangle(D2D1::RectF(0, 0, width, height), psfive_shade_.Get());
@@ -93,6 +115,8 @@ void Renderer::drawPsfive() {
     if (selected_ < cards.size()) drawCard(placed(selected_), selected_);
     if (context_->psfive_details && context_->psfive_details->viewer)
         drawShotViewer(context_->psfive_details->shot, context_->psfive_details->shots);
+    if (context_->psfive_details && context_->psfive_details->text_view && selected_ < cards.size())
+        drawPsfiveTextView(cards[selected_].game.name, context_->psfive_details->description);
 }
 
 float Renderer::drawPsfiveBadge(const std::wstring& platform, float x, float center_y, float alpha, bool draw) {
@@ -155,6 +179,8 @@ void Renderer::drawPsfiveLabel(const GameCard& card, const GameCard& placed) {
         }
     }
     const std::wstring name = game.kind == GameKind::all ? std::wstring(tr(L"Biblioteka")) : game.name;
+    // With every new focus the name slides in a little from the left as it fades in (as on the PS5).
+    x -= 12.0f * (1.0f - smoothFade(detail_ * 2.5f)) * (1.0f - hub);
     // A soft dark copy under the light name keeps it legible over a bright full-screen picture.
     textLine(name, x + 1, center + 1.5f, std::max(40.0f, right - x), psfive_name_font_.Get(), D2D1::ColorF(0, 0, 0, 0.6f * alpha));
     textLine(name, x, center, std::max(40.0f, right - x), psfive_name_font_.Get(), gray(0.98f, alpha));
@@ -177,7 +203,7 @@ void Renderer::drawPsfiveTopBar() {
     const auto& tabs = context_->home_tabs.empty() ? context_->psfive_tabs : none;
     psfive_tab_rects_.assign(tabs.size(), {});
     float x = tabs_left;
-    const float available = (with_clock ? clock(width).left - clock_gap : width - bar_margin) - 48 - tabs_left;
+    const float available = (top_count > 0 ? topItem(0, width, with_clock).left : with_clock ? clock(width).left - clock_gap : width - bar_margin) - 48 - tabs_left;
     const float max_tab = tabs.empty() ? 0 : std::max(40.0f, (available - (tabs.size() - 1) * tab_gap) / tabs.size());
     for (size_t i = 0; i < tabs.size() && psfive_tab_font_ && psfive_tab_idle_font_; ++i) {
         const bool shown = static_cast<int>(i) == context_->psfive_tab;
@@ -214,21 +240,7 @@ void Renderer::drawPsfiveTopBar() {
             target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), icon_radius, icon_radius), solid_.Get());
         }
         const auto ink = focused ? gray(0.06f, opacity) : gray(0.95f, opacity);
-        brush(ink);
-        if (i == top_menu) {
-            Microsoft::WRL::ComPtr<ID2D1TransformedGeometry> icon;
-            if (SUCCEEDED(factory_->CreateTransformedGeometry(squircle_.Get(),
-                    D2D1::Matrix3x2F::Scale(24, 24) * D2D1::Matrix3x2F::Translation(cx - 12, cy - 12), icon.GetAddressOf())))
-                target_->DrawGeometry(icon.Get(), solid_.Get(), 2.4f);
-            target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), 3.2f, 3.2f), solid_.Get());
-        } else {
-            // A tall widget beside two small ones: the dashboard drawer.
-            target_->DrawRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(cx - 12, cy - 11, cx - 2, cy + 11), 2.5f, 2.5f), solid_.Get(), 2);
-            for (int row = 0; row < 2; ++row) {
-                const float top = cy - 11 + row * 13.0f;
-                target_->DrawRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(cx + 3, top, cx + 12, top + 9), 2, 2), solid_.Get(), 2);
-            }
-        }
+        desktopGlyph(i == top_search ? L'\xE721' : L'\xE713', cx, cy, 22.0f, ink); // Search, Settings (Segoe Fluent Icons).
     }
 }
 
@@ -325,6 +337,12 @@ void Renderer::drawPsfiveButtons(bool frost) {
             const auto& glide = *context_->psfive_action_glide;
             r = {glide.left, glide.top - rise, glide.right, glide.bottom - rise};
         }
+        // The focused pill a touch larger (as on the PS5), pressed in for a moment as the game starts.
+        const float press = std::sin(std::clamp(context_->launch_progress * 5.0f, 0.0f, 1.0f) * 3.14159265f);
+        const float grow = 1.035f - 0.07f * press;
+        const float cx = (r.left + r.right) * 0.5f, cy = (r.top + r.bottom) * 0.5f;
+        const float hw = (r.right - r.left) * 0.5f * grow, hh = (r.bottom - r.top) * 0.5f * grow;
+        r = {cx - hw, cy - hh, cx + hw, cy + hh};
         drawButtonFocus(box(r), pill_alpha);
     }
     const auto ink = [&](int i, bool enabled) {

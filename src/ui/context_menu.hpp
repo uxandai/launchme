@@ -43,6 +43,7 @@ struct Rows {
     bool studio = false;         // A studio's logo tile: only its three rows.
     bool emulator = false;       // Details' "…": an emulated game's own emulator (Launcher::gameEmulatorEditable).
     bool recent = false;         // The game stands in the recent rows (Launcher::inRecent): Usuń z ostatnio granych.
+    bool full = false;           // The game's menu with every row (Details' "…" ones too) instead of Więcej opcji.
 };
 // The game's menu (a held A, Y, right click; PSfive's "…" without its own Graj): play, Szczegóły,
 // Usuń z ostatnio granych, Więcej opcji, Odinstaluj; a running game's Wstrzymaj / Zamknij grę too.
@@ -50,6 +51,13 @@ struct Rows {
 // named, its files, the plugins, its place in the library, then what removes it.
 constexpr auto order(Rows options) {
     using enum Item;
+    if (options.full) return options.secondary_only ?
+        std::array{studio_earlier, studio_later, studio_hide, details, primary, suspend, close, forget_recent,
+                   launch, steam_account, emulator, compat, aurelia, artwork, metadata, identify, folder, shortcuts, plugin,
+                   hide, exclude, uninstall, remove, retry, more} :
+        std::array{studio_earlier, studio_later, studio_hide, primary, suspend, close, details, forget_recent,
+                   launch, steam_account, emulator, compat, aurelia, artwork, metadata, identify, folder, shortcuts, plugin,
+                   hide, exclude, uninstall, remove, retry, more};
     return options.detail_options ?
         std::array{studio_earlier, studio_later, studio_hide, primary, suspend, close, details,
                    launch, steam_account, emulator, compat, aurelia, artwork, metadata, identify, folder, shortcuts, plugin,
@@ -64,7 +72,16 @@ constexpr bool visible(Item entry, Rows options) {
     const bool studio_item = entry == Item::studio_earlier || entry == Item::studio_later || entry == Item::studio_hide;
     if (options.studio || studio_item) return options.studio && studio_item;
     if (entry == Item::forget_recent) return options.recent && !options.session; // A game in play keeps its place.
-    if (options.detail_options) return (entry == Item::aurelia && options.aurelia) || (entry == Item::identify && options.identify) ||
+    if (options.full) switch (entry) {
+        case Item::primary: return !options.secondary_only;
+        case Item::suspend: return options.suspend;
+        case Item::close: return options.session;
+        case Item::details: return true;
+        case Item::more: case Item::retry: return false;
+        case Item::uninstall: return options.uninstall && !options.session;
+        default: break; // The rest as in Details' "…".
+    }
+    if (options.detail_options || options.full) return (entry == Item::aurelia && options.aurelia) || (entry == Item::identify && options.identify) ||
         (entry == Item::steam_account && options.steam_account) || (entry == Item::emulator && options.emulator) ||
         (entry == Item::plugin && options.plugins > 0) || entry == Item::artwork || (entry == Item::launch && options.launch) ||
         (entry == Item::compat && options.compat) || (entry == Item::shortcuts && options.shortcuts) ||
@@ -108,7 +125,38 @@ constexpr int row(Item entry, Rows options) {
     }
     return result;
 }
-constexpr float height(Rows options) { return 16.0f + rows(options) * 53.0f; }
+// Rows come in groups (play, how it starts, how it looks and is named, its files, its place in the
+// library); a small gap (no line) stands between two groups.
+inline constexpr float row_step = 53.0f, group_gap = 10.0f;
+constexpr int group(Item entry) {
+    switch (entry) {
+    case Item::launch: case Item::steam_account: case Item::emulator: case Item::compat: case Item::aurelia: return 1;
+    case Item::artwork: case Item::metadata: case Item::identify: case Item::retry: return 2;
+    case Item::folder: case Item::shortcuts: case Item::plugin: return 3;
+    case Item::hide: case Item::exclude: case Item::uninstall: case Item::remove: return 4;
+    case Item::studio_earlier: case Item::studio_later: case Item::studio_hide: return 5;
+    default: return 0;
+    }
+}
+// Gaps above `row` (one where its group differs from the row before it).
+constexpr int gapsBefore(int row, Rows options) {
+    int gaps = 0;
+    for (int r = 1; r <= row && r < rows(options); ++r) gaps += group(item(r, options)) != group(item(r - 1, options));
+    return gaps;
+}
+// A row's top from the menu's top (8 px padding), and the row at a height from it (-1: none).
+constexpr float rowTop(int row, Rows options) { return 8.0f + row * row_step + gapsBefore(row, options) * group_gap; }
+constexpr float rowTop(float row, Rows options) { // A gliding highlight: between two rows' tops.
+    const int below = std::clamp(static_cast<int>(row), 0, std::max(0, rows(options) - 1));
+    const int above = std::min(below + 1, std::max(0, rows(options) - 1));
+    const float t = std::clamp(row - static_cast<float>(below), 0.0f, 1.0f);
+    return rowTop(below, options) + (rowTop(above, options) - rowTop(below, options)) * t;
+}
+constexpr int rowAt(float y, Rows options) {
+    for (int r = 0; r < rows(options); ++r) if (y >= rowTop(r, options) && y < rowTop(r, options) + row_step) return r;
+    return -1;
+}
+constexpr float height(Rows options) { return 16.0f + rows(options) * row_step + (rows(options) ? gapsBefore(rows(options) - 1, options) : 0) * group_gap; }
 inline float left(const GameCard& card) { return card.x; }
 inline float top(const GameCard& card, Rows options) { return std::max(8.0f, card.y - height(options) - 14.0f); }
 inline float width(const GameCard& card) { return card.width(); }

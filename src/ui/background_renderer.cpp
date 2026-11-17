@@ -18,11 +18,11 @@ using namespace render_detail;
 
 // One centred cover-fit for every still wallpaper. The slow Details zoom is
 // continuous across navigation; layouts never lift or drift the picture.
-void Renderer::drawWallpaper(ID2D1Bitmap* image, float opacity, float offset, CropFocus focus) {
+void Renderer::drawWallpaper(ID2D1Bitmap* image, float opacity, float offset, CropFocus focus, float zoom) {
     if (!image || opacity <= 0.001f) return;
     const auto pixels = image->GetSize();
     const float scale = std::max(viewport_.width / pixels.width, viewport_.height / pixels.height) *
-                        std::clamp(context_->wallpaper_zoom, 1.0f, 1.01f);
+                        std::clamp(context_->wallpaper_zoom, 1.0f, 1.01f) * zoom * depth_zoom_;
     const float width = pixels.width * scale, height = pixels.height * scale;
     // The focus (centred by default) at the screen's centre, never past the picture's edges.
     const float x = std::clamp(viewport_.width * 0.5f - focus.x * width, viewport_.width - width, 0.0f) + offset;
@@ -35,15 +35,15 @@ void Renderer::drawWallpapers(const Wallpaper& under, const Wallpaper& over) {
     ComPtr<ID2D1DeviceContext> context;
     if (lower && upper) target_.As(&context);
     if (!context) {
-        if (lower) drawWallpaper(under.image, under.opacity, 0, under.focus);
-        if (upper) drawWallpaper(over.image, over.opacity, 0, over.focus);
+        if (lower) drawWallpaper(under.image, under.opacity, 0, under.focus, under.zoom);
+        if (upper) drawWallpaper(over.image, over.opacity, 0, over.focus, over.zoom);
         return;
     }
     // In a layer of their own, added together: (1 - f)·A + f·B, then laid over the screen once.
     target_->PushLayer(D2D1::LayerParameters(), nullptr);
     context->SetPrimitiveBlend(D2D1_PRIMITIVE_BLEND_ADD);
-    drawWallpaper(under.image, under.opacity, 0, under.focus);
-    drawWallpaper(over.image, over.opacity, 0, over.focus);
+    drawWallpaper(under.image, under.opacity, 0, under.focus, under.zoom);
+    drawWallpaper(over.image, over.opacity, 0, over.focus, over.zoom);
     context->SetPrimitiveBlend(D2D1_PRIMITIVE_BLEND_SOURCE_OVER);
     target_->PopLayer();
 }
@@ -244,8 +244,17 @@ void Renderer::drawBackground() {
             return layer.tone == HeroTone::logo ? 0.13f : layer.tone == HeroTone::dimmed ? 0.32f :
                    grid || search ? 0.5f : std::lerp(0.75f, 0.96f, full_screen_mix_);
         };
+        // PSfive: the new picture comes in a little larger and settles (an ease-out over hero_zoom_seconds).
+        float arriving = 1;
+        if (context_->psfive && hero_shown_.bitmap) {
+            const auto now = std::chrono::steady_clock::now();
+            if (hero_shown_.bitmap.Get() != hero_zoom_bitmap_) { hero_zoom_bitmap_ = hero_shown_.bitmap.Get(); hero_zoom_at_ = now; }
+            const float t = std::clamp(std::chrono::duration<float>(now - hero_zoom_at_).count() / hero_zoom_seconds, 0.0f, 1.0f);
+            const float rest = 1.0f - t;
+            arriving = 1.0f + 0.04f * rest * rest * rest;
+        }
         drawWallpapers({hero_leaving_.bitmap.Get(), alpha(hero_leaving_) * hero_leaving_.level * picture_share, hero_leaving_.focus},
-                       {hero_shown_.bitmap.Get(), alpha(hero_shown_) * hero_shown_.level * picture_share, hero_shown_.focus});
+                       {hero_shown_.bitmap.Get(), alpha(hero_shown_) * hero_shown_.level * picture_share, hero_shown_.focus, arriving});
         drawVideo((search ? 0.5f : std::lerp(0.8f, 0.96f, full_screen_mix_)) * video);
         art = video_bitmap_ ? video : 0.0f;
     } else if (hero_shown_.bitmap && !menu_wallpaper && (context_->screen == ScreenMode::settings || context_->screen == ScreenMode::downloads || context_->screen == ScreenMode::devices || context_->screen == ScreenMode::glance ||

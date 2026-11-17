@@ -24,6 +24,8 @@ std::wstring lowered(std::wstring text) {
 }
 }
 
+std::wstring desktopPlayedWhen(uint64_t seconds); // desktop.cpp
+
 void Launcher::paint(bool overlay) {
     // Behind a game with its graphics given back (src/app/memory.cpp): nothing is drawn until the
     // launcher is in front again, or a paint would build the whole device back.
@@ -86,7 +88,7 @@ void Launcher::paint(bool overlay) {
         if (favorite_pulse_ > 0.0f && library_view::selectionKey(cards_[0].game) == favorite_pulse_key_)
             context.detail_favorite_pulse = favorite_pulse_;
         context.menu_hidden = hiddenInLauncher(cards_[0].game);
-    }
+    } else if (menu_open_ && selected_ < cards_.size()) context.menu_hidden = hiddenInLauncher(cards_[selected_].game); // The full game menu's Ukryj / Pokaż.
     context.identify = identifyOpen() ? &identify_state_ : nullptr;
     context.bulk_covers = bulkCoversOpen() ? &bulk_ui_ : nullptr;
     context.rating_label = ratingLabel();
@@ -429,6 +431,9 @@ void Launcher::paint(bool overlay) {
     }
     if (power_menu_) {
         context.power_menu = *power_menu_ - (hud_menu_ ? hud_menu_first_ : 0);
+        // Its first frame counts as opened now (the tick marks the time a moment later).
+        context.power_entrance = !power_was_open_ ? 0.0f :
+            std::clamp(std::chrono::duration<float>(std::chrono::steady_clock::now() - power_opened_at_).count() / power_entrance_seconds, 0.0f, 1.0f);
         if (hud_menu_) {
             for (int i = 0; i < hudMenuVisible(); ++i) {
                 const auto& row = hud_menu_rows_[static_cast<size_t>(hud_menu_first_ + i)];
@@ -689,11 +694,16 @@ void Launcher::paint(bool overlay) {
             const auto& info = desktopDetails(game, loading);
             details_sheet.loading = loading || psfive_shots_loading_;
             details_sheet.description = info.description;
-            details_sheet.achievements_unlocked = info.achievements_unlocked;
-            details_sheet.achievements_total = info.achievements_total;
+            std::tie(details_sheet.achievements_unlocked, details_sheet.achievements_total) = psfiveAchievements();
             details_sheet.focus_glide = psfive_focus_glide_;
             details_sheet.shots_scroll = psfive_shots_scroll_; details_sheet.similar_scroll = psfive_similar_scroll_;
             details_sheet.similar_up = psfive_similar_up_;
+            for (const auto card : psfiveCards()) details_sheet.cards.push_back(static_cast<int>(card));
+            details_sheet.card = psfive_card_;
+            details_sheet.text_view = psfive_text_view_ && psfiveDetailsShown();
+            if (info.playtime_minutes && *info.playtime_minutes) details_sheet.playtime = formatPlaytime(*info.playtime_minutes);
+            else if (game.store_playtime_minutes) details_sheet.playtime = formatPlaytime(game.store_playtime_minutes);
+            if (game.last_played) details_sheet.last_played = desktopPlayedWhen(game.last_played);
             details_sheet.focus_left = psfive_focus_box_[0]; details_sheet.focus_top = psfive_focus_box_[1];
             details_sheet.focus_right = psfive_focus_box_[2]; details_sheet.focus_bottom = psfive_focus_box_[3];
             // As on Szczegóły: the four main facts always (a dash when unknown), the others when known.

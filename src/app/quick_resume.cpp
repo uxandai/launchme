@@ -121,6 +121,24 @@ context_menu::Rows Launcher::menuRows() const {
     rows.secondary_only = psfiveActive();
     rows.uninstall = canUninstall(game);
     rows.recent = inRecent(game) && state == SessionState::none; // A game in play keeps its place.
+    // A game: every option at once (Details' "…" ones too), no Więcej opcji to go through.
+    if (isGame(game) && game.kind != GameKind::catalog) {
+        rows.full = true;
+        rows.folder = !gameFolder(game).empty();
+        rows.exclude = canExclude(game);
+        rows.hide = !hideableCopies(game).empty();
+        rows.launch = launchEditable(game);
+        rows.compat = compatMenu(game);
+        rows.shortcuts = shortcutAvailable(game, ShortcutPlace::desktop) || shortcutAvailable(game, ShortcutPlace::menu) ||
+                         shortcutAvailable(game, ShortcutPlace::steam);
+        rows.aurelia = aurelia_active_ && aurelia::validGame(game);
+        rows.steam_account = steamAccountChoices(game).size() > 1;
+        rows.emulator = gameEmulatorEditable(game);
+        rows.metadata = !gameKey(game).empty();
+        rows.identify = rows.metadata && !steamArtwork(game);
+        rows.identified = rows.identify && !unidentifiedGame(game);
+        rows.remove = canRemoveFromLibrary(game) && state == SessionState::none;
+    }
     return rows;
 }
 

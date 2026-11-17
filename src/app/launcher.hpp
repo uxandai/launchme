@@ -73,6 +73,7 @@
 #include "../ui/home_widgets.hpp"
 #include "../ui/screensaver.hpp"
 #include "../ui/spring.hpp"
+#include "../ui/psfive_details_layout.hpp"
 #include "../platform/power.hpp"
 #include "../platform/discord.hpp"
 #include "../platform/sensors.hpp"
@@ -2238,6 +2239,11 @@ private:
     Spring psfive_hub_motion_, psfive_corner_motion_;
     int psfive_details_ = -1;
     float psfive_details_progress_ = 0, psfive_details_scroll_ = 0;
+    std::vector<psfive_details::Card> psfiveCards();
+    std::pair<uint32_t, uint32_t> psfiveAchievements(); // Unlocked, total (0: none known). // The game's activity cards (psfive_details_layout.hpp).
+    size_t psfive_card_ = 0;           // The focused activity card.
+    bool psfive_text_view_ = false;    // Its Opis card opened: the whole description over the screen.
+    Spring psfive_page_motion_;        // The page's scroll between sections (psfive_details::sectionScroll).
     float psfive_similar_up_ = 0; // psfive_details::similarShift: no screenshots, the similar games in their place.
     size_t psfive_shot_ = 0, psfive_similar_ = 0;
     bool psfive_shot_view_ = false, psfive_shots_loading_ = false;
@@ -3302,6 +3308,10 @@ private:
     bool pad_echo_char_ = false;     // The key just dropped makes a WM_CHAR too (Enter, Tab, Esc…): drop it as well.
     // Power menu: selected row while open, rows offered on this machine.
     std::optional<int> power_menu_;
+    // Its entrance (rising from below as it fades in, as the game menu does): since when it is open.
+    bool power_was_open_ = false;
+    std::chrono::steady_clock::time_point power_opened_at_{};
+    static constexpr float power_entrance_seconds = 0.26f;
     std::vector<power_menu::Item> power_items_;
     MenuKind hud_menu_kind_ = MenuKind::hud;
     int hud_menu_first_ = 0;      // The first row of the window shown.

@@ -222,8 +222,8 @@ void Launcher::click(float mouse_x, float mouse_y, bool double_click) {
         const float menu_y = menu.top;
         if (menu.contains(x, y)) {
             if (y >= menu_y + 8) {
-                const int row = static_cast<int>((y - menu_y - 8) / 53);
-                if (row < context_menu::rows(rows)) {
+                const int row = context_menu::rowAt(y - menu_y, rows);
+                if (row >= 0 && row < context_menu::rows(rows)) {
                     menu_selected_ = row;
                     menuAccept();
                 }
@@ -478,7 +478,7 @@ bool Launcher::hoverButton(float mouse_x, float mouse_y) const {
     }
     if (categoryRailActive() && category_rail::Layout{view.width, view.height, categories_.size(), category_}.hit(x, y) >= 0) return true;
     if (psfiveActive() && !menu_open_ && ((psfiveButtons() && psfive_layout::hitAction(x, y, view.height, psfiveScale(), psfiveRaise()) >= 0) ||
-        psfive_layout::hitTop(x, y, view.width, settings_.psfive_clock) >= 0 || renderer_.psfiveTabAt(x, y) >= 0)) return true;
+        (psfive_corner_ < 0.5f && psfive_layout::hitTop(x, y, view.width, settings_.psfive_clock) >= 0) || renderer_.psfiveTabAt(x, y) >= 0)) return true;
     for (size_t i = 0; i < cards_.size(); ++i) if (cardHit(i, x, y)) return true;
     if (library_view::metadata(libraryPresentation()) && !ratingUrl().empty() && renderer_.ratingLink().contains(x, y)) return true;
     return false;

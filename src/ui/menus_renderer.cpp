@@ -56,9 +56,18 @@ void Renderer::drawPowerMenu() {
     const auto panel = D2D1::RectF(p.left, p.top, p.right, p.bottom);
     const auto danger = [&](int i) { return i >= 0 && i < static_cast<int>(context_->power_danger.size()) && context_->power_danger[static_cast<size_t>(i)]; };
     const auto rect = [](settings_ui::Rect r) { return D2D1::RectF(r.left, r.top, r.right, r.bottom); };
-    brush(color(0, 0, 0, 0.62f));
+    // The entrance: it rises a little from below as it fades in (the glass copies the scene first,
+    // outside the fading layer, which a copy does not allow).
+    const float entrance = smoothFade(context_->power_entrance);
+    brush(color(0, 0, 0, 0.62f * entrance));
     target_->FillRectangle(D2D1::RectF(0, 0, viewport_.width, viewport_.height), solid_.Get());
-    glassFill(glassPanel(D2D1::RoundedRect(panel, 26, 26)), color(0.022f, 0.024f, 0.027f, 0.95f));
+    D2D1_MATRIX_3X2_F base; target_->GetTransform(&base);
+    target_->SetTransform(D2D1::Matrix3x2F::Translation(0, 26.0f * (1.0f - entrance)) * base);
+    const auto glass = glassPanel(D2D1::RoundedRect(panel, 26, 26));
+    const bool fading = entrance < 0.999f;
+    if (fading) target_->PushLayer(D2D1::LayerParameters(D2D1::InfiniteRect(), nullptr, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE, D2D1::IdentityMatrix(), entrance), nullptr);
+    struct Restore { Renderer* self; bool fading; D2D1_MATRIX_3X2_F base; ~Restore() { if (fading) self->target_->PopLayer(); self->target_->SetTransform(base); } } restore{this, fading, base};
+    glassFill(glass, color(0.022f, 0.024f, 0.027f, 0.95f));
     if (panel_borders_) {
         brush(color(0.90f, 0.90f, 0.90f, 0.5f));
         target_->DrawRoundedRectangle(D2D1::RoundedRect(panel, 26, 26), solid_.Get(), 1.4f);
@@ -73,12 +82,7 @@ void Renderer::drawPowerMenu() {
         textLine(context_->power_title.empty() ? std::wstring(tr(L"Zasilanie")) : context_->power_title, title_left, panel.top + 52, panel.right - title_left - 30, psfive_name_font_.Get(), color(0.97f, 0.97f, 0.97f));
         textLine(context_->power_subtitle.empty() ? std::wstring(tr(L"Launcher i komputer")) : context_->power_subtitle, title_left, panel.top + 81, panel.right - title_left - 30, settings_body_font_.Get(), color(0.6f, 0.6f, 0.6f));
     }
-    // A hairline in the middle of each band separates the groups.
-    for (int i = 1; i < count; ++i) {
-        if (!layout.gaps[static_cast<size_t>(i)]) continue;
-        const float y = layout.row(i).top - (layout.rowStep() - layout.rowHeight() + power_menu::Geometry::band) * 0.5f;
-        line(panel.left + 36, y, panel.right - 36, y, color(1, 1, 1, 0.08f), 1);
-    }
+    // The groups stand apart by their band alone (no line).
     if (count <= 0) return;
     // The white button glides between rows (ViewContext::picker_glide, a fractional row); the text
     // darkens as it reaches its row.
@@ -240,11 +244,11 @@ void Renderer::drawContextMenu() {
         return L"";
     };
     // The highlight glides between rows (ViewContext::menu_glide, a fractional row).
-    const float highlight_y = y + 8 + context_->menu_glide.value_or(static_cast<float>(context_->menu_selected)) * 53.0f;
+    const float highlight_y = y + context_menu::rowTop(context_->menu_glide.value_or(static_cast<float>(context_->menu_selected)), rows);
     brush(color(0.86f, 0.86f, 0.86f, 0.14f * alpha));
     target_->FillRoundedRectangle(pill(D2D1::RectF(x + 12, highlight_y, x + width - 12, highlight_y + 48)), solid_.Get());
     for (int row = 0; row < context_menu::rows(rows); ++row) {
-        const float row_y = y + 8 + row * 53.0f;
+        const float row_y = y + context_menu::rowTop(row, rows);
         const auto entry = context_menu::item(row, rows);
         // "Zamknij grę" and "Odinstaluj" are destructive: a soft red, as used for save errors in Settings.
         const bool destructive = entry == context_menu::Item::close || entry == context_menu::Item::uninstall || entry == context_menu::Item::remove;

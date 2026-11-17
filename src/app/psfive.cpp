@@ -116,8 +116,8 @@ void Launcher::psfiveTopActivate() {
     const int tabs = static_cast<int>(psfiveTabs().size());
     if (psfive_top_ < tabs) { psfiveFocusTop(-1); audio_.navigate(); return; } // A tab: down to its row.
     if (psfive_top_ < psfiveTabCount()) openCategoryMenu();
-    else if (psfive_top_ - psfiveTabCount() == psfive_layout::top_widgets) toggleFriendsDrawer();
-    else openQuick(); // Menu: the quick bar; closing it returns here.
+    else if (psfive_top_ - psfiveTabCount() == psfive_layout::top_search) openSearch();
+    else openSettings();
 }
 
 void Launcher::psfiveTarget(size_t index, float& x, float& y, float& size, float& aspect, float& delay) const {
@@ -232,9 +232,9 @@ void Launcher::psfiveClickCard(size_t index, bool double_click) {
         if (game.kind == GameKind::platform) openPlatform(game.platform); else openPcLibrary(game.source);
         return;
     }
-    // A game: the first click focuses it, a click on the focused tile goes down to "Graj" and a
-    // double click opens it the default game action's way (its details, or "Graj" pressed).
-    if (moved || !psfiveButtons()) return;
+    // A game: a click focuses it and goes down to "Graj" (the hub rises), and a double click opens
+    // it the default game action's way (its details, or "Graj" pressed).
+    if (!psfiveButtons()) return;
     if (double_click && psfiveOpensDetails()) { psfiveFocusAction(-1); openDetails(game); return; }
     psfive_action_ = 0;
     if (double_click) psfiveActivate();
@@ -249,7 +249,7 @@ void Launcher::psfiveHover(float x, float y) {
     const auto view = renderer_.viewport();
     const int tab = renderer_.psfiveTabAt(x, y);
     const bool strip = psfiveStrip() && library_tabs::home::hit(x, y, view.width, homeTabIndex()).has_value();
-    const bool top = tab >= 0 || strip || psfive_layout::hitTop(x, y, view.width, settings_.psfive_clock) >= 0 ||
+    const bool top = tab >= 0 || strip || (psfive_corner_ < 0.5f && psfive_layout::hitTop(x, y, view.width, settings_.psfive_clock) >= 0) ||
         (settings_.psfive_clock && psfive_layout::clock(view.width).contains(x, y));
     if (top != psfive_top_hover_) { psfive_top_hover_ = top; InvalidateRect(hwnd_, nullptr, FALSE); }
     const bool more = categories_.size() > psfiveVisibleTabs() &&
@@ -280,9 +280,9 @@ bool Launcher::psfiveClick(float x, float y, bool double_click) {
         }
         return true;
     }
-    if (const int item = psfive_layout::hitTop(x, y, view.width, settings_.psfive_clock); item >= 0) {
+    if (const int item = psfive_corner_ < 0.5f ? psfive_layout::hitTop(x, y, view.width, settings_.psfive_clock) : -1; item >= 0) {
         if (double_click) return true;
-        if (item == psfive_layout::top_widgets) toggleFriendsDrawer(); else openQuick();
+        if (item == psfive_layout::top_search) openSearch(); else openSettings();
         return true;
     }
     if (!psfiveButtons()) return false;
