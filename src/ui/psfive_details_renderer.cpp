@@ -4,6 +4,7 @@
 #include "renderer.hpp"
 #include "renderer_internal.hpp"
 #include "psfive_details_layout.hpp"
+#include "psfive_layout.hpp"
 #include "../i18n/i18n.hpp"
 
 #include <algorithm>
@@ -54,44 +55,57 @@ void Renderer::setPsfiveShotFull(ImageBytes pixels) {
     createBitmap(psfive_shot_full_);
 }
 
+// Under the sheet, drawn before the logo and buttons (they stand over it): a dark veil that deepens
+// toward the bottom. While the sheet only peeks it starts high and darkens slowly; risen, it is
+// short and dense over the sheet's own top.
+void Renderer::drawPsfiveDetailsVeil() {
+    if (!context_->psfive_details) return;
+    const float rise = smoothFade(context_->psfive_details->progress), hub = psfive_layout::hubEase(context_->psfive_hub);
+    const float opacity = std::max(rise, hub);
+    if (opacity <= 0.001f) return;
+    const float width = viewport_.width, height = viewport_.height;
+    const float top = psfive_details::sheetTop(height, hub, rise);
+    const float reach = std::lerp(420.0f, 84.0f, rise), start = top - reach;
+    const float span = std::max(1.0f, height - start), knee = std::clamp((reach + 30) / span, 0.0f, 1.0f);
+    const auto ink = [](float a) { return D2D1::ColorF(0.01f, 0.012f, 0.016f, a); };
+    const D2D1_GRADIENT_STOP stops[] = {{0, ink(0)}, {knee * 0.45f, ink(0.22f)}, {knee * 0.8f, ink(0.58f)}, {knee, ink(0.8f)}, {1, ink(0.94f)}};
+    Microsoft::WRL::ComPtr<ID2D1GradientStopCollection> collection;
+    Microsoft::WRL::ComPtr<ID2D1LinearGradientBrush> veil;
+    if (SUCCEEDED(target_->CreateGradientStopCollection(stops, 5, collection.GetAddressOf())) &&
+        SUCCEEDED(target_->CreateLinearGradientBrush(D2D1::LinearGradientBrushProperties(D2D1::Point2F(0, start), D2D1::Point2F(0, height)),
+                                                     collection.Get(), veil.GetAddressOf()))) {
+        veil->SetOpacity(opacity);
+        target_->FillRectangle(D2D1::RectF(0, start, width, height), veil.Get());
+    }
+}
+
 void Renderer::drawPsfiveDetails() {
     if (!context_->psfive_details) return;
     const auto& details = *context_->psfive_details;
     const float width = viewport_.width, height = viewport_.height;
-    const float rise = smoothFade(details.progress);
-    if (rise <= 0.001f) return;
-    const float top = psfive_details::sheetTop(height, rise);
-    // The sheet: a dark veil that deepens under its cards, over the full-screen background.
-    {
-        Microsoft::WRL::ComPtr<ID2D1GradientStopCollection> stops;
-        Microsoft::WRL::ComPtr<ID2D1LinearGradientBrush> veil;
-        const D2D1_GRADIENT_STOP veil_stops[] = {{0, D2D1::ColorF(0.01f, 0.012f, 0.016f, 0.0f)}, {0.14f, D2D1::ColorF(0.01f, 0.012f, 0.016f, 0.82f)},
-                                                 {1, D2D1::ColorF(0.01f, 0.012f, 0.016f, 0.94f)}};
-        if (SUCCEEDED(target_->CreateGradientStopCollection(veil_stops, 3, stops.GetAddressOf())) &&
-            SUCCEEDED(target_->CreateLinearGradientBrush(D2D1::LinearGradientBrushProperties(D2D1::Point2F(0, top - 84), D2D1::Point2F(0, height)),
-                                                         stops.Get(), veil.GetAddressOf()))) {
-            veil->SetOpacity(rise);
-            target_->FillRectangle(D2D1::RectF(0, top - 84, width, height), veil.Get());
-        }
-    }
+    const float rise = smoothFade(details.progress), hub = psfive_layout::hubEase(context_->psfive_hub);
+    const float sheet = std::max(rise, hub); // The cards: peeking under the buttons (the hub) or risen.
+    if (sheet <= 0.001f) return;
+    const float top = psfive_details::sheetTop(height, hub, rise);
+    const float left = psfive_layout::tabs_left;
     // Cards as on Szczegóły: frosted panels with a small capitalised heading.
     const auto card = [&](settings_ui::Rect r, const std::wstring& heading) {
-        glassFill(glassPanel(D2D1::RoundedRect(box(r), 20, 20), 18), D2D1::ColorF(0.05f, 0.055f, 0.07f, 0.66f), rise);
-        textLine(upper(heading), r.left + 24, r.top + 30, r.right - r.left - 48, friend_section_font_.Get(), gray(0.6f, rise));
+        glassFill(glassPanel(D2D1::RoundedRect(box(r), 20, 20), 18), D2D1::ColorF(0.05f, 0.055f, 0.07f, 0.66f), sheet);
+        textLine(upper(heading), r.left + 24, r.top + 30, r.right - r.left - 48, friend_section_font_.Get(), gray(0.6f, sheet));
     };
     const bool achievements = details.achievements_total > 0;
-    const psfive_details::Cards cards{width, top, achievements};
+    const psfive_details::Cards cards{width, top, achievements, left};
     {
         const auto r = cards.description;
         card(r, tr(L"Opis"));
         const auto metrics = typeMetrics(details_body_font_.Get());
         const int lines = std::max(1, static_cast<int>((r.bottom - r.top - 56 - 20) / std::max(1.0f, metrics.line)));
         if (!details.description.empty())
-            paragraph(details.description, r.left + 24, r.top + 52, r.right - r.left - 48, details_body_font_.Get(), D2D1::ColorF(0.80f, 0.82f, 0.85f, rise), lines);
+            paragraph(details.description, r.left + 24, r.top + 52, r.right - r.left - 48, details_body_font_.Get(), D2D1::ColorF(0.80f, 0.82f, 0.85f, sheet), lines);
         else if (details.loading)
-            drawSkeleton(D2D1::RectF(r.left + 24, r.top + 52, r.right - 24, r.bottom - 20), std::min(lines, 5), metrics.line, rise);
+            drawSkeleton(D2D1::RectF(r.left + 24, r.top + 52, r.right - 24, r.bottom - 20), std::min(lines, 5), metrics.line, sheet);
         else
-            paragraph(tr(L"Opis gry nie jest dostępny."), r.left + 24, r.top + 52, r.right - r.left - 48, details_body_font_.Get(), gray(0.6f, rise), 2);
+            paragraph(tr(L"Opis gry nie jest dostępny."), r.left + 24, r.top + 52, r.right - r.left - 48, details_body_font_.Get(), gray(0.6f, sheet), 2);
     }
     {
         const auto r = cards.facts;
@@ -101,8 +115,8 @@ void Renderer::drawPsfiveDetails() {
         const float label_width = std::min(130.0f, (r.right - r.left - 48) * 0.36f);
         for (size_t i = 0; i < rows.size(); ++i) {
             const float y = first + step * (static_cast<float>(i) + 0.5f) - 4;
-            textLine(rows[i].first, r.left + 24, y, label_width, settings_body_font_.Get(), palette::muted(rise));
-            textLine(rows[i].second, r.left + 24 + label_width + 12, y, r.right - r.left - 60 - label_width, settings_body_font_.Get(), gray(0.95f, rise));
+            textLine(rows[i].first, r.left + 24, y, label_width, settings_body_font_.Get(), palette::muted(sheet));
+            textLine(rows[i].second, r.left + 24 + label_width + 12, y, r.right - r.left - 60 - label_width, settings_body_font_.Get(), gray(0.95f, sheet));
         }
     }
     if (achievements) {
@@ -112,14 +126,14 @@ void Renderer::drawPsfiveDetails() {
         const float share = std::clamp(static_cast<float>(details.achievements_unlocked) / details.achievements_total, 0.0f, 1.0f);
         const float value_y = r.top + 92;
         textLine(std::to_wstring(details.achievements_unlocked) + L" / " + std::to_wstring(details.achievements_total), r.left + 24, value_y,
-                 r.right - r.left - 140, settings_heading_font_.Get(), gray(0.97f, rise));
-        textLine(std::to_wstring(static_cast<int>(share * 100 + 0.5f)) + L"%", r.right - 124, value_y, 100, category_font_.Get(), gray(0.72f, rise),
+                 r.right - r.left - 140, settings_heading_font_.Get(), gray(0.97f, sheet));
+        textLine(std::to_wstring(static_cast<int>(share * 100 + 0.5f)) + L"%", r.right - 124, value_y, 100, category_font_.Get(), gray(0.72f, sheet),
                  DWRITE_TEXT_ALIGNMENT_TRAILING);
         const float bar = value_y + 40;
-        brush(gray(1, 0.14f * rise));
+        brush(gray(1, 0.14f * sheet));
         target_->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(r.left + 24, bar, r.right - 24, bar + 6), 3, 3), solid_.Get());
         if (share > 0) {
-            brush(uiAccent(rise));
+            brush(uiAccent(sheet));
             target_->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(r.left + 24, bar, r.left + 24 + (r.right - r.left - 48) * share, bar + 6), 3, 3), solid_.Get());
         }
     }
@@ -136,15 +150,15 @@ void Renderer::drawPsfiveDetails() {
     const float shot_step = psfive_details::shot_width + psfive_details::shot_gap;
     const float similar_step = psfive_details::similar_size + psfive_details::similar_gap;
     if (details.shots || details.loading) {
-        textLine(upper(tr(L"Zrzuty ekranu")), psfive_details::left, top + psfive_details::shots_label, 600, friend_section_font_.Get(), gray(0.6f, rise));
+        textLine(upper(tr(L"Zrzuty ekranu")), left, top + psfive_details::shots_label, 600, friend_section_font_.Get(), gray(0.6f, rise));
         if (!details.shots) {
-            const auto r = psfive_details::shot(0, 0, top);
+            const auto r = psfive_details::shot(0, 0, top, left);
             drawSkeleton(D2D1::RectF(r.left, r.top, r.right, r.bottom), 1, r.bottom - r.top, rise);
         }
         for (size_t i = 0; i < details.shots && i < psfive_shots_.size(); ++i) {
-            const auto r = psfive_details::shot(i, details.shots_scroll, top);
+            const auto r = psfive_details::shot(i, details.shots_scroll, top, left);
             if (r.left > width) break;
-            const float shown = rise * psfive_details::edgeFade(r.left, shot_step);
+            const float shown = rise * psfive_details::edgeFade(r.left, shot_step, left);
             if (shown <= 0.003f) continue;
             const auto rect = D2D1::RectF(r.left, r.top, r.right, r.bottom);
             const auto shape = D2D1::RoundedRect(rect, 14, 14);
@@ -170,11 +184,11 @@ void Renderer::drawPsfiveDetails() {
     }
     // Similar games: square covers sliding the same way (a name only inside a cover that has no picture yet).
     if (!details.similar_names.empty()) {
-        textLine(upper(tr(L"Podobne gry")), psfive_details::left, top + psfive_details::similar_label, 600, friend_section_font_.Get(), gray(0.6f, rise));
+        textLine(upper(tr(L"Podobne gry")), left, top + psfive_details::similar_label, 600, friend_section_font_.Get(), gray(0.6f, rise));
         for (size_t i = 0; i < details.similar_names.size(); ++i) {
-            const auto r = psfive_details::similar(i, details.similar_scroll, top);
+            const auto r = psfive_details::similar(i, details.similar_scroll, top, left);
             if (r.left > width) break;
-            const float shown = rise * psfive_details::edgeFade(r.left, similar_step);
+            const float shown = rise * psfive_details::edgeFade(r.left, similar_step, left);
             if (shown <= 0.003f) continue;
             const auto rect = D2D1::RectF(r.left, r.top, r.right, r.bottom);
             const auto shape = tileShape(rect, tile_shape_);
@@ -211,7 +225,6 @@ void Renderer::drawPsfiveDetails() {
         }
         if (outline) drawCoverOutline(outline.Get(), tint, rise, true);
     }
-    if (details.viewer) drawShotViewer(details.shot, details.shots);
 }
 
 // A screenshot full screen: its full picture (the strip's while it loads), contained.

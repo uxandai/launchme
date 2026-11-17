@@ -492,6 +492,9 @@ struct ViewContext {
     int psfive_tab = -1;                   // The shown category's tab (overflow uses "Więcej...").
     int psfive_tab_focus = -1;
     float psfive_top_opacity = 0.66f; // Whole navigation row: active 100%, inactive 66%.
+    float psfive_hub = 0;    // 0..1: the focus on "Graj" / "…" (psfive_layout::hub_lift): the logo and buttons up, the details peeking.
+    float psfive_corner = 0; // 0..1, quicker: the cover and its name at the corner, the row and the top bar away.
+    float psfive_raise = 0; // The logo and buttons over their place (hub and details), pixels.
     float psfive_intro = 1; // The start-up intro (psfive_layout::intro): the top bar, logo and buttons fading in.
     std::optional<float> psfive_menu_glide; // Fractional category index; scroll uses category_scroll.
     bool psfive_clock_shown = true;

@@ -2230,6 +2230,12 @@ private:
     void psfiveDetailsAccept();
     bool psfiveDetailsClick(float x, float y);
     void tickPsfiveDetails(float dt, bool& needs_paint);
+    // The hub (psfive_layout::hub_lift): 0 the row, 1 the focus on "Graj" / "…" or the details.
+    bool psfiveHubWanted() const;
+    float psfiveRaise() const; // How far the logo and buttons stand over their place now (hub and details), pixels.
+    float psfiveDetailsLeft() const; // The sheet's margin: the focused tile's (psfive_layout::anchorX).
+    float psfive_hub_ = 0, psfive_corner_ = 0; // Clamped 0..1 values of the springs below (psfive_layout::hubEase).
+    Spring psfive_hub_motion_, psfive_corner_motion_;
     int psfive_details_ = -1;
     float psfive_details_progress_ = 0, psfive_details_scroll_ = 0;
     size_t psfive_shot_ = 0, psfive_similar_ = 0;

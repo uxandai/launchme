@@ -477,7 +477,7 @@ bool Launcher::hoverButton(float mouse_x, float mouse_y) const {
             return true;
     }
     if (categoryRailActive() && category_rail::Layout{view.width, view.height, categories_.size(), category_}.hit(x, y) >= 0) return true;
-    if (psfiveActive() && !menu_open_ && ((psfiveButtons() && psfive_layout::hitAction(x, y, view.height, psfiveScale()) >= 0) ||
+    if (psfiveActive() && !menu_open_ && ((psfiveButtons() && psfive_layout::hitAction(x, y, view.height, psfiveScale(), psfiveRaise()) >= 0) ||
         psfive_layout::hitTop(x, y, view.width, settings_.psfive_clock) >= 0 || renderer_.psfiveTabAt(x, y) >= 0)) return true;
     for (size_t i = 0; i < cards_.size(); ++i) if (cardHit(i, x, y)) return true;
     if (library_view::metadata(libraryPresentation()) && !ratingUrl().empty() && renderer_.ratingLink().contains(x, y)) return true;

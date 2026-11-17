@@ -427,7 +427,7 @@ void Launcher::snapCardsForTransition() {
     // (Glance, Tarot, Towarzyszka, Dodaj grę as tiles) it scrolls sideways like the other rows instead of shrinking.
     const bool fixed_row = !rail && category_ == 0 && !grid && carousel::fitsFixedRow(cards_.size(), view.width - shelf_inset);
     const bool xmb = xmbActive(), flix = flixActive(), metro = metroActive(), psfive = psfiveActive(), list = libraryList();
-    const bool psfive_buttons = psfive && (psfiveActions() || psfiveTopFocused());
+    const bool psfive_buttons = psfive && (psfiveActions() || psfiveTopFocused() || psfiveDetailsShown());
     const float shelf_aspect = shelfPosters() ? 2.0f / 3.0f : 1.0f;
     const bool steam_row = shelfSteamRow(); // Wygląd Steam: the first row's own geometry (steamTarget).
     const float compact_size = grid ? grid_layout::cell(view.width) :
@@ -635,7 +635,7 @@ void Launcher::tick() {
     if (flix) needs_paint |= tickFlixUnfold(now, dt);
     else { flix_unfold_ = 0; flix_unfold_index_ = SIZE_MAX; }
     // The buttons or the top bar have the focus: the focused tile keeps its size, not its outline.
-    const bool psfive_buttons = psfive && (psfiveActions() || psfiveTopFocused());
+    const bool psfive_buttons = psfive && (psfiveActions() || psfiveTopFocused() || psfiveDetailsShown());
     // Shelves of posters: 2:3 cards as wide as the square covers (so 1.5x as tall).
     const float shelf_aspect = shelfPosters() ? 2.0f / 3.0f : 1.0f;
     const bool steam_row = shelfSteamRow(); // Wygląd Steam: the first row's own geometry (steamTarget).
@@ -773,7 +773,7 @@ void Launcher::tick() {
             const float scale = psfiveScale(), grown = intro::growth(arrived_);
             const float small_size = psfive_layout::tileSize(false, scale);
             // Its place in a row of small tiles, then its place once the first is large.
-            const float small_x = psfive_layout::anchorX(scale) + offset * (psfive_layout::tile + psfive_layout::gap) * scale;
+            const float small_x = psfive_layout::rowAnchor(selected_, scale) + offset * (psfive_layout::tile + psfive_layout::gap) * scale;
             const float rest_x = std::lerp(small_x, target_x, grown);
             const float in = intro::slideIn(arrived_, offset);
             card.x = std::lerp(rest_x + view.width * 0.75f, rest_x, in);

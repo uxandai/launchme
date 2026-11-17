@@ -8,10 +8,13 @@
 // Geometry of the PSfive home layout (src/app/psfive.cpp, src/ui/psfive_renderer.cpp), measured on
 // the PS5 home screen (1920 x 1080 scaled to the 1600 x 900 viewport): the top bar (tabs on the
 // left; Menu and the clock on the right), then one row of square tiles over the focused
-// game's full-screen background. The focused tile is larger, framed and pinned at the fixed
-// left margin shared with the tabs, logo and buttons; earlier tiles slide out under that edge. Its name (and platform
-// badge) starts where the next tile starts, under the small ones. Low on the left the game's logo
-// over "Graj" and "…"; they rise over the quick bar. Tile sizes follow the size setting (`scale`,
+// game's full-screen background. The focused tile is larger, framed and pinned one and a half small
+// tiles from the left edge (the earlier tiles show there, the last half cut by the edge); the logo,
+// buttons and the details sheet share that margin. Its name (and platform badge) starts where the
+// next tile starts, under the small ones. Low on the left the game's logo over "Graj" and "…".
+// With the focus on the buttons the hub rises (`hub`, 0..1): the row leaves upwards, the focused
+// cover and its name settle small in the top left corner, the top bar fades, the logo and buttons
+// move up and the details sheet peeks from the bottom. Tile sizes follow the size setting (`scale`,
 // 80 / 100 / 120% of a base enlarged by 30%). Shared by animation targets, hit testing and drawing.
 namespace psfive_layout {
 constexpr float tile = 114.4f, focus_tile = 182; // All three settings: 30% larger than the original 88 / 140.
@@ -26,6 +29,11 @@ constexpr int action_count = 2; // "Graj", "…".
 constexpr float button_height = 59, play_width = 278, more_width = 59, button_gap = 14;
 constexpr float bottom_margin = 145; // Under the buttons.
 constexpr float quick_lift = 0;      // The buttons sit clear of the quick bar: nothing has to rise.
+// The hub (focus on "Graj" / "…"): the logo and buttons rise by hub_lift, the details sheet's top
+// stands hub_peek over the bottom edge, the cover settles at the corner (left = tabs_left).
+constexpr float hub_lift = 130, hub_peek = 196;
+constexpr float corner_top = 24, corner_size = 60;
+constexpr float row_leave = 300; // How far the row moves up as it leaves.
 // The logo's box at most (≤ 40% of the screen width), its bottom logo_gap over the buttons.
 constexpr float logo_width = 420, logo_height = 150, logo_gap = 56;
 // Top bar. Tabs from the left margin; right to left the clock (a reserved box, right-aligned
@@ -70,11 +78,19 @@ inline float growth(float seconds) {
 inline float chrome(float seconds) { return smooth((seconds - (grow_at - 0.2f)) / 0.6f); }
 }
 inline float tileSize(bool focused, float scale = 1) { return (focused ? focus_tile : tile) * scale; }
-inline float anchorX(float /*scale*/ = 1) { return tabs_left; } // Tile size never changes the left alignment.
-inline float rowClipLeft() { return tabs_left - frame_gap - frame_width; } // Keep the focus frame visible.
+// One and a half small tiles show before the focused one (the second half cut by the screen's edge).
+// The logo and buttons align with it.
+inline float anchorX(float scale = 1) { return (1.5f * tile + gap + focus_gap) * scale; }
+// The focused tile's left for the `selected`-th tile: the first stays at the tabs' margin, the
+// next ones follow the row until the tile reaches anchorX.
+inline float rowAnchor(size_t selected, float scale = 1) {
+    if (selected == 0) return tabs_left;
+    return std::min(anchorX(scale), tabs_left + (focus_gap + tile + static_cast<float>(selected - 1) * (tile + gap)) * scale);
+}
+inline float rowClipLeft() { return -4 * tile; } // Nothing clipped: the tiles leave past the screen's edge.
 // Offset from the focused tile: 0 at the anchor, the next ones after the large tile.
-inline float tileLeft(int offset, float scale = 1) {
-    const float anchor = anchorX(scale);
+inline float tileLeft(int offset, float scale = 1, float anchor = -1) {
+    if (anchor < 0) anchor = anchorX(scale);
     if (offset == 0) return anchor;
     if (offset > 0) return anchor + (focus_tile + focus_gap + (offset - 1) * (tile + gap)) * scale;
     return anchor - (focus_gap + tile) * scale + (offset + 1) * (tile + gap) * scale;
@@ -82,24 +98,37 @@ inline float tileLeft(int offset, float scale = 1) {
 // Badge and name: where the next tile starts, centred in the band under the small tiles.
 inline float labelCenter(float scale = 1) { return row_top + (tile + (focus_tile - tile) * 0.5f) * scale; }
 inline float labelLeft(float scale = 1) { return tileLeft(1, scale); }
-// The focused tile starts the visible row; earlier tiles are clipped at its left margin.
-constexpr int visible_before = 0;
+// One and a half tiles before the focused one.
+constexpr int visible_before = 2;
 inline int visibleAfter(float width, float scale = 1) {
     return std::max(1, static_cast<int>((width - tileLeft(1, scale)) / ((tile + gap) * scale)) + 2);
 }
-// At rest; `lift` (0..1, the quick bar's progress) raises them by quick_lift.
-inline float buttonsTop(float height, float lift = 0) { return height - bottom_margin - button_height - quick_lift * lift; }
-inline settings_ui::Rect action(int index, float height, float scale = 1, float lift = 0) {
-    const float top = buttonsTop(height, lift), left = anchorX(scale);
+// At rest; `lift` (0..1, the quick bar's progress) raises them by quick_lift, `raise` (pixels: the
+// hub and the details scrolled in) on top of it.
+inline float buttonsTop(float height, float lift = 0, float raise = 0) { return height - bottom_margin - button_height - quick_lift * lift - raise; }
+inline settings_ui::Rect action(int index, float height, float scale = 1, float lift = 0, float raise = 0) {
+    const float top = buttonsTop(height, lift, raise), left = anchorX(scale);
     if (index <= 0) return {left, top, left + play_width, top + button_height};
     const float more = left + play_width + button_gap;
     return {more, top, more + more_width, top + button_height};
 }
-inline int hitAction(float x, float y, float height, float scale = 1) {
-    for (int i = 0; i < action_count; ++i) if (action(i, height, scale).contains(x, y)) return i;
+inline int hitAction(float x, float y, float height, float scale = 1, float raise = 0) {
+    for (int i = 0; i < action_count; ++i) if (action(i, height, scale, 0, raise).contains(x, y)) return i;
     return -1;
 }
-inline float logoBottom(float height, float lift = 0) { return buttonsTop(height, lift) - logo_gap; }
+inline float logoBottom(float height, float lift = 0, float raise = 0) { return buttonsTop(height, lift, raise) - logo_gap; }
+// The hub's progress as drawn: Launcher moves it on critically damped springs (a soft start, a
+// quick middle, a settle without overshoot; a reversal mid-way keeps its speed); this only clamps it.
+// Two of them: `hub` lifts the logo and buttons and raises the details' peek; `corner`, quicker,
+// takes the cover and its name to the corner, sends the row away and fades the top bar.
+inline float hubEase(float hub) { return std::clamp(hub, 0.0f, 1.0f); }
+constexpr float hub_omega = 17.0f;    // ~0.35 s.
+constexpr float corner_omega = 26.0f; // ~0.22 s.
+// The platform badge beside the name leaves first as the cover moves to the corner.
+inline float hubBadge(float hub) { return std::clamp(1.0f - 2.5f * hub, 0.0f, 1.0f); }
+// The top bar fades quickly as the hub rises (and returns as quickly after it).
+inline float hubBar(float hub) { return std::clamp(1.0f - 3.0f * hub, 0.0f, 1.0f); }
+inline settings_ui::Rect corner() { return {tabs_left, corner_top, tabs_left + corner_size, corner_top + corner_size}; }
 inline settings_ui::Rect clock(float width) { return {width - bar_margin - clock_width, top_center - 22, width - bar_margin, top_center + 22}; }
 // A top bar icon's circle; without the clock the icons move into its place.
 inline settings_ui::Rect topItem(int index, float width, bool with_clock) {

@@ -959,7 +959,7 @@ private:
     void drawSnitch();
     void drawPsfiveTopBar();
     void drawPsfiveMoreMenu();
-    void drawPsfiveLabel();
+    void drawPsfiveLabel(const GameCard& card, const GameCard& placed); // placed: where the tile is drawn (the hub moves it).
     void drawPsfiveLogo(float lift); // Over "Graj" / "…"; the title in large type without a logo.
     void drawPsfiveButtons(bool frost = true); // frost: the grey glass blurs the picture under them.
     // The focused tile's light frame, a thin dark gap outside its edge (as on the PS5).
@@ -1334,6 +1334,7 @@ private:
     std::vector<Cover> psfive_shots_, psfive_similar_;
     Cover psfive_shot_full_;
     void drawPsfiveDetails();
+    void drawPsfiveDetailsVeil(); // Under the logo and buttons.
     // A screenshot full screen (PSfive's sheet, Szczegóły): its full picture, else the strip's.
     void drawShotViewer(size_t shot, size_t shots);
     // Szczegóły's strips under the cards (details_media_renderer.cpp): Tryb TV's, and the desktop

@@ -58,8 +58,15 @@ home_widgets::Spots Launcher::homeWidgetSpots() const {
         if (spots.companion) { spots.companion = settings_ui::Rect{left, 60, left + home_widgets::companion_pill_width, 100}; left += home_widgets::companion_pill_width + 10; }
         if (spots.glance) spots.glance = settings_ui::Rect{left, 60, left + home_widgets::glance_pill_width, 100};
     }
-    // PSfive's details sheet covers the corner where they stand.
-    if (psfive_details_progress_ > 0.001f && psfiveActive()) { spots.glance.reset(); spots.companion.reset(); }
+    // PSfive: they rise with the hub (clear of the details peeking under them) and leave with the
+    // rest as the details scroll in.
+    if (psfiveActive()) {
+        if (psfive_details_progress_ > 0.98f) { spots.glance.reset(); spots.companion.reset(); }
+        else if (const float shift = psfiveRaise() + 24 * std::clamp(psfive_hub_, 0.0f, 1.0f); shift > 0.01f) {
+            if (spots.glance) { spots.glance->top -= shift; spots.glance->bottom -= shift; }
+            if (spots.companion) { spots.companion->top -= shift; spots.companion->bottom -= shift; }
+        }
+    }
     return spots;
 }
 

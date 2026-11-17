@@ -22,6 +22,26 @@ void Renderer::drawPsfive() {
     const float width = viewport_.width, height = viewport_.height;
     // The buttons and the logo rise over the quick bar while it opens.
     const float lift = smoothFade(context_->quick_progress);
+    // The hub (the focus on "Graj" / "…"): the row leaves upwards and fades, the focused cover
+    // settles small at the top left corner; the logo and buttons stand context_->psfive_raise higher.
+    const float hub = psfive_layout::hubEase(context_->psfive_corner);
+    const float opened = context_->psfive_details ? smoothFade(context_->psfive_details->progress) : 0.0f;
+    const auto placed = [&](size_t i) {
+        GameCard card = cards[i];
+        if (hub <= 0.001f) return card;
+        if (i == selected_) {
+            const auto corner = psfive_layout::corner();
+            card.x = std::lerp(card.x, corner.left, hub);
+            card.y = std::lerp(card.y, corner.top, hub);
+            // The size a little ahead of the way: it reads as one shrinking move, not a large tile sliding.
+            const float shrink = 1.0f - (1.0f - hub) * (1.0f - hub);
+            card.size = std::lerp(card.size, corner.right - corner.left, shrink);
+        } else {
+            card.y -= psfive_layout::row_leave * hub;
+            card.opacity *= std::clamp(1.0f - 1.6f * hub, 0.0f, 1.0f);
+        }
+        return card;
+    };
     drawBackground();
     if (psfive_shade_) {
         psfive_shade_->SetEndPoint(D2D1::Point2F(0, height));
@@ -33,10 +53,11 @@ void Renderer::drawPsfive() {
     }
     beginScreenForeground();
     drawPsfiveTopBar();
-    drawPsfiveLabel();
+    drawPsfiveDetailsVeil(); // Under the logo and buttons: they stand over the sheet's veil.
     // The start-up intro (psfive_layout::intro): the logo and buttons fade in after the row, without
     // their frosted glass meanwhile (it copies the target, which a pushed layer does not allow).
-    const float chrome = std::clamp(context_->psfive_intro, 0.0f, 1.0f);
+    // They fade out the same way as the details scroll over them.
+    const float chrome = std::clamp(context_->psfive_intro, 0.0f, 1.0f) * (1.0f - opened);
     if (chrome >= 0.999f) {
         drawPsfiveLogo(lift);
         drawPsfiveButtons(); // Last before the shade: its glass blurs everything drawn so far.
@@ -48,36 +69,30 @@ void Renderer::drawPsfive() {
         target_->PopLayer();
     }
     drawQuickShade();
-    const auto row_clip = D2D1::RectF(psfive_layout::rowClipLeft(), 0, width, height);
     // Every shadow first: the tiles sit close, so none may fall over a neighbour (the focused
-    // tile, drawn last, would darken the edges of the tiles beside it). The shadows reach past the
-    // row's clip on the left (the first tile's was cut off there, issue #23); a tile sliding out
-    // past the row's start takes its shadow with it.
-    constexpr float shadow_reach = 20;
-    target_->PushAxisAlignedClip(D2D1::RectF(psfive_layout::rowClipLeft() - shadow_reach, 0, width, height), D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
+    // tile, drawn last, would darken the edges of the tiles beside it).
     for (size_t i = 0; i < cards.size(); ++i) {
-        const auto& card = cards[i];
+        const auto card = placed(i);
         if (card.opacity < 0.01f || card.size <= 0 || card.x > width + 45 || card.x + card.size < -45) continue;
         const bool focused = i == selected_;
         const float zoom = focused ? 1.0f + 0.13f * smoothFade(context_->launch_progress) : 1.0f;
         const float size = card.size * zoom;
-        const float leaving = std::clamp(1.0f - (psfive_layout::rowClipLeft() - card.x) / shadow_reach, 0.0f, 1.0f);
-        if (leaving <= 0.001f) continue;
-        drawSquareShadow(card.x - (size - card.size) * 0.5f, card.y - (size - card.size) * 0.5f, size, focused, card.opacity * leaving);
+        drawSquareShadow(card.x - (size - card.size) * 0.5f, card.y - (size - card.size) * 0.5f, size, focused, card.opacity);
     }
-    target_->PopAxisAlignedClip();
-    target_->PushAxisAlignedClip(row_clip, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
-    for (size_t i = 0; i < cards.size(); ++i) if (i != selected_) drawCard(cards[i], i);
-    target_->PopAxisAlignedClip();
+    for (size_t i = 0; i < cards.size(); ++i) if (i != selected_) {
+        if (hub <= 0.001f) drawCard(cards[i], i);
+        else if (const auto card = placed(i); card.opacity >= 0.01f) drawCard(card, i);
+    }
+    drawPsfiveDetails(); // Szczegóły pod rzędem: the sheet peeking or risen (psfive_details_renderer.cpp).
+    if (selected_ < cards.size()) drawPsfiveLabel(cards[selected_], placed(selected_));
     const float launch = smoothFade(context_->launch_progress);
     if (launch > 0.001f) {
         brush(D2D1::ColorF(0.008f, 0.012f, 0.016f, launch * 0.82f));
         target_->FillRectangle(D2D1::RectF(0, 0, width, height), solid_.Get());
     }
-    target_->PushAxisAlignedClip(row_clip, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
-    if (selected_ < cards.size()) drawCard(cards[selected_], selected_);
-    target_->PopAxisAlignedClip();
-    drawPsfiveDetails(); // Szczegóły pod rzędem: the sheet over the row (psfive_details_renderer.cpp).
+    if (selected_ < cards.size()) drawCard(placed(selected_), selected_);
+    if (context_->psfive_details && context_->psfive_details->viewer)
+        drawShotViewer(context_->psfive_details->shot, context_->psfive_details->shots);
 }
 
 float Renderer::drawPsfiveBadge(const std::wstring& platform, float x, float center_y, float alpha, bool draw) {
@@ -120,18 +135,24 @@ float Renderer::drawPsfiveBadge(const std::wstring& platform, float x, float cen
 // Beside the focused tile, under the small ones: the platform badge and the game's name (the
 // library: its number of games; a category's "Wszystkie": the category). It follows the tile
 // while the row glides and fades in with every new focus.
-void Renderer::drawPsfiveLabel() {
-    if (selected_ >= cards_->size()) return;
-    const auto& card = (*cards_)[selected_];
+// In the hub (`placed`: the tile at the corner) it stands beside the small cover, centred on it.
+void Renderer::drawPsfiveLabel(const GameCard& card, const GameCard& placed) {
     const auto& game = card.game;
     const float alpha = smoothFade(detail_ * 2.5f) * card.opacity * std::clamp(context_->psfive_intro, 0.0f, 1.0f);
     if (alpha < 0.01f || !psfive_name_font_) return;
-    const float center = psfive_layout::labelCenter(context_->psfive_scale) + (card.y - psfive_layout::row_top);
+    const float hub = psfive_layout::hubEase(context_->psfive_corner);
+    const float center = std::lerp(psfive_layout::labelCenter(context_->psfive_scale) + (card.y - psfive_layout::row_top),
+                                   placed.y + placed.size * 0.5f, hub);
     const float right = viewport_.width - psfive_layout::bar_margin;
-    float x = card.x + card.width() + psfive_layout::focus_gap * context_->psfive_scale; // Where the next tile starts.
-    if (isGame(game)) {
+    // Where the next tile starts; at the corner, a little after the cover.
+    float x = placed.x + placed.size + std::lerp(psfive_layout::focus_gap * context_->psfive_scale, 20.0f, hub);
+    // The badge leaves as the cover heads for the corner; the name slides into its place.
+    if (const float badge = psfive_layout::hubBadge(context_->psfive_corner); isGame(game) && badge > 0) {
         const auto platform = activePlatformName(game);
-        if (!platform.empty()) x += drawPsfiveBadge(platform, x, center, alpha) + 14;
+        if (!platform.empty()) {
+            const float w = drawPsfiveBadge(platform, x, center, alpha * badge, badge > 0.01f);
+            x += (w + 14) * smoothFade(badge);
+        }
     }
     const std::wstring name = game.kind == GameKind::all ? std::wstring(tr(L"Biblioteka")) : game.name;
     // A soft dark copy under the light name keeps it legible over a bright full-screen picture.
@@ -146,8 +167,9 @@ void Renderer::drawPsfiveLabel() {
 void Renderer::drawPsfiveTopBar() {
     using namespace psfive_layout;
     const float width = viewport_.width;
-    const float opacity = context_->psfive_top_opacity * std::clamp(context_->psfive_intro, 0.0f, 1.0f);
+    const float opacity = context_->psfive_top_opacity * std::clamp(context_->psfive_intro, 0.0f, 1.0f) * hubBar(context_->psfive_corner);
     const bool with_clock = context_->psfive_clock_shown;
+    if (opacity < 0.01f) { psfive_tab_rects_.clear(); return; } // Gone with the hub: nothing to click either.
     // One opacity for the whole row. Only the focused tab is bold while navigating;
     // otherwise the shown category is bold, including a named overflow category.
     // "Pasek kategorii": the library's strip in the middle (drawHomeTabs) instead of these tabs.
@@ -253,7 +275,7 @@ void Renderer::drawPsfiveMoreMenu() {
 // has none. It rises with the buttons over the quick bar and fades with a new focus.
 void Renderer::drawPsfiveLogo(float lift) {
     if (selected_ >= cards_->size() || !isGame((*cards_)[selected_].game)) return;
-    const float width = viewport_.width, bottom = psfive_layout::logoBottom(viewport_.height, lift);
+    const float width = viewport_.width, bottom = psfive_layout::logoBottom(viewport_.height, lift, context_->psfive_raise);
     const float left = psfive_layout::anchorX(context_->psfive_scale);
     if (auto box = cornerLogoRect(std::min(psfive_layout::logo_width, width * 0.4f), psfive_layout::logo_height, left, bottom)) {
         const float w = box->right - box->left;
@@ -276,11 +298,12 @@ void Renderer::drawPsfiveButtons(bool frost) {
     const auto& game = (*cards_)[selected_].game;
     if (!isGame(game) || game.kind == GameKind::catalog) return;
     const float height = viewport_.height, scale = context_->psfive_scale;
-    const float lift = smoothFade(context_->quick_progress), rise = psfive_layout::quick_lift * lift;
+    const float lift = smoothFade(context_->quick_progress), raise = context_->psfive_raise;
+    const float rise = psfive_layout::quick_lift * lift + raise; // The glide below has neither.
     // The quick bar takes the focus: the white pill fades while it is open (and returns after).
     const int focus = lift < 0.5f ? context_->psfive_action : -1;
     const float pill_alpha = 1.0f - lift;
-    const auto play_rect = psfive_layout::action(0, height, scale, lift), more_rect = psfive_layout::action(1, height, scale, lift);
+    const auto play_rect = psfive_layout::action(0, height, scale, lift, raise), more_rect = psfive_layout::action(1, height, scale, lift, raise);
     // One copy and blur for both (a second copy would already hold the first button's glass).
     const D2D1_ROUNDED_RECT pills[] = {pill(box(play_rect)), pill(box(more_rect))};
     Microsoft::WRL::ComPtr<ID2D1RoundedRectangleGeometry> glass[2];
@@ -297,7 +320,7 @@ void Renderer::drawPsfiveButtons(bool frost) {
         target_->FillRoundedRectangle(pills[i], solid_.Get());
     }
     if (context_->psfive_action >= 0 && pill_alpha > 0.004f) {
-        auto r = psfive_layout::action(context_->psfive_action, height, scale, lift);
+        auto r = psfive_layout::action(context_->psfive_action, height, scale, lift, raise);
         if (context_->psfive_action_glide) {
             const auto& glide = *context_->psfive_action_glide;
             r = {glide.left, glide.top - rise, glide.right, glide.bottom - rise};
@@ -308,12 +331,12 @@ void Renderer::drawPsfiveButtons(bool frost) {
         if (!enabled) return gray(focus == i ? 0.42f : 0.56f);
         return focus == i ? gray(0.05f) : gray(0.97f);
     };
-    const auto play = psfive_layout::action(0, height, scale, lift);
+    const auto play = psfive_layout::action(0, height, scale, lift, raise);
     // In place of the large "Pobieranie w Steam" label: a small status above a thin track.
     if (!drawInstallProgress(game, box(play), ink(0, true), focus == 0 ? gray(0.05f, 0.15f) : gray(1, 0.20f), settings_body_font_.Get()))
         text(context_->primary_action, play.left + 18, play.top, play.right - play.left - 36, play.bottom - play.top,
              psfive_button_font_.Get(), ink(0, context_->primary_enabled));
-    const auto more = psfive_layout::action(1, height, scale, lift);
+    const auto more = psfive_layout::action(1, height, scale, lift, raise);
     brush(ink(1, true));
     const float cx = (more.left + more.right) * 0.5f, cy = (more.top + more.bottom) * 0.5f;
     for (int dot = -1; dot <= 1; ++dot)

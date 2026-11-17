@@ -183,7 +183,7 @@ std::optional<settings_ui::Rect> Launcher::libraryMenuAnchor() const {
     }
     if (!library_menu_from_action_) return std::nullopt;
     const auto view = renderer_.viewport();
-    if (psfiveActive()) return psfive_layout::action(1, view.height, psfiveScale()); // "…" under the row.
+    if (psfiveActive()) return psfive_layout::action(1, view.height, psfiveScale(), 0, psfiveRaise()); // "…" under the row.
     if (!libraryActions()) return std::nullopt;
     return library_presentation::Layout{view.width, view.height}.action(1);
 }
@@ -304,6 +304,8 @@ bool Launcher::cardHit(size_t index, float x, float y) const {
     const auto view = renderer_.viewport();
     if (categoryRailActive() && x < category_rail::Layout{view.width, view.height}.contentClip()) return false;
     if (psfiveActive() && x < psfive_layout::rowClipLeft()) return false;
+    // PSfive's hub: the row has left; only the focused cover at the corner takes a click (back to the row).
+    if (psfiveActive() && psfive_corner_ > 0.001f) return index == selected_ && psfive_layout::corner().contains(x, y);
     if (snitchActive() && x < snitch_layout::clip_left) return false;
     const auto& card = cards_[index];
     if (libraryBookshelf()) {

@@ -163,6 +163,7 @@ void Launcher::paint(bool overlay) {
             // PSfive's top bar: the strip in place of its tabs, dimmed with the bar and faded in after the start-up row.
             context.home_tabs_alpha = std::clamp(psfive_top_opacity_.value, 0.66f, 1.0f) * (psfiveIntro() ? psfive_layout::intro::chrome(arrived_) : 1.0f);
             if (!psfiveTopAvailable()) context.home_tabs_alpha *= std::clamp(1.0f - away, 0.0f, 1.0f);
+            context.home_tabs_alpha *= psfive_layout::hubBar(psfive_corner_); // Gone while the hub is up.
         }
     }
     if (libraryView() == library_view::View::list || libraryListPlus()) {
@@ -624,6 +625,14 @@ void Launcher::paint(bool overlay) {
         context.psfive = true;
         context.psfive_action = psfiveActions() ? psfive_action_ : -1;
         context.psfive_scale = psfiveScale();
+        context.psfive_hub = psfive_hub_;
+        context.psfive_corner = psfive_corner_;
+        context.psfive_raise = psfiveRaise();
+        if (const float away = psfive_layout::hubEase(psfive_details_progress_); away > 0) { // Leaving with the logo as the details rise.
+            const float t = 1.0f - away * away * (3 - 2 * away);
+            context.glance_alpha *= t;
+            if (context.companion) companion_view.tile_alpha *= t;
+        }
         if (psfiveIntro()) {
             context.psfive_intro = psfive_layout::intro::chrome(arrived_);
             // The home widgets (Glance, her tile) come in with the top bar, after the row.
@@ -666,8 +675,8 @@ void Launcher::paint(bool overlay) {
                 if (const auto* games = consoleGames(game.platform)) context.psfive_caption = gamesLabel(games->size());
             }
         }
-        // Szczegóły pod rzędem (psfive_details.cpp): the sheet while it shows or slides away.
-        if ((psfiveDetailsShown() || psfive_details_progress_ > 0.001f) && selected_ < cards_.size() && isGame(cards_[selected_].game)) {
+        // Szczegóły pod rzędem (psfive_details.cpp): the sheet while it peeks under the buttons, shows or slides away.
+        if ((psfiveDetailsShown() || psfive_details_progress_ > 0.001f || (psfive_hub_ > 0.001f && settings_.psfive_details)) && selected_ < cards_.size() && isGame(cards_[selected_].game)) {
             const auto& game = cards_[selected_].game;
             ViewContext::PsfiveDetails details_sheet;
             details_sheet.progress = psfive_details_progress_;

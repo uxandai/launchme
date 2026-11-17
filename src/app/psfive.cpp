@@ -3,8 +3,9 @@
 // another game category its first row_games games and a "Wszystkie" tile for its library) drawn
 // as one row of square covers at the top over the focused game's full-screen background, so
 // building, focus, bookmarks and artwork are the shelves' own. What differs: the focused tile is
-// pinned to the shared left margin (psfive_layout.hpp), and Enter/A or a click on a game
-// moves the focus down to its buttons, "Graj" and "…" (the game menu), instead of starting it.
+// pinned one and a half tiles from the left (psfive_layout.hpp), and Enter/A or a click on a game
+// moves the focus down to its buttons, "Graj" and "…" (the game menu), instead of starting it;
+// the hub then rises (the row away, the cover at the corner, the details peeking from below).
 // Up from the row goes to the top bar (three categories, "Więcej...", Widgets, Menu = the quick
 // bar); LB/RB change the tab; Down from the buttons opens the quick bar, or with Szczegóły pod rzędem
 // (on by default) scrolls to the game's details and the quick bar opens from above the tabs.
@@ -123,7 +124,7 @@ void Launcher::psfiveTarget(size_t index, float& x, float& y, float& size, float
     const int offset = static_cast<int>(index) - static_cast<int>(selected_);
     const float scale = psfiveScale();
     size = psfive_layout::tileSize(offset == 0, scale);
-    x = psfive_layout::tileLeft(offset, scale);
+    x = psfive_layout::tileLeft(offset, scale, psfive_layout::rowAnchor(selected_, scale));
     y = psfive_layout::row_top;
     aspect = 1;
     // The row enters from the focused tile outwards.
@@ -220,6 +221,8 @@ void Launcher::psfiveClickCard(size_t index, bool double_click) {
     psfiveFocusTop(-1);
     const bool moved = index != selected_;
     if (moved) { focusCard(index, false); audio_.navigate(); }
+    // The hub: the cover at the corner takes the focus back to the row.
+    if (!moved && psfiveHubWanted()) { psfiveCloseDetails(false); psfiveFocusAction(-1); audio_.navigate(); return; }
     const auto game = cards_[index].game;
     if (game.kind == GameKind::all) { openLibrary(); return; }
     if (specialTile(game)) { launch(); return; } // Glance, Tarot, Towarzyszka, Dodaj grę as tiles: one click.
@@ -283,7 +286,7 @@ bool Launcher::psfiveClick(float x, float y, bool double_click) {
         return true;
     }
     if (!psfiveButtons()) return false;
-    const int action = psfive_layout::hitAction(x, y, view.height, psfiveScale());
+    const int action = psfive_layout::hitAction(x, y, view.height, psfiveScale(), psfiveRaise());
     if (action < 0) return false;
     if (double_click) return true; // The first click already acted.
     psfive_action_ = action;

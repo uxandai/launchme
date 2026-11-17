@@ -13,6 +13,7 @@
 #include "../platform/text_encoding.hpp"
 #include "../store/steam_app_match.hpp"
 #include "../ui/psfive_details_layout.hpp"
+#include "../ui/psfive_layout.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -31,6 +32,18 @@ std::vector<uint8_t> cachedOrDownloaded(const std::wstring& url, const std::file
 }
 
 bool Launcher::psfiveDetailsShown() const { return psfive_details_ >= 0 && psfiveActive(); }
+
+bool Launcher::psfiveHubWanted() const { return psfiveActive() && (psfiveActions() || psfiveDetailsShown()); }
+
+float Launcher::psfiveDetailsLeft() const { return psfive_layout::tabs_left; }
+
+float Launcher::psfiveRaise() const {
+    const float height = renderer_.viewport().height;
+    const float hub = psfive_layout::hubEase(psfive_hub_);
+    const float peeked = height - psfive_details::peek * hub;
+    const float t = std::clamp(psfive_details_progress_, 0.0f, 1.0f), rise = t * t * (3 - 2 * t); // As drawn (smoothFade).
+    return psfive_layout::hub_lift * hub + (peeked - psfive_details::sheetTop(height, hub, rise));
+}
 
 void Launcher::psfiveOpenDetails() {
     if (!psfiveButtons() || selected_ >= cards_.size()) { navigationBoundary(); return; }
@@ -238,28 +251,46 @@ bool Launcher::psfiveDetailsClick(float x, float y) {
     if (!psfiveDetailsShown()) return false;
     if (psfive_shot_view_) { psfive_shot_view_ = false; InvalidateRect(hwnd_, nullptr, FALSE); return true; }
     const auto view = renderer_.viewport();
-    const float top = psfive_details::sheetTop(view.height, psfive_details_progress_) - psfive_details_scroll_;
+    const float hub = psfive_layout::hubEase(psfive_hub_), left = psfiveDetailsLeft();
+    const float top = psfive_details::sheetTop(view.height, hub, psfive_details_progress_) - psfive_details_scroll_;
     for (size_t i = 0; i < psfive_shot_full_urls_.size(); ++i)
-        if (psfive_details::shot(i, psfive_shots_scroll_, top).contains(x, y) && x >= psfive_details::left - 1) {
+        if (psfive_details::shot(i, psfive_shots_scroll_, top, left).contains(x, y) && x >= left - 1) {
             const bool again = psfive_details_ == 1 && psfive_shot_ == i;
             psfive_details_ = 1; psfive_shot_ = i;
             if (again) psfiveViewShot(); else { audio_.navigate(); InvalidateRect(hwnd_, nullptr, FALSE); }
             return true;
         }
     for (size_t i = 0; i < psfive_similar_games_.size(); ++i)
-        if (psfive_details::similar(i, psfive_similar_scroll_, top).contains(x, y) && x >= psfive_details::left - 1) {
+        if (psfive_details::similar(i, psfive_similar_scroll_, top, left).contains(x, y) && x >= left - 1) {
             const bool again = psfive_details_ == 2 && psfive_similar_ == i;
             psfive_details_ = 2; psfive_similar_ = i;
             if (again) psfiveDetailsAccept(); else { audio_.navigate(); InvalidateRect(hwnd_, nullptr, FALSE); }
             return true;
         }
-    return y >= psfive_details::sheetTop(view.height, psfive_details_progress_);
+    return y >= psfive_details::sheetTop(view.height, hub, psfive_details_progress_);
 }
 
 void Launcher::tickPsfiveDetails(float dt, bool& needs_paint) {
     const bool shown = psfiveDetailsShown();
     const float target = shown ? 1.0f : 0.0f;
-    const float ease = 1.0f - std::exp(-dt * 11.0f);
+    const float ease = 1.0f - std::exp(-dt * 8.0f);
+    // The hub: two critically damped springs (psfive_layout::hub_omega, corner_omega).
+    const float hub_target = psfiveHubWanted() ? 1.0f : 0.0f;
+    const auto move = [&](Spring& motion, float& value, float omega) {
+        if (!psfiveActive()) { motion.snap(0); value = 0; return; }
+        if (motion.value == hub_target && motion.velocity == 0) return;
+        motion.step(hub_target, dt, omega, 1.0f);
+        if (motion.settled(hub_target, 0.001f)) motion.snap(hub_target);
+        value = std::clamp(motion.value, 0.0f, 1.0f);
+        needs_paint = true;
+    };
+    move(psfive_hub_motion_, psfive_hub_, psfive_layout::hub_omega);
+    move(psfive_corner_motion_, psfive_corner_, psfive_layout::corner_omega);
+    // The sheet peeking under the buttons: its game's description and facts load with the hub.
+    if (psfive_hub_ > 0 && settings_.psfive_details && selected_ < cards_.size() && psfiveButtons()) {
+        if (gameKey(cards_[selected_].game) != psfive_details_key_) psfiveLoadDetails(cards_[selected_].game);
+        if (preview_.request(cards_[selected_].game, account_)) needs_paint = true;
+    }
     if (std::abs(psfive_details_progress_ - target) > 0.001f) {
         psfive_details_progress_ += (target - psfive_details_progress_) * ease;
         if (std::abs(psfive_details_progress_ - target) <= 0.001f) psfive_details_progress_ = target;
@@ -269,7 +300,8 @@ void Launcher::tickPsfiveDetails(float dt, bool& needs_paint) {
     if (!shown) { psfive_focus_glide_ = false; return; }
     // The focus frame glides between the screenshots and the similar games, as the tiles' outline does.
     const auto view = renderer_.viewport();
-    const float top = psfive_details::sheetTop(view.height, psfive_details_progress_);
+    const float left = psfiveDetailsLeft();
+    const float top = psfive_details::sheetTop(view.height, psfive_layout::hubEase(psfive_hub_), psfive_details_progress_);
     // The strips slide to keep their focused item in view, and the frame slides with its strip.
     const float shot_step = psfive_details::shot_width + psfive_details::shot_gap;
     const float similar_step = psfive_details::similar_size + psfive_details::similar_gap;
@@ -279,15 +311,15 @@ void Launcher::tickPsfiveDetails(float dt, bool& needs_paint) {
         else scroll = wanted;
         return scroll - before;
     };
-    const float shots_moved = slide(psfive_shots_scroll_, psfive_details::scrollFor(psfive_shot_, psfive_shot_full_urls_.size(), view.width, shot_step));
-    const float similar_moved = slide(psfive_similar_scroll_, psfive_details::scrollFor(psfive_similar_, psfive_similar_games_.size(), view.width, similar_step));
+    const float shots_moved = slide(psfive_shots_scroll_, psfive_details::scrollFor(psfive_shot_, psfive_shot_full_urls_.size(), view.width, shot_step, left));
+    const float similar_moved = slide(psfive_similar_scroll_, psfive_details::scrollFor(psfive_similar_, psfive_similar_games_.size(), view.width, similar_step, left));
     if (psfive_focus_glide_) {
         const float moved = psfive_details_ == 1 ? shots_moved : psfive_details_ == 2 ? similar_moved : 0.0f;
         psfive_focus_box_[0] -= moved; psfive_focus_box_[2] -= moved;
     }
     std::optional<settings_ui::Rect> focus;
-    if (psfive_details_ == 1 && psfive_shot_ < psfive_shot_full_urls_.size()) focus = psfive_details::shot(psfive_shot_, psfive_shots_scroll_, top);
-    else if (psfive_details_ == 2 && psfive_similar_ < psfive_similar_games_.size()) focus = psfive_details::similar(psfive_similar_, psfive_similar_scroll_, top);
+    if (psfive_details_ == 1 && psfive_shot_ < psfive_shot_full_urls_.size()) focus = psfive_details::shot(psfive_shot_, psfive_shots_scroll_, top, left);
+    else if (psfive_details_ == 2 && psfive_similar_ < psfive_similar_games_.size()) focus = psfive_details::similar(psfive_similar_, psfive_similar_scroll_, top, left);
     if (!focus) psfive_focus_glide_ = false;
     else if (!psfive_focus_glide_) { psfive_focus_box_ = {focus->left, focus->top, focus->right, focus->bottom}; psfive_focus_glide_ = true; needs_paint = true; }
     else {
