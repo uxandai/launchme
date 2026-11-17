@@ -184,9 +184,9 @@ void Renderer::drawPsfiveDetails() {
     }
     // Similar games: square covers sliding the same way (a name only inside a cover that has no picture yet).
     if (!details.similar_names.empty()) {
-        textLine(upper(tr(L"Podobne gry")), left, top + psfive_details::similar_label, 600, friend_section_font_.Get(), gray(0.6f, rise));
+        textLine(upper(tr(L"Podobne gry")), left, top + psfive_details::similar_label - psfive_details::similarShift(details.similar_up), 600, friend_section_font_.Get(), gray(0.6f, rise));
         for (size_t i = 0; i < details.similar_names.size(); ++i) {
-            const auto r = psfive_details::similar(i, details.similar_scroll, top, left);
+            const auto r = psfive_details::similar(i, details.similar_scroll, top, left, details.similar_up);
             if (r.left > width) break;
             const float shown = rise * psfive_details::edgeFade(r.left, similar_step, left);
             if (shown <= 0.003f) continue;

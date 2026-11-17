@@ -693,6 +693,7 @@ void Launcher::paint(bool overlay) {
             details_sheet.achievements_total = info.achievements_total;
             details_sheet.focus_glide = psfive_focus_glide_;
             details_sheet.shots_scroll = psfive_shots_scroll_; details_sheet.similar_scroll = psfive_similar_scroll_;
+            details_sheet.similar_up = psfive_similar_up_;
             details_sheet.focus_left = psfive_focus_box_[0]; details_sheet.focus_top = psfive_focus_box_[1];
             details_sheet.focus_right = psfive_focus_box_[2]; details_sheet.focus_bottom = psfive_focus_box_[3];
             // As on Szczegóły: the four main facts always (a dash when unknown), the others when known.

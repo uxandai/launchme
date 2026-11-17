@@ -2238,6 +2238,7 @@ private:
     Spring psfive_hub_motion_, psfive_corner_motion_;
     int psfive_details_ = -1;
     float psfive_details_progress_ = 0, psfive_details_scroll_ = 0;
+    float psfive_similar_up_ = 0; // psfive_details::similarShift: no screenshots, the similar games in their place.
     size_t psfive_shot_ = 0, psfive_similar_ = 0;
     bool psfive_shot_view_ = false, psfive_shots_loading_ = false;
     std::string psfive_details_key_;

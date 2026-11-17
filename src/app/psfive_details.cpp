@@ -261,7 +261,7 @@ bool Launcher::psfiveDetailsClick(float x, float y) {
             return true;
         }
     for (size_t i = 0; i < psfive_similar_games_.size(); ++i)
-        if (psfive_details::similar(i, psfive_similar_scroll_, top, left).contains(x, y) && x >= left - 1) {
+        if (psfive_details::similar(i, psfive_similar_scroll_, top, left, psfive_similar_up_).contains(x, y) && x >= left - 1) {
             const bool again = psfive_details_ == 2 && psfive_similar_ == i;
             psfive_details_ = 2; psfive_similar_ = i;
             if (again) psfiveDetailsAccept(); else { audio_.navigate(); InvalidateRect(hwnd_, nullptr, FALSE); }
@@ -286,6 +286,16 @@ void Launcher::tickPsfiveDetails(float dt, bool& needs_paint) {
     };
     move(psfive_hub_motion_, psfive_hub_, psfive_layout::hub_omega);
     move(psfive_corner_motion_, psfive_corner_, psfive_layout::corner_omega);
+    // No screenshots (none found, not still loading): the similar games close the gap, gliding up.
+    const float up = psfive_shot_full_urls_.empty() && !psfive_shots_loading_ ? 1.0f : 0.0f;
+    if (psfive_similar_up_ != up) {
+        if (psfive_details_progress_ < 0.01f) psfive_similar_up_ = up; // Unseen: no glide.
+        else {
+            psfive_similar_up_ += (up - psfive_similar_up_) * (1.0f - std::exp(-dt * 12.0f));
+            if (std::abs(psfive_similar_up_ - up) < 0.002f) psfive_similar_up_ = up;
+        }
+        needs_paint = true;
+    }
     // The sheet peeking under the buttons: its game's description and facts load with the hub.
     if (psfive_hub_ > 0 && settings_.psfive_details && selected_ < cards_.size() && psfiveButtons()) {
         if (gameKey(cards_[selected_].game) != psfive_details_key_) psfiveLoadDetails(cards_[selected_].game);
@@ -319,7 +329,7 @@ void Launcher::tickPsfiveDetails(float dt, bool& needs_paint) {
     }
     std::optional<settings_ui::Rect> focus;
     if (psfive_details_ == 1 && psfive_shot_ < psfive_shot_full_urls_.size()) focus = psfive_details::shot(psfive_shot_, psfive_shots_scroll_, top, left);
-    else if (psfive_details_ == 2 && psfive_similar_ < psfive_similar_games_.size()) focus = psfive_details::similar(psfive_similar_, psfive_similar_scroll_, top, left);
+    else if (psfive_details_ == 2 && psfive_similar_ < psfive_similar_games_.size()) focus = psfive_details::similar(psfive_similar_, psfive_similar_scroll_, top, left, psfive_similar_up_);
     if (!focus) psfive_focus_glide_ = false;
     else if (!psfive_focus_glide_) { psfive_focus_box_ = {focus->left, focus->top, focus->right, focus->bottom}; psfive_focus_glide_ = true; needs_paint = true; }
     else {

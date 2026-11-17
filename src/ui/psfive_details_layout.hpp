@@ -47,9 +47,12 @@ inline settings_ui::Rect shot(size_t index, float scroll, float top, float left)
     const float x = left + static_cast<float>(index) * (shot_width + shot_gap) - scroll;
     return {x, top + shots_top, x + shot_width, top + shots_top + shot_height};
 }
-inline settings_ui::Rect similar(size_t index, float scroll, float top, float left) {
+// Without screenshots the similar games take their place: `up` 0..1 moves them there (eased by the launcher).
+inline float similarShift(float up) { return (similar_top - shots_top) * std::clamp(up, 0.0f, 1.0f); }
+inline settings_ui::Rect similar(size_t index, float scroll, float top, float left, float up = 0) {
     const float x = left + static_cast<float>(index) * (similar_size + similar_gap) - scroll;
-    return {x, top + similar_top, x + similar_size, top + similar_top + similar_size};
+    const float y = top + similar_top - similarShift(up);
+    return {x, y, x + similar_size, y + similar_size};
 }
 // An item sliding out past the left margin fades over one step.
 inline float edgeFade(float x, float step, float left) { return std::clamp((x - (left - step)) / step, 0.0f, 1.0f); }

@@ -514,6 +514,7 @@ struct ViewContext {
         // The focus frame gliding between screenshots and similar games (absolute rectangle).
         bool focus_glide = false;
         float shots_scroll = 0, similar_scroll = 0; // The strips' slide (psfive_details_layout.hpp).
+        float similar_up = 0; // 0..1: the similar games moved up into the screenshots' place (none to show).
         float focus_left = 0, focus_top = 0, focus_right = 0, focus_bottom = 0;
     };
     std::optional<PsfiveDetails> psfive_details;
