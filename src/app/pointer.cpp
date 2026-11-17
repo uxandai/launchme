@@ -199,6 +199,7 @@ void Launcher::click(float mouse_x, float mouse_y, bool double_click) {
         !ratingUrl().empty() && renderer_.ratingLink().contains(x, y)) { if (!double_click) openRatingSource(); return; }
     if (screen_ == ScreenMode::details && !menu_open_) {
         if (psfive_shot_view_) { detailsCloseShot(); return; } // A screenshot full screen: any click closes it.
+        if (details_text_view_) { details_text_view_ = false; InvalidateRect(hwnd_, nullptr, FALSE); return; } // The whole description too.
         if (double_click || cards_.empty()) return; // A double-click on a Store tile cannot also press the detail action.
         // Every target from the shared geometry; the click focuses it and acts as Enter would.
         const int action = detailsLayout().hit(detailsActions(), x, y);

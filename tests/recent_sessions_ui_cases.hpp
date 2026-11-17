@@ -192,7 +192,7 @@ int LauncherUiTest::recentSessions(HWND window) {
     const auto step = [&](int dx, int dy) { if (dx) app.navigate(dx); else app.changeCategory(dy); return app.detail_action_; };
     if (step(0, -1) != -1 || step(0, 1) != 0 || step(1, 0) != collections || step(1, 0) != favorite || step(1, 0) != 1 || step(-1, 0) != favorite) return 3726;
     if (step(0, 1) != achievements || step(0, -1) != favorite || step(-1, 0) != collections) return 3727;
-    if (step(0, 1) != achievements || step(1, 0) != achievements || step(0, -1) != collections) return 3728;
+    if (step(0, 1) != achievements || step(1, 0) != details_layout::description_action || step(-1, 0) != achievements || step(0, -1) != collections) return 3728;
     if (step(-1, 0) != 0 || step(-1, 0) != 0 || step(0, -1) != -1) return 3729;
     app.navigate(10, false); // Programmatic jumps keep the action order.
     if (app.detail_action_ != achievements) return 3730;

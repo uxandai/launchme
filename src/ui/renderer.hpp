@@ -1342,6 +1342,14 @@ private:
     void drawPsfiveDetails();
     void drawPsfiveDetailsVeil(); // Under the logo and buttons.
     void drawPsfiveTextView(const std::wstring& title, const std::wstring& text);
+    // An achievements card's body (PSfive's details and Szczegóły): a ring of the share with its
+    // percent, the count beside it.
+    void drawAchievementRing(settings_ui::Rect card, uint32_t unlocked, uint32_t total, float alpha);
+    // A Czas gry card's body (both): the play time, when last played, and the details plugin's
+    // comparison with the main story (HowLongToBeat) with its bar.
+    void drawPlaytimeBody(settings_ui::Rect card, const std::wstring& playtime, const std::wstring& last_played,
+                          const plugins::TimeComparison* comparison, std::optional<uint64_t> played, float alpha);
+    void drawTrophy(float cx, float cy, float alpha); // The achievements cards' cup, before their heading.
     // A screenshot full screen (PSfive's sheet, Szczegóły): its full picture, else the strip's.
     void drawShotViewer(size_t shot, size_t shots);
     // Szczegóły's strips under the cards (details_media_renderer.cpp): Tryb TV's, and the desktop

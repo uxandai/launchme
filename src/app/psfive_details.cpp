@@ -46,7 +46,8 @@ std::vector<psfive_details::Card> Launcher::psfiveCards() {
     if (psfiveAchievements().second) cards.push_back(Card::achievements);
     bool loading = false;
     const auto& info = desktopDetails(game, loading);
-    if ((info.playtime_minutes && *info.playtime_minutes) || game.store_playtime_minutes || game.last_played) cards.push_back(Card::playtime);
+    if ((info.playtime_minutes && *info.playtime_minutes) || game.store_playtime_minutes || game.last_played ||
+        !plugins_.contributions("details", &game).empty()) cards.push_back(Card::playtime);
     cards.push_back(Card::description);
     cards.push_back(Card::facts);
     return cards;
@@ -354,6 +355,7 @@ void Launcher::tickPsfiveDetails(float dt, bool& needs_paint) {
         if (gameKey(cards_[selected_].game) != psfive_details_key_) psfiveLoadDetails(cards_[selected_].game);
         if (preview_.request(cards_[selected_].game, account_)) needs_paint = true;
         requestFocusedAchievements(cards_[selected_].game); // Local and plugin achievements (once per game).
+        requestGameComparisons(cards_[selected_].game);     // The details plugin's times (HowLongToBeat).
     }
     if (std::abs(psfive_details_progress_ - target) > 0.001f) {
         psfive_details_progress_ += (target - psfive_details_progress_) * ease;

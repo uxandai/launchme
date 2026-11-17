@@ -36,7 +36,7 @@ int LauncherUiTest::excludedGames(HWND window) {
         const int row = context_menu::row(item, app.menuRows());
         if (row < 0) return false;
         app.mouse_transition_until_ = 0;
-        const float x = (bounds.left + 30) * view.scale, y = (bounds.top + 8 + row * 53 + 24) * view.scale;
+        const float x = (bounds.left + 30) * view.scale, y = (bounds.top + context_menu::rowTop(row, app.menuRows()) + 24) * view.scale;
         if (!app.hoverButton(x, y)) return false;
         app.click(x, y, false); return true;
     };

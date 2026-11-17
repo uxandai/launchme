@@ -12,16 +12,17 @@
 // Drawing, clicks and the keys share this geometry.
 //
 // With Zrzuty ekranu i podobne gry (Interfejs) the page goes on below the cards: a strip of the
-// game's screenshots and one of similar games; Down from the cards scrolls the page up to them
-// (Layout::scroll moves everything; the background stays).
+// game's screenshots and one of similar games; Down from the cards scrolls the page a section at a
+// time, the focused strip's heading near the top (Layout::scroll moves everything; the background
+// stays, blurred). Cards and strips measure as PSfive's details (psfive_details_layout.hpp).
 //
 // Action indices (Launcher::detail_action_): -1 Back, 0 the primary action, 1 "…",
 // then the ones a game may have (identify, favourite, collections, versions, Zamknij grę beside
 // Wróć while it runs, the cloud after "…"), then the achievements card, the rating and the plugin card.
 namespace details_layout {
-enum class Kind { back, rating, primary, close, more, cloud, collections, favorite, versions, identify, achievements, plugin, shot, similar };
-// The strips' targets: a screenshot's and a similar game's action, by index.
-inline constexpr int shot_action = 100000, similar_action = 200000;
+enum class Kind { back, rating, primary, close, more, cloud, collections, favorite, versions, identify, achievements, plugin, description, shot, similar };
+// The strips' targets: a screenshot's and a similar game's action, by index; the Opis card's.
+inline constexpr int shot_action = 100000, similar_action = 200000, description_action = 90000;
 inline bool shotAction(int action) { return action >= shot_action && action < similar_action; }
 inline bool similarAction(int action) { return action >= similar_action && action < similar_action + 100000; }
 // The actions shown for this game (-2 or false: none).
@@ -29,6 +30,8 @@ struct Actions {
     int identify = -2, favorite = -2, collections = -2, versions = -2;
     int close = -2, cloud = -2; // ✕ "Zamknij grę" beside Wróć; the cloud saves after "…" (Aurelia).
     int achievements = -2, rating = -2, plugin = -2;
+    int description = -2;   // The Opis card (description_action): Enter shows the whole description.
+    bool playtime = false;  // A Czas gry card (play time, last played, the plugin's comparison) even without the plugin.
     // The rating pill ends the line of facts, after text only the renderer measures: its
     // rectangle as last drawn (Renderer::ratingLink); empty before the first frame.
     settings_ui::Rect rating_rect{};
@@ -42,7 +45,7 @@ struct Item {
     int action;
     Kind kind;
     settings_ui::Rect rect;
-    bool card() const { return kind == Kind::achievements || kind == Kind::plugin; }
+    bool card() const { return kind == Kind::achievements || kind == Kind::plugin || kind == Kind::description; }
     bool media() const { return kind == Kind::shot || kind == Kind::similar; }
 };
 // Pill widths: wide enough for the longest label (Polish and English).
@@ -62,8 +65,9 @@ inline float buttonWidth(Kind kind) {
 struct Layout {
     float width, height;
     float scroll = 0; // The page moved up to show the strips under the cards.
-    static constexpr float margin = 68, button_height = 54, gap = 12, card_gap = 16;
-    static constexpr float shot_width = 352, shot_height = 198, similar_size = 170, strip_gap = 18;
+    static constexpr float margin = 77, button_height = 54, gap = 12, card_gap = 18;
+    static constexpr float shot_width = 400, shot_height = 225, similar_size = 170, strip_gap = 18;
+    static constexpr float section_top = 110; // A focused strip's heading once scrolled to it.
     float left() const { return margin; }
     float right() const { return width - margin; }
     // The achievements list (achievements_view.hpp) over the page: a centred panel.
@@ -134,12 +138,12 @@ struct Layout {
         const float x = left() + static_cast<float>(index) * (similar_size + strip_gap) - a.similar_scroll;
         return {x, similarTop(a), x + similar_size, similarTop(a) + similar_size};
     }
-    // How far the page moves up while a strip has the focus: its bottom clear of the hints.
-    float mediaScroll(const Actions& a) const {
+    // How far the page moves up while a strip has the focus: a section at a time, its heading near
+    // the top (as PSfive's details scroll).
+    float mediaScroll(const Actions& a, bool similar_focus) const {
         if (!a.media()) return 0;
         const Layout top{width, height};
-        const float bottom = a.similar ? top.similarTop(a) + similar_size : top.shotsTop() + shot_height;
-        return std::max(0.0f, bottom + 72 - height);
+        return std::max(0.0f, (similar_focus ? top.similarLabel(a) : top.shotsLabel()) - section_top);
     }
     // Where a strip slides to keep its focused item in view (the one after it peeking in).
     float stripScroll(size_t focus, size_t count, float step) const {
@@ -147,24 +151,19 @@ struct Layout {
         if (count <= visible || focus + 1 < visible) return 0;
         return static_cast<float>(std::min(focus + 2 - visible, count - visible)) * step;
     }
-    // Cards: the description, the facts table, and (with achievements or a plugin) a progress column.
-    bool progress(const Actions& a) const { return a.achievements >= 0 || a.plugin >= 0; }
-    settings_ui::Rect description(const Actions& a) const {
-        const float w = right() - left() - (progress(a) ? 2 : 1) * card_gap;
-        return {left(), cardsTop(), left() + w * (progress(a) ? 0.44f : 0.62f), cardsBottom()};
+    // Cards, as PSfive's activity cards: one width each (a quarter of the row), in order the
+    // achievements, the plugin's comparison, the description, the facts.
+    bool progress(const Actions& a) const { return a.achievements >= 0 || a.plugin >= 0 || a.playtime; }
+    settings_ui::Rect slot(int index) const {
+        const float w = (right() - left() - 3 * card_gap) / 4, x = left() + static_cast<float>(index) * (w + card_gap);
+        return {x, cardsTop(), x + w, cardsBottom()};
     }
-    settings_ui::Rect facts(const Actions& a) const {
-        const float w = right() - left() - (progress(a) ? 2 : 1) * card_gap;
-        const float x = description(a).right + card_gap;
-        return {x, cardsTop(), progress(a) ? x + w * 0.28f : right(), cardsBottom()};
-    }
-    settings_ui::Rect progressCard(const Actions& a, bool plugin) const {
-        const float x = facts(a).right + card_gap;
-        const bool both = a.achievements >= 0 && a.plugin >= 0;
-        if (!both) return {x, cardsTop(), right(), cardsBottom()};
-        const float middle = (cardsTop() + cardsBottom() - card_gap) * 0.5f;
-        return plugin ? settings_ui::Rect{x, middle + card_gap, right(), cardsBottom()} : settings_ui::Rect{x, cardsTop(), right(), middle};
-    }
+    // The Czas gry card stands where the plugin's comparison stood (it holds that comparison too).
+    bool timeCard(const Actions& a) const { return a.plugin >= 0 || a.playtime; }
+    int leading(const Actions& a) const { return (a.achievements >= 0) + timeCard(a); }
+    settings_ui::Rect description(const Actions& a) const { return slot(leading(a)); }
+    settings_ui::Rect facts(const Actions& a) const { return slot(leading(a) + 1); }
+    settings_ui::Rect progressCard(const Actions& a, bool plugin) const { return slot(plugin && a.achievements >= 0 ? 1 : 0); }
     // Every focus target: Back, the rating, the buttons, the cards.
     std::vector<Item> items(const Actions& a) const {
         std::vector<Item> all{{-1, Kind::back, back()}};
@@ -173,6 +172,7 @@ struct Layout {
         all.insert(all.end(), row.begin(), row.end());
         if (a.achievements >= 0) all.push_back({a.achievements, Kind::achievements, progressCard(a, false)});
         if (a.plugin >= 0) all.push_back({a.plugin, Kind::plugin, progressCard(a, true)});
+        if (a.description >= 0) all.push_back({a.description, Kind::description, description(a)});
         for (size_t i = 0; i < a.shots; ++i) all.push_back({shot_action + static_cast<int>(i), Kind::shot, shot(a, i)});
         for (size_t i = 0; i < a.similar; ++i) all.push_back({similar_action + static_cast<int>(i), Kind::similar, similar(a, i)});
         return all;

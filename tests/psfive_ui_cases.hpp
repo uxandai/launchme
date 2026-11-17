@@ -78,7 +78,7 @@ int LauncherUiTest::psfive(HWND window) {
     const auto view = app.renderer_.viewport();
     if (std::abs(app.cards_[0].x - layout::tabs_left) > 1 || std::abs(app.cards_[0].size - 182.0f) > 1 ||
         std::abs(app.cards_[0].y - layout::row_top) > 1) return 4905;
-    if (std::abs(app.cards_[1].x - layout::tileLeft(1)) > 1 || std::abs(app.cards_[1].size - 114.4f) > 1 ||
+    if (std::abs(app.cards_[1].x - layout::tileLeft(1, 1, layout::tabs_left)) > 1 || std::abs(app.cards_[1].size - 114.4f) > 1 ||
         std::abs(app.cards_[1].y - layout::row_top) > 1 || app.cards_[0].emphasis < 0.99f) return 4906;
     // As measured on the PS5 (1920 x 1080 -> 1600 x 900): "Graj" 145 px over the bottom edge, clear
     // of the quick bar; the next tile and the name start 12 px after the focused tile.
@@ -95,12 +95,12 @@ int LauncherUiTest::psfive(HWND window) {
         if (!app.psfiveIntro() || app.cards_[0].opacity > 0.01f || app.cards_[3].opacity > 0.01f) return 4870;
         step(15); // 0.95 s: the first tile in place but small; a later one still on its way from the right.
         if (std::abs(app.cards_[0].x - layout::tabs_left) > 1 || std::abs(app.cards_[0].size - layout::tileSize(false)) > 1 ||
-            app.cards_[0].emphasis > 0.01f || app.cards_[8].x < layout::tileLeft(8) + 100) return 4871;
+            app.cards_[0].emphasis > 0.01f || app.cards_[8].x < layout::tileLeft(8, 1, layout::tabs_left) + 100) return 4871;
         if (!capture(L"psfive-intro-row.png")) return 4872;
         step(8); // 1.35 s: the first growing, the row moving aside.
         if (app.cards_[0].size <= layout::tileSize(false) + 1 || !capture(L"psfive-intro-grow.png")) return 4873;
         step(10); // 1.85 s: done, as the row rests.
-        if (app.psfive_intro_ || std::abs(app.cards_[0].size - 182.0f) > 1 || std::abs(app.cards_[1].x - layout::tileLeft(1)) > 1 ||
+        if (app.psfive_intro_ || std::abs(app.cards_[0].size - 182.0f) > 1 || std::abs(app.cards_[1].x - layout::tileLeft(1, 1, layout::tabs_left)) > 1 ||
             app.cards_[0].emphasis < 0.99f) return 4874;
     }
     {
@@ -143,13 +143,12 @@ int LauncherUiTest::psfive(HWND window) {
         if (!capture(L"psfive-download-paused.png")) return 5046;
         install = saved;
     }
-    // Right: the focus stays aligned with the tabs/logo/buttons. Earlier tiles leave under the
-    // left clip and cannot be clicked in the margin.
+    // Right: the focus moves toward its anchor (a tile and a half from the left); the earlier
+    // tiles stay in view on its left.
     app.navigate(1); app.navigate(1); settle();
-    if (app.selected_ != 2 || std::abs(app.cards_[2].x - layout::anchorX()) > 1 || std::abs(app.cards_[1].x - layout::tileLeft(-1)) > 1 ||
-        std::abs(app.cards_[0].x - layout::tileLeft(-2)) > 1 || app.cards_[1].x + app.cards_[1].size >= layout::rowClipLeft() ||
-        app.cardHit(1, app.cards_[1].x + app.cards_[1].size - 3, app.cards_[1].y + 10) ||
-        std::abs(app.cards_[2].x - play_rest.left) > 1) return 4908;
+    const float anchor = layout::rowAnchor(2);
+    if (app.selected_ != 2 || std::abs(app.cards_[2].x - anchor) > 1 || std::abs(app.cards_[1].x - layout::tileLeft(-1, 1, anchor)) > 1 ||
+        std::abs(app.cards_[0].x - layout::tileLeft(-2, 1, anchor)) > 1 || app.cards_[1].x + app.cards_[1].size <= 0) return 4908;
     if (!capture(L"psfive-scrolled.png")) return 4909;
     // Enter/A on a game opens its details with "Szczegóły" as the default action (no launch); with
     // "Uruchom / instaluj" it goes down to "Graj".
@@ -190,16 +189,23 @@ int LauncherUiTest::psfive(HWND window) {
         app.desktop_details_.achievements_unlocked = 17; app.desktop_details_.achievements_total = 42;
         app.settings_.psfive_details = true;
         app.psfiveVertical(1); // Down from "Graj".
-        if (app.psfive_details_ != 1 || app.psfiveActions()) return 5130;
+        // Down from "Graj": the activity cards first (achievements, Czas gry, Opis, Informacje), then the screenshots.
+        if (app.psfive_details_ != 0 || app.psfiveActions()) return 5130;
         settle();
-        if (!app.psfive_focus_glide_ || !capture(L"psfive-details.png")) return 5131;
+        if (!app.psfive_focus_glide_ || !capture(L"psfive-details-cards.png")) return 5131;
+        app.psfiveVertical(1);
+        if (app.psfive_details_ != 1) return 5140;
+        settle();
+        if (!capture(L"psfive-details.png")) return 5141;
         // Right along the screenshots: the strip slides as the tiles do (caught mid-way), the frame on its picture.
         for (int i = 0; i < 4; ++i) app.psfiveDetailsHorizontal(1);
         frame(); frame(); frame();
         if (app.psfive_shot_ != 4 || app.psfive_shots_scroll_ <= 0 || !capture(L"psfive-details-slide.png")) return 5137;
         settle();
-        // Five pictures, four in view: the last one brings the strip one step along.
-        if (std::abs(app.psfive_shots_scroll_ - (psfive_details::shot_width + psfive_details::shot_gap)) > 1) return 5138;
+        // Five pictures, fewer in view: the last one brings the strip along so it stays in view.
+        const float shot_step = psfive_details::shot_width + psfive_details::shot_gap;
+        if (app.psfive_shots_scroll_ < shot_step - 1 ||
+            std::abs(app.psfive_shots_scroll_ - psfive_details::scrollFor(4, 5, view.width, shot_step, app.psfiveDetailsLeft())) > 1) return 5138;
         if (!capture(L"psfive-details-scrolled.png")) return 5139;
         for (int i = 0; i < 4; ++i) app.psfiveDetailsHorizontal(-1);
         settle();
@@ -207,7 +213,7 @@ int LauncherUiTest::psfive(HWND window) {
         if (app.psfive_details_ != 2) return 5132;
         settle();
         if (!capture(L"psfive-details-similar.png")) return 5133;
-        app.psfiveDetailsVertical(-1); app.psfiveDetailsVertical(-1);
+        app.psfiveDetailsVertical(-1); app.psfiveDetailsVertical(-1); app.psfiveDetailsVertical(-1);
         if (app.psfive_details_ != -1 || app.psfive_action_ != 0) return 5134;
         app.settings_.psfive_details = false;
         settle();
@@ -223,11 +229,11 @@ int LauncherUiTest::psfive(HWND window) {
     using MenuItem = context_menu::Item;
     if (context_menu::item(0, app.menuRows()) != MenuItem::details ||
         context_menu::row(MenuItem::primary, app.menuRows()) != -1 || app.menu_selected_ != 0) return 5051;
-    // Details stays first with a live session; plugin actions live in Details' "…", Więcej opcji ends the menu.
+    // Details stays first with a live session; every other option follows (plugins' too), no Więcej opcji.
     auto session_menu = app.menuRows(); session_menu.suspend = session_menu.session = true; session_menu.plugins = 2;
     if (context_menu::item(0, session_menu) != MenuItem::details || context_menu::item(1, session_menu) != MenuItem::suspend ||
-        context_menu::item(2, session_menu) != MenuItem::close || context_menu::row(MenuItem::plugin, session_menu) != -1 ||
-        context_menu::item(context_menu::rows(session_menu) - 1, session_menu) != MenuItem::more) return 5052;
+        context_menu::item(2, session_menu) != MenuItem::close || context_menu::row(MenuItem::plugin, session_menu) < 3 ||
+        context_menu::row(MenuItem::more, session_menu) != -1) return 5052;
     app.menu_progress_ = 1; settle();
     const auto menu = context_menu::bounds(app.cards_[app.selected_], app.menuRows(), app.menuBeside(), view.width, view.height, app.libraryMenuAnchor());
     if (menu.bottom > layout::action(1, view.height).top || menu.left != layout::action(1, view.height).left) return 4916;
@@ -339,8 +345,8 @@ int LauncherUiTest::psfive(HWND window) {
     app.controllerNavigate(1); // Pad Right opens More.
     app.categoryMenuMove(5); // Highlight a category different from the currently shown one.
     const auto before_right = app.category_;
-    app.categoryMenuHorizontal(1, false); // The Widgets and Menu icons are gone: nothing follows More, and no category is accepted.
-    if (app.psfive_top_ != icons - 1 || app.category_ != before_right) return 5021;
+    app.categoryMenuHorizontal(1, false); // Right from More: the search icon, and no category is accepted.
+    if (app.psfive_top_ != icons + layout::top_search || app.category_ != before_right) return 5021;
     app.closeCategoryMenu();
     app.psfiveFocusTop(2); // The last tab before More.
     if (app.category_menu_open_ || app.psfive_top_ != 2 || app.category_ != tabs[2]) return 4964;
@@ -413,17 +419,17 @@ int LauncherUiTest::psfive(HWND window) {
     if (!app.psfiveActive() || app.category_ != action_category || app.selected_ != app.cards_.size() - 1) return 4959;
     app.back();
     if (app.category_ != 0 || app.cards_.back().game.kind != GameKind::all) return 4960;
-    // Mouse: a click on another tile focuses it, on the focused one goes down to "Graj"; "…" opens
-    // the menu, "Graj" starts the game.
+    // Mouse: a click on a tile focuses it and goes down to "Graj" (the hub rises); "…" opens the
+    // menu, "Graj" starts the game.
     settle();
     app.mouse_transition_until_ = 0;
     const auto clickAt = [&](float x, float y, bool double_click = false) { app.click(x * view.scale, y * view.scale, double_click); };
     const auto clickCard = [&](size_t index) { const auto& card = app.cards_[index]; clickAt(card.x + card.width() * 0.5f, card.y + card.size * 0.5f); };
     clickCard(3);
-    if (app.selected_ != 3 || app.psfive_action_ != -1 || app.pending_launch_) return 4934;
-    settle(); clickCard(3);
-    if (app.psfive_action_ != 0 || app.pending_launch_) return 4935;
-    const auto more = layout::action(1, view.height), play = layout::action(0, view.height);
+    if (app.selected_ != 3 || app.psfive_action_ != 0 || app.pending_launch_) return 4934;
+    settle();
+    if (app.psfive_hub_ < 0.99f) return 4935;
+    const auto more = layout::action(1, view.height, 1, 0, app.psfiveRaise()), play = layout::action(0, view.height, 1, 0, app.psfiveRaise());
     if (!app.hoverButton(((more.left + more.right) * 0.5f) * view.scale, ((more.top + more.bottom) * 0.5f) * view.scale)) return 4936;
     clickAt((more.left + more.right) * 0.5f, (more.top + more.bottom) * 0.5f);
     if (!app.menu_open_ || app.psfive_action_ != 1 || !app.libraryMenuAnchor()) return 4937;
@@ -436,9 +442,15 @@ int LauncherUiTest::psfive(HWND window) {
     clickAt((play.left + play.right) * 0.5f, (play.top + play.bottom) * 0.5f);
     if (!app.pending_launch_ || app.pending_game_.app_id != app.cards_[3].game.app_id) return 4938;
     app.pending_launch_ = false; app.launch_progress_ = 0;
-    // The Menu and Widgets icons are gone from the top bar: a click where they stood does nothing.
-    clickAt(view.width - layout::bar_margin - layout::clock_width - layout::clock_gap - layout::icon_radius, layout::top_center);
-    if (app.quick_open_ || app.friends_open_) return 4973;
+    // The top bar's icons: Szukaj and Ustawienia; a click on the gear opens the settings.
+    {
+        app.psfiveFocusAction(-1); settle(); // Back to the row: the bar returns as the hub goes down.
+        app.mouse_transition_until_ = 0;
+        const auto gear = layout::topItem(layout::top_settings, view.width, app.settings_.psfive_clock);
+        clickAt((gear.left + gear.right) * 0.5f, (gear.top + gear.bottom) * 0.5f);
+        if (app.quick_open_ || app.friends_open_ || !app.settingsOpen()) return 4973;
+        app.back(); settle();
+    }
     // Mouse overflow: opens below the fourth tab, selects only later categories, dismisses outside.
     app.paint(); app.mouse_transition_until_ = 0;
     float more_x = -1;
@@ -552,20 +564,20 @@ int LauncherUiTest::psfive(HWND window) {
     app.saveSettings();
     if (loadAppSettings().psfive_size != AppSettings::XmbSize::large || loadAppSettings().home_layout != AppSettings::HomeLayout::psfive ||
         loadAppSettings().psfive_clock) return 4943;
-    if (layout::top_count != 0 || layout::hitTop(view.width - layout::bar_margin - layout::icon_radius, layout::top_center, view.width, false) != -1) return 4979; // The icons are gone.
+    if (layout::top_count != 2 || layout::hitTop(view.width - layout::bar_margin - layout::icon_radius, layout::top_center, view.width, false) != layout::top_settings) return 4979; // The icons in the clock's place.
     app.settings_state_.options = app.settings_state_.editing = false; app.back(); app.showCategory(0); settle();
     // Every size is +30%: large focus 168 -> 218.4, small focus 112 -> 145.6.
     // Changing size never shifts the row/buttons from the shared left margin.
     const float large = layout::sizeScale(2);
     if (!app.psfiveActive() || std::abs(app.cards_[app.selected_].size - 218.4f) > 1 ||
-        std::abs(app.cards_[app.selected_].x - layout::tabs_left) > 1 ||
+        std::abs(app.cards_[app.selected_].x - layout::rowAnchor(app.selected_, large)) > 1 ||
         std::abs(app.cards_[app.selected_ + 1].size - 137.28f) > 1 ||
-        layout::action(0, view.height, large).left != layout::tabs_left) return 4944;
+        std::abs(layout::action(0, view.height, large).left - layout::anchorX(large)) > 0.5f) return 4944;
     if (!capture(L"psfive-large.png")) return 4961; // Also: no clock.
     app.settings_.psfive_size = AppSettings::XmbSize::compact; settle();
     if (std::abs(app.cards_[app.selected_].size - 145.6f) > 1 ||
         std::abs(app.cards_[app.selected_ + 1].size - 91.52f) > 1 ||
-        std::abs(app.cards_[app.selected_].x - layout::tabs_left) > 1) return 4962;
+        std::abs(app.cards_[app.selected_].x - layout::rowAnchor(app.selected_, layout::sizeScale(0))) > 1) return 4962;
     if (!capture(L"psfive-small.png")) return 5043;
     // Leaving PSfive: Recent is eight games again and the slider is gone.
     app.setHomeLayout(0); app.showCategory(0);

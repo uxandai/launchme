@@ -225,6 +225,11 @@ details_layout::Actions Launcher::detailsActions() const {
     actions.achievements = achievementsDetailAction();
     actions.rating = ratingDetailAction();
     actions.plugin = pluginDetailAction();
+    if (screen_ == ScreenMode::details && !cards_.empty() && isGame(cards_[0].game)) {
+        actions.description = details_layout::description_action;
+        const auto& game = cards_[0].game;
+        actions.playtime = game.last_played || game.store_playtime_minutes || (details_.playtime_minutes && *details_.playtime_minutes);
+    }
     if (actions.rating >= 0 && screen_ == ScreenMode::details) actions.rating_rect = renderer_.ratingLink(); // As last drawn.
     detailsMediaActions(actions);
     return actions;

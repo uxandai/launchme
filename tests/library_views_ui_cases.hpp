@@ -491,7 +491,7 @@ int LauncherUiTest::libraryViews(HWND window) {
     if (app.screen_ != ScreenMode::library || !app.menu_open_ || app.cards_[app.selected_].game.app_id != detailed_game) return 1968;
     const auto menu = context_menu::bounds(app.cards_[app.selected_], app.menuRows(), app.menuBeside(), viewport.width, viewport.height, app.libraryMenuAnchor());
     if (std::abs(menu.left - more_button.left) > 1 || menu.top < 8 || menu.bottom > viewport.height - 8) return 2610;
-    const float details_y = menu.top + 8 + context_menu::row(context_menu::Item::details, app.menuRows()) * 53 + 24;
+    const float details_y = menu.top + context_menu::rowTop(context_menu::row(context_menu::Item::details, app.menuRows()), app.menuRows()) + 24;
     app.click((menu.left + 40) * scale, details_y * scale, false);
     if (app.screen_ != ScreenMode::details) return 2611; // Anchored menu uses the same geometry for picking.
     app.back(); settle();

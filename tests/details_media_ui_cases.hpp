@@ -67,7 +67,7 @@ int LauncherUiTest::detailsMedia(HWND window) {
     {
         const auto layout = app.detailsLayout();
         const auto actions = app.detailsActions();
-        if (app.details_scroll_ < 100 || std::abs(app.details_scroll_ - layout.mediaScroll(actions)) > 1) return 22006;
+        if (app.details_scroll_ < 100 || std::abs(app.details_scroll_ - layout.mediaScroll(actions, false)) > 1) return 22006;
         if (layout.similar(actions, 0).bottom > view.height - 60 || layout.shot(actions, 0).top < 0) return 22007;
     }
     if (!capture(L"details-media-shots.png")) return 22008;

@@ -37,7 +37,9 @@ int LauncherUiTest::hltbDetails(HWND window) {
     if (!capture(L"hltb-details.png")) return 3304;
     const auto comparison = app.renderer_.detailsComparison(), achievements = app.renderer_.detailsAchievements();
     const auto view = app.renderer_.viewport(); const details_layout::Layout layout{view.width, view.height};
-    if (comparison.top <= achievements.bottom || comparison.bottom > view.height - 10 || comparison.right != layout.right()) return 3305;
+    // One row of equal cards: Osiągnięcia, then Czas gry with the comparison.
+    if (comparison.left <= achievements.right || std::abs(comparison.top - achievements.top) > 0.5f || comparison.bottom > view.height - 10 ||
+        std::abs((comparison.right - comparison.left) - (achievements.right - achievements.left)) > 0.5f) return 3305;
     // The cards sit under the buttons, the logo (or title) over the line of facts.
     const auto actions = app.detailsActions();
     if (achievements.top <= layout.buttonsTop(actions) + layout.button_height || layout.logo(actions).bottom >= layout.factsCenter(actions)) return 3306;

@@ -61,9 +61,13 @@ void Renderer::drawDetails() {
             target_->FillRectangle(D2D1::RectF(0, height * 0.4f, width, height), down.Get());
     }
     const auto* media = context_->details_media ? &*context_->details_media : nullptr;
-    // Scrolled down to the strips: the picture darker behind them.
+    // Scrolled down to the strips: the picture blurred and a little darker behind them (as PSfive's details).
     if (media && media->scroll > 0.5f) {
-        brush(D2D1::ColorF(0.006f, 0.008f, 0.012f, std::min(0.72f, media->scroll / 400.0f)));
+        const float deep = std::min(1.0f, media->scroll / 400.0f);
+        ComPtr<ID2D1RectangleGeometry> all;
+        if (SUCCEEDED(factory_->CreateRectangleGeometry(D2D1::RectF(0, 0, width, height), all.GetAddressOf())) && frostCapture(all.Get(), 18))
+            frostDraw(all.Get(), deep);
+        brush(D2D1::ColorF(0.006f, 0.008f, 0.012f, 0.35f * deep));
         target_->FillRectangle(D2D1::RectF(0, 0, width, height), solid_.Get());
     }
     beginScreenForeground();
@@ -230,24 +234,7 @@ void Renderer::drawDetails() {
         glassFill(glassPanel(D2D1::RoundedRect(box(r), 20, 20), 18), D2D1::ColorF(0.05f, 0.055f, 0.07f, 0.66f));
         float x = r.left + 24;
         if (trophy) {
-            // A cup with two handles on a stem and a base: the achievements' pictogram.
-            const float cx = x + 8, cy = r.top + 30;
-            const auto ink = D2D1::ColorF(0.96f, 0.78f, 0.32f);
-            Microsoft::WRL::ComPtr<ID2D1PathGeometry> cup;
-            Microsoft::WRL::ComPtr<ID2D1GeometrySink> sink;
-            if (SUCCEEDED(factory_->CreatePathGeometry(cup.GetAddressOf())) && SUCCEEDED(cup->Open(sink.GetAddressOf()))) {
-                sink->BeginFigure(D2D1::Point2F(cx - 6, cy - 8), D2D1_FIGURE_BEGIN_FILLED);
-                sink->AddLine(D2D1::Point2F(cx + 6, cy - 8));
-                sink->AddLine(D2D1::Point2F(cx + 6, cy - 3));
-                sink->AddArc(D2D1::ArcSegment(D2D1::Point2F(cx - 6, cy - 3), D2D1::SizeF(6, 6), 0, D2D1_SWEEP_DIRECTION_CLOCKWISE, D2D1_ARC_SIZE_SMALL));
-                sink->EndFigure(D2D1_FIGURE_END_CLOSED);
-                if (SUCCEEDED(sink->Close())) { brush(ink); target_->FillGeometry(cup.Get(), solid_.Get()); }
-            }
-            brush(ink);
-            target_->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(cx - 7, cy - 4.5f), 2.6f, 3), solid_.Get(), 1.5f);
-            target_->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(cx + 7, cy - 4.5f), 2.6f, 3), solid_.Get(), 1.5f);
-            target_->FillRectangle(D2D1::RectF(cx - 1.2f, cy + 2, cx + 1.2f, cy + 6), solid_.Get());
-            target_->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(cx - 5, cy + 5.5f, cx + 5, cy + 8.5f), 1.2f, 1.2f), solid_.Get());
+            drawTrophy(x + 8, r.top + 30, 1.0f);
             x += 26;
         }
         textLine(upper(heading), x, r.top + 30, r.right - x - 24, friend_section_font_.Get(), gray(0.6f));
@@ -257,10 +244,18 @@ void Renderer::drawDetails() {
         line(cx - 3, cy - 6, cx + 3, cy, ink, 1.8f);
         line(cx + 3, cy, cx - 3, cy + 6, ink, 1.8f);
     };
+    // Scrolled to the strips, the cards have left the screen (only their bottom edge would stay).
+    const bool cards_shown = layout.cardsBottom() > 70;
     // Description.
-    {
+    if (cards_shown) {
         const auto r = layout.description(actions);
         card(r, tr(L"Opis"));
+        if (focus && focus->kind == details_layout::Kind::description) { // Focused: lighter, as the other cards (Enter: all of it).
+            auto h = box(focus->rect);
+            if (context_->details_glide) { const auto& g = *context_->details_glide; h = D2D1::RectF(g.left, g.top, g.right, g.bottom); }
+            brush(gray(1, 0.12f));
+            target_->FillRoundedRectangle(D2D1::RoundedRect(h, 20, 20), solid_.Get());
+        }
         const auto description = context_->details_loading ? std::wstring(tr(L"Pobieranie opisu gry…")) :
             info && !info->description.empty() ? info->description :
             info && !info->error.empty() ? info->error : std::wstring(tr(L"Opis gry nie jest dostępny."));
@@ -270,7 +265,7 @@ void Renderer::drawDetails() {
         else paragraph(description, r.left + 24, r.top + 52, r.right - r.left - 48, details_body_font_.Get(), D2D1::ColorF(0.80f, 0.82f, 0.85f), lines);
     }
     // Facts table: label and value on one line each.
-    {
+    if (cards_shown) {
         const auto r = layout.facts(actions);
         card(r, tr(L"Informacje"));
         std::vector<std::pair<const wchar_t*, std::wstring>> rows;
@@ -279,7 +274,6 @@ void Renderer::drawDetails() {
                     {tr(L"Gatunek"), info->genres}};
             if (!info->players.empty()) rows.push_back({tr(L"Gracze"), info->players});
             if (!info->score.empty()) rows.push_back({tr(L"Ocena"), info->score});
-            if (info->playtime_minutes) rows.push_back({tr(L"Czas gry"), formatPlaytime(*info->playtime_minutes)});
         }
         const float top = r.top + 66, step = rows.empty() ? 0 : std::min(34.0f, (r.bottom - 22 - top) / rows.size());
         const float label_width = std::min(130.0f, (r.right - r.left - 48) * 0.36f);
@@ -299,53 +293,73 @@ void Renderer::drawDetails() {
         target_->FillRoundedRectangle(D2D1::RoundedRect(r, std::min(20.0f, (r.bottom - r.top) * 0.5f), std::min(20.0f, (r.bottom - r.top) * 0.5f)), solid_.Get());
     };
     // Achievements: unlocked of all, the share and its bar; it opens the list.
-    if (actions.achievements >= 0 && info && info->achievements_total) {
+    if (cards_shown && actions.achievements >= 0 && info && info->achievements_total) {
         const auto r = layout.progressCard(actions, false);
         details_achievements_ = r;
         card(r, tr(L"Osiągnięcia"), true);
         progressHighlight(actions.achievements);
         chevron(r, gray(0.8f));
-        const float share = std::clamp(static_cast<float>(info->achievements_unlocked) / info->achievements_total, 0.0f, 1.0f);
-        const bool compact = r.bottom - r.top < 180;
-        const float value_y = r.top + (compact ? 70 : 92);
-        const std::wstring count = std::to_wstring(info->achievements_unlocked) + L" / " + std::to_wstring(info->achievements_total);
-        textLine(count, r.left + 24, value_y, r.right - r.left - 140, settings_heading_font_.Get(), gray(0.97f));
-        textLine(std::to_wstring(static_cast<int>(share * 100 + 0.5f)) + L"%", r.right - 124, value_y, 100, category_font_.Get(), gray(0.72f),
-                 DWRITE_TEXT_ALIGNMENT_TRAILING);
-        const float bar = value_y + (compact ? 30 : 40);
-        brush(gray(1, 0.14f));
-        target_->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(r.left + 24, bar, r.right - 24, bar + 6), 3, 3), solid_.Get());
-        if (share > 0) {
-            brush(uiAccent());
-            target_->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(r.left + 24, bar, r.left + 24 + (r.right - r.left - 48) * share, bar + 6), 3, 3), solid_.Get());
-        }
+        drawAchievementRing(r, info->achievements_unlocked, info->achievements_total, 1.0f);
     }
-    // The plugin's comparison (HowLongToBeat): our time against the main story; it opens the plugin's page.
-    if (actions.plugin >= 0 && context_->detail_comparison) {
-        const auto& comparison = *context_->detail_comparison;
+    // Czas gry: the play time, when last played and the details plugin's comparison (HowLongToBeat)
+    // in one card; with the plugin it is a target and opens the plugin's page.
+    if (cards_shown && layout.timeCard(actions)) {
         const auto r = layout.progressCard(actions, true);
-        details_comparison_ = r;
-        card(r, context_->detail_comparison_title);
-        progressHighlight(actions.plugin);
-        chevron(r, gray(0.8f));
-        const bool compact = r.bottom - r.top < 180;
-        if (comparison.main_seconds) {
-            const float y = r.top + (compact ? 62 : 80);
-            textLine(tr(L"Twój czas / główna fabuła"), r.left + 24, y, r.right - r.left - 48, settings_body_font_.Get(), palette::muted());
-            textLine(plugins::comparisonLabel(comparison, context_->detail_playtime_seconds), r.left + 24, y + 28, r.right - r.left - 48, menu_font_.Get(), gray(0.97f));
-            if (const auto share = plugins::timePercent(comparison, context_->detail_playtime_seconds)) {
-                const float bar = y + 52;
-                brush(gray(1, 0.14f));
-                target_->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(r.left + 24, bar, r.right - 24, bar + 6), 3, 3), solid_.Get());
-                if (*share > 0) {
-                    brush(uiAccent());
-                    target_->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(r.left + 24, bar,
-                        r.left + 24 + (r.right - r.left - 48) * static_cast<float>(std::min(*share / 100, 1.0)), bar + 6), 3, 3), solid_.Get());
-                }
-            }
-        } else textLine(comparison.status, r.left + 24, r.top + (compact ? 70 : 92), r.right - r.left - 48, settings_body_font_.Get(), palette::muted());
+        if (actions.plugin >= 0) details_comparison_ = r;
+        card(r, tr(L"Czas gry"));
+        if (actions.plugin >= 0) { progressHighlight(actions.plugin); chevron(r, gray(0.8f)); }
+        std::wstring playtime;
+        if (info && info->playtime_minutes && *info->playtime_minutes) playtime = formatPlaytime(*info->playtime_minutes);
+        else if (game.store_playtime_minutes) playtime = formatPlaytime(game.store_playtime_minutes);
+        drawPlaytimeBody(r, playtime, context_->detail_last_played, context_->detail_comparison ? &*context_->detail_comparison : nullptr,
+                         context_->detail_playtime_seconds, 1.0f);
     }
     if (actions.media()) drawDetailsMedia(layout, actions, context_->detail_action);
     controls();
     if (media && media->viewer) drawShotViewer(media->shot, media->shots);
+    if (context_->detail_text_view) drawPsfiveTextView(game.name, info ? info->description : std::wstring{});
+}
+
+// A cup with two handles on a stem and a base: the achievements' pictogram.
+void Renderer::drawTrophy(float cx, float cy, float alpha) {
+    const auto ink = D2D1::ColorF(0.96f, 0.78f, 0.32f, alpha);
+    Microsoft::WRL::ComPtr<ID2D1PathGeometry> cup;
+    Microsoft::WRL::ComPtr<ID2D1GeometrySink> sink;
+    if (SUCCEEDED(factory_->CreatePathGeometry(cup.GetAddressOf())) && SUCCEEDED(cup->Open(sink.GetAddressOf()))) {
+        sink->BeginFigure(D2D1::Point2F(cx - 6, cy - 8), D2D1_FIGURE_BEGIN_FILLED);
+        sink->AddLine(D2D1::Point2F(cx + 6, cy - 8));
+        sink->AddLine(D2D1::Point2F(cx + 6, cy - 3));
+        sink->AddArc(D2D1::ArcSegment(D2D1::Point2F(cx - 6, cy - 3), D2D1::SizeF(6, 6), 0, D2D1_SWEEP_DIRECTION_CLOCKWISE, D2D1_ARC_SIZE_SMALL));
+        sink->EndFigure(D2D1_FIGURE_END_CLOSED);
+        if (SUCCEEDED(sink->Close())) { brush(ink); target_->FillGeometry(cup.Get(), solid_.Get()); }
+    }
+    brush(ink);
+    target_->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(cx - 7, cy - 4.5f), 2.6f, 3), solid_.Get(), 1.5f);
+    target_->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(cx + 7, cy - 4.5f), 2.6f, 3), solid_.Get(), 1.5f);
+    target_->FillRectangle(D2D1::RectF(cx - 1.2f, cy + 2, cx + 1.2f, cy + 6), solid_.Get());
+    target_->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(cx - 5, cy + 5.5f, cx + 5, cy + 8.5f), 1.2f, 1.2f), solid_.Get());
+}
+
+void Renderer::drawPlaytimeBody(settings_ui::Rect r, const std::wstring& playtime, const std::wstring& last_played,
+                                const plugins::TimeComparison* comparison, std::optional<uint64_t> played, float alpha) {
+    const float inner = r.right - r.left - 48;
+    textLine(playtime.empty() ? std::wstring(L"\u2014") : playtime, r.left + 24, r.top + 80, inner, settings_heading_font_.Get(), gray(0.97f, alpha));
+    if (!last_played.empty())
+        textLine(std::wstring(tr(L"Ostatnio")) + L" \u00b7 " + last_played, r.left + 24, r.top + 114, inner, settings_body_font_.Get(), palette::muted(alpha));
+    if (!comparison) return;
+    if (comparison->main_seconds) {
+        const float y = r.bottom - 76;
+        textLine(tr(L"Twój czas / główna fabuła"), r.left + 24, y, inner, settings_body_font_.Get(), palette::muted(alpha));
+        textLine(plugins::comparisonLabel(*comparison, played), r.left + 24, y + 26, inner, menu_font_.Get(), gray(0.97f, alpha));
+        if (const auto share = plugins::timePercent(*comparison, played)) {
+            const float bar = r.bottom - 26;
+            brush(gray(1, 0.14f * alpha));
+            target_->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(r.left + 24, bar, r.right - 24, bar + 6), 3, 3), solid_.Get());
+            if (*share > 0) {
+                brush(uiAccent(alpha));
+                target_->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(r.left + 24, bar,
+                    r.left + 24 + inner * static_cast<float>(std::min(*share / 100, 1.0)), bar + 6), 3, 3), solid_.Get());
+            }
+        }
+    } else if (!comparison->status.empty()) textLine(comparison->status, r.left + 24, r.bottom - 40, inner, settings_body_font_.Get(), palette::muted(alpha));
 }

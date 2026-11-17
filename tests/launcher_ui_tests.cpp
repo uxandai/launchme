@@ -1257,11 +1257,11 @@ public:
         app.openContextMenu();
         if (!app.pluginContext(crop_game).empty() || context_menu::item(1, app.menuRows()) != context_menu::Item::details) return 128;
         app.menuMove(10);
-        // Its own rows, and Odinstaluj last for an installed Steam game.
+        // Every option at once (no Więcej opcji), Odinstaluj among them for an installed Steam game.
         const auto own_rows = app.menuRows();
-        if (own_rows.uninstall != app.canUninstall(app.cards_[app.selected_].game) ||
-            context_menu::rows(own_rows) != context_menu::rows({}) + (own_rows.uninstall ? 1 : 0) + (own_rows.recent ? 1 : 0) || app.menu_selected_ != context_menu::rows(own_rows) - 1 ||
-            own_rows.uninstall != (context_menu::item(app.menu_selected_, own_rows) == context_menu::Item::uninstall)) return 129;
+        if (!own_rows.full || own_rows.uninstall != app.canUninstall(app.cards_[app.selected_].game) ||
+            context_menu::row(context_menu::Item::more, own_rows) != -1 || app.menu_selected_ != context_menu::rows(own_rows) - 1 ||
+            own_rows.uninstall != (context_menu::row(context_menu::Item::uninstall, own_rows) >= 0)) return 129;
         app.dismissMenu(); dispatched.clear();
         // The crop editor opens from "Zmień grafikę" ("Kadruj" beside "Szukaj", on Kwadrat), no longer from the game menu.
         app.openArtworkBrowser(crop_game);
@@ -1280,26 +1280,27 @@ public:
         artwork_failure::record(failures, crop_key, crop_game.name, failed_at, failed_at + 60000, false);
         app.retryGameArtwork(crop_game, false);
         if (artwork_failure::blockedUntil(failures, crop_key, crop_game.name, artwork_failure::now()) || !manualTextCrop(crop_file)) return 115;
-        // A click on the menu's Więcej opcji runs that row (Details with its "…" open), never the game under it.
+        // A click on the menu's Szczegóły runs that row (Details), never the game under it.
         if (app.artworkOpen()) app.back(); // Saving the crop returns to the artwork browser.
         app.openLibrary();
         if (app.cards_.empty()) return 160;
         app.cards_[0].x = 68; app.cards_[0].y = 190; app.cards_[0].size = 186;
         app.mouse_transition_until_ = 0; app.focusCard(0); app.openContextMenu();
         const auto menu_rows = app.menuRows();
-        const int last_row = context_menu::row(context_menu::Item::more, menu_rows);
+        const int last_row = context_menu::row(context_menu::Item::details, menu_rows);
         if (!app.menu_open_ || last_row < 1) return 160;
         const auto menu_view = app.renderer_.viewport();
         const auto menu_box = context_menu::bounds(app.cards_[app.selected_], menu_rows, app.menuBeside(), menu_view.width, menu_view.height, app.libraryMenuAnchor());
-        settings_ui::Rect row_box{menu_box.left, menu_box.top + 8 + 53.0f * last_row, menu_box.right, menu_box.top + 8 + 53.0f * (last_row + 1)};
+        settings_ui::Rect row_box{menu_box.left, menu_box.top + context_menu::rowTop(last_row, menu_rows), menu_box.right,
+                                  menu_box.top + context_menu::rowTop(last_row, menu_rows) + context_menu::row_step};
         if (app.menuDialog()) { // Duże menu gry: the same rows in the dialog.
             const context_menu::Dialog dialog{menu_view.width, menu_view.height, context_menu::rows(menu_rows)};
             row_box = dialog.row(last_row, dialog.first(app.menu_selected_));
         }
         const float row_x = (row_box.left + row_box.right) * 0.5f * menu_view.scale, row_y = (row_box.top + row_box.bottom) * 0.5f * menu_view.scale;
         app.click(row_x, row_y, false); // (A double click's second half would land on Details' "…" opened by it.)
-        if (app.pending_launch_ || app.screen_ != ScreenMode::details || !app.menu_open_ || !app.menuRows().detail_options) return 124;
-        app.back(); app.back(); // The "…", then Details.
+        if (app.pending_launch_ || app.screen_ != ScreenMode::details || app.menu_open_) return 124;
+        app.back();
         if (app.menu_open_ || app.screen_ == ScreenMode::details) return 124;
         auto late_cover = std::make_unique<CoverMessage>();
         late_cover->key = gameKey(crop_game); late_cover->generation = app.jobs_->generation.load();
@@ -1927,10 +1928,11 @@ int LauncherUiTest::quickResume(HWND window) {
     if (app.sessionState(first) != SessionState::running || app.actionLabel(first) != L"Wróć") return 303;
     app.openContextMenu();
     const auto live = app.menuRows();
-    // A running game: Wróć, Wstrzymaj, Zamknij grę, Szczegóły, Więcej opcji (never Odinstaluj or Usuń z ostatnio granych).
+    // A running game: Wróć, Wstrzymaj, Zamknij grę, Szczegóły, then its other options (never Odinstaluj or Usuń z ostatnio granych).
     if (!live.suspend || context_menu::item(1, live) != context_menu::Item::suspend || context_menu::item(2, live) != context_menu::Item::close ||
+        context_menu::item(3, live) != context_menu::Item::details ||
         context_menu::row(context_menu::Item::uninstall, live) != -1 || context_menu::row(context_menu::Item::forget_recent, live) != -1 ||
-        context_menu::item(context_menu::rows(live) - 1, live) != context_menu::Item::more || context_menu::rows(live) != 5) return 304;
+        context_menu::row(context_menu::Item::more, live) != -1) return 304;
     if (!capture(L"quick-resume-running.png")) return 305;
     app.menu_selected_ = 1; app.menuAccept();
     if (app.sessionState(first) != SessionState::frozen || log != std::vector<std::string>{"suspend:3000"} ||

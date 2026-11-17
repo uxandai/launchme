@@ -270,6 +270,8 @@ struct ViewContext {
     std::wstring store_status;
     const GameDetails* game_details = nullptr;
     std::optional<plugins::TimeComparison> detail_comparison;
+    std::wstring detail_last_played; // Szczegóły' Czas gry card: "Wczoraj" (empty: never).
+    bool detail_text_view = false;   // Szczegóły: the Opis card opened (the whole description over the page).
     std::optional<uint64_t> detail_playtime_seconds;
     std::wstring detail_comparison_title;
     int detail_comparison_action = -2;
@@ -518,6 +520,8 @@ struct ViewContext {
         std::vector<int> cards;        // The activity cards (psfive_details::Card), in order.
         size_t card = 0;               // The focused one.
         std::wstring playtime, last_played; // Czas gry: the hours, "Wczoraj".
+        std::optional<plugins::TimeComparison> comparison; // The details plugin's (HowLongToBeat) time against the main story.
+        std::optional<uint64_t> played_seconds;            // The time it compares.
         bool text_view = false;        // The whole description over the screen (Opis opened).
         float similar_up = 0; // 0..1: the similar games moved up into the screenshots' place (none to show).
         float focus_left = 0, focus_top = 0, focus_right = 0, focus_bottom = 0;

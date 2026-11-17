@@ -44,6 +44,10 @@ void Launcher::detailsMediaOpened() {
 bool Launcher::detailsMediaAccept() {
     if (screen_ != ScreenMode::details) return false;
     if (psfive_shot_view_) { detailsCloseShot(); audio_.context(); return true; }
+    if (details_text_view_) { details_text_view_ = false; audio_.context(); InvalidateRect(hwnd_, nullptr, FALSE); return true; }
+    if (detail_action_ == details_layout::description_action) { // Opis: the whole description over the page.
+        details_text_view_ = true; audio_.context(); InvalidateRect(hwnd_, nullptr, FALSE); return true;
+    }
     if (!detailsMediaReady()) return false;
     if (details_layout::shotAction(detail_action_)) {
         const auto index = static_cast<size_t>(detail_action_ - details_layout::shot_action);
@@ -84,6 +88,7 @@ void Launcher::detailsShotStep(int amount) {
 bool Launcher::detailsMediaBack() {
     if (screen_ != ScreenMode::details) return false;
     if (psfive_shot_view_) { detailsCloseShot(); audio_.navigate(); return true; }
+    if (details_text_view_) { details_text_view_ = false; audio_.navigate(); InvalidateRect(hwnd_, nullptr, FALSE); return true; }
     if (!detailsMediaFocused()) return false;
     const auto row = detailsLayout().buttons(detailsActions());
     detail_action_ = std::any_of(row.begin(), row.end(), [&](const details_layout::Item& item) { return item.action == detail_column_; }) ? detail_column_ : 0;
@@ -120,6 +125,7 @@ void Launcher::tickDetailsMedia(float dt, bool& needs_paint) {
     if (!detailsMedia()) {
         if (screen_ != ScreenMode::details) {
             details_scroll_ = 0;
+            details_text_view_ = false;
             if (psfive_shot_view_ && !psfiveDetailsShown()) psfive_shot_view_ = false;
         }
         return;
@@ -134,7 +140,7 @@ void Launcher::tickDetailsMedia(float dt, bool& needs_paint) {
         if (std::abs(wanted - value) > 0.3f) { value += (wanted - value) * (1.0f - std::exp(-dt * rate)); needs_paint = true; }
         else value = wanted;
     };
-    ease(details_scroll_, detailsMediaFocused() ? layout.mediaScroll(actions) : 0.0f, 12.0f);
+    ease(details_scroll_, detailsMediaFocused() ? layout.mediaScroll(actions, details_layout::similarAction(detail_action_)) : 0.0f, 9.0f);
     if (!desktop_mode_) {
         const float shot_step = details_layout::Layout::shot_width + details_layout::Layout::strip_gap;
         const float similar_step = details_layout::Layout::similar_size + details_layout::Layout::strip_gap;

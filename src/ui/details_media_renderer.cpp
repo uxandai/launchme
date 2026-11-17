@@ -35,12 +35,14 @@ void Renderer::drawDetailsMedia(const details_layout::Layout& layout, const deta
         target_->DrawBitmap(image.bitmap.Get(), D2D1::RectF(x, y, x + w, y + h), alpha * reveal(image), D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
         target_->PopLayer();
     };
-    // Past the left margin an item fades over one step, as PSfive's strips do.
+    // Past the left margin an item fades over one step, as PSfive's strips do; scrolled up past the
+    // top, it fades too.
     const auto fade = [&](float x, float step) { return std::clamp((x - (left - step)) / step, 0.0f, 1.0f); };
+    const auto top_fade = [&](float y) { return std::clamp((y - 10) / 80, 0.0f, 1.0f); };
     ComPtr<ID2D1Geometry> focus_shape;
     D2D1_COLOR_F focus_tint = color(0.94f, 0.96f, 0.97f);
     if (layout.hasShots(actions)) {
-        textLine(upper(tr(L"Zrzuty ekranu")), left, layout.shotsLabel(), 600, friend_section_font_.Get(), gray(0.6f));
+        textLine(upper(tr(L"Zrzuty ekranu")), left, layout.shotsLabel(), 600, friend_section_font_.Get(), gray(0.6f, top_fade(layout.shotsLabel())));
         if (!actions.shots) {
             const auto r = layout.shot(actions, 0);
             if (r.top < height) drawSkeleton(D2D1::RectF(r.left, r.top, r.right, r.bottom), 1, r.bottom - r.top);
@@ -49,7 +51,7 @@ void Renderer::drawDetailsMedia(const details_layout::Layout& layout, const deta
         for (size_t i = 0; i < actions.shots && i < psfive_shots_.size(); ++i) {
             const auto r = layout.shot(actions, i);
             if (r.left > width || r.top > height) break;
-            const float shown = fade(r.left, step);
+            const float shown = fade(r.left, step) * top_fade(r.top);
             if (shown <= 0.003f) continue;
             const auto rect = D2D1::RectF(r.left, r.top, r.right, r.bottom);
             ComPtr<ID2D1RoundedRectangleGeometry> shape;
@@ -63,12 +65,12 @@ void Renderer::drawDetailsMedia(const details_layout::Layout& layout, const deta
         }
     }
     if (actions.similar) {
-        textLine(upper(tr(L"Podobne gry")), left, layout.similarLabel(actions), 600, friend_section_font_.Get(), gray(0.6f));
+        textLine(upper(tr(L"Podobne gry")), left, layout.similarLabel(actions), 600, friend_section_font_.Get(), gray(0.6f, top_fade(layout.similarLabel(actions))));
         const float step = details_layout::Layout::similar_size + details_layout::Layout::strip_gap;
         for (size_t i = 0; i < actions.similar; ++i) {
             const auto r = layout.similar(actions, i);
             if (r.left > width || r.top > height) break;
-            const float shown = fade(r.left, step);
+            const float shown = fade(r.left, step) * top_fade(r.top);
             if (shown <= 0.003f) continue;
             const auto rect = D2D1::RectF(r.left, r.top, r.right, r.bottom);
             const auto shape = tileShape(rect, tile_shape_);

@@ -2243,6 +2243,7 @@ private:
     std::pair<uint32_t, uint32_t> psfiveAchievements(); // Unlocked, total (0: none known). // The game's activity cards (psfive_details_layout.hpp).
     size_t psfive_card_ = 0;           // The focused activity card.
     bool psfive_text_view_ = false;    // Its Opis card opened: the whole description over the screen.
+    bool details_text_view_ = false;   // Szczegóły: the Opis card opened, the same way.
     Spring psfive_page_motion_;        // The page's scroll between sections (psfive_details::sectionScroll).
     float psfive_similar_up_ = 0; // psfive_details::similarShift: no screenshots, the similar games in their place.
     size_t psfive_shot_ = 0, psfive_similar_ = 0;

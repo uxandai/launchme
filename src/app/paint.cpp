@@ -280,6 +280,10 @@ void Launcher::paint(bool overlay) {
             context.game_details = &local_details;
         }
     }
+    if (screen_ == ScreenMode::details && !cards_.empty()) {
+        if (cards_[0].game.last_played) context.detail_last_played = desktopPlayedWhen(cards_[0].game.last_played);
+        context.detail_text_view = details_text_view_;
+    }
     if (screen_ == ScreenMode::details && !cards_.empty() && !context.detail_playtime_seconds) {
         const auto& game = cards_[0].game;
         const auto* own = metadataOverride(game);
@@ -704,6 +708,13 @@ void Launcher::paint(bool overlay) {
             if (info.playtime_minutes && *info.playtime_minutes) details_sheet.playtime = formatPlaytime(*info.playtime_minutes);
             else if (game.store_playtime_minutes) details_sheet.playtime = formatPlaytime(game.store_playtime_minutes);
             if (game.last_played) details_sheet.last_played = desktopPlayedWhen(game.last_played);
+            // The details plugin's comparison (HowLongToBeat), as on Szczegóły: one Czas gry card holds both.
+            if (const auto providers = plugins_.contributions("details", &game); !providers.empty()) {
+                const auto* data = pluginComparison(providers.front().plugin, game);
+                details_sheet.comparison = data ? data->value : plugins::TimeComparison{gameKey(game), 0, 0, 0, tr(L"Wczytywanie…")};
+                details_sheet.played_seconds = pluginPlaytimeSeconds(game);
+                if (details_sheet.played_seconds && *details_sheet.played_seconds) details_sheet.playtime = formatPlaytime(static_cast<uint32_t>(*details_sheet.played_seconds / 60));
+            }
             details_sheet.focus_left = psfive_focus_box_[0]; details_sheet.focus_top = psfive_focus_box_[1];
             details_sheet.focus_right = psfive_focus_box_[2]; details_sheet.focus_bottom = psfive_focus_box_[3];
             // As on Szczegóły: the four main facts always (a dash when unknown), the others when known.

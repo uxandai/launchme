@@ -153,7 +153,7 @@ int LauncherUiTest::privateGames(HWND window) {
         if (!capture(L"details-show-hidden.png")) return 2725;
         const auto view = app.renderer_.viewport();
         const auto menu = context_menu::bounds(app.cards_[0], app.menuRows(), app.menuBeside(), view.width, view.height, app.libraryMenuAnchor());
-        const float show_y = menu.top + 8 + context_menu::row(context_menu::Item::hide, app.menuRows()) * 53 + 24;
+        const float show_y = menu.top + context_menu::rowTop(context_menu::row(context_menu::Item::hide, app.menuRows()), app.menuRows()) + 24;
         app.mouse_transition_until_ = 0;
         app.click((menu.left + 30) * view.scale, show_y * view.scale, false);
         const auto shown = find(app.public_library_);

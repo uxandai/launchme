@@ -89,9 +89,11 @@ void Renderer::drawPsfiveDetails() {
     const float top = psfive_details::sheetTop(height, hub, rise) - details.scroll;
     const float left = psfive_layout::tabs_left;
     // Activity cards, as on the PS5's game hub: frosted panels of one size with a small heading.
-    const auto card = [&](settings_ui::Rect r, const std::wstring& heading, float alpha) {
+    const auto card = [&](settings_ui::Rect r, const std::wstring& heading, float alpha, bool trophy = false) {
         glassFill(glassPanel(D2D1::RoundedRect(box(r), 20, 20), 18), D2D1::ColorF(0.05f, 0.055f, 0.07f, 0.66f), alpha);
-        textLine(upper(heading), r.left + 24, r.top + 30, r.right - r.left - 48, friend_section_font_.Get(), gray(0.6f, alpha));
+        const float x = r.left + 24 + (trophy ? 26.0f : 0.0f);
+        if (trophy) drawTrophy(r.left + 32, r.top + 30, alpha); // As on Szczegóły.
+        textLine(upper(heading), x, r.top + 30, r.right - x - 24, friend_section_font_.Get(), gray(0.6f, alpha));
     };
     for (size_t i = 0; i < details.cards.size(); ++i) {
         const auto r = psfive_details::card(i, width, top, left);
@@ -100,47 +102,13 @@ void Renderer::drawPsfiveDetails() {
         switch (static_cast<psfive_details::Card>(details.cards[i])) {
         case psfive_details::Card::achievements: {
             // A ring of the share with its percent inside, the count beside it.
-            card(r, tr(L"Osiągnięcia"), alpha);
-            const float share = details.achievements_total ? std::clamp(static_cast<float>(details.achievements_unlocked) / details.achievements_total, 0.0f, 1.0f) : 0.0f;
-            const float radius = 50, cx = r.left + 24 + radius, cy = (r.top + 52 + r.bottom - 18) * 0.5f;
-            brush(gray(1, 0.14f * alpha));
-            target_->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), radius, radius), solid_.Get(), 7);
-            if (share > 0.001f) {
-                Microsoft::WRL::ComPtr<ID2D1PathGeometry> arc;
-                Microsoft::WRL::ComPtr<ID2D1GeometrySink> sink;
-                if (share >= 0.999f) {
-                    brush(uiAccent(alpha));
-                    target_->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), radius, radius), solid_.Get(), 7);
-                } else if (SUCCEEDED(factory_->CreatePathGeometry(arc.GetAddressOf())) && SUCCEEDED(arc->Open(sink.GetAddressOf()))) {
-                    const float angle = share * 6.2831853f;
-                    sink->BeginFigure(D2D1::Point2F(cx, cy - radius), D2D1_FIGURE_BEGIN_HOLLOW);
-                    sink->AddArc(D2D1::ArcSegment(D2D1::Point2F(cx + radius * std::sin(angle), cy - radius * std::cos(angle)), D2D1::SizeF(radius, radius), 0,
-                                                  D2D1_SWEEP_DIRECTION_CLOCKWISE, share > 0.5f ? D2D1_ARC_SIZE_LARGE : D2D1_ARC_SIZE_SMALL));
-                    sink->EndFigure(D2D1_FIGURE_END_OPEN);
-                    if (SUCCEEDED(sink->Close())) {
-                        Microsoft::WRL::ComPtr<ID2D1StrokeStyle> round;
-                        factory_->CreateStrokeStyle(D2D1::StrokeStyleProperties(D2D1_CAP_STYLE_ROUND, D2D1_CAP_STYLE_ROUND), nullptr, 0, round.GetAddressOf());
-                        brush(uiAccent(alpha));
-                        target_->DrawGeometry(arc.Get(), solid_.Get(), 7, round.Get());
-                    }
-                }
-            }
-            textLine(std::to_wstring(static_cast<int>(share * 100 + 0.5f)) + L"%", cx - radius, cy, radius * 2, category_font_.Get(), gray(0.97f, alpha),
-                     DWRITE_TEXT_ALIGNMENT_CENTER);
-            const float text_left = cx + radius + 24;
-            textLine(std::to_wstring(details.achievements_unlocked) + L" / " + std::to_wstring(details.achievements_total), text_left, cy - 14,
-                     r.right - 20 - text_left, settings_heading_font_.Get(), gray(0.97f, alpha));
-            textLine(tr(L"odblokowane"), text_left, cy + 20, r.right - 20 - text_left, settings_body_font_.Get(), palette::muted(alpha));
+            card(r, tr(L"Osiągnięcia"), alpha, true);
+            drawAchievementRing(r, details.achievements_unlocked, details.achievements_total, alpha);
             break;
         }
         case psfive_details::Card::playtime: {
             card(r, tr(L"Czas gry"), alpha);
-            textLine(details.playtime.empty() ? std::wstring(L"—") : details.playtime, r.left + 24, r.top + 104, r.right - r.left - 48,
-                     settings_heading_font_.Get(), gray(0.97f, alpha));
-            if (!details.last_played.empty()) {
-                textLine(tr(L"Ostatnio"), r.left + 24, r.bottom - 58, r.right - r.left - 48, settings_body_font_.Get(), palette::muted(alpha));
-                textLine(details.last_played, r.left + 24, r.bottom - 32, r.right - r.left - 48, settings_body_font_.Get(), gray(0.92f, alpha));
-            }
+            drawPlaytimeBody(r, details.playtime, details.last_played, details.comparison ? &*details.comparison : nullptr, details.played_seconds, alpha);
             break;
         }
         case psfive_details::Card::description: {
@@ -265,6 +233,39 @@ void Renderer::drawPsfiveDetails() {
         }
         if (outline) drawCoverOutline(outline.Get(), tint, rise, true);
     }
+}
+
+void Renderer::drawAchievementRing(settings_ui::Rect r, uint32_t unlocked, uint32_t total, float alpha) {
+    const float share = total ? std::clamp(static_cast<float>(unlocked) / total, 0.0f, 1.0f) : 0.0f;
+    const float radius = std::min(50.0f, (r.bottom - r.top - 52 - 18) * 0.5f - 6), cx = r.left + 24 + radius, cy = (r.top + 52 + r.bottom - 18) * 0.5f;
+    if (radius < 12) return;
+    brush(gray(1, 0.14f * alpha));
+    target_->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), radius, radius), solid_.Get(), 7);
+    if (share >= 0.999f) {
+        brush(uiAccent(alpha));
+        target_->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), radius, radius), solid_.Get(), 7);
+    } else if (share > 0.001f) {
+        Microsoft::WRL::ComPtr<ID2D1PathGeometry> arc;
+        Microsoft::WRL::ComPtr<ID2D1GeometrySink> sink;
+        if (SUCCEEDED(factory_->CreatePathGeometry(arc.GetAddressOf())) && SUCCEEDED(arc->Open(sink.GetAddressOf()))) {
+            const float angle = share * 6.2831853f;
+            sink->BeginFigure(D2D1::Point2F(cx, cy - radius), D2D1_FIGURE_BEGIN_HOLLOW);
+            sink->AddArc(D2D1::ArcSegment(D2D1::Point2F(cx + radius * std::sin(angle), cy - radius * std::cos(angle)), D2D1::SizeF(radius, radius), 0,
+                                          D2D1_SWEEP_DIRECTION_CLOCKWISE, share > 0.5f ? D2D1_ARC_SIZE_LARGE : D2D1_ARC_SIZE_SMALL));
+            sink->EndFigure(D2D1_FIGURE_END_OPEN);
+            if (SUCCEEDED(sink->Close())) {
+                Microsoft::WRL::ComPtr<ID2D1StrokeStyle> round;
+                factory_->CreateStrokeStyle(D2D1::StrokeStyleProperties(D2D1_CAP_STYLE_ROUND, D2D1_CAP_STYLE_ROUND), nullptr, 0, round.GetAddressOf());
+                brush(uiAccent(alpha));
+                target_->DrawGeometry(arc.Get(), solid_.Get(), 7, round.Get());
+            }
+        }
+    }
+    textLine(std::to_wstring(static_cast<int>(share * 100 + 0.5f)) + L"%", cx - radius, cy, radius * 2, category_font_.Get(), gray(0.97f, alpha),
+             DWRITE_TEXT_ALIGNMENT_CENTER);
+    const float text_left = cx + radius + 24;
+    textLine(std::to_wstring(unlocked) + L" / " + std::to_wstring(total), text_left, cy - 14, r.right - 20 - text_left, settings_heading_font_.Get(), gray(0.97f, alpha));
+    textLine(tr(L"odblokowane"), text_left, cy + 20, r.right - 20 - text_left, settings_body_font_.Get(), palette::muted(alpha));
 }
 
 // Opis opened: the whole description over the darkened screen, the game's name over it.

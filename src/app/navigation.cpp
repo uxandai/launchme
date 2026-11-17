@@ -45,6 +45,7 @@ void Launcher::navigate(int amount, bool edge_menu) {
     if (screen_ == ScreenMode::details) {
         if (menu_open_) { dismissMenu(); return; }
         if (psfive_shot_view_) { detailsShotStep(amount); return; } // A screenshot full screen: the strip's next.
+        if (details_text_view_) { navigationBoundary(); return; }
         if (edge_menu && std::abs(amount) == 1) { detailsMove(amount, 0); return; } // Keys and pad: by position.
         // Programmatic jumps: the buttons, then the achievements row when the game has achievements.
         const int next = std::clamp(detail_action_ + amount, -1, std::max({lastDetailAction(), achievementsDetailAction(), ratingDetailAction(), pluginDetailAction()}));
@@ -482,6 +483,7 @@ void Launcher::updateSearch() {
 // card Up returns to the button last left. Action indices only identify the targets.
 void Launcher::detailsMove(int dx, int dy) {
     if (cards_.empty()) return;
+    if (details_text_view_) { navigationBoundary(); return; } // The whole description: Enter or Back closes it.
     const auto layout = detailsLayout();
     const auto actions = detailsActions();
     const auto all = layout.items(actions);
