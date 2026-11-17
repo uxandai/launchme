@@ -514,6 +514,8 @@ void Launcher::paint(bool overlay) {
     if (xmbActive() && xmb_column_ < xmb_top_.size() && cards_.size() >= xmb_top_.size()) {
         context.xmb = true;
         context.xmb_posters = settings_.xmb_posters;
+        context.xmb_landscape = settings_.xmb_landscape;
+        context.xmb_title_glow = settings_.xmb_title_glow;
         context.xmb_scale = xmb_layout::sizeScale(static_cast<int>(settings_.xmb_size));
         context.xmb_top = xmb_top_.size();
         context.xmb_column = xmb_column_;

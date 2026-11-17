@@ -52,8 +52,11 @@ void Renderer::drawCard(const GameCard& card, size_t index) {
         const float previous = squircle_corner_; squircle_corner_ = context_->library_options.grid_landscape ? 0.4f : 0.2f;
         drawRectangularCard(card, index, 1); squircle_corner_ = previous; return;
     }
-    if (context_->xmb && context_->xmb_posters && isGame(card.game)) {
+    if (context_->xmb && (context_->xmb_posters || context_->xmb_landscape) && isGame(card.game)) {
+        const float previous = squircle_corner_;
+        if (context_->xmb_landscape) squircle_corner_ = 0.4f;
         drawRectangularCard(card, index, xmbTransparency(index, index == selected_));
+        squircle_corner_ = previous;
         return;
     }
     if (context_->shelf_posters && context_->screen == ScreenMode::shelves && std::abs(card.aspect - 1.0f) > 0.01f) {

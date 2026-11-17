@@ -436,7 +436,7 @@ struct ViewContext {
     size_t psfive_visible_tabs = 3; // PSfive: the tabs in the bar before "Więcej..." (more with the icons on).
     float psfive_dim = 0; // PSfive: extra darkening of the background (AppSettings::psfive_dim).
     // XMB home: cards = [xmb_top tiles..., focused column games...].
-    bool xmb = false, xmb_posters = false;
+    bool xmb = false, xmb_posters = false, xmb_landscape = false, xmb_title_glow = false;
     bool shelf_posters = false; // Default layout: the shown shelf's cards are 2:3 posters (GameCard::aspect).
     float xmb_scale = 1;
     size_t xmb_top = 0;

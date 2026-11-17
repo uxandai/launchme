@@ -106,6 +106,7 @@ void Renderer::drawRectangularCard(const GameCard& card, size_t index, float alp
     // Landscape capsules fill their tile (Kinowy, Przegląd, Siatka's and the search's landscape tiles).
     const bool cinematic = (library_view::landscape(context_->library_mode) && context_->screen == ScreenMode::library) ||
         (gridScreen(context_->screen) && context_->library_mode == library_view::View::grid && context_->library_options.grid_landscape);
+    const bool landscape_fill = cinematic || (context_->xmb && context_->xmb_landscape);
     const bool xmb = context_->xmb && !cinematic;
     const float emphasis = xmb ? (focused ? 1.0f - smoothFade(context_->quick_progress) : 0.0f) : card.emphasis;
     const float launch = focused ? smoothFade(context_->launch_progress) : 0.0f;
@@ -200,8 +201,8 @@ void Renderer::drawRectangularCard(const GameCard& card, size_t index, float alp
         };
         const auto standIn = [&](Cover& image, float opacity) {
             const float ratio = ratioOf(image);
-            if (std::abs(ratio / tile_ratio - 1) < 0.12f || (cinematic && ratio >= 1.5f)) {
-                if (cinematic) fillWidth(image, opacity); else fillImage(image, rect, tile_radius, opacity, frozen, shape.Get());
+            if (std::abs(ratio / tile_ratio - 1) < 0.12f || (landscape_fill && ratio >= 1.5f)) {
+                if (landscape_fill) fillWidth(image, opacity); else fillImage(image, rect, tile_radius, opacity, frozen, shape.Get());
                 return;
             }
             // A square or portrait cover waiting for its capsule: whole, over a dimmed fill of itself.
@@ -213,7 +214,7 @@ void Renderer::drawRectangularCard(const GameCard& card, size_t index, float alp
         // The poster fades in over the cover it replaces, never over the bare tile.
         if (cover && shown < 1) standIn(*cover, transparency * card.cover_opacity * reveal(*cover));
         if (poster) {
-            if (cinematic) fillWidth(*poster, transparency * shown);
+            if (landscape_fill) fillWidth(*poster, transparency * shown);
             else fillImage(*poster, rect, tile_radius, transparency * shown, frozen, shape.Get());
         }
     } else if (!(index < posters_.size() && posters_[index].decoding) && !(index < covers_.size() && covers_[index].decoding)) {

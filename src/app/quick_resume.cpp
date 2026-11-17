@@ -77,6 +77,16 @@ void Launcher::focusPlayedGame(const std::string& key) {
     };
     if (xmbActive()) {
         if (const auto found = tile(0, xmb_top_.size())) xmbFocus(*found, -1); // Recent opens the XMB tile row.
+        else {
+            for (size_t i = 0; i < xmb_top_.size(); ++i)
+                if (xmb_top_[i].kind == GameKind::category && xmb_top_[i].app_id == category) {
+                    const auto* games = xmbColumn(xmb_top_[i]);
+                    int row = -1;
+                    if (games) for (size_t r = 0; r < games->size(); ++r) if (sameTile((*games)[r], key)) { row = static_cast<int>(r); break; }
+                    xmbFocus(i, row);
+                    break;
+                }
+        }
     } else if (flixActive()) {
         const auto row = std::find_if(flix_rows_.begin(), flix_rows_.end(), [&](const FlixRow& item) { return item.category == category; });
         if (row != flix_rows_.end())

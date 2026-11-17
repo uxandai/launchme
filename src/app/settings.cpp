@@ -730,15 +730,32 @@ void Launcher::settingsToggle(const Row& row) {
         prefetchPosters();
         settingsChanged(); audio_.context(); return;
     }
-    else if (row.id == Id::xmb_platform_badge || row.id == Id::metro_title_corner) {
-        auto& value = row.id == Id::xmb_platform_badge ? settings_.xmb_platform_badge : settings_.metro_title_corner;
+    else if (row.id == Id::xmb_platform_badge || row.id == Id::xmb_title_glow || row.id == Id::metro_title_corner) {
+        auto& value = row.id == Id::xmb_platform_badge ? settings_.xmb_platform_badge :
+                      row.id == Id::xmb_title_glow ? settings_.xmb_title_glow : settings_.metro_title_corner;
         value = !value;
         settingsChanged(); audio_.context(); return;
     }
-    else if (row.id == Id::xmb_posters) {
-        settings_.xmb_posters = !settings_.xmb_posters;
+    else if (row.id == Id::xmb_posters || row.id == Id::xmb_landscape) {
+        if (row.id == Id::xmb_posters) {
+            settings_.xmb_posters = !settings_.xmb_posters;
+            if (settings_.xmb_posters) settings_.xmb_landscape = false;
+        } else {
+            settings_.xmb_landscape = !settings_.xmb_landscape;
+            if (settings_.xmb_landscape) settings_.xmb_posters = false;
+        }
+        xmb_slots_ = ~uint64_t{0};
+        if (xmbActive()) rebuildXmb(false, true);
         prefetchPosters();
         settingsChanged(); audio_.context(); return;
+    }
+    else if (row.id == Id::xmb_recent_icon || row.id == Id::xmb_favorites_icon) {
+        auto& value = row.id == Id::xmb_recent_icon ? settings_.xmb_recent_icon : settings_.xmb_favorites_icon;
+        value = !value;
+        xmb_slots_ = ~uint64_t{0};
+        settingsChanged(true);
+        if (xmbActive()) rebuildXmb(false, true);
+        audio_.context(); return;
     }
     else if (row.id == Id::quick_resume) {
         settings_.quick_resume = !settings_.quick_resume;

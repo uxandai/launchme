@@ -235,11 +235,19 @@ void Launcher::buildSettingsRows() {
             if (settings_.home_layout == HomeLayout::xmb) {
                 add({Id::xmb_posters, Control::toggle, tr(L"Pionowe plakaty"),
                     tr(L"Plakaty gier zamiast kwadratowych okładek w układzie XMB."), {}, settings_.xmb_posters});
+                add({Id::xmb_landscape, Control::toggle, tr(L"Poziome kafle"),
+                    tr(L"Poziome kafle gier zamiast kwadratowych okładek lub plakatów w układzie XMB."), {}, settings_.xmb_landscape});
+                add({Id::xmb_recent_icon, Control::toggle, tr(L"„Ostatnio grane” jako ikona"),
+                    tr(L"Jeden kafel z ikoną zegara i grami w kolumnie pod nim zamiast osobnych gier w górnym rzędzie."), {}, settings_.xmb_recent_icon});
+                add({Id::xmb_favorites_icon, Control::toggle, tr(L"„Ulubione” jako ikona gwiazdki"),
+                    tr(L"Ikona gwiazdki na kafelku kolekcji Ulubione zamiast podglądu czterech okładek."), {}, settings_.xmb_favorites_icon});
+                add({Id::xmb_title_glow, Control::toggle, tr(L"Pulsująca poświata tytułu"),
+                    tr(L"Delikatny, pulsujący blask na tytule zaznaczonej gry, jak w menu PS3."), {}, settings_.xmb_title_glow});
                 add({Id::xmb_platform_badge, Control::toggle, tr(L"Platforma jako logo"),
                     tr(L"Logo platformy na białej plakietce pod nazwą gry, jak w PSfive, zamiast jej nazwy."), {}, settings_.xmb_platform_badge});
                 const int size = std::clamp(static_cast<int>(settings_.xmb_size), 0, 2);
                 add({Id::xmb_size, Control::slider, tr(L"Rozmiar kafelków XMB"),
-                    tr(L"Mały, domyślny lub duży — dla okładek i plakatów."), tr(xmb_sizes[size]), false, size / 2.0f});
+                    tr(L"Mały, domyślny lub duży — dla okładek, plakatów i poziomych kafli."), tr(xmb_sizes[size]), false, size / 2.0f});
             }
             if (settings_.home_layout == HomeLayout::flix) {
                 const int size = std::clamp(static_cast<int>(settings_.flix_size), 0, 1);
@@ -419,7 +427,7 @@ void Launcher::buildSettingsRows() {
         {
             // The chosen layout's own options on their page.
             const wchar_t* options = settings_.home_layout == HomeLayout::shelves ? trKey(L"Stała lista kategorii, pionowe plakaty, kafelek „Wszystkie” i informacje pod logo.") :
-                                     settings_.home_layout == HomeLayout::xmb ? trKey(L"Pionowe plakaty i rozmiar kafelków.") :
+                                     settings_.home_layout == HomeLayout::xmb ? trKey(L"Kształt i rozmiar kafelków, ikony kategorii oraz poświata tytułu.") :
                                      settings_.home_layout == HomeLayout::flix ? trKey(L"Rozmiar kafelków, kafelek „Wszystkie”, pasek kategorii i boczny.") :
                                      settings_.home_layout == HomeLayout::metro ? trKey(L"Efekt 3D stron obok bieżącej.") :
                                      settings_.home_layout == HomeLayout::psfive ? trKey(L"Rozmiar kafelków i zegar.") :

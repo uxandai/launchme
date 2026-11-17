@@ -1753,12 +1753,20 @@ int LauncherUiTest::xmb(HWND window) {
         if (!app.settings_state_.at(settings_ui::Page::layout_options)) return 219;
     }
     const int posters_row = rowIndex(settings_ui::Id::xmb_posters), size_row = rowIndex(settings_ui::Id::xmb_size);
-    // Pionowe plakaty, Platforma jako logo, then the tiles' size.
-    if (posters_row != 0 || rowIndex(settings_ui::Id::xmb_platform_badge) != posters_row + 1 || size_row != posters_row + 2 ||
-        app.settings_.xmb_posters || app.settings_.xmb_size != AppSettings::XmbSize::normal) return 219;
+    // Pionowe plakaty, Poziome kafle, ikony kategorii, poświata tytułu, Platforma jako logo, then the tiles' size.
+    if (posters_row != 0 || rowIndex(settings_ui::Id::xmb_landscape) != posters_row + 1 ||
+        rowIndex(settings_ui::Id::xmb_recent_icon) != posters_row + 2 ||
+        rowIndex(settings_ui::Id::xmb_favorites_icon) != posters_row + 3 ||
+        rowIndex(settings_ui::Id::xmb_title_glow) != posters_row + 4 ||
+        rowIndex(settings_ui::Id::xmb_platform_badge) != posters_row + 5 || size_row != posters_row + 6 ||
+        app.settings_.xmb_posters || app.settings_.xmb_landscape || app.settings_.xmb_recent_icon ||
+        app.settings_.xmb_favorites_icon || app.settings_.xmb_title_glow || app.settings_.xmb_size != AppSettings::XmbSize::normal) return 219;
     app.settings_state_.enter(static_cast<int>(app.settings_rows_.size()));
-    app.settings_state_.selected[0] = posters_row; app.settingsActivate();
-    app.settings_state_.selected[0] = size_row; app.settingsActivate();
+    app.settings_state_.selected[0] = posters_row + 1; app.settingsActivate(); // Poziome kafle on.
+    if (!app.settings_.xmb_landscape || app.settings_.xmb_posters) return 219;
+    app.settings_state_.selected[0] = posters_row; app.settingsActivate(); // Pionowe plakaty clears Poziome kafle.
+    if (!app.settings_.xmb_posters || app.settings_.xmb_landscape) return 219;
+    app.settings_state_.selected[0] = size_row; app.ensureSettingVisible(); app.settingsActivate();
     app.settingsAdjust(-1);
     if (app.settings_.xmb_size != AppSettings::XmbSize::compact) return 220;
     app.settingsAdjust(1); app.settingsAdjust(1); app.settingsAdjust(1);
@@ -1811,6 +1819,33 @@ int LauncherUiTest::xmb(HWND window) {
     app.openArtworkBrowser(app.cards_[app.selected_].game);
     if (app.artwork_state_.kind() != ArtworkKind::poster) return 231;
     app.closeArtworkBrowser();
+    {
+        // PS3-style XMB options: landscape tiles, Recent as a clock tile, Favorites as a star tile, pulsing title glow.
+        app.settings_.xmb_posters = false; app.settings_.xmb_landscape = true;
+        app.settings_.xmb_recent_icon = true; app.settings_.xmb_favorites_icon = true; app.settings_.xmb_title_glow = true;
+        app.settings_.xmb_size = AppSettings::XmbSize::normal;
+        app.xmb_slots_ = ~uint64_t{0};
+        app.rebuildXmb(false);
+        for (const auto& game : app.public_library_) {
+            auto artwork = std::make_unique<CoverMessage>();
+            artwork->key = gameKey(game); artwork->generation = app.jobs_->generation.load(); artwork->kind = CoverMessage::Kind::landscape;
+            artwork->bytes = pngFixture(static_cast<uint8_t>(55 + (game.app_id % 11) * 10), 184, 86);
+            app.onCover(std::move(artwork));
+        }
+        if (app.xmb_top_.empty() || app.xmb_top_[0].kind != GameKind::category || app.xmb_top_[0].source_id != "xmb:clock") return 2191;
+        app.xmbFocus(0, 0); settle();
+        const size_t new_top = app.xmb_top_.size();
+        if (app.cards_.size() <= new_top || std::abs(app.cards_[new_top].aspect - xmb_layout::landscape_aspect) > 0.02f) return 2192;
+        if (!capture(L"xmb-ps3-style.png")) return 2193;
+        app.openArtworkBrowser(app.cards_[app.selected_].game);
+        if (app.artwork_state_.kind() != ArtworkKind::landscape) return 2194;
+        app.closeArtworkBrowser();
+        app.settings_.xmb_landscape = false; app.settings_.xmb_posters = true;
+        app.settings_.xmb_recent_icon = false; app.settings_.xmb_favorites_icon = false; app.settings_.xmb_title_glow = false;
+        app.settings_.xmb_size = AppSettings::XmbSize::large;
+        app.xmb_slots_ = ~uint64_t{0};
+        app.rebuildXmb(false); settle();
+    }
     app.openSettings(); app.settings_state_.selectCategory(0);
     app.buildSettingsRows(); app.openSettingsPage(settings_ui::Page::appearance_all); // The classic list.
     for (const int layout : {0, 2}) {

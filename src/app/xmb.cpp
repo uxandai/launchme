@@ -17,8 +17,10 @@ bool Launcher::xmbActive() const {
 }
 
 const std::vector<Game>* Launcher::xmbColumn(const Game& tile) const {
-    if (tile.kind == GameKind::category && tile.app_id < categories_.size() && !categories_[tile.app_id].games.empty())
-        return &categories_[tile.app_id].games;
+    if (tile.kind == GameKind::category && tile.app_id < categories_.size()) {
+        if (categories_[tile.app_id].id == "recent") return xmb_recent_games_.empty() ? nullptr : &xmb_recent_games_;
+        if (!categories_[tile.app_id].games.empty()) return &categories_[tile.app_id].games;
+    }
     if (tile.kind == GameKind::platform) {
         if (const auto* games = consoleGames(tile.platform); games && !games->empty()) return games;
     }
@@ -70,6 +72,7 @@ void Launcher::rebuildXmb(bool keep_top, bool preserve_background) {
         if (xmb_row_ >= 0 && selected_ < cards_.size() && selected_ >= xmb_top_.size()) row_key = gameKey(cards_[selected_].game);
         category_ = 0;
         xmb_top_.clear();
+        xmb_recent_games_.clear();
         std::vector<Game> collections, stores, consoles, hidden;
         // Glance and Towarzyszka (while on) right after the recent games, before "Wszystkie gry".
         std::vector<Game> widgets;
@@ -85,7 +88,31 @@ void Launcher::rebuildXmb(bool keep_top, bool preserve_background) {
         if (special_row) widgets.clear();
         for (size_t i = 0; i < categories_.size(); ++i) {
             const auto& category = categories_[i];
-            if (category.id == "recent" && special_row) xmb_top_.insert(xmb_top_.end(), category.games.begin(), category.games.end());
+            if (category.id == "recent" && settings_.xmb_recent_icon) {
+                std::vector<Game> specials;
+                for (const auto& item : category.games) {
+                    if (isGame(item)) xmb_recent_games_.push_back(item);
+                    else specials.push_back(item);
+                }
+                const auto pushRecent = [&] {
+                    if (xmb_recent_games_.empty()) return;
+                    Game tile;
+                    tile.name = category.title;
+                    tile.kind = GameKind::category;
+                    tile.app_id = static_cast<uint32_t>(i);
+                    tile.source_id = "xmb:clock";
+                    xmb_top_.push_back(std::move(tile));
+                };
+                if (settings_.home_tiles == AppSettings::HomeTiles::first) {
+                    xmb_top_.insert(xmb_top_.end(), specials.begin(), specials.end());
+                    pushRecent();
+                } else {
+                    pushRecent();
+                    xmb_top_.insert(xmb_top_.end(), widgets.begin(), widgets.end());
+                    xmb_top_.insert(xmb_top_.end(), specials.begin(), specials.end());
+                    widgets.clear();
+                }
+            } else if (category.id == "recent" && special_row) xmb_top_.insert(xmb_top_.end(), category.games.begin(), category.games.end());
             else if (category.id == "recent") {
                 const auto games = std::find_if(category.games.begin(), category.games.end(), [](const Game& game) { return !isGame(game); });
                 xmb_top_.insert(xmb_top_.end(), category.games.begin(), games);
@@ -99,6 +126,7 @@ void Launcher::rebuildXmb(bool keep_top, bool preserve_background) {
                 tile.name = category.title;
                 tile.kind = GameKind::category;
                 tile.app_id = static_cast<uint32_t>(i);
+                if (settings_.xmb_favorites_icon && category.id == "user-collections.favorite") tile.source_id = "xmb:star";
                 // The Ctrl+H shelf comes last, after the consoles (just before Settings).
                 (category.id == "private" ? hidden : collections).push_back(std::move(tile));
             }
@@ -285,28 +313,40 @@ void Launcher::xmbClick(size_t index, bool double_click) {
 void Launcher::xmbTarget(size_t index, float& x, float& y, float& size, float& aspect, float& delay) const {
     using namespace xmb_layout;
     const size_t top = xmb_top_.size();
-    const bool poster = settings_.xmb_posters && isGame(cards_[index].game);
+    const Art column_art = settings_.xmb_landscape ? Art::landscape : settings_.xmb_posters ? Art::poster : Art::square;
+    const bool game_card = isGame(cards_[index].game);
+    const Art card_art = game_card ? column_art : Art::square;
     const float scale = sizeScale(static_cast<int>(settings_.xmb_size));
-    aspect = poster ? poster_aspect : 1.0f;
+    aspect = card_art == Art::landscape ? landscape_aspect : card_art == Art::poster ? poster_aspect : 1.0f;
     if (index < top) {
         const int offset = static_cast<int>(index) - static_cast<int>(xmb_column_);
-        size = artHeight(tileSize(offset == 0, scale), poster);
-        x = tileLeft(offset, scale);
+        size = card_art == Art::poster ? artHeight(tileSize(offset == 0, scale), true) : tileSize(offset == 0, scale);
+        if (column_art == Art::landscape) {
+            const auto topWidth = [&](size_t i) {
+                const float h = tileSize(i == xmb_column_, scale);
+                return i < cards_.size() && isGame(cards_[i].game) ? h * landscape_aspect : h;
+            };
+            x = anchor_x;
+            if (index > xmb_column_) for (size_t i = xmb_column_; i < index; ++i) x += topWidth(i) + gap * scale;
+            else for (size_t i = index; i < xmb_column_; ++i) x -= topWidth(i) + gap * scale;
+        } else x = tileLeft(offset, scale);
         y = tileTop(size);
         delay = std::min(std::abs(offset), 8) * 0.045f;
         return;
     }
     const int row = static_cast<int>(index - top);
-    const float width = itemSize(row == xmb_row_, scale);
-    size = artHeight(width, poster);
+    const bool focused = row == xmb_row_;
+    const float width = columnItemWidth(focused, card_art, scale);
+    size = columnItemHeight(focused, card_art, scale);
     x = itemLeft(width, scale);
-    y = itemTop(row, xmb_row_, settings_.xmb_posters, scale);
+    y = itemTop(row, xmb_row_, column_art, scale);
     delay = 0.12f + std::min(row, 8) * 0.04f;
 }
 
 void Launcher::xmbBindThumbnails(size_t tile) {
     // Also the default layout's "Wszystkie" tile (a category's games as its 2x2 preview).
     if (tile >= cards_.size() || cards_[tile].game.kind != GameKind::category) return;
+    if (cards_[tile].game.source_id == "xmb:clock" || cards_[tile].game.source_id == "xmb:star") return;
     const auto* games = xmbColumn(cards_[tile].game);
     if (!games) return;
     for (int slot = 0; slot < 4 && slot < static_cast<int>(games->size()); ++slot) {
@@ -322,14 +362,18 @@ void Launcher::bindXmbArt(size_t index, bool replace) {
     if (index >= cards_.size()) return;
     const auto& game = cards_[index].game;
     const auto* found = art_.find(gameKey(game));
-    if (settings_.xmb_posters && isGame(game)) {
-        if (found && found->poster) {
-            if (replace || !renderer_.hasPoster(index)) renderer_.setPoster(index, found->poster);
+    if ((settings_.xmb_posters || settings_.xmb_landscape) && isGame(game)) {
+        const bool landscape = settings_.xmb_landscape;
+        const ImageBytes shaped = found ? (landscape ? found->landscape : found->poster) : ImageBytes{};
+        if (shaped) {
+            if (replace || !renderer_.hasPoster(index)) renderer_.setPoster(index, shaped);
             return;
         }
-        requestArt(game, CoverMessage::Kind::poster);
+        requestArt(game, landscape ? CoverMessage::Kind::landscape : CoverMessage::Kind::poster);
+        if (landscape && found && found->hero) { if (!renderer_.hasPoster(index)) renderer_.setPoster(index, found->hero); return; }
+        if (landscape) requestArt(game, CoverMessage::Kind::hero);
     }
-    // Square cover while the poster is unavailable; icons keep their usual artwork.
+    // Square cover while the poster/capsule is unavailable; icons keep their usual artwork.
     if (found && found->cover) {
         if (renderer_.hasCover(index)) return;
         cards_[index].cover_opacity = 0;
@@ -339,8 +383,10 @@ void Launcher::bindXmbArt(size_t index, bool replace) {
 }
 
 void Launcher::xmbRequestArt() {
+    using xmb_layout::Art;
     const size_t top = std::min(xmb_top_.size(), cards_.size());
     const float scale = xmb_layout::sizeScale(static_cast<int>(settings_.xmb_size));
+    const Art column_art = settings_.xmb_landscape ? Art::landscape : settings_.xmb_posters ? Art::poster : Art::square;
     const auto view = renderer_.viewport();
     // Tiles left of the anchor scroll off quickly; the right side shows roughly width / tile pitch.
     const size_t first = xmb_column_ > 2 ? xmb_column_ - 2 : 0;
@@ -351,7 +397,7 @@ void Launcher::xmbRequestArt() {
     }
     const int rows = static_cast<int>(cards_.size() - top);
     const int begin = xmb_layout::firstVisibleRow(xmb_row_);
-    const int end = std::min(rows, xmb_layout::lastVisibleRow(xmb_row_, view.height, settings_.xmb_posters, scale));
+    const int end = std::min(rows, xmb_layout::lastVisibleRow(xmb_row_, view.height, column_art, scale));
     for (int row = begin; row < end; ++row) bindXmbArt(top + static_cast<size_t>(row));
     for (size_t i = 0; i < cards_.size(); ++i) {
         const bool nearby = i < top ? i >= first && i < last : i >= top + begin && i < top + end;

@@ -157,6 +157,10 @@ constexpr FlagSetting flag_settings[] = {
     {"snitch_colour_icons", &AppSettings::snitch_colour_icons},
     {"metro_category_tabs", &AppSettings::metro_category_tabs},
     {"xmb_platform_badge", &AppSettings::xmb_platform_badge},
+    {"xmb_landscape", &AppSettings::xmb_landscape},
+    {"xmb_recent_icon", &AppSettings::xmb_recent_icon},
+    {"xmb_favorites_icon", &AppSettings::xmb_favorites_icon},
+    {"xmb_title_glow", &AppSettings::xmb_title_glow},
     {"metro_title_corner", &AppSettings::metro_title_corner},
     {"flix_category_tabs", &AppSettings::flix_category_tabs},
     {"psfive_category_tabs", &AppSettings::psfive_category_tabs},
@@ -844,6 +848,7 @@ AppSettings parseAppSettings(std::string_view text) {
     }
     // A hand-edited file cannot enable both animations; tracing wins independently of key order.
     if (settings.glow_trace) settings.glow_pulse = false;
+    if (settings.xmb_landscape) settings.xmb_posters = false;
     if (!settings.companion_import_folder.empty()) settings.setCompanionImportFolder(settings.companion_import_folder);
     return settings;
 }
@@ -996,7 +1001,11 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
     output << "psfive_clock=" << settings.psfive_clock << '\n';
     output << "psfive_dim=" << std::clamp(settings.psfive_dim, 0.0f, 1.0f) << '\n';
     output << "show_categories=" << settings.show_categories << '\n';
-    output << "xmb_posters=" << settings.xmb_posters << '\n';
+    output << "xmb_posters=" << (settings.xmb_posters && !settings.xmb_landscape) << '\n';
+    output << "xmb_landscape=" << settings.xmb_landscape << '\n';
+    output << "xmb_recent_icon=" << settings.xmb_recent_icon << '\n';
+    output << "xmb_favorites_icon=" << settings.xmb_favorites_icon << '\n';
+    output << "xmb_title_glow=" << settings.xmb_title_glow << '\n';
     output << "shelves_posters=" << settings.shelves_posters << '\n';
     output << "shelves_steam=" << settings.shelves_steam << '\n';
     output << "shelves_category_all=" << settings.shelves_category_all << '\n';

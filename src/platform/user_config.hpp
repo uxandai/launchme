@@ -203,7 +203,11 @@ struct AppSettings {
     // Default home: the focused game's playtime, last played, release date and platform centred under
     // its logo (raised a little), each under a small capitalised heading; the corner badge moves there.
     bool shelves_hero_facts = false;
-    bool xmb_posters = false; // XMB: portrait game artwork instead of square covers.
+    bool xmb_posters = false;        // XMB: portrait game artwork instead of square covers.
+    bool xmb_landscape = false;      // XMB: landscape game tiles instead of square covers or posters.
+    bool xmb_recent_icon = false;    // XMB: Ostatnio grane as one clock-icon tile with its games in a column.
+    bool xmb_favorites_icon = false; // XMB: Ulubione as a star-icon tile instead of a 2x2 cover preview.
+    bool xmb_title_glow = false;     // XMB: subtle PS3-style pulsing glow behind the focused game's title.
     enum class XmbSize { compact, normal, large };
     XmbSize xmb_size = XmbSize::normal;
     XmbSize psfive_size = XmbSize::normal; // PSfive tiles: the same three sizes (80 / 100 / 120%).

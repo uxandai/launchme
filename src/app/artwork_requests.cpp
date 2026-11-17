@@ -83,7 +83,8 @@ void Launcher::onCover(std::unique_ptr<CoverMessage> cover) {
         if (shelfPosters() && cover->kind == CoverMessage::Kind::poster)
             for (size_t i = 0; i < cards_.size(); ++i) if (gameKey(cards_[i].game) == cover->key) bindLibraryPoster(i, true);
         if (cover->kind == CoverMessage::Kind::landscape && shelfWideCard(0) && gameKey(cards_[0].game) == cover->key) bindLibraryLandscape(0, true);
-        if (xmbActive() && settings_.xmb_posters && cover->kind == CoverMessage::Kind::poster)
+        if (xmbActive() && ((settings_.xmb_posters && cover->kind == CoverMessage::Kind::poster) ||
+                            (settings_.xmb_landscape && cover->kind == CoverMessage::Kind::landscape)))
             for (size_t i = 0; i < cards_.size(); ++i) if (gameKey(cards_[i].game) == cover->key) bindXmbArt(i, true);
         if (desktopActive() && desktopWantsKind(cover->key, cover->kind)) {
             // The desktop grid's wanted rows: the poster (or capsule) replaces its stand-in.
@@ -191,6 +192,8 @@ void Launcher::onCover(std::unique_ptr<CoverMessage> cover) {
         InvalidateRect(hwnd_, nullptr, FALSE);
     }
     if (libraryLandscape() && cover->kind == CoverMessage::Kind::hero) requestVisibleArt();
+    if (xmbActive() && settings_.xmb_landscape && cover->kind == CoverMessage::Kind::hero)
+        for (size_t i = 0; i < cards_.size(); ++i) if (gameKey(cards_[i].game) == cover->key) bindXmbArt(i);
     if (xmbActive() && cover->kind == CoverMessage::Kind::cover) {
         // Collection tiles preview their first covers; bind the one that just arrived.
         for (size_t i = 0; i < xmb_top_.size() && i < cards_.size(); ++i) xmbBindThumbnails(i);
@@ -246,6 +249,7 @@ void Launcher::prefetchPosters() {
     const bool flix = settings_.home_layout == AppSettings::HomeLayout::flix;
     const bool metro = settings_.home_layout == AppSettings::HomeLayout::metro;
     const bool xmb = settings_.home_layout == AppSettings::HomeLayout::xmb && settings_.xmb_posters;
+    const bool xmb_wide = settings_.home_layout == AppSettings::HomeLayout::xmb && settings_.xmb_landscape;
     const bool shelves = settings_.home_layout == AppSettings::HomeLayout::shelves && settings_.shelves_posters;
     const bool steam = shelves && settings_.shelves_steam; // Wygląd Steam: a wide capsule for Ostatnio grane's first tile.
     const bool desktop = desktop_mode_; // The desktop window's grid: a poster for every game.
@@ -253,17 +257,17 @@ void Launcher::prefetchPosters() {
         std::lock_guard lock(jobs_->mutex);
         jobs_->posters_first = desktop || xmb || shelves;
     }
-    if ((!boxes && !xmb && !shelves && !desktop) || !(flix || metro)) {
+    if ((!boxes && !xmb && !shelves && !desktop) || !(flix || metro || xmb_wide)) {
         // Posters/capsules still queued for a style or layout no longer in use are not needed any more.
         std::lock_guard lock(jobs_->mutex);
         std::erase_if(jobs_->prefetch, [&](const Job& job) {
             const bool unused = (job.kind == CoverMessage::Kind::poster && !boxes && !flix && !metro && !xmb && !shelves && !desktop) ||
-                                (job.kind == CoverMessage::Kind::landscape && !flix && !metro && !steam && !(desktop && settings_.desktop_view == 2));
+                                (job.kind == CoverMessage::Kind::landscape && !flix && !metro && !xmb_wide && !steam && !(desktop && settings_.desktop_view == 2));
             if (unused) jobs_->requested.erase(job.key);
             return unused;
         });
     }
-    if (!runtime_started_ || (!boxes && !flix && !metro && !xmb && !shelves && !desktop)) return;
+    if (!runtime_started_ || (!boxes && !flix && !metro && !xmb && !xmb_wide && !shelves && !desktop)) return;
     const auto queue = [&](const Game& game, CoverMessage::Kind kind) { if (isGame(game)) requestArt(game, kind, true); };
     if (flix) for (size_t i = 0; i < categories_.size(); ++i)
         for (const auto& game : categories_[i].games) queue(game, i ? CoverMessage::Kind::poster : CoverMessage::Kind::landscape);
@@ -276,7 +280,7 @@ void Launcher::prefetchPosters() {
         }
     }
     if (metro) if (const auto* install = metroInstallGame()) queue(*install, CoverMessage::Kind::poster);
-    if (desktop && settings_.desktop_view == 2) for (const auto& game : public_library_) queue(game, CoverMessage::Kind::landscape);
+    if ((desktop && settings_.desktop_view == 2) || xmb_wide) for (const auto& game : public_library_) queue(game, CoverMessage::Kind::landscape);
     else if (desktop && (settings_.desktop_view == 1 || settings_.desktop_view == 3)) for (const auto& game : public_library_) queue(game, CoverMessage::Kind::cover);
     else if (boxes || xmb || desktop) for (const auto& game : public_library_) queue(game, CoverMessage::Kind::poster);
     else if (shelves) for (const auto& category : categories_) for (const auto& game : category.games) queue(game, CoverMessage::Kind::poster);
@@ -304,8 +308,9 @@ void Launcher::retryGameArtwork(const Game& game, bool notify) {
     else if ((settings_.home_layout == AppSettings::HomeLayout::xmb && settings_.xmb_posters) ||
              (settings_.home_layout == AppSettings::HomeLayout::shelves && settings_.shelves_posters) ||
              desktop_mode_) kinds.push_back(desktopCellKind()); // The desktop window's grid: its cells' art (posters, covers or capsules).
-    if (settings_.home_layout == AppSettings::HomeLayout::shelves && settings_.shelves_steam &&
-        std::find(kinds.begin(), kinds.end(), CoverMessage::Kind::landscape) == kinds.end()) kinds.push_back(CoverMessage::Kind::landscape);
+    if ((settings_.home_layout == AppSettings::HomeLayout::xmb && settings_.xmb_landscape) ||
+        (settings_.home_layout == AppSettings::HomeLayout::shelves && settings_.shelves_steam))
+        if (std::find(kinds.begin(), kinds.end(), CoverMessage::Kind::landscape) == kinds.end()) kinds.push_back(CoverMessage::Kind::landscape);
     if ((libraryLandscape() || libraryGridLandscape()) && std::find(kinds.begin(), kinds.end(), CoverMessage::Kind::landscape) == kinds.end()) kinds.push_back(CoverMessage::Kind::landscape);
     if (library_view::posterArt(libraryPresentation()) && std::find(kinds.begin(), kinds.end(), CoverMessage::Kind::poster) == kinds.end()) kinds.push_back(CoverMessage::Kind::poster);
     if (discArt()) kinds.push_back(CoverMessage::Kind::disc);

@@ -3178,6 +3178,7 @@ private:
     size_t selected_ = 0;
     size_t category_ = 0;
     std::vector<Game> xmb_top_;    // XMB top row: recent games, all, collections, PC stores, consoles, settings.
+    std::vector<Game> xmb_recent_games_; // Ostatnio grane's column when shown as one clock tile (xmb_recent_icon).
     size_t xmb_column_ = 0;        // Focused top-row tile.
     int xmb_row_ = -1;             // -1 = the tile itself, otherwise a game in its column.
     std::unordered_map<std::string, int> xmb_rows_; // Remembered column position per xmbKey.

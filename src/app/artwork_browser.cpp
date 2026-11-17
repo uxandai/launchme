@@ -292,7 +292,7 @@ void Launcher::openArtworkBrowser(const Game& game) {
         (flix_card_rows_[selected_] == 0 ? ArtworkKind::landscape : ArtworkKind::poster) :
         metroActive() && selected_ < metro_tiles_.size() ?
         (metro_layout::wideTile(metro_tiles_[selected_].role, metro_tiles_[selected_].rect) ? ArtworkKind::landscape : ArtworkKind::poster) :
-        shelfWideCard(selected_) ? ArtworkKind::landscape :
+        shelfWideCard(selected_) || (xmbActive() && settings_.xmb_landscape) ? ArtworkKind::landscape :
         (xmbActive() && settings_.xmb_posters) || shelfPosters() ? ArtworkKind::poster : ArtworkKind::cover;
     artwork_state_ = {};
     artwork_pages_.clear(); artwork_page_key_.clear();

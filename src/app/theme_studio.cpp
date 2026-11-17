@@ -131,6 +131,10 @@ void Launcher::themeBuildOptions() {
         } else if (s.home_layout == HomeLayout::xmb) {
             cards(Id::xmb_size, Look::size, L"Rozmiar kafelków XMB", static_cast<int>(s.xmb_size), names(xmb_sizes, xmb_sizes.size()));
             toggle(Id::xmb_posters, L"Pionowe plakaty", s.xmb_posters);
+            toggle(Id::xmb_landscape, L"Poziome kafle", s.xmb_landscape);
+            toggle(Id::xmb_recent_icon, L"„Ostatnio grane” jako ikona", s.xmb_recent_icon);
+            toggle(Id::xmb_favorites_icon, L"„Ulubione” jako ikona gwiazdki", s.xmb_favorites_icon);
+            toggle(Id::xmb_title_glow, L"Pulsująca poświata tytułu", s.xmb_title_glow);
             toggle(Id::xmb_platform_badge, L"Platforma jako logo", s.xmb_platform_badge);
         } else if (s.home_layout == HomeLayout::flix) {
             cards(Id::flix_size, Look::size, L"Rozmiar kafelków Flix", static_cast<int>(s.flix_size), names(flix_sizes, flix_sizes.size()));
@@ -420,6 +424,7 @@ void Launcher::themeApplyLook(const AppSettings& look) {
     settings_.home_layout = previous;
     applyWallpaper();
     setHomeLayout(static_cast<int>(layout));
+    xmb_slots_ = ~uint64_t{0};
     settingsChanged(true);
     prefetchPosters();
     themeRefreshHome(layout != previous);

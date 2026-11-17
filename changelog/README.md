@@ -2,6 +2,7 @@
 
 One file per release, newest first. Downloads are on the [Releases](../../../releases) page.
 
+- [0.7.20](0.7.20.md)
 - [0.7.19](0.7.19.md)
 - [0.7.18](0.7.18.md)
 - [0.7.17](0.7.17.md)

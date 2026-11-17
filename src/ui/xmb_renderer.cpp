@@ -3,6 +3,8 @@
 #include "xmb_layout.hpp"
 #include "occlusion_mask.hpp"
 
+#include <d2d1effects.h>
+
 #include <algorithm>
 #include <cmath>
 #include <numbers>
@@ -22,7 +24,10 @@ void Renderer::drawXmb() {
         if (card.opacity < 0.01f || card.size <= 0 || card.x > viewport_.width + 45 || card.x + card.width() < -45) continue;
         const float zoom = i == selected_ ? 1 + 0.13f * smoothFade(context_->launch_progress) : 1;
         const float dx = card.width() * (zoom - 1) * 0.5f, dy = card.size * (zoom - 1) * 0.5f;
+        const float previous = squircle_corner_;
+        if (context_->xmb_landscape && isGame(card.game)) squircle_corner_ = 0.4f;
         tiles.push_back(tileShape(D2D1::RectF(card.x - dx, card.y - dy, card.x + card.width() + dx, card.y + card.size + dy), tile_shape_));
+        squircle_corner_ = previous;
     }
     const auto mask = occlusionMask(factory_.Get(), bounds, tiles);
     // The column fades out towards the bottom edge (and the hints there) instead of being cut by it.
@@ -82,6 +87,43 @@ float Renderer::xmbTransparency(size_t index, bool selected) const {
 void Renderer::drawXmbTileIcon(const GameCard& card, size_t index, float x, float y, float size, float transparency) {
     const auto base = D2D1::Matrix3x2F::Scale(viewport_.scale, viewport_.scale);
     if (card.game.kind == GameKind::category) {
+        if (card.game.source_id == "xmb:clock" || card.game.source_id == "xmb:star") {
+            target_->SetTransform(base);
+            const float cx = x + size * 0.5f, cy = y + size * 0.5f;
+            const float stroke = std::max(1.6f, size * 0.018f);
+            const auto ink = gray(0.94f, 0.9f * transparency);
+            if (!controller_art_stroke_)
+                factory_->CreateStrokeStyle(D2D1::StrokeStyleProperties(D2D1_CAP_STYLE_ROUND, D2D1_CAP_STYLE_ROUND, D2D1_CAP_STYLE_ROUND,
+                                                                        D2D1_LINE_JOIN_ROUND), nullptr, 0, controller_art_stroke_.GetAddressOf());
+            if (card.game.source_id == "xmb:clock") {
+                brush(ink);
+                target_->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), size * 0.205f, size * 0.205f), solid_.Get(), stroke);
+                target_->DrawLine(D2D1::Point2F(cx, cy), D2D1::Point2F(cx, cy - size * 0.12f), solid_.Get(), stroke * 1.15f, controller_art_stroke_.Get());
+                target_->DrawLine(D2D1::Point2F(cx, cy), D2D1::Point2F(cx + size * 0.085f, cy + size * 0.05f), solid_.Get(), stroke * 1.15f, controller_art_stroke_.Get());
+                target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), stroke * 0.85f, stroke * 0.85f), solid_.Get());
+                return;
+            }
+            Microsoft::WRL::ComPtr<ID2D1PathGeometry> star;
+            Microsoft::WRL::ComPtr<ID2D1GeometrySink> sink;
+            if (SUCCEEDED(factory_->CreatePathGeometry(star.GetAddressOf())) && SUCCEEDED(star->Open(sink.GetAddressOf()))) {
+                const float sy = cy + size * 0.018f, outer = size * 0.215f, inner = size * 0.095f;
+                for (int k = 0; k < 10; ++k) {
+                    const float angle = -std::numbers::pi_v<float> * 0.5f + k * std::numbers::pi_v<float> * 0.2f;
+                    const float r = (k % 2) ? inner : outer;
+                    const auto pt = D2D1::Point2F(cx + std::cos(angle) * r, sy + std::sin(angle) * r);
+                    if (k == 0) sink->BeginFigure(pt, D2D1_FIGURE_BEGIN_FILLED);
+                    else sink->AddLine(pt);
+                }
+                sink->EndFigure(D2D1_FIGURE_END_CLOSED);
+                if (SUCCEEDED(sink->Close())) {
+                    brush(gray(0.94f, 0.12f * transparency));
+                    target_->FillGeometry(star.Get(), solid_.Get());
+                    brush(ink);
+                    target_->DrawGeometry(star.Get(), solid_.Get(), stroke * 1.05f, controller_art_stroke_.Get());
+                }
+            }
+            return;
+        }
         // 2x2 preview of the collection's first covers, in unit tile space like the cover fill.
         target_->SetTransform(D2D1::Matrix3x2F::Scale(size, size) * D2D1::Matrix3x2F::Translation(x, y) * base);
         constexpr float pad = 0.1f, gap = 0.05f, cell = (1.0f - 2 * pad - gap) / 2;
@@ -167,6 +209,68 @@ void Renderer::drawXmbTileIcon(const GameCard& card, size_t index, float x, floa
     }
 }
 
+void Renderer::drawXmbGlowText(const std::wstring& value, float x, float y, float width, float height,
+                               IDWriteTextFormat* format, D2D1_COLOR_F ink, float glow_alpha,
+                               std::optional<DWRITE_TEXT_ALIGNMENT> alignment) {
+    if (value.empty() || width <= 0 || height <= 0 || !format) return;
+    const auto adjust = [&](IDWriteTextLayout* layout) {
+        if (alignment) {
+            layout->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
+            layout->SetTextAlignment(*alignment);
+        }
+    };
+    const uint32_t variant = alignment ? text_variant_line + 1 + static_cast<uint32_t>(*alignment) : 0;
+    Microsoft::WRL::ComPtr<IDWriteTextLayout> created;
+    auto* layout = text_layouts_.get(dwrite_.Get(), value, format, width, height, variant, adjust);
+    if (!layout) {
+        if (FAILED(dwrite_->CreateTextLayout(value.c_str(), static_cast<UINT32>(value.size()), format, width, height,
+                                             created.GetAddressOf()))) return;
+        adjust(created.Get()); layout = created.Get();
+    }
+    if (glow_alpha > 0.004f && realizer_) {
+        DWRITE_TEXT_METRICS metrics{};
+        if (SUCCEEDED(layout->GetMetrics(&metrics)) && metrics.widthIncludingTrailingWhitespace > 0.5f) {
+            const float ink_left = x + std::max(0.0f, metrics.left);
+            const float ink_right = std::min(x + width, ink_left + metrics.widthIncludingTrailingWhitespace + 4.0f);
+            constexpr float pad = 20.0f;
+            const auto origin = D2D1::Point2F(std::floor(ink_left - pad), std::floor(y - pad));
+            const float needed_w = std::ceil((ink_right + pad - origin.x) / 64.0f) * 64.0f;
+            const float needed_h = std::ceil((y + height + pad - origin.y) / 64.0f) * 64.0f;
+            const auto available = orbit_target_ ? orbit_target_->GetSize() : D2D1::SizeF(0, 0);
+            if (available.width < needed_w || available.height < needed_h) {
+                orbit_ink_.Reset(); orbit_target_.Reset();
+                target_->CreateCompatibleRenderTarget(D2D1::SizeF(std::max(available.width, needed_w),
+                    std::max(available.height, needed_h)), orbit_target_.GetAddressOf());
+            }
+            if (orbit_target_) {
+                if (!orbit_ink_) orbit_target_->CreateSolidColorBrush(D2D1::ColorF(1, 1, 1, 1), orbit_ink_.GetAddressOf());
+                if (!orbit_blur_) realizer_->CreateEffect(CLSID_D2D1GaussianBlur, orbit_blur_.GetAddressOf());
+                if (orbit_ink_ && orbit_blur_) {
+                    const float pulse = 0.5f + 0.5f * std::sin(elapsed_ * 2.4f);
+                    orbit_ink_->SetColor(D2D1::ColorF(1.0f, 1.0f, 1.0f, std::min(1.0f, (0.185f + 0.315f * pulse) * glow_alpha)));
+                    orbit_target_->BeginDraw();
+                    orbit_target_->Clear(D2D1::ColorF(0, 0, 0, 0));
+                    orbit_target_->SetTransform(D2D1::Matrix3x2F::Translation(-origin.x, -origin.y));
+                    orbit_target_->DrawTextLayout(D2D1::Point2F(x, y), layout, orbit_ink_.Get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
+                    const auto rendered = orbit_target_->EndDraw();
+                    Microsoft::WRL::ComPtr<ID2D1Bitmap> bitmap;
+                    if (SUCCEEDED(rendered) && SUCCEEDED(orbit_target_->GetBitmap(bitmap.GetAddressOf()))) {
+                        orbit_blur_->SetInput(0, bitmap.Get());
+                        orbit_blur_->SetValue(D2D1_GAUSSIANBLUR_PROP_BORDER_MODE, D2D1_BORDER_MODE_SOFT);
+                        orbit_blur_->SetValue(D2D1_GAUSSIANBLUR_PROP_STANDARD_DEVIATION, 6.2f);
+                        realizer_->DrawImage(orbit_blur_.Get(), origin);
+                        orbit_blur_->SetValue(D2D1_GAUSSIANBLUR_PROP_STANDARD_DEVIATION, 2.4f);
+                        realizer_->DrawImage(orbit_blur_.Get(), origin);
+                        orbit_blur_->SetInput(0, nullptr);
+                    }
+                }
+            }
+        }
+    }
+    brush(ink);
+    target_->DrawTextLayout(D2D1::Point2F(x, y), layout, solid_.Get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
+}
+
 void Renderer::drawXmbCaption() {
     const auto& cards = *cards_;
     const size_t top = context_->xmb_top;
@@ -176,7 +280,13 @@ void Renderer::drawXmbCaption() {
     const float caption_alpha = context_->xmb_row < 0 ? 1.0f : 0.72f;
     const float caption_y = column_tile.y + column_tile.size + 10;
     // 17 px over 16 px (15 px was too small from the sofa); the band to the column holds both.
-    textLine(context_->xmb_caption, center - 180, caption_y + 11, 360, toast_font_.Get(), gray(0.96f, caption_alpha), DWRITE_TEXT_ALIGNMENT_CENTER);
+    const float glow = context_->xmb_title_glow && context_->xmb_row < 0 && isGame(column_tile.game) ?
+        caption_alpha * (1.0f - smoothFade(context_->quick_progress)) : 0.0f;
+    if (glow > 0.004f && toast_font_) {
+        const auto tm = typeMetrics(toast_font_.Get());
+        drawXmbGlowText(context_->xmb_caption, center - 180, caption_y + 11 - (tm.baseline - tm.cap * 0.5f), 360, tm.line,
+                        toast_font_.Get(), gray(0.96f, caption_alpha), glow, DWRITE_TEXT_ALIGNMENT_CENTER);
+    } else textLine(context_->xmb_caption, center - 180, caption_y + 11, 360, toast_font_.Get(), gray(0.96f, caption_alpha), DWRITE_TEXT_ALIGNMENT_CENTER);
     if (context_->xmb_platform_badge && !context_->xmb_subcaption_platform.empty()) {
         const auto& platform = context_->xmb_subcaption_platform;
         const float width = drawPsfiveBadge(platform, 0, 0, caption_alpha, false);
@@ -189,7 +299,8 @@ void Renderer::drawXmbLabels() {
     using namespace xmb_layout;
     const auto& cards = *cards_;
     const size_t top = context_->xmb_top;
-    const float label_x = labelLeft(context_->xmb_scale);
+    const Art column_art = context_->xmb_landscape ? Art::landscape : context_->xmb_posters ? Art::poster : Art::square;
+    const float label_x = labelLeft(column_art, context_->xmb_scale);
     const float full_width = std::max(120.0f, viewport_.width - label_x - 80);
     const auto logo = xmbLogoRect(); // Labels beside the corner logo stop short of it.
     for (size_t i = top; i < cards.size(); ++i) {
@@ -211,7 +322,9 @@ void Renderer::drawXmbLabels() {
                                     session == SessionState::frozen ? std::wstring(tr(L"Wstrzymana")) : session == SessionState::running ? std::wstring(tr(L"W grze")) :
                                     game.installation.active() ? std::wstring(primaryActionLabel(game)) :
                                     !game.installed ? std::wstring(localFileGame(game.source) ? missingFileLabel(game) : tr(L"Do instalacji")) : activePlatformName(game);
-        text(game.name, label_x, middle - 31, width, 32, category_font_.Get(), gray(0.97f, alpha));
+        const float glow = context_->xmb_title_glow && isGame(game) ? alpha * (1.0f - smoothFade(context_->quick_progress)) : 0.0f;
+        if (glow > 0.004f) drawXmbGlowText(game.name, label_x, middle - 31, width, 32, category_font_.Get(), gray(0.97f, alpha), glow);
+        else text(game.name, label_x, middle - 31, width, 32, category_font_.Get(), gray(0.97f, alpha));
         if (platform_line && context_->xmb_platform_badge && !status.empty()) drawPsfiveBadge(status, label_x, middle + 17, alpha);
         else text(status, label_x, middle + 5, width, 24, settings_body_font_.Get(), gray(0.62f, alpha));
     }

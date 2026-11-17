@@ -1109,6 +1109,8 @@ private:
     void drawXmb();
     void drawXmbCaption();
     void drawXmbLabels();
+    void drawXmbGlowText(const std::wstring& value, float x, float y, float width, float height, IDWriteTextFormat* format,
+                         D2D1_COLOR_F ink, float glow_alpha, std::optional<DWRITE_TEXT_ALIGNMENT> alignment = std::nullopt);
     // The focused game's logo in a bottom-right box at most max_width x max_height whose right
     // and bottom edges it touches (trimmed to its ink bounds). XMB: above the platform badge.
     std::optional<D2D1_RECT_F> cornerLogoRect(float max_width, float max_height, float right, float bottom) const;
