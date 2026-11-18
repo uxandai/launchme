@@ -559,7 +559,8 @@ void Launcher::tick() {
         launch_age_ += dt;
         launch_progress_ = launchAnimationActive() ? 0 : std::min(1.0f, launch_age_ / 0.52f);
         // A Steam account switch first restarts Steam (src/app/steam_install.cpp): the game waits for it.
-        if (!steam_switch_pending_ && (launchAnimationActive() || launch_age_ >= 0.52f)) finishLaunch();
+        // So does the game's script before the launch (launch_scripts.cpp).
+        if (!steam_switch_pending_ && !launch_script_wait_ && (launchAnimationActive() || launch_age_ >= 0.52f)) finishLaunch();
     } else launch_progress_ = std::max(0.0f, launch_progress_ - dt / 0.30f);
     tickLaunchAnimation(now);
     if (enter_held_ && !menu_open_ && !cards_.empty() &&

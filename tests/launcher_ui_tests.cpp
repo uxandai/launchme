@@ -136,6 +136,7 @@ public:
     static int customGames(HWND window);
     static int emulationSettings(HWND window);
     static int manualGames(HWND window); // manual_games_ui_cases.hpp
+    static int launchScripts(HWND window); // launch_scripts_ui_cases.hpp
     static int metadataFind(HWND window); // metadata_find_ui_cases.hpp
     static int ux076(HWND window); // ux_076_ui_cases.hpp
     static int fileBrowserAndColors(HWND window);
@@ -2377,6 +2378,7 @@ int LauncherUiTest::language(HWND window) {
 #include "excluded_games_ui_cases.hpp"
 #include "uninstall_ui_cases.hpp"
 #include "manual_games_ui_cases.hpp"
+#include "launch_scripts_ui_cases.hpp"
 #include "metadata_find_ui_cases.hpp"
 #include "ux_076_ui_cases.hpp"
 #include "hltb_ui_cases.hpp"
@@ -2682,6 +2684,15 @@ int main(int argc, char** argv) {
         if (window) DestroyWindow(window);
         CoUninitialize();
         if (code) std::cerr << "Organization regression: " << code << '\n';
+        return code;
+    }
+    if (argc == 2 && std::string_view(argv[1]) == "--launch-scripts") {
+        std::filesystem::create_directories(root);
+        const auto code = window ? LauncherUiTest::launchScripts(window) : 99;
+        if (window) DestroyWindow(window);
+        CoUninitialize();
+        if (code) std::cerr << "Launch scripts regression: " << code << '\n';
+        else std::cout << "Launch scripts: tabs, test, save, before/after the game passed\n";
         return code;
     }
     if (argc == 2 && std::string_view(argv[1]) == "--manual-games") {

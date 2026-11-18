@@ -132,6 +132,13 @@ bool parseRow(const std::string& line, LibraryState& result) {
             std::string key; unsigned bits = 0;
             if (!field(row, key) || key.empty() || !(row >> bits) || !bits || (bits & ~launch_flag::all)) return {};
             result.launch_flags[std::move(key)] = bits;
+        } else if (kind == "launch-scripts") {
+            std::string key, before, started, exited;
+            if (!field(row, key) || !field(row, before) || !field(row, started) || !field(row, exited) || key.empty()) return {};
+            LibraryState::LaunchScripts scripts{text_encoding::wide(before), text_encoding::wide(started), text_encoding::wide(exited)};
+            if ((!before.empty() && scripts.before.empty()) || (!started.empty() && scripts.started.empty()) ||
+                (!exited.empty() && scripts.exited.empty()) || scripts.empty()) return {};
+            result.launch_scripts[std::move(key)] = std::move(scripts);
         } else if (kind == "recent-hidden") {
             std::string key; uint64_t time = 0;
             if (!(field(row, key) && row >> time && !key.empty())) return {};
@@ -259,6 +266,14 @@ bool saveLibraryState(const LibraryState& state, const std::filesystem::path& fi
     for (const auto& [key, bits] : state.launch_flags) {
         if (key.empty() || !validField(key) || !bits || (bits & ~launch_flag::all)) return false;
         output << "launch-flags " << std::quoted(encoded(key)) << ' ' << bits << '\n';
+        if (!bounded()) return false;
+    }
+    for (const auto& [key, scripts] : state.launch_scripts) {
+        const auto before = text_encoding::utf8(scripts.before), started = text_encoding::utf8(scripts.started), exited = text_encoding::utf8(scripts.exited);
+        if (key.empty() || !validField(key) || scripts.empty() || !validField(before) || !validField(started) || !validField(exited) ||
+            (!scripts.before.empty() && before.empty()) || (!scripts.started.empty() && started.empty()) || (!scripts.exited.empty() && exited.empty())) return false;
+        output << "launch-scripts " << std::quoted(encoded(key)) << ' ' << std::quoted(encoded(before)) << ' ' << std::quoted(encoded(started)) << ' '
+               << std::quoted(encoded(exited)) << '\n';
         if (!bounded()) return false;
     }
     for (const auto& [key, time] : state.recent_hidden) {

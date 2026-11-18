@@ -397,6 +397,8 @@ if(BUILD_TESTING)
     launchme_executable(metadata_sources_tests TEST metadata_sources SOURCES tests/metadata_sources_tests.cpp)
     launchme_executable(system_requirements_tests TEST system_requirements_and_hardware_ratings
         SOURCES tests/system_requirements_tests.cpp src/library/system_requirements.cpp src/library/hardware_rating.cpp src/net/json.cpp)
+    launchme_executable(launch_scripts_tests TEST launch_scripts_before_after_game
+        SOURCES tests/launch_scripts_tests.cpp src/platform/launch_scripts.cpp)
     launchme_executable(library_state_tests TEST library_view_state_and_sorting
         SOURCES tests/library_state_tests.cpp src/platform/library_state.cpp src/library/view_options.cpp)
     launchme_executable(device_tests TEST device_input_and_audio_transactions
@@ -460,6 +462,7 @@ if(BUILD_TESTING)
     add_test(NAME plugin_library_supplement_merge COMMAND launcher_ui_tests --plugin-library)
 add_test(NAME uninstall_from_game_menus COMMAND launcher_ui_tests --uninstall)
 add_test(NAME games_added_by_hand_without_file COMMAND launcher_ui_tests --manual-games)
+add_test(NAME launch_scripts_tabs_and_lifecycle COMMAND launcher_ui_tests --launch-scripts)
 add_test(NAME metadata_find_in_edit_metadata COMMAND launcher_ui_tests --metadata-find)
 add_test(NAME desktop_076 COMMAND launcher_ui_tests --ux-076)
 add_test(NAME low_memory_mode COMMAND launcher_ui_tests --low-memory)

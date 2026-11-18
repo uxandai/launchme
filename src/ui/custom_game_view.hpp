@@ -16,15 +16,23 @@
 // DRM-free game's file, options and working directory, a Steam game's launch options only.
 // Linux, a Windows game (State::compat): also its WINEDLLOVERRIDES and its Wine/Proton launch options
 // as Steam writes them (VAR=value wrapper %command% arguments), with "Proton / Wine…" to its page.
+// A game with a key (State::tabs()) has two tabs: "Uruchamianie" (the above) and "Skrypty", its
+// commands before the launch, after the start and after the exit, each with "Testuj"
+// (src/platform/launch_scripts.hpp).
 namespace custom_game_ui {
 // pick_file / pick_folder: a new game's two pills above the fields ("Wskaż plik", "Wskaż folder"); they
 // take the file row's "Wybierz…" place.
 // log_toggle, hdr_toggle: the switches' row under the fields (State::flags): "Zapisuj logi", "HDR na czas gry" (Windows).
+// tab_launch, tab_scripts: the tabs above the fields; before…exited: the scripts' fields, test_*: their "Testuj".
 enum class Item { name, file, file_browse, arguments, directory, directory_browse, dll, wine, wine_page, platform, identify, remove, cancel, save,
-                  pick_file, pick_folder, log_toggle, hdr_toggle };
+                  pick_file, pick_folder, log_toggle, hdr_toggle, tab_launch, tab_scripts, before, test_before, started, test_started, exited, test_exited };
 // platform_field: an emulated game's console (Left/Right or Enter pick another; never typed). With it the
 // file is the ROM, the options an emulator command of its own and the working directory has no use.
-enum Field { name_field, file_field, arguments_field, directory_field, dll_field, wine_field, platform_field, field_count };
+// before_field…exited_field: the "Skrypty" tab's (launch_scripts::Phase order).
+enum Field { name_field, file_field, arguments_field, directory_field, dll_field, wine_field, platform_field,
+             before_field, started_field, exited_field, field_count };
+inline bool scriptField(int index) { return index >= before_field && index <= exited_field; }
+enum class Tab { launch, scripts };
 // other: a game of another store, whose client takes no options: the switches alone.
 enum class Target { custom, drm_free, steam, other };
 // The poster beside the fields: nothing to look for (no name), being looked for, shown, none found.
@@ -59,7 +67,14 @@ struct State {
     // Windows (HDR switching), and not for a new game, which has no key yet.
     bool flags = false, log = false, hdr = false, hdr_option = false;
     std::string flags_key;
-    int toggles() const { return flags ? (hdr_option ? 2 : 1) : 0; }
+    // The tabs: a game with a key (an edited one or another's launch options); a new game has none.
+    Tab tab = Tab::launch;
+    std::wstring note; // A script test's outcome under the fields (ui.error wins).
+    bool note_failed = false;
+    bool testing = false; // A test runs: "Testuj" waits for it.
+    bool tabs() const { return flags; }
+    bool scripts() const { return tabs() && tab == Tab::scripts; }
+    int toggles() const { return flags && !scripts() ? (hdr_option ? 2 : 1) : 0; }
     bool editing() const { return !id.empty(); }
     bool launchOptions() const { return target != Target::custom; }
     // The desktop window: a new game has the file row's "Wybierz" like an edited one, and "Dodaj folder jako bibliotekę" at the bottom.
@@ -69,9 +84,12 @@ struct State {
     // The file row's "Wybierz…" (a game being edited; a new one has the pills).
     bool browses(int index) const { return index != file_field || !pills(); }
     bool posterShown() const { return target == Target::custom; }
+    bool posterVisible() const { return posterShown() && !scripts(); } // The scripts' tab uses the whole width.
     const std::string& gameId() const { return editing() ? id : pending_id; }
     bool emulated() const { return target == Target::custom && !fields[platform_field].empty(); }
     bool shows(int index) const {
+        if (scriptField(index)) return scripts();
+        if (scripts()) return false;
         if (index == dll_field || index == wine_field) return compat;
         if (index == platform_field) return emulated();
         if (index == directory_field && emulated()) return false;
@@ -99,6 +117,19 @@ inline const wchar_t* emulatedHint(const State& state, int index) {
     return nullptr;
 }
 
+// What a script's empty field suggests.
+inline const wchar_t* scriptHint(int index) {
+#ifdef _WIN32
+    if (index == before_field) return tr(L"Np. C:\\Narzędzia\\przed.bat -cicho albo Start-Process notepad");
+    if (index == started_field) return tr(L"Np. Start-Process \"C:\\Narzędzia\\trener.exe\"");
+    return tr(L"Np. C:\\Narzędzia\\po.vbs albo Stop-Process -Name trener");
+#else
+    if (index == before_field) return tr(L"Np. ~/skrypty/przed.sh --cicho");
+    if (index == started_field) return tr(L"Np. notify-send \"Gra wystartowała\"");
+    return tr(L"Np. ~/skrypty/po.sh; pkill trener");
+#endif
+}
+
 // Text field behind an item, -1 for buttons.
 inline int field(Item item) {
     switch (item) {
@@ -109,12 +140,15 @@ inline int field(Item item) {
     case Item::dll: return dll_field;
     case Item::wine: return wine_field;
     case Item::platform: return platform_field;
+    case Item::before: return before_field;
+    case Item::started: return started_field;
+    case Item::exited: return exited_field;
     default: return -1;
     }
 }
-// Rows 0-6 hold the fields (1 and 3 with a browse button, 5 with "Proton / Wine…"), row 6 the
-// buttons; "Zidentyfikuj grę" stands apart in the poster's column (7).
-inline constexpr int buttons_row = field_count, identify_row = field_count + 1;
+// Rows 0-9 hold the fields (1 and 3 with a browse button, 5 with "Proton / Wine…", 7-9 with "Testuj"),
+// then the buttons; "Zidentyfikuj grę" stands apart in the poster's column, the tabs above the fields.
+inline constexpr int buttons_row = field_count, identify_row = field_count + 1, tabs_row = field_count + 2;
 inline int row(Item item) {
     switch (item) {
     case Item::name: return 0;
@@ -124,13 +158,33 @@ inline int row(Item item) {
     case Item::dll: return 4;
     case Item::wine: case Item::wine_page: return 5;
     case Item::platform: return 6;
+    case Item::before: case Item::test_before: return before_field;
+    case Item::started: case Item::test_started: return started_field;
+    case Item::exited: case Item::test_exited: return exited_field;
     case Item::identify: return identify_row;
+    case Item::tab_launch: case Item::tab_scripts: return tabs_row;
     default: return buttons_row;
     }
 }
-inline bool browseRow(int index) { return index == file_field || index == directory_field || index == wine_field; }
+inline bool browseRow(int index) { return index == file_field || index == directory_field || index == wine_field || scriptField(index); }
 // The button beside a row's field.
-inline Item browseItem(int index) { return index == file_field ? Item::file_browse : index == wine_field ? Item::wine_page : Item::directory_browse; }
+inline Item browseItem(int index) {
+    switch (index) {
+    case file_field: return Item::file_browse;
+    case wine_field: return Item::wine_page;
+    case before_field: return Item::test_before;
+    case started_field: return Item::test_started;
+    case exited_field: return Item::test_exited;
+    default: return Item::directory_browse;
+    }
+}
+// A row's field item (rows 0-9).
+inline Item fieldItem(int index) {
+    constexpr Item items[field_count] = {Item::name, Item::file, Item::arguments, Item::directory, Item::dll, Item::wine, Item::platform,
+                                         Item::before, Item::started, Item::exited};
+    return items[index];
+}
+inline bool testItem(Item item) { return item == Item::test_before || item == Item::test_started || item == Item::test_exited; }
 
 struct Layout {
     float width, height;
@@ -138,8 +192,24 @@ struct Layout {
     bool poster = false; // State::posterShown(): the poster column on the right.
     bool pills = false;  // State::pills(): "Wskaż plik" / "Wskaż folder" above the fields.
     int toggles = 0;     // State::toggles(): the switches' row under the fields.
-    static constexpr float margin = 36, button_width = 176, gap = 16, poster_width = 200, poster_gap = 28, pills_height = 76, toggles_height = 68;
-    static Layout of(const State& state, float width, float height) { return {width, height, state.hidden(), state.posterShown(), state.pills(), state.toggles()}; }
+    bool tabs = false;   // State::tabs(): "Uruchamianie" / "Skrypty" above the fields.
+    float body = 0;      // With tabs: the taller tab's fields and switches, so switching keeps the panel's size.
+    static constexpr float margin = 36, button_width = 176, gap = 16, poster_width = 200, poster_gap = 28, pills_height = 76, toggles_height = 68,
+                           tabs_height = 72, row_height = 104;
+    static Layout of(const State& state, float width, float height) {
+        Layout layout{width, height, state.hidden(), state.posterVisible(), state.pills(), state.toggles(), state.tabs()};
+        if (layout.tabs) {
+            auto other = state;
+            other.tab = state.scripts() ? Tab::launch : Tab::scripts;
+            const auto rows = [](const State& s) {
+                int count = 0;
+                for (int index = 0; index < field_count; ++index) count += s.shows(index);
+                return static_cast<float>(count) * row_height + (s.toggles() ? toggles_height : 0.0f);
+            };
+            layout.body = std::max(rows(state), rows(other));
+        }
+        return layout;
+    }
     bool shown(int index) const { return !(hidden & (1u << index)); }
     bool browses(int index) const { return browseRow(index) && (index != file_field || !pills); }
     int slot(int index) const { // A field's row among the shown ones.
@@ -147,11 +217,18 @@ struct Layout {
         for (int i = 0; i < index; ++i) result += shown(i);
         return result;
     }
-    float pillsSpace() const { return pills ? pills_height : 0.0f; }
+    float pillsSpace() const { return pills ? pills_height : tabs ? tabs_height : 0.0f; }
     settings_ui::Rect panel() const {
-        const float w = std::min(poster ? 1100.0f : 920.0f, width - 96),
-                    half = 118 + slot(field_count) * 52.0f + pillsSpace() * 0.5f + (toggles ? toggles_height * 0.5f : 0.0f);
+        const float w = std::min(poster || tabs ? 1100.0f : 920.0f, width - 96),
+                    own = slot(field_count) * row_height + (toggles ? toggles_height : 0.0f),
+                    half = 118 + std::max(own, body) * 0.5f + pillsSpace() * 0.5f;
         return {(width - w) * 0.5f, height * 0.5f - half, (width + w) * 0.5f, height * 0.5f + half};
+    }
+    // The tabs at the top left of the fields: 0 "Uruchamianie", 1 "Skrypty".
+    settings_ui::Rect tab(int which) const {
+        const auto p = panel(); const float top = p.top + 96, w = 220;
+        const float left = p.left + margin + static_cast<float>(which) * (w + 10);
+        return {left, top, left + w, top + 52};
     }
     float rowTop(int index) const { return panel().top + 96 + pillsSpace() + slot(index) * 104.0f; }
     float fieldsRight() const { return panel().right - margin - (poster ? poster_width + poster_gap : 0.0f); }
@@ -197,13 +274,17 @@ struct Layout {
         return {right - button_width, top, right, bottom};
     }
     std::optional<Item> hit(float x, float y, bool editing) const {
+        if (tabs) {
+            if (tab(0).contains(x, y)) return Item::tab_launch;
+            if (tab(1).contains(x, y)) return Item::tab_scripts;
+        }
         if (pills) {
             if (pill(0).contains(x, y)) return Item::pick_file;
             if (pill(1).contains(x, y)) return Item::pick_folder;
         }
-        for (const auto item : {Item::name, Item::file, Item::arguments, Item::directory, Item::dll, Item::wine, Item::platform})
-            if (shown(row(item)) && input(row(item)).contains(x, y)) return item;
-        for (const int index : {static_cast<int>(file_field), static_cast<int>(directory_field), static_cast<int>(wine_field)})
+        for (int index = 0; index < field_count; ++index)
+            if (shown(index) && input(index).contains(x, y)) return fieldItem(index);
+        for (int index = 0; index < field_count; ++index)
             if (shown(index) && browses(index) && browse(index).contains(x, y)) return browseItem(index);
         if (poster && (identify().contains(x, y) || posterBox().contains(x, y))) return Item::identify;
         for (int which = 0; which < toggles; ++which) if (toggle(which).contains(x, y)) return which ? Item::hdr_toggle : Item::log_toggle;

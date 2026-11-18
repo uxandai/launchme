@@ -32,6 +32,7 @@ set(LAUNCHME_APP_SOURCES
     src/app/flix_rail.cpp
     src/app/game_emulator.cpp
     src/app/launch_flags.cpp
+    src/app/launch_scripts.cpp
     src/app/game_launch.cpp
     src/app/pointer.cpp
     src/app/friends.cpp
@@ -401,6 +402,7 @@ set(LAUNCHME_APP_SOURCES
     src/platform/unicode_text.cpp
     src/platform/hashing.cpp
     src/platform/library_state.cpp
+    src/platform/launch_scripts.cpp
     src/platform/zip_archive.cpp
     src/platform/password_crypto.cpp
     src/platform/profile_transfer.cpp

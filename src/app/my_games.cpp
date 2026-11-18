@@ -21,9 +21,10 @@ std::filesystem::path customGamesFile() { return userConfigDirectory() / L"custo
 std::filesystem::path posterPreviewCache() { return coverCacheDirectory().parent_path() / L"artwork" / L"editor-preview"; }
 constexpr uint64_t poster_delay_ms = 500; // The typed name rests this long before its poster is looked up.
 
+constexpr size_t max_script = 1000; // Opcje uruchamiania → Skrypty: library-state.ini's fields (UTF-8 bytes, checked on save).
 constexpr size_t field_limits[custom_game_ui::field_count]{
     custom_games::max_name, custom_games::max_path, custom_games::max_arguments, custom_games::max_path, custom_games::max_arguments, custom_games::max_arguments,
-    custom_games::max_name};
+    custom_games::max_name, max_script, max_script, max_script};
 
 // Caret steps keep surrogate pairs together.
 size_t previousStop(const std::wstring& text, size_t caret) {
@@ -301,6 +302,11 @@ void Launcher::customEditorFlags(custom_game_ui::State& ui, const std::string& k
     const unsigned bits = found == library_state_.launch_flags.end() ? 0u : found->second;
     ui.log = (bits & launch_flag::log) != 0;
     ui.hdr = (bits & launch_flag::hdr) != 0;
+    if (const auto* scripts = launchScripts(key)) { // Its scripts' tab.
+        ui.fields[custom_game_ui::before_field] = scripts->before;
+        ui.fields[custom_game_ui::started_field] = scripts->started;
+        ui.fields[custom_game_ui::exited_field] = scripts->exited;
+    }
 #ifdef _WIN32
     ui.hdr_option = ui.flags;
 #endif
@@ -363,6 +369,7 @@ void Launcher::closeCustomEditor() {
     if (ui.posterShown() && ui.open && runtime_started_) // Posters matched for typed names are not kept.
         work_.start([cache = posterPreviewCache()] { std::error_code ec; std::filesystem::remove_all(cache, ec); });
     custom_poster_ = {}; custom_poster_name_.clear(); custom_poster_at_ = 0; ++custom_poster_generation_;
+    ++script_test_generation_; // A test still running reports to no one.
     custom_editor_ = {};
     mouse_transition_until_ = GetTickCount64() + GetDoubleClickTime();
     InvalidateRect(hwnd_, nullptr, FALSE);
@@ -370,7 +377,11 @@ void Launcher::closeCustomEditor() {
 
 void Launcher::customEditorFocus(Item item) {
     auto& ui = custom_editor_;
-    if (!ui.open || ui.focus == item || (item == Item::remove && !ui.editing()) || (item == Item::identify && !ui.posterShown())) return;
+    if (!ui.open || ui.focus == item || (item == Item::remove && !ui.editing()) || (item == Item::identify && !ui.posterVisible())) return;
+    if (item == Item::tab_launch || item == Item::tab_scripts) { // A tab shows as soon as it is reached.
+        if (ui.tabs()) customEditorTab(item == Item::tab_scripts ? custom_game_ui::Tab::scripts : custom_game_ui::Tab::launch);
+        return;
+    }
     if ((item == Item::log_toggle && ui.toggles() < 1) || (item == Item::hdr_toggle && ui.toggles() < 2)) return;
     if ((item == Item::pick_file && !ui.pills()) || (item == Item::pick_folder && !ui.pills() && !ui.folderButton())) return;
     if (item == Item::file_browse && !ui.browses(custom_game_ui::file_field)) return;
@@ -386,8 +397,9 @@ void Launcher::customEditorFocus(Item item) {
 void Launcher::customEditorMove(int horizontal, int vertical) {
     const auto focus = custom_editor_.focus;
     auto next = focus;
-    const bool poster = custom_editor_.posterShown();
+    const bool poster = custom_editor_.posterVisible();
     const bool pills = custom_editor_.pills();
+    const bool tabs = custom_editor_.tabs();
     const bool file_browse = custom_editor_.browses(custom_game_ui::file_field);
     const int toggles = custom_editor_.toggles();
     const auto lastField = [&] { // The last row of fields shown, -1 when none.
@@ -395,16 +407,26 @@ void Launcher::customEditorMove(int horizontal, int vertical) {
         while (row >= 0 && !custom_editor_.shows(row)) --row;
         return row;
     };
-    const auto fieldItem = [](int row) {
-        constexpr Item items[] = {Item::name, Item::file, Item::arguments, Item::directory, Item::dll, Item::wine, Item::platform};
-        return items[row];
+    const auto fieldItem = [](int row) { return custom_game_ui::fieldItem(row); };
+    const auto firstRow = [&] { // Down from above the fields: the first field, else the switches or the buttons.
+        int row = 0;
+        while (row < custom_game_ui::field_count && !custom_editor_.shows(row)) ++row;
+        return row < custom_game_ui::field_count ? fieldItem(row) : toggles ? Item::log_toggle : Item::save;
     };
+    if (focus == Item::tab_launch || focus == Item::tab_scripts) {
+        // The tabs: Left/Right between them (each shows at once), Down into the tab, Up nowhere.
+        if (horizontal) customEditorTab(horizontal > 0 ? custom_game_ui::Tab::scripts : custom_game_ui::Tab::launch);
+        else if (vertical > 0) customEditorFocus(firstRow());
+        else navigationBoundary();
+        return;
+    }
     if (focus == Item::log_toggle || focus == Item::hdr_toggle) {
         // The switches' row: Left/Right between them, Up to the last field, Down to the buttons.
         if (horizontal) next = horizontal > 0 ? (toggles > 1 ? Item::hdr_toggle : focus) : Item::log_toggle;
         else if (vertical > 0) next = Item::save;
         else if (vertical < 0) {
             if (const int row = lastField(); row >= 0) next = fieldItem(row);
+            else if (tabs) next = custom_editor_.scripts() ? Item::tab_scripts : Item::tab_launch;
             else { navigationBoundary(); return; }
         }
         customEditorFocus(next);
@@ -433,12 +455,14 @@ void Launcher::customEditorMove(int horizontal, int vertical) {
         int row = custom_game_ui::row(focus);
         do row += vertical; while (row >= 0 && row < custom_game_ui::field_count && !custom_editor_.shows(row));
         if (row < 0) {
+            if (tabs) { customEditorFocus(custom_editor_.scripts() ? Item::tab_scripts : Item::tab_launch); return; } // Up from the first field: the tabs.
             if (!pills) return;
             customEditorFocus(Item::pick_file); // Up from the first field: the pills.
             return;
         }
         row = std::min(row, custom_game_ui::buttons_row);
-        const bool right = focus == Item::file_browse || focus == Item::directory_browse || focus == Item::wine_page || focus == Item::save;
+        const bool right = focus == Item::file_browse || focus == Item::directory_browse || focus == Item::wine_page || focus == Item::save ||
+                           custom_game_ui::testItem(focus);
         switch (row) {
         case 0: next = Item::name; break;
         case 1: next = right && file_browse ? Item::file_browse : Item::file; break;
@@ -447,6 +471,7 @@ void Launcher::customEditorMove(int horizontal, int vertical) {
         case 4: next = Item::dll; break;
         case 5: next = right ? Item::wine_page : Item::wine; break;
         case 6: next = Item::platform; break;
+        case 7: case 8: case 9: next = right ? custom_game_ui::browseItem(row) : fieldItem(row); break;
         default: if (custom_game_ui::row(focus) != custom_game_ui::buttons_row) next = Item::save; break;
         }
     } else if (horizontal) {
@@ -460,6 +485,8 @@ void Launcher::customEditorMove(int horizontal, int vertical) {
         case Item::directory_browse: next = forward ? (poster ? Item::identify : focus) : Item::directory; break;
         case Item::wine: if (forward) next = Item::wine_page; break;
         case Item::wine_page: next = forward ? (poster ? Item::identify : focus) : Item::wine; break;
+        case Item::before: case Item::started: case Item::exited: if (forward) next = custom_game_ui::browseItem(custom_game_ui::row(focus)); break;
+        case Item::test_before: case Item::test_started: case Item::test_exited: if (!forward) next = fieldItem(custom_game_ui::row(focus)); break;
         case Item::remove: if (forward) next = Item::cancel; break;
         case Item::cancel: next = forward ? Item::save : custom_editor_.editing() ? Item::remove : Item::cancel; break;
         case Item::save: if (!forward) next = Item::cancel; break;
@@ -521,13 +548,15 @@ void Launcher::customEditorKey(WPARAM key, bool repeated) {
     case VK_RIGHT: customEditorMove(1, 0); break;
     case VK_TAB: {
         std::vector<Item> order;
+        if (ui.tabs()) order.push_back(ui.scripts() ? Item::tab_scripts : Item::tab_launch);
         if (ui.pills()) { order.push_back(Item::pick_file); order.push_back(Item::pick_folder); }
         for (const auto item : {Item::name, Item::file, Item::file_browse, Item::arguments, Item::directory, Item::directory_browse,
-                                Item::dll, Item::wine, Item::wine_page, Item::platform})
+                                Item::dll, Item::wine, Item::wine_page, Item::platform, Item::before, Item::test_before,
+                                Item::started, Item::test_started, Item::exited, Item::test_exited})
             if (ui.shows(custom_game_ui::row(item)) && (item != Item::file_browse || ui.browses(custom_game_ui::file_field))) order.push_back(item);
         if (ui.toggles() > 0) order.push_back(Item::log_toggle);
         if (ui.toggles() > 1) order.push_back(Item::hdr_toggle);
-        if (ui.posterShown()) order.push_back(Item::identify);
+        if (ui.posterVisible()) order.push_back(Item::identify);
         if (ui.folderButton()) order.push_back(Item::pick_folder);
         if (ui.editing()) order.push_back(Item::remove);
         order.push_back(Item::cancel); order.push_back(Item::save);
@@ -561,6 +590,9 @@ void Launcher::customEditorAccept() {
         break;
     }
     case Item::platform: customEditorCyclePlatform(1); break;
+    case Item::tab_launch: customEditorTab(custom_game_ui::Tab::launch); break;
+    case Item::tab_scripts: customEditorTab(custom_game_ui::Tab::scripts); break;
+    case Item::test_before: case Item::test_started: case Item::test_exited: customEditorTestScript(custom_game_ui::row(ui.focus)); break;
     case Item::log_toggle: ui.log = !ui.log; audio_.navigate(); InvalidateRect(hwnd_, nullptr, FALSE); break;
     case Item::hdr_toggle: ui.hdr = !ui.hdr; audio_.navigate(); InvalidateRect(hwnd_, nullptr, FALSE); break;
     case Item::save: customEditorSave(); break;
@@ -661,6 +693,7 @@ void Launcher::customEditorSave() {
         customEditorFocus(focus);
         InvalidateRect(hwnd_, nullptr, FALSE);
     };
+    if (!customEditorScriptsValid()) return;
     if (ui.launchOptions()) { launchEditorSave(); return; }
     const auto flags = (ui.log ? launch_flag::log : 0u) | (ui.hdr ? launch_flag::hdr : 0u);
     const auto flags_key = ui.flags ? ui.flags_key : std::string{};
@@ -705,6 +738,7 @@ void Launcher::customEditorSave() {
     ui.identified_new = false; // Saved: its identification stays with it.
     compatEditorApply(ui, true, compat_error, compat_field);
     setLaunchFlags(flags_key, flags);
+    if (ui.tabs()) setLaunchScripts(flags_key, customEditorScripts());
     closeCustomEditor();
     applyCustomGames();
     if (settingsOpen() && settings_state_.category == static_cast<int>(settings_ui::Category::library)) {
@@ -748,6 +782,7 @@ void Launcher::launchEditorSave() {
         if (!compatEditorApply(ui, false, compat_error, compat_field)) { fail(compat_error, compat_field); return; }
         compatEditorApply(ui, true, compat_error, compat_field);
         setLaunchFlags(ui.flags_key, (ui.log ? launch_flag::log : 0u) | (ui.hdr ? launch_flag::hdr : 0u));
+        setLaunchScripts(ui.flags_key, customEditorScripts());
         closeCustomEditor();
         audio_.context();
         return;
@@ -775,7 +810,10 @@ void Launcher::launchEditorSave() {
         if (check.arguments.empty()) library_state_.launch_arguments.erase(ui.key);
         else library_state_.launch_arguments[ui.key] = check.arguments;
         library_state_dirty_ = true;
-        if (ui.flags) setLaunchFlags(ui.flags_key, (ui.log ? launch_flag::log : 0u) | (ui.hdr ? launch_flag::hdr : 0u));
+        if (ui.flags) {
+            setLaunchFlags(ui.flags_key, (ui.log ? launch_flag::log : 0u) | (ui.hdr ? launch_flag::hdr : 0u));
+            setLaunchScripts(ui.flags_key, customEditorScripts());
+        }
         saveLibraryPreferences();
         closeCustomEditor();
         audio_.context();
@@ -794,11 +832,36 @@ void Launcher::launchEditorSave() {
     }
     if (!saveDrmFree()) { *entry = previous; fail(tr(L"Nie udało się zapisać katalogu DRM-free"), Item::save); return; }
     compatEditorApply(ui, true, compat_error, compat_field);
-    if (ui.flags) setLaunchFlags(ui.flags_key, (ui.log ? launch_flag::log : 0u) | (ui.hdr ? launch_flag::hdr : 0u));
+    if (ui.flags) {
+        setLaunchFlags(ui.flags_key, (ui.log ? launch_flag::log : 0u) | (ui.hdr ? launch_flag::hdr : 0u));
+        setLaunchScripts(ui.flags_key, customEditorScripts());
+    }
     closeCustomEditor();
     applyDrmFree();
     if (settingsOpen()) buildSettingsRows();
     audio_.context();
+}
+
+// The scripts' tab as typed (trimmed; an empty field runs nothing).
+LibraryState::LaunchScripts Launcher::customEditorScripts() const {
+    const auto& ui = custom_editor_;
+    return {custom_games::trim(ui.fields[custom_game_ui::before_field]), custom_games::trim(ui.fields[custom_game_ui::started_field]),
+            custom_games::trim(ui.fields[custom_game_ui::exited_field])};
+}
+
+// Each script fits a library-state.ini field; one that does not shows its tab and field.
+bool Launcher::customEditorScriptsValid() {
+    auto& ui = custom_editor_;
+    if (!ui.tabs()) return true;
+    for (int index = custom_game_ui::before_field; index <= custom_game_ui::exited_field; ++index) {
+        if (text_encoding::utf8(custom_games::trim(ui.fields[static_cast<size_t>(index)])).size() <= max_script) continue;
+        ui.tab = custom_game_ui::Tab::scripts;
+        ui.error = tr(L"Skrypt: jedna linia, do 1000 znaków.");
+        customEditorFocus(custom_game_ui::fieldItem(index));
+        InvalidateRect(hwnd_, nullptr, FALSE);
+        return false;
+    }
+    return true;
 }
 
 void Launcher::customEditorRemove() {

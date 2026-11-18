@@ -47,6 +47,9 @@ int main() {
     state.excluded_games = {{"gog:456", L"Zażółć \"GOG\""}, {"epic:456", L"Epic game"}};
     state.launch_arguments = {{"steam:620", L"-dx11 \"-name=Gość\" -skipintro"}};
     state.recent_hidden = {{"steam:620", 1700000000}, {"nonsteam:12", 5}};
+    // Opcje uruchamiania → Skrypty: any of the three may be empty, never all.
+    state.launch_scripts = {{"steam:620", {L"& 'C:\\Narzędzia\\przed.bat' -x; Start-Process notepad", {}, L"Stop-Process -Name \"trener\""}},
+                            {"gog:77", {{}, L"~/po starcie.sh", {}}}};
     const auto file = root / L"library-state.ini";
     std::filesystem::create_directories(root);
     for (const auto* tail : {"1 0", "2 1 1 1 0 5 0", "0 1 1 1 0 6 0", "0 1 1 1 0 2 -1", "0 1 1 1 0 5 0 2", "0 1 1 1 0 5 0 1 1"}) {
@@ -91,6 +94,8 @@ int main() {
         if (!saveLibraryState(excluded, file) || loadLibraryState(file) != excluded) return 47;
         auto both = state; both.game_emulators["shortcut:1"] = {"ryujinx", L"C:\\x.exe"}; // One of them, never both.
         if (saveLibraryState(both, file)) return 48;
+        auto empty_scripts = state; empty_scripts.launch_scripts["epic:1"] = {};
+        if (saveLibraryState(empty_scripts, file)) return 90;
         if (!saveLibraryState(state, file)) return 1;
         const auto malformed = root / L"malformed-exclusion.ini";
         for (const auto& key : {"platform:456", "gog:", "epic:", "steam:"}) {

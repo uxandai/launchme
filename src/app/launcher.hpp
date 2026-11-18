@@ -16,6 +16,7 @@
 #include "../platform/game_controllers.hpp"
 #include "../platform/device_service.hpp"
 #include "../platform/library_state.hpp"
+#include "../platform/launch_scripts.hpp"
 #include "../friends/steam_friends.hpp"
 #include "../library/collections.hpp"
 #include "../library/versions.hpp"
@@ -3386,6 +3387,26 @@ private:
     // Its launch failed or its session ended: the log's last line, HDR back off after the last such game.
     void launchFlagsEnd(const std::string& key, std::wstring_view how);
     std::filesystem::path launchLog(const std::string& key) const;
+    // Opcje uruchamiania → Skrypty (launch_scripts.cpp): a game's commands before its launch (waited
+    // for), after its start and after its exit (src/platform/launch_scripts.hpp), and their tests.
+    const LibraryState::LaunchScripts* launchScripts(const std::string& key) const;
+    void setLaunchScripts(const std::string& key, LibraryState::LaunchScripts scripts);
+    // Runs one of the game's scripts on a worker; `then` runs on the UI thread once it ended (or was
+    // left running), also when there is nothing to run. False: nothing ran (`then` already called).
+    bool runLaunchScript(const std::string& key, const std::wstring& name, launch_scripts::Phase phase, std::function<void(Launcher&)> then = {});
+    // The game's script before its launch: true when one runs and `then` continues the launch after it.
+    bool launchScriptBefore(const Game& game, std::function<void(Launcher&)> then);
+    void launchScriptsStarted(const Game& game);        // beginGameSession: after the start; its exit is awaited.
+    void launchScriptsEnded(const std::string& key);    // launchFlagsEnd: the session ended.
+    void customEditorTab(custom_game_ui::Tab tab);
+    void customEditorTestScript(int field);             // "Testuj" beside a script's field.
+    LibraryState::LaunchScripts customEditorScripts() const;
+    bool customEditorScriptsValid();
+    // Tests: runs a script instead of launch_scripts::run (no PowerShell or shell).
+    std::function<launch_scripts::Result(std::wstring command, launch_scripts::Context context)> launch_script_run_;
+    bool launch_script_wait_ = false;                   // The script before a launch runs: the launch waits.
+    uint64_t script_test_generation_ = 0;
+    std::map<std::string, std::wstring> script_sessions_; // Games started here with scripts: gameKey → name.
     // Empty = the real PDH/D3DKMT reader, created on the poll worker. Tests inject a fixture.
     std::function<sensors::Reading()> read_sensors_;
     // Whether the poll worker takes the CPU temperature from MSI Afterburner (AppSettings::cpu_temp_source).

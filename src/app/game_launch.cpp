@@ -179,7 +179,7 @@ void Launcher::launch() {
 
 void Launcher::launchGame(const Game& original, bool via_steam) {
     Game active = original; active.version_group.clear();
-    if (pending_launch_ || launchAnimationActive() || !isGame(active)) return;
+    if (pending_launch_ || launch_script_wait_ || launchAnimationActive() || !isGame(active)) return;
     if (launcherTile(active)) { openLauncher(active.source_id.substr(9)); return; } // A client opens; it is not a played game.
     if (switchToGame(active)) { focusPlayedGame(gameKey(active)); return; }
     // A preload: downloaded, not released yet; Steam installs it on the release day by itself.
@@ -193,13 +193,18 @@ void Launcher::launchGame(const Game& original, bool via_steam) {
     // A game Aurelia manages is installed and launched through it; any other Steam game, or one
     // whose launch through Aurelia was refused, keeps the Steam client (below).
     if (!via_steam && (aureliaManaged(active) || (aurelia_active_ && aurelia::validGame(active) && aurelia_downloads_.contains(active.app_id)))) {
-        aureliaLaunch(active); return;
+        // Opcje uruchamiania → Skrypty: the script before the launch first.
+        if (!launchScriptBefore(active, [active](Launcher& app) { app.aureliaLaunch(active); })) aureliaLaunch(active);
+        return;
     }
     if (active.source == GameSource::gog && !active.installed && !gog_state_.account.empty() &&
         (!active.account_id.empty() || active.installation.active())) { openGogInstall(active); return; }
     if (active.source == GameSource::epic && !active.installed && !epic_state_.account.empty() &&
         (!active.account_id.empty() || active.installation.active())) { openEpicInstall(active); return; }
-    if (active.source == GameSource::epic && active.epic_managed) { startEpicGame(active); return; }
+    if (active.source == GameSource::epic && active.epic_managed) {
+        if (!launchScriptBefore(active, [active](Launcher& app) { app.startEpicGame(active); })) startEpicGame(active);
+        return;
+    }
     // Amazon Games: an account title is installed through Nile; an installed one starts from its fuel.json.
     if (active.source == GameSource::amazon && !active.installed && amazonConnected() &&
         (!active.account_id.empty() || active.installation.active())) { openAmazonInstall(active); return; }
@@ -245,6 +250,8 @@ void Launcher::launchGame(const Game& original, bool via_steam) {
     pending_game_ = active;
     pending_launch_ = true;
     launch_age_ = 0;
+    // Opcje uruchamiania → Skrypty: finishLaunch waits for the script before the launch (launch_script_wait_).
+    if (action.kind == ActionKind::play) launchScriptBefore(active, {});
     // A GOG game: comet answers its Galaxy calls (achievements, stats) from now on.
     if (action.kind == ActionKind::play) startGogComet(active);
     dismissMenu();
@@ -307,6 +314,9 @@ void Launcher::finishLaunch() {
         if (const auto* text = launch_options_catalog::text(wine_runner::problemText(code)); text && *text) skipped += (skipped.empty() ? L"" : L"; ") + std::wstring(text);
 #endif
     if (result <= 32) launchFlagsEnd(flags_key, L"Not started (error " + std::to_wstring(static_cast<long long>(result)) + L")");
+    // Not started after its script before the launch ran: the script after the exit undoes what it did.
+    if (const auto* scripts = launchScripts(flags_key); result <= 32 && action.kind == ActionKind::play && scripts && !scripts->before.empty())
+        runLaunchScript(flags_key, pending_game_.name, launch_scripts::Phase::exited);
     else launchFlagsNote(flags_key, L"Started");
     if (result <= 32) {
         stopLaunchAnimation();

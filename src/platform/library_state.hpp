@@ -53,6 +53,15 @@ struct LibraryState {
     // Opcje uruchamiania's switches of any game, by gameKey: launch_flag bits (never 0).
     // Row: launch-flags "<key>" <bits>.
     std::map<std::string, unsigned> launch_flags;
+    // Opcje uruchamiania → Skrypty of any game, by gameKey (src/platform/launch_scripts.hpp): commands
+    // run before the game, after it has started and after it has exited; empty: none.
+    // Row: launch-scripts "<key>" "<before>" "<started>" "<exited>" (never all three empty).
+    struct LaunchScripts {
+        std::wstring before, started, exited;
+        bool empty() const { return before.empty() && started.empty() && exited.empty(); }
+        bool operator==(const LaunchScripts&) const = default;
+    };
+    std::map<std::string, LaunchScripts> launch_scripts;
     // Usuń z ostatnio granych, by gameKey: the game stays out of the recent rows until it is played
     // after this time (Steam's own play dates are never touched). Row: recent-hidden "<key>" <time>.
     std::map<std::string, uint64_t> recent_hidden;

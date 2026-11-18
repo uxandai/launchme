@@ -86,6 +86,7 @@ void Launcher::launchFlagsBegin(const Game& game, const GameAction* action) {
 }
 
 void Launcher::launchFlagsEnd(const std::string& key, std::wstring_view how) {
+    launchScriptsEnded(key); // Its script after the exit (launch_scripts.cpp).
     const auto found = launch_runs_.find(key);
     if (found == launch_runs_.end()) return;
     const auto run = found->second;

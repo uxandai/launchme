@@ -123,6 +123,7 @@ set(LAUNCHME_CORE_SOURCES
     src/net/web_search.cpp
     src/platform/hashing.cpp
     src/platform/library_state.cpp
+    src/platform/launch_scripts.cpp
     src/platform/protected_file.cpp
     src/platform/zip_archive.cpp
     src/platform/password_crypto.cpp
@@ -342,6 +343,7 @@ if(BUILD_TESTING)
     launchme_executable(playnite_import_tests TEST playnite_library_import SOURCES tests/playnite_import_tests.cpp
         DEFINES LAUNCHME_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     launchme_executable(failure_cache_tests TEST persistent_artwork_failure_cache SOURCES tests/failure_cache_tests.cpp)
+    launchme_executable(launch_scripts_tests TEST launch_scripts_before_after_game SOURCES tests/launch_scripts_tests.cpp)
     launchme_executable(protondb_tests TEST protondb_and_steam_deck_ratings SOURCES tests/protondb_tests.cpp)
     launchme_executable(system_requirements_tests TEST system_requirements_and_hardware_ratings SOURCES tests/system_requirements_tests.cpp)
     launchme_executable(metadata_sources_tests TEST metadata_sources SOURCES tests/metadata_sources_tests.cpp)

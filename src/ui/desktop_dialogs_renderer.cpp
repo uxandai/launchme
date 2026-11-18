@@ -231,23 +231,37 @@ void Renderer::drawDesktopCustomEditor() {
     target_->GetTransform(&saved);
     target_->SetTransform(D2D1::Matrix3x2F::Scale(view.scale, view.scale));
     const float field_step = 74;
-    int fields = 0;
-    for (int index = 0; index < custom_game_ui::field_count; ++index) fields += ui.shows(index);
+    // The fields and switches of a tab; with tabs the taller one sizes the sheet, so switching keeps it.
+    const auto body = [&](const custom_game_ui::State& state) {
+        int fields = 0;
+        for (int index = 0; index < custom_game_ui::field_count; ++index) fields += state.shows(index);
+        return static_cast<float>(fields) * field_step + (state.toggles() ? 52.0f : 0.0f);
+    };
+    float content = body(ui);
+    if (ui.tabs()) {
+        auto other = ui;
+        other.tab = ui.scripts() ? custom_game_ui::Tab::launch : custom_game_ui::Tab::scripts;
+        content = std::max(content, body(other));
+    }
     // Launch options of a library game: its name under the panel's title.
     const float subtitle = ui.launchOptions() ? 24.0f : 0.0f;
     // A user-added game: its poster (matched by the typed name) and "Zidentyfikuj grę" on the right.
-    const bool poster = ui.posterShown();
+    const bool poster = ui.posterVisible();
     constexpr float poster_w = 150, poster_column = poster_w + 22;
-    // A new game: "Wskaż plik" / "Wskaż folder" above the fields.
-    const float pills = ui.pills() ? 52.0f : 0.0f;
-    const float toggles = ui.toggles() ? 52.0f : 0.0f; // Opcje uruchamiania's switches under the fields.
-    const float height = sheet_header + 16 + subtitle + pills + static_cast<float>(fields) * field_step + toggles + (ui.error.empty() ? 0.0f : 26.0f) + 64;
-    const float width = ui.compat ? 760.0f : 620.0f; // A Windows game on Linux: its Wine/Proton options are long.
-    const auto p = desktopDialogFrame(view, poster ? width + poster_column : width, height,
+    // A new game: "Wskaż plik" / "Wskaż folder" above the fields; a game with a key: the tabs.
+    const float pills = ui.pills() || ui.tabs() ? 52.0f : 0.0f;
+    const bool note = !ui.error.empty() || !ui.note.empty();
+    const float height = sheet_header + 16 + subtitle + pills + content + (note ? 26.0f : 0.0f) + 64;
+    // A Windows game on Linux: its Wine/Proton options are long; scripts too (the sheet keeps its width across the tabs).
+    float width = (ui.compat ? 760.0f : 620.0f) + (ui.posterShown() ? poster_column : 0.0f);
+    if (ui.tabs()) width = std::max(width, 820.0f);
+    const auto p = desktopDialogFrame(view, width, height,
                                       ui.launchOptions() ? tr(L"Opcje uruchamiania") : ui.editing() ? tr(L"Edytuj grę") : tr(L"Dodaj grę"), false);
     const float fields_right = p.right - 22 - (poster ? poster_column : 0.0f);
     const std::array<const wchar_t*, custom_game_ui::field_count> labels{trKey(L"Nazwa"), trKey(L"Plik"), trKey(L"Opcje uruchamiania"), trKey(L"Folder roboczy"),
-                                                                         L"WINEDLLOVERRIDES", trKey(L"Opcje Protona i Wine (jak w Steamie)"), trKey(L"Platforma")};
+                                                                         L"WINEDLLOVERRIDES", trKey(L"Opcje Protona i Wine (jak w Steamie)"), trKey(L"Platforma"),
+                                                                         trKey(L"Przed uruchomieniem gry (Launchme czeka, aż skończy)"), trKey(L"Po uruchomieniu gry"),
+                                                                         trKey(L"Po wyjściu z gry")};
     const int focused_field = custom_game_ui::field(ui.focus);
     float y = p.top + sheet_header + 14;
     if (poster) {
@@ -274,7 +288,23 @@ void Renderer::drawDesktopCustomEditor() {
         desktopModalHot({Kind::action, static_cast<int>(Item::identify)}, b);
     }
     if (ui.launchOptions()) { textLine(ui.title, p.left + 22, y + 6, p.right - p.left - 44, desktop_strong_font_.Get(), palette::text()); y += subtitle; }
-    if (pills) {
+    if (ui.tabs()) {
+        // "Uruchamianie" / "Skrypty": the shown tab filled, the other one plain.
+        float left = p.left + 22;
+        for (const Item item : {Item::tab_launch, Item::tab_scripts}) {
+            const bool shown = (item == Item::tab_scripts) == ui.scripts();
+            const std::wstring label = item == Item::tab_scripts ? tr(L"Skrypty") : tr(L"Uruchamianie");
+            const float w = std::max(130.0f, textAdvance(label, desktop_button_font_.Get()) + 52);
+            const Rect r{left, y + 8, left + w, y + 44};
+            desktopButton(r, shown ? 2 : 1, hover == SheetHit{Kind::action, static_cast<int>(item)} ? 1.0f : 0.0f, false, true,
+                          item == Item::tab_scripts ? glyph::edit : glyph::play, label);
+            if (ui.focus == item) desktopFocusRing(r, 8);
+            desktopModalHot({Kind::action, static_cast<int>(item)}, r);
+            left = r.right + 10;
+        }
+        y += pills;
+    }
+    if (ui.pills()) {
         const float w = (fields_right - p.left - 22 - 10) * 0.5f;
         const auto pill = [&](Item item, float left, wchar_t icon, const wchar_t* label) {
             const Rect r{left, y + 8, left + w, y + 44};
@@ -291,26 +321,28 @@ void Renderer::drawDesktopCustomEditor() {
         textLine(custom_game_ui::emulatedLabel(ui, index, tr(labels[static_cast<size_t>(index)])), p.left + 22, y + 8, fields_right - p.left - 22, desktop_label_font_.Get(), gray(0.62f));
         const bool browse = custom_game_ui::browseRow(index) && ui.browses(index);
         const bool page = index == custom_game_ui::wine_field; // "Proton / Wine…": the game's page.
-        const float field_right = fields_right - (browse ? (page ? 170.0f : 120.0f) : 0.0f);
+        const bool test = custom_game_ui::scriptField(index);  // "Testuj": the script runs now.
+        const float field_right = fields_right - (browse ? (page ? 170.0f : test ? 140.0f : 120.0f) : 0.0f);
         const Rect f{p.left + 22, y + 20, field_right, y + 60};
         const wchar_t* placeholder = custom_game_ui::emulatedHint(ui, index) ? custom_game_ui::emulatedHint(ui, index) : index == custom_game_ui::directory_field ? tr(L"Domyślnie: folder pliku") :
             index == custom_game_ui::arguments_field && ui.launchOptions() ? tr(L"Np. -windowed -skipintro") :
             index == custom_game_ui::dll_field ? tr(L"Np. dinput8=n,b;winhttp=n,b") :
-            page ? tr(L"Np. PROTON_USE_WINED3D=1 gamemoderun %command% -dx11") : L"";
+            page ? tr(L"Np. PROTON_USE_WINED3D=1 gamemoderun %command% -dx11") : test ? custom_game_ui::scriptHint(index) : L"";
         desktopTextField(f, ui.fields[static_cast<size_t>(index)], placeholder,
                          ui.caret, focused_field == index, ui.selected, hover == SheetHit{Kind::field, index} ? 1.0f : 0.0f);
         desktopModalHot({Kind::field, index}, f);
         if (browse) {
             const Rect b{field_right + 10, f.top, fields_right, f.bottom};
             const Item item = custom_game_ui::browseItem(index);
-            desktopButton(b, 1, hover == SheetHit{Kind::tile_action, index} ? 1.0f : 0.0f, false, true, page ? glyph::settings : glyph::folder_open,
-                          page ? std::wstring(L"Proton / Wine…") : std::wstring(tr(L"Wybierz")));
+            desktopButton(b, 1, hover == SheetHit{Kind::tile_action, index} ? 1.0f : 0.0f, false, true,
+                          page ? glyph::settings : test ? glyph::play : glyph::folder_open,
+                          page ? std::wstring(L"Proton / Wine…") : test ? std::wstring(ui.testing ? tr(L"Testowanie…") : tr(L"Testuj")) : std::wstring(tr(L"Wybierz")));
             if (ui.focus == item) desktopFocusRing(b, 8);
             desktopModalHot({Kind::tile_action, index}, b);
         }
         y += field_step;
     }
-    if (toggles) {
+    if (ui.toggles()) {
         // Each switch with its caption, side by side; a click anywhere on one flips it.
         const float w = (fields_right - p.left - 22 - 16) / static_cast<float>(ui.toggles());
         for (int which = 0; which < ui.toggles(); ++which) {
@@ -323,9 +355,14 @@ void Renderer::drawDesktopCustomEditor() {
             if (ui.focus == item) desktopFocusRing(r, 8);
             desktopModalHot({Kind::action, static_cast<int>(item)}, r);
         }
-        y += toggles;
+        y += 52;
     }
-    if (!ui.error.empty()) { textLine(ui.error, p.left + 22, y + 6, fields_right - p.left - 22, desktop_small_font_.Get(), palette::danger()); y += 26; }
+    y = std::max(y, p.top + sheet_header + 14 + subtitle + pills + content); // The shorter tab: its note where the taller one's would be.
+    if (note) {
+        const bool danger = !ui.error.empty() || ui.note_failed;
+        textLine(ui.error.empty() ? ui.note : ui.error, p.left + 22, y + 6, p.right - p.left - 44, desktop_small_font_.Get(), danger ? palette::danger() : palette::muted());
+        y += 26;
+    }
     const float by = p.bottom - 20 - 36;
     const auto button = [&](Item item, Rect r, int style, wchar_t icon, const std::wstring& label) {
         desktopButton(r, style, hover == SheetHit{Kind::action, static_cast<int>(item)} ? 1.0f : 0.0f, false, true, icon, label);

@@ -232,6 +232,7 @@ void Launcher::beginGameSession(const Game& game, uint64_t focus_ms, std::shared
     }
     ensurePluginPlaytime(game);
     companionSessionStarted(game, true);
+    launchScriptsStarted(game); // Opcje uruchamiania → Skrypty: after the start (its exit awaited).
     requestGameFocus(game, focus_ms);
 }
 

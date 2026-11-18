@@ -53,7 +53,19 @@ void Renderer::drawCustomGameEditor() {
               panel.right - panel.left - 2 * Layout::margin, category_font_.Get(), gray(0.96f), settings_body_font_.Get(), gray(0.62f), 1, true);
 
     const std::array<const wchar_t*, field_count> labels{tr(L"Nazwa"), tr(L"Plik"), tr(L"Opcje uruchamiania"), tr(L"Folder roboczy"),
-                                                         L"WINEDLLOVERRIDES", tr(L"Opcje Protona i Wine (jak w Steamie)"), tr(L"Platforma")};
+                                                         L"WINEDLLOVERRIDES", tr(L"Opcje Protona i Wine (jak w Steamie)"), tr(L"Platforma"),
+                                                         tr(L"Przed uruchomieniem gry (Launchme czeka, aż skończy)"), tr(L"Po uruchomieniu gry"), tr(L"Po wyjściu z gry")};
+    if (layout.tabs) {
+        // "Uruchamianie" / "Skrypty": the shown one lit by the accent, the focused one as a button.
+        for (int which = 0; which < 2; ++which) {
+            const auto r = layout.tab(which);
+            const bool shown = (which == 1) == ui.scripts(), focused = ui.focus == (which ? Item::tab_scripts : Item::tab_launch);
+            const auto ink = drawButton(rect(r), focused ? 1.0f : 0.0f, 1, false);
+            textLine(which ? tr(L"Skrypty") : tr(L"Uruchamianie"), r.left + 8, (r.top + r.bottom) * 0.5f, r.right - r.left - 16, settings_body_font_.Get(),
+                     focused ? ink : shown ? gray(0.96f) : gray(0.55f), DWRITE_TEXT_ALIGNMENT_CENTER);
+            if (shown) fill({r.left + 36, r.bottom + 5, r.right - 36, r.bottom + 9}, accent, 2);
+        }
+    }
     for (int index = 0; index < field_count; ++index) {
         if (!ui.shows(index)) continue;
         const auto label = layout.label(index);
@@ -89,6 +101,7 @@ void Renderer::drawCustomGameEditor() {
                 textLine(tr(L"Np. -windowed -skipintro"), left, y, visible, settings_body_font_.Get(), gray(0.38f));
             else if (index == dll_field) textLine(tr(L"Np. dinput8=n,b;winhttp=n,b"), left, y, visible, settings_body_font_.Get(), gray(0.38f));
             else if (index == wine_field) textLine(tr(L"Np. PROTON_USE_WINED3D=1 gamemoderun %command% -dx11"), left, y, visible, settings_body_font_.Get(), gray(0.38f));
+            else if (scriptField(index)) textLine(scriptHint(index), left, y, visible, settings_body_font_.Get(), gray(0.38f));
         } else {
             target_->PushAxisAlignedClip(D2D1::RectF(left - 4, input.top + 2, left + visible + 4, input.bottom - 2), D2D1_ANTIALIAS_MODE_ALIASED);
             if (focused && ui.selected)
@@ -98,7 +111,8 @@ void Renderer::drawCustomGameEditor() {
         }
         if (focused && !ui.selected) line(left + caret - offset, input.top + 14, left + caret - offset, input.bottom - 14, gray(0.93f), 2);
         if (layout.browses(index))
-            button(layout.browse(index), index == wine_field ? std::wstring(L"Proton / Wine…") : std::wstring(tr(L"Wybierz…")), ui.focus == browseItem(index));
+            button(layout.browse(index), index == wine_field ? std::wstring(L"Proton / Wine…") :
+                   scriptField(index) ? std::wstring(ui.testing ? tr(L"Testowanie…") : tr(L"Testuj")) : std::wstring(tr(L"Wybierz…")), ui.focus == browseItem(index));
     }
     for (int which = 0; which < layout.toggles; ++which) {
         // Opcje uruchamiania's switches: a pill with its caption and a switch at its right end.
@@ -117,7 +131,7 @@ void Renderer::drawCustomGameEditor() {
         button(layout.pill(0), tr(L"Wskaż plik"), ui.focus == Item::pick_file);
         button(layout.pill(1), tr(L"Wskaż folder"), ui.focus == Item::pick_folder);
     }
-    if (ui.posterShown()) {
+    if (ui.posterVisible()) {
         // The poster the typed name finds (or the game's own), "Zidentyfikuj grę" under it.
         bindCustomPoster();
         const auto box = layout.posterBox();
@@ -138,10 +152,11 @@ void Renderer::drawCustomGameEditor() {
         outline(box, gray(1, ui.focus == Item::identify ? 0.32f : 0.10f), 1.0f, radius);
         button(layout.identify(), tr(L"Zidentyfikuj grę"), ui.focus == Item::identify);
     }
-    if (!ui.error.empty()) {
+    if (!ui.error.empty() || !ui.note.empty()) {
+        // An error, else a script test's outcome (red when it failed).
         const auto error = layout.error();
-        text(ui.error, error.left + 2, error.top, error.right - error.left, error.bottom - error.top,
-             settings_body_font_.Get(), palette::danger());
+        text(ui.error.empty() ? ui.note : ui.error, error.left + 2, error.top, error.right - error.left, error.bottom - error.top,
+             settings_body_font_.Get(), ui.error.empty() && !ui.note_failed ? gray(0.70f) : palette::danger());
     }
     if (ui.editing()) // Only the entry goes; the game's file stays (red: it cannot be undone).
         button(layout.button(Item::remove), ui.confirm_remove ? tr(L"Potwierdź usunięcie") : tr(L"Usuń z biblioteki"),

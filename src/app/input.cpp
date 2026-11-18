@@ -787,6 +787,9 @@ bool Launcher::modalPad(const PadReading& state, WORD buttons, ULONGLONG now) {
         if (pressed(XINPUT_GAMEPAD_A)) { noteUserInput(); customEditorKey(VK_RETURN, false); }
         else if (pressed(XINPUT_GAMEPAD_B)) { noteUserInput(); customEditorKey(VK_ESCAPE, false); }
         else if (pressed(XINPUT_GAMEPAD_X)) { noteUserInput(); openKeyboard(); } // The focused field, else the name.
+        // LB / RB: the tabs "Uruchamianie" and "Skrypty".
+        else if (pressed(XINPUT_GAMEPAD_LEFT_SHOULDER) && custom_editor_.tabs()) { noteUserInput(); customEditorTab(custom_game_ui::Tab::launch); }
+        else if (pressed(XINPUT_GAMEPAD_RIGHT_SHOULDER) && custom_editor_.tabs()) { noteUserInput(); customEditorTab(custom_game_ui::Tab::scripts); }
         break;
     case Modal::game_case:
         // The case in the hand: D-pad / left stick between its buttons, A presses, B puts it back (shuts it
