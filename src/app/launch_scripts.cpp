@@ -135,7 +135,8 @@ void Launcher::customEditorTestScript(int field) {
         return;
     }
     const auto phase = static_cast<Phase>(field - custom_game_ui::before_field);
-    launch_scripts::Context context{phase, ui.title.empty() ? ui.fields[custom_game_ui::name_field] : ui.title, ui.flags_key};
+    launch_scripts::Context context{phase, ui.title.empty() ? ui.fields[custom_game_ui::name_field] : ui.title,
+                                    ui.flags_key.empty() ? gameKey(customEditorGame()) : ui.flags_key}; // A new game: the key it will have.
     ui.testing = true;
     ui.note = tr(L"Testowanie skryptu…");
     ui.note_failed = false;

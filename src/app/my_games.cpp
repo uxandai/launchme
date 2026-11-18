@@ -416,7 +416,7 @@ void Launcher::customEditorMove(int horizontal, int vertical) {
     if (focus == Item::tab_launch || focus == Item::tab_scripts) {
         // The tabs: Left/Right between them (each shows at once), Down into the tab, Up nowhere.
         if (horizontal) customEditorTab(horizontal > 0 ? custom_game_ui::Tab::scripts : custom_game_ui::Tab::launch);
-        else if (vertical > 0) customEditorFocus(firstRow());
+        else if (vertical > 0) customEditorFocus(pills ? Item::pick_file : firstRow());
         else navigationBoundary();
         return;
     }
@@ -442,7 +442,10 @@ void Launcher::customEditorMove(int horizontal, int vertical) {
             int row = 0;
             while (row < custom_game_ui::field_count && !custom_editor_.shows(row)) ++row;
             next = row == 0 ? Item::name : row == 1 ? Item::file : Item::save;
-        } else if (vertical < 0) { navigationBoundary(); return; }
+        } else if (vertical < 0) {
+            if (tabs) next = Item::tab_launch; // Above them: the tabs.
+            else { navigationBoundary(); return; }
+        }
         else if (horizontal > 0) next = focus == Item::pick_file ? Item::pick_folder : poster ? Item::identify : focus;
         else if (horizontal < 0) next = focus == Item::pick_folder ? Item::pick_file : focus;
     } else if (focus == Item::identify) {
@@ -455,9 +458,8 @@ void Launcher::customEditorMove(int horizontal, int vertical) {
         int row = custom_game_ui::row(focus);
         do row += vertical; while (row >= 0 && row < custom_game_ui::field_count && !custom_editor_.shows(row));
         if (row < 0) {
-            if (tabs) { customEditorFocus(custom_editor_.scripts() ? Item::tab_scripts : Item::tab_launch); return; } // Up from the first field: the tabs.
-            if (!pills) return;
-            customEditorFocus(Item::pick_file); // Up from the first field: the pills.
+            if (pills) { customEditorFocus(Item::pick_file); return; } // Up from the first field: the pills, then the tabs.
+            if (tabs) customEditorFocus(custom_editor_.scripts() ? Item::tab_scripts : Item::tab_launch);
             return;
         }
         row = std::min(row, custom_game_ui::buttons_row);
@@ -738,7 +740,7 @@ void Launcher::customEditorSave() {
     ui.identified_new = false; // Saved: its identification stays with it.
     compatEditorApply(ui, true, compat_error, compat_field);
     setLaunchFlags(flags_key, flags);
-    if (ui.tabs()) setLaunchScripts(flags_key, customEditorScripts());
+    if (ui.tabs()) setLaunchScripts(gameKey(custom_games::makeGame(entry, true)), customEditorScripts()); // A new game: the key it now has.
     closeCustomEditor();
     applyCustomGames();
     if (settingsOpen() && settings_state_.category == static_cast<int>(settings_ui::Category::library)) {

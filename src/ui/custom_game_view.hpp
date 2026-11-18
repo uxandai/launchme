@@ -16,7 +16,8 @@
 // DRM-free game's file, options and working directory, a Steam game's launch options only.
 // Linux, a Windows game (State::compat): also its WINEDLLOVERRIDES and its Wine/Proton launch options
 // as Steam writes them (VAR=value wrapper %command% arguments), with "Proton / Wine…" to its page.
-// A game with a key (State::tabs()) has two tabs: "Uruchamianie" (the above) and "Skrypty", its
+// Every user-added game (a new one too: its scripts are saved with it) and every game's launch options
+// (State::tabs()) have two tabs: "Uruchamianie" (the above) and "Skrypty", its
 // commands before the launch, after the start and after the exit, each with "Testuj"
 // (src/platform/launch_scripts.hpp).
 namespace custom_game_ui {
@@ -67,20 +68,22 @@ struct State {
     // Windows (HDR switching), and not for a new game, which has no key yet.
     bool flags = false, log = false, hdr = false, hdr_option = false;
     std::string flags_key;
-    // The tabs: a game with a key (an edited one or another's launch options); a new game has none.
+    // The tabs: a game with a key (an edited one or another's launch options), and a new user-added game
+    // (its scripts saved under the key it gets).
     Tab tab = Tab::launch;
     std::wstring note; // A script test's outcome under the fields (ui.error wins).
     bool note_failed = false;
     bool testing = false; // A test runs: "Testuj" waits for it.
-    bool tabs() const { return flags; }
+    bool tabs() const { return flags || (target == Target::custom && !editing()); }
     bool scripts() const { return tabs() && tab == Tab::scripts; }
     int toggles() const { return flags && !scripts() ? (hdr_option ? 2 : 1) : 0; }
     bool editing() const { return !id.empty(); }
     bool launchOptions() const { return target != Target::custom; }
     // The desktop window: a new game has the file row's "Wybierz" like an edited one, and "Dodaj folder jako bibliotekę" at the bottom.
     bool desktop = false;
-    bool pills() const { return target == Target::custom && !editing() && !desktop; } // Tryb TV: "Wskaż plik" / "Wskaż folder".
-    bool folderButton() const { return target == Target::custom && !editing() && desktop; }
+    // Tryb TV: "Wskaż plik" / "Wskaż folder" (the launch tab's).
+    bool pills() const { return target == Target::custom && !editing() && !desktop && tab == Tab::launch; }
+    bool folderButton() const { return target == Target::custom && !editing() && desktop && tab == Tab::launch; }
     // The file row's "Wybierz…" (a game being edited; a new one has the pills).
     bool browses(int index) const { return index != file_field || !pills(); }
     bool posterShown() const { return target == Target::custom; }
@@ -204,7 +207,7 @@ struct Layout {
             const auto rows = [](const State& s) {
                 int count = 0;
                 for (int index = 0; index < field_count; ++index) count += s.shows(index);
-                return static_cast<float>(count) * row_height + (s.toggles() ? toggles_height : 0.0f);
+                return static_cast<float>(count) * row_height + (s.toggles() ? toggles_height : 0.0f) + (s.pills() ? pills_height : 0.0f);
             };
             layout.body = std::max(rows(state), rows(other));
         }
@@ -217,11 +220,12 @@ struct Layout {
         for (int i = 0; i < index; ++i) result += shown(i);
         return result;
     }
-    float pillsSpace() const { return pills ? pills_height : tabs ? tabs_height : 0.0f; }
+    float tabsSpace() const { return tabs ? tabs_height : 0.0f; }
+    float pillsSpace() const { return (pills ? pills_height : 0.0f) + tabsSpace(); } // The tabs, then the pills.
     settings_ui::Rect panel() const {
         const float w = std::min(poster || tabs ? 1100.0f : 920.0f, width - 96),
-                    own = slot(field_count) * row_height + (toggles ? toggles_height : 0.0f),
-                    half = 118 + std::max(own, body) * 0.5f + pillsSpace() * 0.5f;
+                    own = slot(field_count) * row_height + (toggles ? toggles_height : 0.0f) + (pills ? pills_height : 0.0f),
+                    half = 118 + std::max(own, body) * 0.5f + tabsSpace() * 0.5f;
         return {(width - w) * 0.5f, height * 0.5f - half, (width + w) * 0.5f, height * 0.5f + half};
     }
     // The tabs at the top left of the fields: 0 "Uruchamianie", 1 "Skrypty".
@@ -234,7 +238,7 @@ struct Layout {
     float fieldsRight() const { return panel().right - margin - (poster ? poster_width + poster_gap : 0.0f); }
     // The two pills side by side over the fields' width: 0 "Wskaż plik", 1 "Wskaż folder".
     settings_ui::Rect pill(int which) const {
-        const auto p = panel(); const float top = p.top + 96, w = (fieldsRight() - p.left - margin - gap) * 0.5f;
+        const auto p = panel(); const float top = p.top + 96 + tabsSpace(), w = (fieldsRight() - p.left - margin - gap) * 0.5f;
         const float left = p.left + margin + static_cast<float>(which) * (w + gap);
         return {left, top, left + w, top + 56};
     }

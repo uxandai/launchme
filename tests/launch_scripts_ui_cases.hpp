@@ -132,9 +132,29 @@ int LauncherUiTest::launchScripts(HWND window) {
     app.customEditorSave();
     if (!app.customEditorOpen() || !editor.scripts() || editor.focus != Item::started || editor.error.empty()) return 8725;
     app.closeCustomEditor();
-    // A new game added by hand has no key yet: no tabs.
+    // A new game added by hand: the tabs too (Up from the pills reaches them); its scripts are saved under
+    // the key it gets, and its test already uses that key.
     app.openCustomEditor({});
-    if (editor.tabs() || editor.shows(ui::before_field)) return 8726;
-    app.closeCustomEditor();
+    const auto new_key = gameKey(app.customEditorGame());
+    if (!editor.tabs() || !editor.pills() || editor.focus != Item::pick_file) return 8726;
+    if (!capture(L"launch-scripts-new-game-launch.png")) return 8733;
+    app.customEditorKey(VK_UP, false);
+    if (editor.focus != Item::tab_launch) return 8727;
+    app.customEditorKey(VK_RIGHT, false);
+    if (!editor.scripts() || editor.pills() || editor.shows(ui::name_field) || !editor.shows(ui::before_field)) return 8728;
+    if (!capture(L"launch-scripts-new-game.png")) return 8729;
+    editor.fields[ui::exited_field] = L"Stop-Process -Name trener";
+    app.customEditorFocus(Item::test_exited); app.customEditorAccept();
+    if (!wait([&] { return !editor.testing; })) return 8730;
+    {
+        std::lock_guard lock(mutex);
+        if (new_key.empty() || runs.back().context.game_key != new_key) return 8731;
+    }
+    app.customEditorTab(ui::Tab::launch);
+    editor.fields[ui::name_field] = L"Nowa gra ze skryptem";
+    editor.fields[ui::file_field] = (userConfigDirectory() / L"nowa.exe").wstring();
+    app.customEditorSave();
+    const auto* fresh = app.launchScripts(new_key);
+    if (app.customEditorOpen() || !fresh || fresh->exited != L"Stop-Process -Name trener") return 8732;
     return 0;
 }

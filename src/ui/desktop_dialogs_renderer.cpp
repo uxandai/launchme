@@ -235,7 +235,7 @@ void Renderer::drawDesktopCustomEditor() {
     const auto body = [&](const custom_game_ui::State& state) {
         int fields = 0;
         for (int index = 0; index < custom_game_ui::field_count; ++index) fields += state.shows(index);
-        return static_cast<float>(fields) * field_step + (state.toggles() ? 52.0f : 0.0f);
+        return static_cast<float>(fields) * field_step + (state.toggles() ? 52.0f : 0.0f) + (state.pills() ? 52.0f : 0.0f);
     };
     float content = body(ui);
     if (ui.tabs()) {
@@ -249,9 +249,9 @@ void Renderer::drawDesktopCustomEditor() {
     const bool poster = ui.posterVisible();
     constexpr float poster_w = 150, poster_column = poster_w + 22;
     // A new game: "Wskaż plik" / "Wskaż folder" above the fields; a game with a key: the tabs.
-    const float pills = ui.pills() || ui.tabs() ? 52.0f : 0.0f;
+    const float pills = ui.pills() ? 52.0f : 0.0f, tabs = ui.tabs() ? 52.0f : 0.0f;
     const bool note = !ui.error.empty() || !ui.note.empty();
-    const float height = sheet_header + 16 + subtitle + pills + content + (note ? 26.0f : 0.0f) + 64;
+    const float height = sheet_header + 16 + subtitle + tabs + content + (note ? 26.0f : 0.0f) + 64;
     // A Windows game on Linux: its Wine/Proton options are long; scripts too (the sheet keeps its width across the tabs).
     float width = (ui.compat ? 760.0f : 620.0f) + (ui.posterShown() ? poster_column : 0.0f);
     if (ui.tabs()) width = std::max(width, 820.0f);
@@ -302,7 +302,7 @@ void Renderer::drawDesktopCustomEditor() {
             desktopModalHot({Kind::action, static_cast<int>(item)}, r);
             left = r.right + 10;
         }
-        y += pills;
+        y += tabs;
     }
     if (ui.pills()) {
         const float w = (fields_right - p.left - 22 - 10) * 0.5f;
@@ -357,7 +357,7 @@ void Renderer::drawDesktopCustomEditor() {
         }
         y += 52;
     }
-    y = std::max(y, p.top + sheet_header + 14 + subtitle + pills + content); // The shorter tab: its note where the taller one's would be.
+    y = std::max(y, p.top + sheet_header + 14 + subtitle + tabs + content); // The shorter tab: its note where the taller one's would be.
     if (note) {
         const bool danger = !ui.error.empty() || ui.note_failed;
         textLine(ui.error.empty() ? ui.note : ui.error, p.left + 22, y + 6, p.right - p.left - 44, desktop_small_font_.Get(), danger ? palette::danger() : palette::muted());

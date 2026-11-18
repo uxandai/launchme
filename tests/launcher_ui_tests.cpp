@@ -1754,14 +1754,17 @@ int LauncherUiTest::xmb(HWND window) {
         if (!app.settings_state_.at(settings_ui::Page::layout_options)) return 219;
     }
     const int posters_row = rowIndex(settings_ui::Id::xmb_posters), size_row = rowIndex(settings_ui::Id::xmb_size);
-    // Pionowe plakaty, Poziome kafle, ikony kategorii, poświata tytułu, Platforma jako logo, then the tiles' size.
+    // Pionowe plakaty, Poziome kafle, ikony kategorii, poświata tytułu, Przygaszone ikony, Platforma jako logo,
+    // then the tiles' size.
     if (posters_row != 0 || rowIndex(settings_ui::Id::xmb_landscape) != posters_row + 1 ||
         rowIndex(settings_ui::Id::xmb_recent_icon) != posters_row + 2 ||
         rowIndex(settings_ui::Id::xmb_favorites_icon) != posters_row + 3 ||
         rowIndex(settings_ui::Id::xmb_title_glow) != posters_row + 4 ||
-        rowIndex(settings_ui::Id::xmb_platform_badge) != posters_row + 5 || size_row != posters_row + 6 ||
+        rowIndex(settings_ui::Id::xmb_icons_only) != posters_row + 5 ||
+        rowIndex(settings_ui::Id::xmb_platform_badge) != posters_row + 6 || size_row != posters_row + 7 ||
         app.settings_.xmb_posters || app.settings_.xmb_landscape || app.settings_.xmb_recent_icon ||
-        app.settings_.xmb_favorites_icon || app.settings_.xmb_title_glow || app.settings_.xmb_size != AppSettings::XmbSize::normal) return 219;
+        app.settings_.xmb_favorites_icon || app.settings_.xmb_title_glow || app.settings_.xmb_icons_only ||
+        app.settings_.xmb_size != AppSettings::XmbSize::normal) return 219;
     app.settings_state_.enter(static_cast<int>(app.settings_rows_.size()));
     app.settings_state_.selected[0] = posters_row + 1; app.settingsActivate(); // Poziome kafle on.
     if (!app.settings_.xmb_landscape || app.settings_.xmb_posters) return 219;

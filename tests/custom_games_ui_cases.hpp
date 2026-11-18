@@ -293,7 +293,9 @@ int LauncherUiTest::customGames(HWND window) {
         if (!app.customEditorOpen() || editor.target != ui::Target::steam || editor.focus != Item::arguments || editor.editing() ||
             editor.shows(ui::file_field) || editor.shows(ui::name_field) || !editor.shows(ui::arguments_field)) return 651;
         app.customEditorKey(VK_UP, false);
-        if (editor.focus != Item::arguments) return 652; // Nothing above it.
+        if (editor.focus != Item::tab_launch || editor.scripts()) return 652; // Above it: the tabs.
+        app.customEditorKey(VK_DOWN, false);
+        if (editor.focus != Item::arguments) return 652;
         app.customEditorInsert(L"-dx11 -skipintro");
         if (!capture(L"launch-options-steam.png")) return 653;
         app.customEditorKey(VK_DOWN, false);

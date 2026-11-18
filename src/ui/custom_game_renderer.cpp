@@ -56,14 +56,13 @@ void Renderer::drawCustomGameEditor() {
                                                          L"WINEDLLOVERRIDES", tr(L"Opcje Protona i Wine (jak w Steamie)"), tr(L"Platforma"),
                                                          tr(L"Przed uruchomieniem gry (Launchme czeka, aż skończy)"), tr(L"Po uruchomieniu gry"), tr(L"Po wyjściu z gry")};
     if (layout.tabs) {
-        // "Uruchamianie" / "Skrypty": the shown one lit by the accent, the focused one as a button.
+        // "Uruchamianie" / "Skrypty": the shown one in bright text, the focused one as a lit button.
         for (int which = 0; which < 2; ++which) {
             const auto r = layout.tab(which);
             const bool shown = (which == 1) == ui.scripts(), focused = ui.focus == (which ? Item::tab_scripts : Item::tab_launch);
             const auto ink = drawButton(rect(r), focused ? 1.0f : 0.0f, 1, false);
             textLine(which ? tr(L"Skrypty") : tr(L"Uruchamianie"), r.left + 8, (r.top + r.bottom) * 0.5f, r.right - r.left - 16, settings_body_font_.Get(),
                      focused ? ink : shown ? gray(0.96f) : gray(0.55f), DWRITE_TEXT_ALIGNMENT_CENTER);
-            if (shown) fill({r.left + 36, r.bottom + 5, r.right - 36, r.bottom + 9}, accent, 2);
         }
     }
     for (int index = 0; index < field_count; ++index) {
