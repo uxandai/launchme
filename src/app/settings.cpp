@@ -730,6 +730,14 @@ void Launcher::settingsToggle(const Row& row) {
         prefetchPosters();
         settingsChanged(); audio_.context(); return;
     }
+    else if (row.id == Id::xmb_wave || row.id == Id::xmb_wave_month || row.id == Id::xmb_clock || row.id == Id::xmb_icons_only ||
+             row.id == Id::blades_green || row.id == Id::blades_light || row.id == Id::blades_clock) {
+        auto& value = row.id == Id::xmb_wave ? settings_.xmb_wave : row.id == Id::xmb_wave_month ? settings_.xmb_wave_month :
+                      row.id == Id::xmb_clock ? settings_.xmb_clock : row.id == Id::xmb_icons_only ? settings_.xmb_icons_only :
+                      row.id == Id::blades_green ? settings_.blades_green : row.id == Id::blades_light ? settings_.blades_light : settings_.blades_clock;
+        value = !value;
+        settingsChanged(); audio_.context(); return;
+    }
     else if (row.id == Id::xmb_platform_badge || row.id == Id::xmb_title_glow || row.id == Id::metro_title_corner) {
         auto& value = row.id == Id::xmb_platform_badge ? settings_.xmb_platform_badge :
                       row.id == Id::xmb_title_glow ? settings_.xmb_title_glow : settings_.metro_title_corner;

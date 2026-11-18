@@ -75,7 +75,7 @@ void Renderer::drawEmptyLibrary() {
 }
 
 void Renderer::drawFooter() {
-    if (context_->screen != ScreenMode::shelves || context_->xmb || context_->flix || context_->metro || context_->psfive || context_->snitch) return;
+    if (context_->screen != ScreenMode::shelves || context_->xmb || context_->flix || context_->metro || context_->psfive || context_->snitch || context_->blades) return;
     const float y = viewport_.height - 65;
     if (context_->category_rail) {
         if (cards_ && selected_ < cards_->size()) {
@@ -168,7 +168,7 @@ float Renderer::drawPlatformMark(const std::wstring& platform, float x, float ce
 }
 
 bool Renderer::footerShowsPlatform() const {
-    if (context_->screen != ScreenMode::shelves || context_->xmb || context_->flix || context_->metro || context_->psfive || context_->snitch ||
+    if (context_->screen != ScreenMode::shelves || context_->xmb || context_->flix || context_->metro || context_->psfive || context_->snitch || context_->blades ||
         context_->category_rail || !context_->main_row || !context_->hero_facts.empty() || !cards_ || selected_ >= cards_->size()) return false;
     return !render_detail::studioPlatform(activePlatformName((*cards_)[selected_].game));
 }
@@ -176,7 +176,7 @@ bool Renderer::footerShowsPlatform() const {
 void Renderer::drawPlatformBadge() {
     if (footerShowsPlatform()) return; // Beside the game's name in the footer.
     if (context_->metro && context_->metro_title_corner) return; // Metro: beside the name bottom left.
-    if (context_->screen == ScreenMode::glance || context_->screen == ScreenMode::companion || context_->snitch) return;
+    if (context_->screen == ScreenMode::glance || context_->screen == ScreenMode::companion || context_->snitch || context_->blades) return;
     if (context_->screen == ScreenMode::plugin_page || context_->screen == ScreenMode::downloads || context_->psfive) return; // PSfive: beside the game's name.
     // The libraries, Search and the Store: their top bar holds the tabs and controls, no badge.
     if (gridScreen(context_->screen)) return;

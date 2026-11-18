@@ -437,6 +437,18 @@ struct ViewContext {
     float psfive_dim = 0; // PSfive: extra darkening of the background (AppSettings::psfive_dim).
     // XMB home: cards = [xmb_top tiles..., focused column games...].
     bool xmb = false, xmb_posters = false, xmb_landscape = false, xmb_title_glow = false;
+    // XMB, PS3 style: ribbon waves on a plain colour (0xRRGGBB; brightness by the time of day), the
+    // date and time top right, and the unfocused top-row tiles dimmed.
+    bool xmb_wave = false, xmb_icons_only = false;
+    uint32_t xmb_wave_rgb = 0;
+    float xmb_wave_light = 1;
+    std::wstring xmb_clock_time, xmb_clock_date; // Empty: no clock.
+    // Blades home (blades_renderer.cpp): the channel tabs (the categories), the shown one, and the
+    // focused game's line under its name.
+    bool blades = false, blades_green = true, blades_light = false;
+    std::vector<std::wstring> blades_channels;
+    size_t blades_channel = 0;
+    std::wstring blades_clock, blades_status; // Empty clock: off.
     bool shelf_posters = false; // Default layout: the shown shelf's cards are 2:3 posters (GameCard::aspect).
     float xmb_scale = 1;
     size_t xmb_top = 0;

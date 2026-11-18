@@ -555,6 +555,10 @@ void Renderer::paint(const std::vector<GameCard>& cards, size_t selected, bool s
             drawGrid();
         } else if (context.snitch) {
             drawSnitch();
+        } else if (context.blades && !scanning_ && !cards.empty()) {
+            squircle_corner_ = compact_corner;
+            drawBlades();
+            squircle_corner_ = full_corner;
         } else if (context.flix && !scanning_ && !cards.empty()) {
             squircle_corner_ = compact_corner;
             drawFlix();
@@ -577,7 +581,7 @@ void Renderer::paint(const std::vector<GameCard>& cards, size_t selected, bool s
                 squircle_corner_ = compact_corner;
                 corner_reference_ = 140;
             }
-            drawBackground();
+            if (context.xmb && context.xmb_wave) drawXmbWave(); else drawBackground();
             beginScreenForeground();
             if (!context.xmb) drawHero(); // XMB labels sit next to the tiles instead.
             drawQuickShade();
@@ -585,7 +589,7 @@ void Renderer::paint(const std::vector<GameCard>& cards, size_t selected, bool s
                 target_->PushAxisAlignedClip(D2D1::RectF(category_rail::Layout{viewport_.width, viewport_.height}.contentClip(),
                     0, viewport_.width, viewport_.height), D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
             if (scanning_ || cards.empty()) drawEmptyState();
-            else if (context.xmb) drawXmb();
+            else if (context.xmb) { drawXmb(); if (!context.xmb_clock_time.empty()) drawXmbClock(); }
             else {
                 for (size_t i = 0; i < cards.size(); ++i) if (i != selected_) drawCard(cards[i], i);
                 const float focus = smoothFade(context.launch_progress);

@@ -136,6 +136,10 @@ void Launcher::themeBuildOptions() {
             toggle(Id::xmb_favorites_icon, L"„Ulubione” jako ikona gwiazdki", s.xmb_favorites_icon);
             toggle(Id::xmb_title_glow, L"Pulsująca poświata tytułu", s.xmb_title_glow);
             toggle(Id::xmb_platform_badge, L"Platforma jako logo", s.xmb_platform_badge);
+            toggle(Id::xmb_wave, L"Tło z falą", s.xmb_wave);
+            if (s.xmb_wave) toggle(Id::xmb_wave_month, L"Kolor miesiąca", s.xmb_wave_month);
+            toggle(Id::xmb_clock, L"Data i godzina", s.xmb_clock);
+            toggle(Id::xmb_icons_only, L"Przygaszone ikony", s.xmb_icons_only);
         } else if (s.home_layout == HomeLayout::flix) {
             cards(Id::flix_size, Look::size, L"Rozmiar kafelków Flix", static_cast<int>(s.flix_size), names(flix_sizes, flix_sizes.size()));
             toggle(Id::flix_category_all, L"Kafelek „Wszystkie” w rzędach", s.flix_category_all);
@@ -156,6 +160,10 @@ void Launcher::themeBuildOptions() {
             if (!s.psfive_category_tabs) toggle(Id::home_tab_icons, L"Ikony zamiast nazw", s.home_tab_icons);
         } else if (s.home_layout == HomeLayout::snitch) {
             toggle(Id::snitch_colour_icons, L"Kolorowe ikony", s.snitch_colour_icons);
+        } else if (s.home_layout == HomeLayout::blades) {
+            toggle(Id::blades_green, L"Klasyczna zieleń", s.blades_green);
+            toggle(Id::blades_light, L"Jasny motyw", s.blades_light);
+            toggle(Id::blades_clock, L"Zegar", s.blades_clock);
         }
         cards(Id::home_tiles, Look::place, L"Kafle Wszystkie, Glance, Tarot i Towarzyszka", static_cast<int>(s.home_tiles),
               {{tr(placeName(0))}, {tr(placeName(1))}, {tr(placeName(2))}});

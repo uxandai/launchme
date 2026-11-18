@@ -103,7 +103,9 @@ struct AppSettings {
     // flix: landscape "recently played" row, then one row of posters per category.
     // metro: Xbox 360-style pages of tiles, a start page then one page per category.
     // psfive: PS5-style row of the recent games on top of a full-screen background, then Biblioteka.
-    enum class HomeLayout { shelves, xmb, flix, metro, psfive, snitch };
+    // blades: Xbox 360-style channels (2005 blades / 2008 panels): categories as tabs on an arc, games as
+    // panels receding along a second arc.
+    enum class HomeLayout { shelves, xmb, flix, metro, psfive, snitch, blades };
     HomeLayout home_layout = HomeLayout::shelves;
     bool glance = true; // Default home's shortcut-only gaming hub (G / right trigger).
     // Tarot (src/app/tarot.cpp): a short card reading that recommends up to three games, from the
@@ -208,6 +210,10 @@ struct AppSettings {
     bool xmb_recent_icon = false;    // XMB: Ostatnio grane as one clock-icon tile with its games in a column.
     bool xmb_favorites_icon = false; // XMB: Ulubione as a star-icon tile instead of a 2x2 cover preview.
     bool xmb_title_glow = false;     // XMB: subtle PS3-style pulsing glow behind the focused game's title.
+    bool xmb_wave = false;           // XMB: PS3-style flowing ribbon waves on a plain colour instead of the game's background.
+    bool xmb_wave_month = true;      // XMB wave: the colour of the month (and darker at night) instead of the accent.
+    bool xmb_clock = false;          // XMB: date and time top right over a thin line, as on the PS3.
+    bool xmb_icons_only = false;     // XMB: unfocused top-row tiles without art fade to dim icons (more PS3-like).
     enum class XmbSize { compact, normal, large };
     XmbSize xmb_size = XmbSize::normal;
     XmbSize psfive_size = XmbSize::normal; // PSfive tiles: the same three sizes (80 / 100 / 120%).
@@ -493,6 +499,10 @@ struct AppSettings {
     bool metro_light = false;
     // Snitch: the dock's News/eShop/Album/Controllers discs in colour, as on the real Switch.
     bool snitch_colour_icons = false;
+    // Blades: the classic green of the console instead of the accent, and a light (2005 white blade) page.
+    bool blades_green = true;
+    bool blades_light = false;
+    bool blades_clock = true;
 };
 
 // The name or nickname she may call you by (AppSettings::companion_user_name): trimmed, one line,

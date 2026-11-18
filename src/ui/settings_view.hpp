@@ -143,6 +143,7 @@ enum class Id { font, home_layout, ui_accent, accent, uninstalled, emulation, mu
                    metro_category_tabs, flix_category_tabs, psfive_category_tabs,
                    // XMB → Platforma jako logo i opcje w stylu PS3; Metro → Tytuł w rogu.
                    xmb_platform_badge, xmb_landscape, xmb_recent_icon, xmb_favorites_icon, xmb_title_glow, metro_title_corner,
+                   xmb_wave, xmb_wave_month, xmb_clock, xmb_icons_only, blades_green, blades_light, blades_clock,
                    // Okna i podpowiedzi → Wygląd podpowiedzi (AppSettings::hint_style).
                    hint_style,
                    // Biblioteka → Uruchamianie: FPS widget's one-time ETW permission (src/platform/etw_access.cpp).
@@ -210,7 +211,7 @@ inline std::wstring companionImportHelp() {
         tr(L"Zamiast saki użyj klucza postaci. Zdjęcia: PNG, JPEG, WebP, GIF lub BMP; opis o tej samej nazwie w TXT jest opcjonalny. Zakresy 00-09 … 50-59 odblokowują się z poziomem postaci (od pierwszej liczby; najwyższy poziom to 50). Feed wymaga pary zdjęcie + TXT. Brak plików oznacza brak zdjęć lub postów.");
 }
 // Polish keys: draw them through tr(). Indexed like AppSettings::HomeLayout.
-inline constexpr std::array<const wchar_t*, 6> home_layouts{trKey(L"Domyślny"), L"XMB", L"Flix", L"Metro", L"PSfive", L"snitch"};
+inline constexpr std::array<const wchar_t*, 7> home_layouts{trKey(L"Domyślny"), L"XMB", L"Flix", L"Metro", L"PSfive", L"snitch", L"Blades"};
 inline constexpr int home_layout_count = static_cast<int>(home_layouts.size());
 // The layout tiles of Settings, the desktop window's settings and the walkthrough are a slider:
 // `visible` tiles at a time, the one cut at an edge shows there are more. Its leftmost slot
