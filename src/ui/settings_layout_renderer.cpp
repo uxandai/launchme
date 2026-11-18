@@ -195,32 +195,6 @@ void Renderer::drawLayoutScene(int option, D2D1_RECT_F picture, float time, floa
             rect(x, y, poster_w, poster_h, mix(poster ? mix(muted, dim, 0.2f * (poster % 3)) : system, focus_ink, focused), 1.5f);
             frame(x, y, poster_w, poster_h, faded(ring, focused), 1.5f);
         }
-    } else if (option == 6) {
-        // Blades: tabs fanned along an arc on the left (the focused one sticks out in the accent),
-        // panels receding up and to the right along the floor's rising arc.
-        const auto accent = mix(muted, ink, 0.6f + 0.4f * emphasis);
-        rect(-150, -40, 200, 176, white(0.05f), 100); // The blades' disc.
-        for (int tab = -2; tab <= 2; ++tab) {
-            const float d = tab + vertical;
-            const float y = 48 + d * 15 - 4, x = 4 - std::abs(d) * std::abs(d) * 1.5f;
-            const float focus = closeness(d);
-            rect(x, y, 40 + 6 * focus, 8, mix(dim, accent, focus), 2);
-        }
-        for (int panel = 7; panel >= 0; --panel) {
-            const float offset = panel - horizontal;
-            if (offset < -0.9f) continue;
-            const float k = std::max(0.0f, offset);
-            const float size = 40 * std::pow(0.8f, k);
-            float x = 60;
-            for (int step = 0; step < panel; ++step) x += (step == 0 ? 40 + 4 : 40 * std::pow(0.8f, static_cast<float>(step)) * 0.86f);
-            x -= horizontal * 44;
-            const float y = 48 - size * 0.5f - (40 - size) * 0.62f;
-            const float focused = closeness(offset);
-            rect(x, y, size, size, faded(mix(mix(muted, dim, 0.15f * (panel % 3)), focus_ink, focused), std::min(1.0f, 1.2f + offset)), 2.5f);
-            frame(x, y, size, size, faded(ring, focused), 2.5f);
-        }
-        rect(60, 76, name_widths[horizontal < 0.5f ? 1 : 3], 4, label, 1);
-        rect(60, 83, 30, 3, faded(label, 0.6f), 1);
     } else if (option == 5) {
         // snitch: equal covers, selected title above, compact circular shortcuts below.
         rect(0, 0, scene_width, scene_height, white(0.14f), 4);

@@ -968,11 +968,6 @@ private:
     // the focused game's badge and name, "Graj" and "…", its logo in the corner.
     void drawPsfive();
     void drawSnitch();
-    void drawBlades();          // blades_renderer.cpp: the Xbox 360-style home.
-    void drawXmbWave();         // XMB: PS3-style ribbon waves in place of the game background.
-    void drawXmbClock();        // XMB: date and time top right over a thin line.
-    float blades_channel_ = -1; // Eased channel position the tab arc follows (-1: snap on the next frame).
-    float blades_time_ = 0;
     void drawPsfiveTopBar();
     void drawPsfiveMoreMenu();
     void drawPsfiveLabel(const GameCard& card, const GameCard& placed); // placed: where the tile is drawn (the hub moves it).

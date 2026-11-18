@@ -161,13 +161,7 @@ constexpr FlagSetting flag_settings[] = {
     {"xmb_recent_icon", &AppSettings::xmb_recent_icon},
     {"xmb_favorites_icon", &AppSettings::xmb_favorites_icon},
     {"xmb_title_glow", &AppSettings::xmb_title_glow},
-    {"xmb_wave", &AppSettings::xmb_wave},
-    {"xmb_wave_month", &AppSettings::xmb_wave_month},
-    {"xmb_clock", &AppSettings::xmb_clock},
     {"xmb_icons_only", &AppSettings::xmb_icons_only},
-    {"blades_green", &AppSettings::blades_green},
-    {"blades_light", &AppSettings::blades_light},
-    {"blades_clock", &AppSettings::blades_clock},
     {"metro_title_corner", &AppSettings::metro_title_corner},
     {"flix_category_tabs", &AppSettings::flix_category_tabs},
     {"psfive_category_tabs", &AppSettings::psfive_category_tabs},
@@ -786,7 +780,6 @@ AppSettings parseAppSettings(std::string_view text) {
             else if (value == "metro") settings.home_layout = AppSettings::HomeLayout::metro;
             else if (value == "psfive") settings.home_layout = AppSettings::HomeLayout::psfive;
             else if (value == "snitch") settings.home_layout = AppSettings::HomeLayout::snitch;
-            else if (value == "blades") settings.home_layout = AppSettings::HomeLayout::blades;
             else if (value == "default") settings.home_layout = AppSettings::HomeLayout::shelves;
         } else if (key == "xmb_size" || key == "psfive_size") {
             auto& size = key == "xmb_size" ? settings.xmb_size : settings.psfive_size;
@@ -1003,8 +996,7 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
                                  settings.home_layout == AppSettings::HomeLayout::flix ? "flix" :
                                  settings.home_layout == AppSettings::HomeLayout::metro ? "metro" :
                                  settings.home_layout == AppSettings::HomeLayout::psfive ? "psfive" :
-                                 settings.home_layout == AppSettings::HomeLayout::snitch ? "snitch" :
-                                 settings.home_layout == AppSettings::HomeLayout::blades ? "blades" : "default") << '\n';
+                                 settings.home_layout == AppSettings::HomeLayout::snitch ? "snitch" : "default") << '\n';
     output << "psfive_size=" << (settings.psfive_size == AppSettings::XmbSize::compact ? "small" :
                                 settings.psfive_size == AppSettings::XmbSize::large ? "large" : "default") << '\n';
     output << "psfive_clock=" << settings.psfive_clock << '\n';
@@ -1015,13 +1007,7 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
     output << "xmb_recent_icon=" << settings.xmb_recent_icon << '\n';
     output << "xmb_favorites_icon=" << settings.xmb_favorites_icon << '\n';
     output << "xmb_title_glow=" << settings.xmb_title_glow << '\n';
-    output << "xmb_wave=" << settings.xmb_wave << '\n';
-    output << "xmb_wave_month=" << settings.xmb_wave_month << '\n';
-    output << "xmb_clock=" << settings.xmb_clock << '\n';
     output << "xmb_icons_only=" << settings.xmb_icons_only << '\n';
-    output << "blades_green=" << settings.blades_green << '\n';
-    output << "blades_light=" << settings.blades_light << '\n';
-    output << "blades_clock=" << settings.blades_clock << '\n';
     output << "shelves_posters=" << settings.shelves_posters << '\n';
     output << "shelves_steam=" << settings.shelves_steam << '\n';
     output << "shelves_category_all=" << settings.shelves_category_all << '\n';

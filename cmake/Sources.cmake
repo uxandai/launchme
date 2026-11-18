@@ -245,7 +245,6 @@ set(LAUNCHME_APP_SOURCES
     src/app/metro.cpp
     src/app/psfive.cpp
     src/app/snitch.cpp
-    src/app/blades.cpp
     src/app/achievements.cpp
     src/app/game_sessions.cpp
     src/app/tray.cpp
@@ -307,7 +306,6 @@ set(LAUNCHME_APP_SOURCES
     src/ui/metro_renderer.cpp
     src/ui/psfive_renderer.cpp
     src/ui/snitch_renderer.cpp
-    src/ui/blades_renderer.cpp
     src/ui/tv_metadata_renderer.cpp
     src/ui/meta_find_renderer.cpp
     src/ui/flix_rail_renderer.cpp

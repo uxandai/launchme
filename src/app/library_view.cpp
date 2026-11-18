@@ -175,7 +175,7 @@ settings_ui::Rect Launcher::libraryButton(int index) const {
     return library_presentation::Layout{view.width, view.height}.action(index);
 }
 int Launcher::libraryColumns() const { return library_layout::columns(libraryView(), renderer_.viewport().width, libraryPresentation()); }
-bool Launcher::menuBeside() const { return xmbActive() || flixActive() || metroActive() || psfiveActive() || snitchActive() || bladesActive() || libraryList() || libraryCarousel(); }
+bool Launcher::menuBeside() const { return xmbActive() || flixActive() || metroActive() || psfiveActive() || snitchActive() || libraryList() || libraryCarousel(); }
 std::optional<settings_ui::Rect> Launcher::libraryMenuAnchor() const {
     if (screen_ == ScreenMode::details) {
         const auto view = renderer_.viewport();

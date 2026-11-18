@@ -42,8 +42,7 @@ home_widgets::Placement Launcher::homeWidgets() const {
     if (settings_.home_tiles != AppSettings::HomeTiles::layout) return Placement::tiles;
     switch (settings_.home_layout) {
     case AppSettings::HomeLayout::xmb:
-    case AppSettings::HomeLayout::metro:
-    case AppSettings::HomeLayout::blades: return Placement::tiles;
+    case AppSettings::HomeLayout::metro: return Placement::tiles;
     case AppSettings::HomeLayout::psfive: return Placement::corner;
     case AppSettings::HomeLayout::flix: return Placement::pills;
     case AppSettings::HomeLayout::snitch: return Placement::pills;

@@ -346,8 +346,7 @@ void Launcher::tourView(TourView& view) const {
                                     tr(L"Rzędy plakatów, ostatnio grane na górze."),
                                     tr(L"Strony kafli: ostatnie gry, dalej kategorie."),
                                     tr(L"Rząd ostatnich gier nad dużym tłem."),
-                                    tr(L"Rząd okładek i małe białe ikony na dole."),
-                                    tr(L"Kategorie na łuku, gry jak panele w głąb.")};
+                                    tr(L"Rząd okładek i małe białe ikony na dole.")};
         break;
     }
     view.target = target;

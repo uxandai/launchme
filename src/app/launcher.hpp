@@ -2519,10 +2519,6 @@ private:
     bool psfiveIntro() const {
         return psfive_intro_ && psfiveActive() && !cards_.empty() && settings_.tile_entrance != AppSettings::TileEntrance::none;
     }
-    // Blades (src/app/blades.cpp): the default shelves' data (category_ is the channel, cards_ its games)
-    // drawn as Xbox 360-style channel tabs on an arc and panels receding along another.
-    bool bladesActive() const;
-    void bladesTarget(size_t index, float& x, float& y, float& size, float& aspect, float& delay) const;
     bool snitchActive() const;
     void snitchTarget(size_t index, float& x, float& y, float& size, float& aspect, float& delay) const;
     bool snitchClick(float x, float y, bool double_click);

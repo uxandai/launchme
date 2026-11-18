@@ -517,27 +517,6 @@ void Launcher::paint(bool overlay) {
         context.xmb_landscape = settings_.xmb_landscape;
         context.xmb_title_glow = settings_.xmb_title_glow;
         context.xmb_icons_only = settings_.xmb_icons_only;
-        if (settings_.xmb_wave || settings_.xmb_clock) {
-            const auto local = local_time_();
-            clock_minute_ = drawer_clock::minute(local);
-            if (settings_.xmb_wave) {
-                context.xmb_wave = true;
-                if (settings_.xmb_wave_month) {
-                    // The PS3's original theme: a colour per month, brighter around midday and dim at night.
-                    static constexpr uint32_t months[12]{0x9EA0A6, 0xCCAA2A, 0x74A834, 0xD8739E, 0x338C40, 0x9E4CB2,
-                                                         0x2699B2, 0x2959BF, 0x7347B2, 0xCC8C26, 0x8C5933, 0xBF2E2E};
-                    context.xmb_wave_rgb = months[std::clamp<int>(local.wMonth, 1, 12) - 1];
-                    const float hour = local.wHour + local.wMinute / 60.0f;
-                    context.xmb_wave_light = 0.55f + 0.45f * (0.5f + 0.5f * std::cos((hour - 13.0f) / 24.0f * 6.2831853f));
-                }
-            }
-            if (settings_.xmb_clock) {
-                wchar_t date[16]{};
-                swprintf_s(date, L"%d/%d", local.wDay, local.wMonth);
-                context.xmb_clock_date = date;
-                context.xmb_clock_time = drawer_clock::time(local, i18n::localeName());
-            }
-        }
         context.xmb_scale = xmb_layout::sizeScale(static_cast<int>(settings_.xmb_size));
         context.xmb_top = xmb_top_.size();
         context.xmb_column = xmb_column_;
@@ -643,31 +622,6 @@ void Launcher::paint(bool overlay) {
             else if (role == Role::glance) tile.sub = tr(L"Nowości i premiery");
             else if (role == Role::companion && context.companion) { tile.caption = context.companion->name; tile.sub = context.companion->persona; }
             context.metro_tiles.push_back(std::move(tile));
-        }
-    }
-    if (bladesActive()) {
-        context.blades = true;
-        context.blades_green = settings_.blades_green;
-        context.blades_light = settings_.blades_light;
-        context.blades_channel = category_;
-        context.blades_channels.reserve(categories_.size());
-        for (const auto& category : categories_) context.blades_channels.push_back(category.title);
-        if (settings_.blades_clock) {
-            const auto local = local_time_();
-            context.blades_clock = drawer_clock::time(local, i18n::localeName());
-            clock_minute_ = drawer_clock::minute(local);
-        }
-        if (selected_ < cards_.size()) {
-            const auto& game = cards_[selected_].game;
-            if (isGame(game)) {
-                const auto session = sessionState(game);
-                context.blades_status = session == SessionState::frozen ? std::wstring(tr(L"Wstrzymana")) :
-                    session == SessionState::running ? std::wstring(tr(L"W grze")) :
-                    game.installation.active() ? installationText(game.installation) :
-                    !game.installed && game.kind != GameKind::catalog ? std::wstring(localFileGame(game.source) ? missingFileLabel(game) : tr(L"Do instalacji")) :
-                    activePlatformName(game);
-            } else if (game.kind == GameKind::all) context.blades_status = gamesLabel(public_library_.size());
-            else if (game.kind == GameKind::glance) context.blades_status = tr(L"Nowości i premiery");
         }
     }
     if (snitchActive()) {

@@ -243,13 +243,6 @@ void Launcher::buildSettingsRows() {
                     tr(L"Ikona gwiazdki na kafelku kolekcji Ulubione zamiast podglądu czterech okładek."), {}, settings_.xmb_favorites_icon});
                 add({Id::xmb_title_glow, Control::toggle, tr(L"Pulsująca poświata tytułu"),
                     tr(L"Delikatny, pulsujący blask na tytule zaznaczonej gry, jak w menu PS3."), {}, settings_.xmb_title_glow});
-                add({Id::xmb_wave, Control::toggle, tr(L"Tło z falą"),
-                    tr(L"Płynące wstęgi na jednolitym kolorze zamiast tła zaznaczonej gry, jak w menu PS3."), {}, settings_.xmb_wave});
-                if (settings_.xmb_wave)
-                    add({Id::xmb_wave_month, Control::toggle, tr(L"Kolor miesiąca"),
-                        tr(L"Każdy miesiąc ma swój kolor fali, a nocą tło ciemnieje. Wyłączone: kolor akcentu."), {}, settings_.xmb_wave_month});
-                add({Id::xmb_clock, Control::toggle, tr(L"Data i godzina"),
-                    tr(L"W prawym górnym rogu nad cienką linią, jak w menu PS3."), {}, settings_.xmb_clock});
                 add({Id::xmb_icons_only, Control::toggle, tr(L"Przygaszone ikony"),
                     tr(L"Kafle górnego rzędu poza zaznaczonym są półprzezroczyste, więc wybrany wyraźnie się wyróżnia."), {}, settings_.xmb_icons_only});
                 add({Id::xmb_platform_badge, Control::toggle, tr(L"Platforma jako logo"),
@@ -286,14 +279,6 @@ void Launcher::buildSettingsRows() {
             if (settings_.home_layout == HomeLayout::snitch)
                 add({Id::snitch_colour_icons, Control::toggle, tr(L"Kolorowe ikony"),
                     tr(L"Kilka ikon dolnego paska w kolorach, jak w prawdziwym Switchu: szukaj, biblioteka, sklep i kontrolery."), {}, settings_.snitch_colour_icons});
-            if (settings_.home_layout == HomeLayout::blades) {
-                add({Id::blades_green, Control::toggle, tr(L"Klasyczna zieleń"),
-                    tr(L"Łuki i zaznaczona zakładka w zieleni konsoli zamiast koloru akcentu."), {}, settings_.blades_green});
-                add({Id::blades_light, Control::toggle, tr(L"Jasny motyw"),
-                    tr(L"Jasne tło i ciemne napisy, jak białe ostrza pierwszego dashboardu."), {}, settings_.blades_light});
-                add({Id::blades_clock, Control::toggle, tr(L"Zegar"),
-                    tr(L"Godzina w prawym górnym rogu."), {}, settings_.blades_clock});
-            }
             if (settings_.home_layout == HomeLayout::psfive) {
                 const int size = std::clamp(static_cast<int>(settings_.psfive_size), 0, 2);
                 add({Id::psfive_size, Control::slider, tr(L"Rozmiar kafelków PSfive"),
@@ -448,8 +433,7 @@ void Launcher::buildSettingsRows() {
                                      settings_.home_layout == HomeLayout::flix ? trKey(L"Rozmiar kafelków, kafelek „Wszystkie”, pasek kategorii i boczny.") :
                                      settings_.home_layout == HomeLayout::metro ? trKey(L"Efekt 3D stron obok bieżącej.") :
                                      settings_.home_layout == HomeLayout::psfive ? trKey(L"Rozmiar kafelków i zegar.") :
-                                     settings_.home_layout == HomeLayout::snitch ? trKey(L"Kolorowe ikony dolnego paska.") :
-                                     settings_.home_layout == HomeLayout::blades ? trKey(L"Kolor łuków, jasny motyw i zegar.") : nullptr;
+                                     settings_.home_layout == HomeLayout::snitch ? trKey(L"Kolorowe ikony dolnego paska.") : nullptr;
             if (options) pageRow(Page::layout_options, tr(L"Opcje układu"), tr(options), layout_name);
         }
         add({Id::launch_tv_mode, Control::toggle, tr(L"Uruchamiaj w trybie TV"),

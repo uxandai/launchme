@@ -2923,19 +2923,8 @@ constexpr Entry entries[] = {
     {L"Tła gier w 4K", L"Fondos de juegos en 4K"},
     {L"Pobiera i zachowuje tła gier w rozdzielczości do 4K (3840×2160) ze Steam i SteamGridDB zamiast 1440p i lokalnych kopii 1920×620.",
      L"Descarga y conserva fondos de juegos hasta en 4K (3840×2160) de Steam y SteamGridDB en lugar de 1440p y copias locales de 1920×620."},
-    {L"Tło z falą", L"Fondo de ola"},
-    {L"Płynące wstęgi na jednolitym kolorze zamiast tła zaznaczonej gry, jak w menu PS3.", L"Cintas fluidas sobre un color liso en lugar del fondo del juego seleccionado, como en el menú de PS3."},
-    {L"Kolor miesiąca", L"Color del mes"},
-    {L"Każdy miesiąc ma swój kolor fali, a nocą tło ciemnieje. Wyłączone: kolor akcentu.", L"Cada mes tiene su color de ola y el fondo se oscurece de noche. Desactivado: el color de acento."},
-    {L"Data i godzina", L"Fecha y hora"},
-    {L"W prawym górnym rogu nad cienką linią, jak w menu PS3.", L"Arriba a la derecha sobre una línea fina, como en el menú de PS3."},
     {L"Przygaszone ikony", L"Iconos atenuados"},
     {L"Kafle górnego rzędu poza zaznaczonym są półprzezroczyste, więc wybrany wyraźnie się wyróżnia.", L"Los mosaicos de la fila superior salvo el seleccionado son translúcidos, así que este destaca claramente."},
-    {L"Klasyczna zieleń", L"Verde clásico"},
-    {L"Łuki i zaznaczona zakładka w zieleni konsoli zamiast koloru akcentu.", L"Arcos y pestaña seleccionada en el verde de la consola en lugar del color de acento."},
-    {L"Jasne tło i ciemne napisy, jak białe ostrza pierwszego dashboardu.", L"Fondo claro y texto oscuro, como las hojas blancas del primer dashboard."},
-    {L"Kolor łuków, jasny motyw i zegar.", L"Color de los arcos, tema claro y reloj."},
-    {L"Kategorie na łuku, gry jak panele w głąb.", L"Categorías en un arco, juegos como paneles en profundidad."},
 };
 } // namespace
 

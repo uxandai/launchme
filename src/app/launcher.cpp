@@ -448,7 +448,6 @@ void Launcher::snapCardsForTransition() {
         else if (metro) metroTarget(i, target_x, target_y, target_size, aspect, delay);
         else if (psfive) psfiveTarget(i, target_x, target_y, target_size, aspect, delay);
         else if (snitchActive()) snitchTarget(i, target_x, target_y, target_size, aspect, delay);
-        else if (bladesActive()) bladesTarget(i, target_x, target_y, target_size, aspect, delay);
         else if (libraryCarousel()) {
             const coverflow_layout::Layout flow{view.width, view.height, libraryView(), libraryPresentation().coverflow_cd};
             flow.target(i, selected_, target_x, target_y, target_size, aspect);
@@ -712,7 +711,6 @@ void Launcher::tick() {
         else if (metro) metroTarget(i, target_x, target_y, target_size, aspect, delay);
         else if (psfive) psfiveTarget(i, target_x, target_y, target_size, aspect, delay);
         else if (snitchActive()) snitchTarget(i, target_x, target_y, target_size, aspect, delay);
-        else if (bladesActive()) bladesTarget(i, target_x, target_y, target_size, aspect, delay);
         else if (libraryCarousel()) {
             const coverflow_layout::Layout flow{view.width, view.height, libraryView(), libraryPresentation().coverflow_cd};
             flow.target(i, selected_, target_x, target_y, target_size, aspect);
@@ -942,8 +940,7 @@ void Launcher::tick() {
     }
     // Drawer clock (and PSfive's in its top bar): one repaint when the displayed minute changes,
     // also while idle. The local time is read at most once a second (and right at the minute boundary).
-    if ((friends_open_ && !friends_list_) || (psfive && settings_.psfive_clock) || snitchActive() || (bladesActive() && settings_.blades_clock) ||
-        (xmb && (settings_.xmb_clock || settings_.xmb_wave))) {
+    if ((friends_open_ && !friends_list_) || (psfive && settings_.psfive_clock) || snitchActive()) {
         const auto ms = GetTickCount64();
         if (ms >= clock_check_at_) {
             const auto local = local_time_();
