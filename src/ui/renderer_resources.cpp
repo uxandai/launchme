@@ -352,7 +352,6 @@ void Renderer::discardTarget() {
     desktop_hero_.Reset(); desktop_hero_previous_.Reset(); // Bitmaps of the old device: the pane picks its picture again.
     platform_aura_.Reset();
     platform_aura_name_.clear();
-    for (auto& glow : library_glows_) glow.Reset();
     // gray_failed may come from the lost target: the new one tries again.
     for (auto& cover : covers_) { cover.bitmap.Reset(); cover.brush.Reset(); cover.gray_bitmap.Reset(); cover.gray_brush.Reset(); cover.gray_failed = false; cover.blurred.Reset(); cover.blurred_source.Reset(); cover.desaturated.Reset(); cover.desaturated_source.Reset(); }
     for (auto& logo : logos_) { logo.bitmap.Reset(); logo.brush.Reset(); }

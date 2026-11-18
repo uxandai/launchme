@@ -578,7 +578,6 @@ private:
     static constexpr float cinematic_fade_seconds = 0.35f;
     void drawBackgroundGrid(float art);
     void drawLaunchAnimation();
-    void drawLibraryBackdrop(float opacity);
     void drawHero();
     void drawCard(const GameCard& card, size_t index);
     static constexpr D2D1_COLOR_F perfect_gold{0.98f, 0.77f, 0.30f, 1.0f}; // Every achievement unlocked.
@@ -1416,11 +1415,6 @@ private:
     std::map<std::wstring, Marquee> marquees_;
     bool marquee_active_ = false;
     uint64_t slot_generation_ = 0; // resetCovers/keepCovers/remapCovers.
-    // Procedural backdrop for the All games tile, blended with the hero transition.
-    bool library_backdrop_active_ = false;
-    float library_backdrop_from_ = 0, library_backdrop_opacity_ = 0;
-    // Four colour palettes x three ribbons; brushes are made as a palette enters.
-    std::array<Microsoft::WRL::ComPtr<ID2D1RadialGradientBrush>, 12> library_glows_;
     Microsoft::WRL::ComPtr<ID2D1Factory> factory_;
     Microsoft::WRL::ComPtr<ID2D1RenderTarget> target_;
     Microsoft::WRL::ComPtr<ID2D1HwndRenderTarget> window_target_;

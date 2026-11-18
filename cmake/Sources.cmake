@@ -269,7 +269,6 @@ set(LAUNCHME_APP_SOURCES
     src/ui/friends_renderer.cpp
     src/ui/quick_menu_renderer.cpp
     src/ui/grid_renderer.cpp
-    src/ui/library_backdrop_renderer.cpp
     src/ui/exit_renderer.cpp
     src/ui/launch_animation_renderer.cpp
     src/ui/overlay_renderer.cpp

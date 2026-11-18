@@ -171,8 +171,6 @@ void Renderer::resetCovers(size_t count, bool preserve_background) {
         kept_hero_ = {};
         hero_shown_ = {}; hero_leaving_ = {}; hero_mix_ = 1; hero_detail_seen_ = 0;
         cinematic_hero_.Reset(); cinematic_previous_hero_.Reset();
-        library_backdrop_active_ = false;
-        library_backdrop_from_ = library_backdrop_opacity_ = 0;
     }
     covers_.clear(); covers_.resize(count);
     logos_.clear(); logos_.resize(count);
@@ -497,19 +495,6 @@ void Renderer::paint(const std::vector<GameCard>& cards, size_t selected, bool s
         }
         cards_ = &cards;
         wallpaper_drawn_ = false; // Set again by whatever draws the wallpaper this frame.
-        // The orbiting lights behind home tiles with no picture of their own (Wszystkie, Glance, Tarot,
-        // Towarzyszka, Dodaj grę; XMB's categories and Ustawienia), unless a wallpaper takes their place.
-        const auto plainTile = [&](const Game& game) {
-            return specialTile(game) || (context.xmb && (game.kind == GameKind::category || game.kind == GameKind::settings));
-        };
-        const bool library_backdrop = context.screen == ScreenMode::shelves && !scanning &&
-            selected < cards.size() && plainTile(cards[selected].game) && !(wallpaper_places_.tiles && hasWallpaper());
-        // Snapshot the current mix on interrupted navigation, including a rebuilt
-        // shelf at the same index. The app's detail clock also works while unfocused.
-        if (library_backdrop != library_backdrop_active_ || selected != selected_ || detail < detail_)
-            library_backdrop_from_ = library_backdrop_opacity_;
-        library_backdrop_active_ = library_backdrop;
-        library_backdrop_opacity_ = std::lerp(library_backdrop_from_, library_backdrop ? 1.0f : 0.0f, smoothFade(detail));
         context_ = &context;
         desktop_style_ = context.desktop_window;
         desktop_modal_ = desktop_ui::DialogKind::none; // Set again by the desktop dialog drawn this frame.

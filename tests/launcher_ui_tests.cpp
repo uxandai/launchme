@@ -216,6 +216,12 @@ public:
             app.settings_.home_layout = AppSettings::HomeLayout::xmb;
             app.settings_.xmb_posters = true;
             app.settings_.xmb_size = AppSettings::XmbSize::large;
+            // LAUNCHME_PERF_XMB_OPTIONS=LRIG (1/0 each): landscape tiles, Ostatnio grane as a column, icons only, title glow.
+            if (wchar_t v[8]{}; GetEnvironmentVariableW(L"LAUNCHME_PERF_XMB_OPTIONS", v, 8) == 4) {
+                app.settings_.xmb_posters = false;
+                app.settings_.xmb_landscape = v[0] == L'1'; app.settings_.xmb_recent_icon = v[1] == L'1';
+                app.settings_.xmb_icons_only = v[2] == L'1'; app.settings_.xmb_title_glow = v[3] == L'1';
+            }
         }
         if (!app.renderer_.initialize(window)) return 1;
         app.renderer_.startDecoderForTest(); // Off-thread decoding, as in the app.
@@ -448,6 +454,46 @@ public:
             }
             std::cout << memoryReport("back in front");
         }
+        {
+            // A game in front (background mode: priority, EcoQoS, 10 Hz ticks), then the launcher in
+            // front again: the frame rate must come back whole.
+            app.pollBackgroundMode(true);
+            app.background_since_ = GetTickCount64() - Launcher::background_delay_ms;
+            app.pollBackgroundMode(true);
+            for (int i = 0; i < 30; ++i) { app.tick(); Sleep(100); }
+            app.pollBackgroundMode(false);
+            std::vector<double> back_frames;
+            const auto back = GetTickCount64(); auto back_navigation = back + 500;
+            Clock::time_point previous{};
+            while (GetTickCount64() - back < 4000) {
+                MSG message{};
+                while (PeekMessageW(&message, window, 0, 0, PM_REMOVE)) {
+                    if (message.message == WM_PAINT) ValidateRect(window, nullptr); else { TranslateMessage(&message); DispatchMessageW(&message); }
+                }
+                frame_clock.limit(app.frameLimit());
+                frame_clock.update(window, true);
+                if (frame_clock.ready()) {
+                    frame_clock.consume();
+                    app.setFrameRate(frame_clock.targetHz(), frame_clock.refreshHz());
+                    app.tick();
+                    if (GetUpdateRect(window, nullptr, FALSE)) {
+                        app.paint();
+                        const auto now = Clock::now();
+                        if (previous != Clock::time_point{} && GetTickCount64() - back > 1000)
+                            back_frames.push_back(std::chrono::duration<double, std::milli>(now - previous).count());
+                        previous = now;
+                    }
+                }
+                if (GetTickCount64() >= back_navigation) { app.navigate(app.selected_ >= 7 ? -7 : 1, false); back_navigation += 250; }
+                frame_clock.wait();
+            }
+            if (!back_frames.empty()) {
+                const double mean = std::accumulate(back_frames.begin(), back_frames.end(), 0.0) / back_frames.size();
+                std::sort(back_frames.begin(), back_frames.end());
+                std::cout << "After a game: frames=" << back_frames.size() << "; FPS=" << 1000.0 / mean << "; p95="
+                          << back_frames[static_cast<size_t>((back_frames.size() - 1) * 0.95)] << " ms; limit=" << app.frameLimit() << '\n';
+            }
+        }
         return 0;
     }
     static int run(HWND window) {
@@ -491,16 +537,14 @@ public:
             library->collections.push_back(std::move(collection));
         }
         app.onLibrary(std::move(library));
-        // Optional native snapshots of the All games background at two animation
-        // phases and on return to a game. No real artwork/network is needed.
+        // Optional native snapshots (no real artwork/network): the All games tile's background (the
+        // plain screen since its light ribbons went), then toasts and search.
         wchar_t backdrop_folder[4096]{};
         if (GetEnvironmentVariableW(L"LAUNCHME_UI_CAPTURE_DIR", backdrop_folder, 4096)) {
             app.focusCard(app.cards_.size() - 1);
             for (int frame = 0; frame < 35; ++frame) { app.last_frame_ -= std::chrono::milliseconds(50); app.tick(); }
             app.ambient_time_ = 0; app.detail_ = 1;
             if (!capture(L"all-games-backdrop-0.png")) return 1950;
-            app.ambient_time_ = 6;
-            if (!capture(L"all-games-backdrop-6.png")) return 1951;
             app.focusCard(0);
             for (int frame = 0; frame < 35; ++frame) { app.last_frame_ -= std::chrono::milliseconds(50); app.tick(); }
             if (!capture(L"all-games-backdrop-exit.png")) return 1952;

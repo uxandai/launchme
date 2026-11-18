@@ -173,7 +173,6 @@ void Renderer::drawBackground() {
         const float presence = std::max({shown, leaving, 1.0f - (1.0f - shown) * (1.0f - leaving), leaving > 0.001f && shown > 0.001f ? 1.0f : 0.0f});
         if (presence < 0.999f) drawWallpaperBackdrop((1.0f - presence) * home_wallpaper_mix_);
     } else if (!tinted && menu_screen && wallpaper_places_.menus) menu_wallpaper = drawWallpaperBackdrop(1.0f);
-    if (library_backdrop_opacity_ > 0.001f) drawLibraryBackdrop(library_backdrop_opacity_);
     // PSfive and Szczegóły use brighter artwork and their own shade. Still images
     // share the same full-screen crop; only the video's presentation follows this mix.
     const bool full_screen = context_->psfive || context_->screen == ScreenMode::details;
