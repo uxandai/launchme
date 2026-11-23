@@ -232,19 +232,33 @@ void Renderer::drawDesktopCustomEditor() {
     target_->SetTransform(D2D1::Matrix3x2F::Scale(view.scale, view.scale));
     const float field_step = 74;
     // The fields and switches of a tab; with tabs the taller one sizes the sheet, so switching keeps it.
+    const float mod_step = 54, option_step = 48;
+    // A list's control (a choice, a mod's method): its value, a chevron pointing down; the open list hangs under it.
+    std::optional<Rect> drop_anchor;
+    const auto picker = [&](Rect r, const std::wstring& value, float hv, bool enabled) {
+        desktopFill(r, 8, gray(1, enabled ? 0.06f + 0.04f * hv : 0.03f));
+        desktopStroke(r, 8, gray(1, 0.08f));
+        textLine(value, r.left + 12, middle(r), r.right - r.left - 40, desktop_font_.Get(), enabled ? palette::text() : palette::muted());
+        desktopGlyph(glyph::chevron_down, r.right - 16, middle(r), 10, enabled ? gray(0.75f) : palette::muted());
+    };
     const auto body = [&](const custom_game_ui::State& state) {
+        if (state.mods()) return 66.0f + static_cast<float>(state.modCount()) * mod_step;
         int fields = 0;
         for (int index = 0; index < custom_game_ui::field_count; ++index) fields += state.shows(index);
-        return static_cast<float>(fields) * field_step + (state.toggles() ? 52.0f : 0.0f) + (state.pills() ? 52.0f : 0.0f);
+        return static_cast<float>(fields) * field_step + static_cast<float>(state.optionCount()) * option_step + (state.optionCount() ? 8.0f : 0.0f) +
+               (state.pills() ? 52.0f : 0.0f);
     };
     float content = body(ui);
     if (ui.tabs()) {
-        auto other = ui;
-        other.tab = ui.scripts() ? custom_game_ui::Tab::launch : custom_game_ui::Tab::scripts;
-        content = std::max(content, body(other));
+        for (const auto which : {custom_game_ui::Tab::launch, custom_game_ui::Tab::scripts, custom_game_ui::Tab::mods}) {
+            if (which == custom_game_ui::Tab::mods && !ui.mods_offered) continue;
+            auto other = ui;
+            other.tab = which;
+            content = std::max(content, body(other));
+        }
     }
-    // Launch options of a library game: its name under the panel's title.
-    const float subtitle = ui.launchOptions() ? 24.0f : 0.0f;
+    // Launch options of a library game: its name under the panel's title, then what starts it.
+    const float subtitle = (ui.launchOptions() ? 24.0f : 0.0f) + (ui.managed.empty() ? 0.0f : 22.0f);
     // A user-added game: its poster (matched by the typed name) and "Zidentyfikuj grę" on the right.
     const bool poster = ui.posterVisible();
     constexpr float poster_w = 150, poster_column = poster_w + 22;
@@ -256,7 +270,7 @@ void Renderer::drawDesktopCustomEditor() {
     float width = (ui.compat ? 760.0f : 620.0f) + (ui.posterShown() ? poster_column : 0.0f);
     if (ui.tabs()) width = std::max(width, 820.0f);
     const auto p = desktopDialogFrame(view, width, height,
-                                      ui.launchOptions() ? tr(L"Opcje uruchamiania") : ui.editing() ? tr(L"Edytuj grę") : tr(L"Dodaj grę"), false);
+                                      ui.launchOptions() || ui.editing() ? tr(L"Opcje uruchamiania") : tr(L"Dodaj grę"), false);
     const float fields_right = p.right - 22 - (poster ? poster_column : 0.0f);
     const std::array<const wchar_t*, custom_game_ui::field_count> labels{trKey(L"Nazwa"), trKey(L"Plik"), trKey(L"Opcje uruchamiania"), trKey(L"Folder roboczy"),
                                                                          L"WINEDLLOVERRIDES", trKey(L"Opcje Protona i Wine (jak w Steamie)"), trKey(L"Platforma"),
@@ -287,17 +301,19 @@ void Renderer::drawDesktopCustomEditor() {
         if (ui.focus == Item::identify) desktopFocusRing(b, 8);
         desktopModalHot({Kind::action, static_cast<int>(Item::identify)}, b);
     }
-    if (ui.launchOptions()) { textLine(ui.title, p.left + 22, y + 6, p.right - p.left - 44, desktop_strong_font_.Get(), palette::text()); y += subtitle; }
+    if (ui.launchOptions()) { textLine(ui.title, p.left + 22, y + 6, fields_right - p.left - 22, desktop_strong_font_.Get(), palette::text()); y += 24; }
+    if (!ui.managed.empty()) { textLine(ui.managed, p.left + 22, y + 6, fields_right - p.left - 22, desktop_small_font_.Get(), palette::muted()); y += 22; }
     if (ui.tabs()) {
-        // "Uruchamianie" / "Skrypty": the shown tab filled, the other one plain.
+        // "Uruchamianie" / "Skrypty" / "Mody": the shown tab filled, the others plain.
         float left = p.left + 22;
-        for (const Item item : {Item::tab_launch, Item::tab_scripts}) {
-            const bool shown = (item == Item::tab_scripts) == ui.scripts();
-            const std::wstring label = item == Item::tab_scripts ? tr(L"Skrypty") : tr(L"Uruchamianie");
+        for (const Item item : {Item::tab_launch, Item::tab_scripts, Item::tab_mods}) {
+            if (item == Item::tab_mods && !ui.mods_offered) continue;
+            const bool shown = item == ui.tabItemOf(ui.tab);
+            const std::wstring label = item == Item::tab_mods ? tr(L"Mody") : item == Item::tab_scripts ? tr(L"Skrypty") : tr(L"Uruchamianie");
             const float w = std::max(130.0f, textAdvance(label, desktop_button_font_.Get()) + 52);
             const Rect r{left, y + 8, left + w, y + 44};
             desktopButton(r, shown ? 2 : 1, hover == SheetHit{Kind::action, static_cast<int>(item)} ? 1.0f : 0.0f, false, true,
-                          item == Item::tab_scripts ? glyph::edit : glyph::play, label);
+                          item == Item::tab_mods ? glyph::settings : item == Item::tab_scripts ? glyph::edit : glyph::play, label);
             if (ui.focus == item) desktopFocusRing(r, 8);
             desktopModalHot({Kind::action, static_cast<int>(item)}, r);
             left = r.right + 10;
@@ -342,20 +358,91 @@ void Renderer::drawDesktopCustomEditor() {
         }
         y += field_step;
     }
-    if (ui.toggles()) {
-        // Each switch with its caption, side by side; a click anywhere on one flips it.
-        const float w = (fields_right - p.left - 22 - 16) / static_cast<float>(ui.toggles());
-        for (int which = 0; which < ui.toggles(); ++which) {
-            const Item item = which ? Item::hdr_toggle : Item::log_toggle;
-            const Rect r{p.left + 22 + static_cast<float>(which) * (w + 16), y + 10, p.left + 22 + static_cast<float>(which) * (w + 16) + w, y + 44};
-            const float hv = hover == SheetHit{Kind::action, static_cast<int>(item)} ? 1.0f : 0.0f;
-            desktopFill(r, 8, gray(1, 0.035f + 0.03f * hv));
-            textLine(which ? tr(L"HDR na czas gry") : tr(L"Zapisuj logi"), r.left + 12, middle(r), r.right - r.left - 70, desktop_font_.Get(), palette::text());
-            desktopSwitch({r.right - 50, middle(r) - 11, r.right - 10, middle(r) + 11}, (which ? ui.hdr : ui.log) ? 1.0f : 0.0f, false, hv);
-            if (ui.focus == item) desktopFocusRing(r, 8);
-            desktopModalHot({Kind::action, static_cast<int>(item)}, r);
+    if (ui.mods()) {
+        // Mody: the program's folder ("Zmień…"; an emulator's is fixed), then a row per mod: its name and
+        // state, the method (‹ › halves step it), install/update, and "Usuń" for Launchme's own.
+        const bool emulator = !ui.mod_target.empty();
+        textLine(emulator ? ui.mod_target : std::wstring(tr(L"Folder programu gry")), p.left + 22, y + 8, fields_right - p.left - 22, desktop_label_font_.Get(), gray(0.62f));
+        const float folder_right = emulator ? fields_right : fields_right - 130;
+        const Rect f{p.left + 22, y + 20, folder_right, y + 56};
+        desktopFill(f, 8, gray(1, 0.035f));
+        textLine(elideStart(ui.mod_folder, f.right - f.left - 24, desktop_font_.Get()), f.left + 12, middle(f), f.right - f.left - 24, desktop_font_.Get(), palette::text());
+        if (!emulator) {
+            const Rect b{folder_right + 10, f.top, fields_right, f.bottom};
+            desktopButton(b, 1, hover == SheetHit{Kind::action, static_cast<int>(Item::mods_folder)} ? 1.0f : 0.0f, false, !ui.mod_busy, glyph::folder_open, tr(L"Zmień…"));
+            if (ui.focus == Item::mods_folder) desktopFocusRing(b, 8);
+            desktopModalHot({Kind::action, static_cast<int>(Item::mods_folder)}, b);
         }
-        y += 52;
+        y += 66;
+        for (int row = 0; row < ui.modCount(); ++row) {
+            const auto& mod = ui.mod_rows[static_cast<size_t>(row)];
+            const bool current = row == ui.mod_row;
+            if (row) { const Rect rule{p.left + 22, y, fields_right, y + 1}; desktopFill(rule, 0, gray(1, 0.06f)); }
+            // The method, "Usuń" for Launchme's own, install at the row's end.
+            const float remove_w = 104, action_w = 140, method_w = 220;
+            const Rect action{fields_right - action_w, y + 10, fields_right, y + 44};
+            const Rect remove{action.left - 10 - remove_w, y + 10, action.left - 10, y + 44};
+            const Rect method{remove.left - 10 - method_w, y + 10, remove.left - 10, y + 44};
+            const float text_w = method.left - 12 - p.left - 22;
+            textLine(mod.name, p.left + 22, y + 18, text_w, desktop_strong_font_.Get(), mod.available || mod.installed ? palette::text() : palette::muted());
+            textLine(mod.status, p.left + 22, y + 37, text_w, desktop_small_font_.Get(), mod.installed ? uiAccent() : palette::muted());
+            if (mod.methods) {
+                const SheetHit hit{Kind::action, static_cast<int>(Item::mod_method), row};
+                picker(method, mod.method, hover == hit ? 1.0f : 0.0f, !ui.mod_busy);
+                if (current && ui.focus == Item::mod_method) desktopFocusRing(method, 8);
+                desktopModalHot(hit, method);
+                if (ui.dropdown.open && ui.dropdown.owner == Item::mod_method && ui.dropdown.index == row) drop_anchor = method;
+            } else if (!mod.method.empty()) {
+                textLine(mod.method, method.left, middle(method), method.right - method.left, desktop_small_font_.Get(), palette::muted(), DWRITE_TEXT_ALIGNMENT_CENTER);
+            }
+            desktopButton(action, 1, hover == SheetHit{Kind::action, static_cast<int>(Item::mod_action), row} ? 1.0f : 0.0f, false,
+                          mod.available && !ui.mod_busy, 0, mod.action);
+            if (current && ui.focus == Item::mod_action) desktopFocusRing(action, 8);
+            desktopModalHot({Kind::action, static_cast<int>(Item::mod_action), row}, action);
+            if (mod.removable) {
+                const auto label = mod.confirm_remove ? std::wstring(tr(L"Potwierdź")) : std::wstring(tr(L"Usuń"));
+                desktopButton(remove, 1, hover == SheetHit{Kind::action, static_cast<int>(Item::mod_remove), row} ? 1.0f : 0.0f, false, !ui.mod_busy, glyph::remove, label);
+                desktopStroke(remove, 8, palette::danger(mod.confirm_remove ? 0.8f : 0.45f), mod.confirm_remove ? 1.5f : 1.0f);
+                if (current && ui.focus == Item::mod_remove) desktopFocusRing(remove, 8);
+                desktopModalHot({Kind::action, static_cast<int>(Item::mod_remove), row}, remove);
+            }
+            y += mod_step;
+        }
+    }
+    if (const int count = ui.optionCount()) {
+        // The options, a row each over the width: a choice's list (a click opens it), a switch (a click
+        // anywhere on the row flips it) and Aurelia's "…" (Zarządzaj · Aurelia).
+        for (int index = 0; index < count; ++index) {
+            const auto& option = ui.options[static_cast<size_t>(index)];
+            const Rect r{p.left + 22, y + 8 + static_cast<float>(index) * option_step, fields_right, y + 8 + static_cast<float>(index) * option_step + 40};
+            const SheetHit hit{Kind::action, static_cast<int>(Item::option), index};
+            const float hv = hover == hit ? 1.0f : 0.0f;
+            const bool focused = ui.focus == Item::option && ui.option == index;
+            desktopFill(r, 8, gray(1, 0.035f + 0.025f * hv));
+            float right = r.right - 6;
+            if (option.choice()) {
+                const Rect value{r.right - 6 - 300, r.top + 4, r.right - 6, r.bottom - 4};
+                picker(value, option.value, hv, true);
+                if (ui.dropdown.open && ui.dropdown.owner == Item::option && ui.dropdown.index == index) drop_anchor = value;
+                right = value.left - 12;
+            } else {
+                if (option.more) {
+                    const SheetHit more_hit{Kind::action, static_cast<int>(Item::option_more), index};
+                    const Rect more{r.right - 6 - 40, r.top + 4, r.right - 6, r.bottom - 4};
+                    desktopModalHot(hit, r);
+                    desktopButton(more, 1, hover == more_hit ? 1.0f : 0.0f, false, true, glyph::more, {});
+                    if (ui.focus == Item::option_more && ui.option == index) desktopFocusRing(more, 8);
+                    desktopModalHot(more_hit, more);
+                    right = more.left - 10;
+                }
+                desktopSwitch({right - 42, middle(r) - 11, right - 2, middle(r) + 11}, option.on ? 1.0f : 0.0f, false, hv);
+                right -= 54;
+            }
+            textLine(option.label, r.left + 12, middle(r), right - r.left - 12, desktop_font_.Get(), palette::text());
+            if (focused) desktopFocusRing(r, 8);
+            if (!option.more) desktopModalHot(hit, r);
+        }
+        y += static_cast<float>(count) * option_step + 8;
     }
     y = std::max(y, p.top + sheet_header + 14 + subtitle + tabs + content); // The shorter tab: its note where the taller one's would be.
     if (note) {
@@ -380,6 +467,26 @@ void Renderer::drawDesktopCustomEditor() {
         const Rect r{p.left + 22, by, p.left + 22 + std::max(110.0f, textAdvance(label, desktop_button_font_.Get()) + 52), by + 36};
         button(Item::remove, r, 1, glyph::remove, label);
         desktopStroke(r, 8, palette::danger(ui.confirm_remove ? 0.8f : 0.45f), ui.confirm_remove ? 1.5f : 1.0f);
+    }
+    if (drop_anchor && !ui.dropdown.items.empty()) {
+        // The open list under its control (above when it would not fit), over the dialog: the chosen one ticked.
+        const float drop_h = 32, w = std::max(drop_anchor->right - drop_anchor->left, 260.0f);
+        const float h = 8 + drop_h * static_cast<float>(ui.dropdown.items.size());
+        float top = drop_anchor->bottom + 4;
+        if (top + h > view.height - 8) top = drop_anchor->top - 4 - h;
+        const Rect box{drop_anchor->right - w, top, drop_anchor->right, top + h};
+        desktopShadow(box, 10, 1.0f);
+        desktopFill(box, 10, dialog_bg);
+        desktopStroke(box, 10, gray(1, 0.12f));
+        desktopModalHot({Kind::dialog}, box); // Eats clicks that fall between rows.
+        for (int i = 0; i < static_cast<int>(ui.dropdown.items.size()); ++i) {
+            const Rect row{box.left + 4, box.top + 4 + drop_h * static_cast<float>(i), box.right - 4, box.top + 4 + drop_h * static_cast<float>(i + 1)};
+            const SheetHit item{Kind::dropdown_item, i};
+            if (hover == item || ui.dropdown.focus == i) desktopFill(row, 7, gray(1, 0.08f));
+            textLine(ui.dropdown.items[static_cast<size_t>(i)], row.left + 12, middle(row), row.right - row.left - 44, desktop_font_.Get(), palette::text());
+            if (i == ui.dropdown.chosen) desktopGlyph(glyph::check, row.right - 18, middle(row), 13, uiAccent());
+            desktopModalHot(item, row);
+        }
     }
     desktop_modal_ = DialogKind::custom_editor;
     target_->SetTransform(saved);

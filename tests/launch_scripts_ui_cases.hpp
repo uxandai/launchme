@@ -57,7 +57,7 @@ int LauncherUiTest::launchScripts(HWND window) {
     app.customEditorKey(VK_UP, false);
     if (editor.focus != Item::tab_launch) return 8702;
     app.customEditorKey(VK_RIGHT, false);
-    if (!editor.scripts() || editor.focus != Item::tab_scripts || editor.shows(ui::arguments_field) || !editor.shows(ui::exited_field) || editor.toggles()) return 8703;
+    if (!editor.scripts() || editor.focus != Item::tab_scripts || editor.shows(ui::arguments_field) || !editor.shows(ui::exited_field) || editor.optionCount()) return 8703;
     const auto scripts_panel = ui::Layout::of(editor, app.renderer_.viewport().width, app.renderer_.viewport().height).panel();
     if (scripts_panel.top != panel.top || scripts_panel.bottom != panel.bottom) return 8704; // The panel keeps its size.
     app.customEditorKey(VK_DOWN, false);

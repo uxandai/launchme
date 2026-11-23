@@ -85,6 +85,9 @@ enum class Id { font, home_layout, ui_accent, accent, uninstalled, emulation, mu
                    low_memory, texture_compression, background_yield,
                    // Biblioteka → Uruchamianie: hidden in the notification area while a game runs (src/app/tray.cpp).
                    hide_while_playing, aurelia, aurelia_open, aurelia_cloud, aurelia_default,
+                   // Biblioteka → Uruchamianie → Mody gier (src/app/game_mods.cpp): the badges, each mod's preferred
+                   // method (Row::key: its slug), the downloaded releases' cache.
+                   mod_badges, mod_method, mod_cache,
                    // Biblioteka → Amazon Games: Nile (the helper), the sign-in address, sync and sign-out.
                    amazon_helper, amazon_callback, amazon_refresh, amazon_logout,
                    // Biblioteka → Xbox: the Xodus-based helper, sync, sign-out and Instalacja przez Launchme.

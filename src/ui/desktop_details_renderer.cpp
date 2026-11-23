@@ -127,6 +127,10 @@ void Renderer::drawDesktopDetails() {
         desktopHot(hit, {x - 4, y - 12, x + w + 4, y + 12});
     }
     y += 26;
+    if (!context_->mod_badges.empty()) { // The game's mods (Opcje uruchamiania → Mody).
+        drawModBadges(context_->mod_badges, left, y + 2, right, desktop_small_font_.Get(), 26);
+        y += 34;
+    }
     // The actions in one row (wrapping when narrow).
     {
         float x = left, row_top = y;

@@ -64,7 +64,9 @@ void Launcher::desktopOpenGameMenu(float x, float y, bool keyboard, bool pane) {
         const wchar_t* submenu_names[] = {trKey(L"Dane i grafika"), trKey(L"Opcje gry"), trKey(L"Więcej")};
         const wchar_t group_icons[] = {glyph::picture, glyph::settings, glyph::more};
         for (int group = 0; group < 3; ++group) {
-            if (desktopGroupItems(game, group).empty()) continue;
+            auto inside = desktopGroupItems(game, group);
+            if (inside.empty()) continue;
+            if (inside.size() == 1) { items.push_back(std::move(inside.front())); continue; } // One entry: no submenu for it.
             MenuItem item{Action::group, tr(submenu_names[group]), {}, group_icons[group]};
             item.submenu = true;
             item.value = group;
@@ -125,8 +127,8 @@ std::vector<MenuItem> Launcher::desktopGroupItems(const Game& game, int group) {
         // The file, options and folder it starts with (Steam: its launch options).
         if (steamAccountChoices(game).size() > 1) items.push_back({Action::steam_account, tr(L"Konto Steam: ") + steamAccountLabel(game), {}, glyph::people});
         if (gameEmulatorEditable(game)) items.push_back({Action::emulator, gameEmulatorLabel(game), {}, glyph::game}); // Emulator per gra: the next choice.
-        if (launchEditable(game)) // A game added by hand: the file, name and options are its own editor.
-            items.push_back({Action::launch_options, game.source == GameSource::custom ? tr(L"Edytuj grę…") : tr(L"Opcje uruchamiania…"), {}, glyph::settings});
+        if (launchEditable(game)) // A game added by hand: the file, name and options too.
+            items.push_back({Action::launch_options, tr(L"Opcje uruchamiania…"), {}, glyph::settings});
         if (compatMenu(game)) items.push_back({Action::compat_options, L"Proton / Wine…", {}, glyph::settings});
     } else {
         const auto line = [&] { if (!items.empty() && !items.back().separator) { MenuItem separator; separator.separator = true; items.push_back(separator); } };

@@ -245,6 +245,7 @@ struct Pane {
     std::wstring playtime, last_played, achievements, rating;
     Hardware hardware;
     std::wstring protondb; // Linux: "ProtonDB: Gold · Steam Deck: Verified"; empty: unknown or not asked.
+    std::vector<std::wstring> mod_badges; // Its mods (Opcje uruchamiania → Mody): a chip each under the rating.
     float achievements_share = -1;
     bool achievements_link = false; // The number opens Szczegóły → Osiągnięcia.
     std::vector<std::pair<std::wstring, std::string>> collections; // Name, sidebar entry id.

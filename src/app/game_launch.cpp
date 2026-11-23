@@ -218,7 +218,7 @@ void Launcher::launchGame(const Game& original, bool via_steam) {
         dismissMenu();
         if (!active.source_id.empty()) openCustomEditor(active.source_id, custom_game_ui::Item::arguments);
         showNotification(NotificationKind::error, std::wstring(tr(L"Brak emulatora: ")) + active.platform,
-                         tr(L"Zainstaluj go w EmuDecku albo wpisz polecenie emulatora w Edytuj grę."));
+                         tr(L"Zainstaluj go w EmuDecku albo wpisz polecenie emulatora w Opcjach uruchamiania."));
         return;
     }
     // A game added by hand without its file ("Wskaż plik"): its editor opens at the file.

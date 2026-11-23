@@ -2678,7 +2678,7 @@ constexpr Entry entries[] = {
     {L"Programy, skróty, obrazy płyt i ROM-y", L"Programas, atalhos, imagens de disco e ROMs"},
     {L"Upuść program (.exe, .lnk, .url, .bat), obraz płyty lub ROM albo folder gry.", L"Solte um programa (.exe, .lnk, .url, .bat), uma imagem de disco ou ROM, ou a pasta de um jogo."},
     {L"Brak emulatora: ", L"Sem emulador: "},
-    {L"Zainstaluj go w EmuDecku albo wpisz polecenie emulatora w Edytuj grę.", L"Instale-o com o EmuDeck ou digite o comando do emulador em Editar jogo."},
+    {L"Zainstaluj go w EmuDecku albo wpisz polecenie emulatora w Opcjach uruchamiania.", L"Instale-o com o EmuDeck ou digite o comando do emulador em Opções de inicialização."},
     {L"Folder ROM-ów, emulatory dla każdego systemu i rząd konsol.", L"A pasta de ROMs, o emulador de cada sistema e a fileira de consoles."},
     {L"Emulatory: ", L"Emuladores: "},
     {L"Szukanie…", L"Pesquisando…"},

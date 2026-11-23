@@ -361,6 +361,54 @@ int LauncherUiTest::emulationSettings(HWND window) {
         app.setGameEmulator(game, std::nullopt); // Automatycznie: the system's again.
         const auto back = std::find_if(app.rom_library_.begin(), app.rom_library_.end(), [&](const Game& g) { return gameKey(g) == key; });
         if (app.library_state_.game_emulators.contains(key) || back == app.rom_library_.end() || back->play_action.target != system_target) return 19975;
+        // Opcje uruchamiania of the same game: "Emulator" first among its options, kept until Zapisz; the line
+        // under the title says what starts it.
+        app.openLaunchEditor(*back);
+        auto& editor = app.custom_editor_;
+        if (!app.customEditorOpen() || editor.target != custom_game_ui::Target::other || editor.options.empty() ||
+            editor.options[0].kind != custom_game_ui::Option::Kind::emulator || editor.focus != custom_game_ui::Item::option ||
+            editor.managed.empty()) return 19976;
+        settle();
+        if (!capture(L"emulation-game-launch-options.png")) return 19977;
+        app.desktop_mode_ = true; editor.desktop = true; // The desktop window's dialog: the same options.
+        const bool desktop_shot = capture(L"emulation-game-launch-options-desktop.png");
+        app.desktop_mode_ = false; editor.desktop = false;
+        if (!desktop_shot) return 19981;
+        app.customEditorKey(VK_LEFT, false); // Automatycznie back to "Inny program…", not picked yet.
+        if (app.library_state_.game_emulators.contains(key) || editor.options[0].value != tr(L"Inny program…")) return 19978;
+        answer = own;
+        app.customEditorKey(VK_RETURN, false); // The list, "Inny program…" in it…
+        if (!editor.dropdown.open || editor.dropdown.chosen != editor.dropdown.focus) return 19982;
+        if (!capture(L"emulation-game-emulator-list.png")) return 19983;
+        app.customEditorKey(VK_RETURN, false); // …picks it: the picker; Zapisz keeps it.
+        if (app.library_state_.game_emulators.contains(key) || editor.options[0].value != own.filename().wstring()) return 19979;
+        app.customEditorSave();
+        if (app.customEditorOpen() || app.library_state_.game_emulators[key].program != own.wstring()) return 19980;
+        app.setGameEmulator(game, std::nullopt);
+        // The desktop window's dialog: a click on the row opens the list, a click on "Inny program…" the picker.
+        {
+            app.desktop_mode_ = true;
+            app.openLaunchEditor(*back);
+            editor.desktop = true;
+            const float scale = app.renderer_.desktopViewport().scale;
+            const auto click = [&](desktop_ui::SheetHit wanted) {
+                app.paint();
+                const auto& spots = app.renderer_.desktopModalHotspots();
+                const auto spot = std::find_if(spots.begin(), spots.end(), [&](const auto& s) { return s.hit == wanted; });
+                if (spot == spots.end()) return false;
+                app.desktopModalClick((spot->rect.left + spot->rect.right) * 0.5f * scale, (spot->rect.top + spot->rect.bottom) * 0.5f * scale, false);
+                return true;
+            };
+            using HitKind = desktop_ui::SheetHit::Kind;
+            if (!click({HitKind::action, static_cast<int>(custom_game_ui::Item::option), 0}) || !editor.dropdown.open || editor.dropdown.items.size() < 2) return 19984;
+            const bool list_shot = capture(L"emulation-game-emulator-list-desktop.png");
+            const int other = static_cast<int>(editor.dropdown.items.size()) - 1; // "Inny program…" comes last.
+            answer = own;
+            if (!list_shot || !click({HitKind::dropdown_item, other}) || editor.dropdown.open || editor.options[0].value != own.filename().wstring()) return 19985;
+            app.closeCustomEditor();
+            app.desktop_mode_ = false;
+            if (app.library_state_.game_emulators.contains(key)) return 19986; // Anuluj: nothing kept.
+        }
     }
     std::filesystem::remove_all(root, error);
     return 0;

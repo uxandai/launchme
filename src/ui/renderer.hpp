@@ -814,6 +814,8 @@ private:
     float paragraph(const std::wstring& value, float x, float top, float width, IDWriteTextFormat* format,
                     D2D1_COLOR_F ink, int max_lines, bool draw = true);
     void drawDetails();
+    // A game's mods as accent badges from x on the centre line cy, until `right`; returns where they end.
+    float drawModBadges(const std::vector<std::wstring>& badges, float x, float cy, float right, IDWriteTextFormat* font, float height);
     void drawLibraryManager();
     void drawIdentify();
     void drawSpinner(float cx, float cy, float radius, D2D1_COLOR_F color); // Ten dots chasing each other; keeps frames coming.

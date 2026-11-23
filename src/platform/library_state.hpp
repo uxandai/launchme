@@ -62,6 +62,9 @@ struct LibraryState {
         bool operator==(const LaunchScripts&) const = default;
     };
     std::map<std::string, LaunchScripts> launch_scripts;
+    // Opcje uruchamiania → Mody: the folder a game's mods go into when it is not its program's own, by
+    // gameKey (src/library/game_mods.hpp). Row: mod-folder "<key>" "<folder>".
+    std::map<std::string, std::wstring> mod_folders;
     // Usuń z ostatnio granych, by gameKey: the game stays out of the recent rows until it is played
     // after this time (Steam's own play dates are never touched). Row: recent-hidden "<key>" <time>.
     std::map<std::string, uint64_t> recent_hidden;

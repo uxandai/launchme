@@ -33,6 +33,8 @@ set(LAUNCHME_APP_SOURCES
     src/app/game_emulator.cpp
     src/app/launch_flags.cpp
     src/app/launch_scripts.cpp
+    src/app/game_mods.cpp
+    src/app/game_mods_panel.cpp
     src/app/game_launch.cpp
     src/app/pointer.cpp
     src/app/friends.cpp
@@ -216,6 +218,8 @@ set(LAUNCHME_APP_SOURCES
     src/app/gog_install.cpp
     src/app/gog_comet.cpp
     src/app/my_games.cpp
+    src/app/custom_editor_keys.cpp
+    src/app/launch_choices.cpp
     src/app/my_games_identify.cpp
     src/app/file_browser.cpp
     src/app/add_game.cpp
@@ -328,6 +332,10 @@ set(LAUNCHME_APP_SOURCES
     src/library/steam_achievements.cpp
     src/library/steam_appinfo.cpp
     src/library/game_index.cpp
+    src/library/game_mods.cpp
+    src/library/game_mods_install.cpp
+    src/library/game_mods_sources.cpp
+    src/library/pe_version.cpp
     src/library/tarot.cpp
     src/library/game_index_sources.cpp
     src/library/game_index_service.cpp

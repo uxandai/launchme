@@ -103,13 +103,17 @@ void Launcher::cycleGameEmulator(const Game& game, int step) {
         return;
     }
     // "Inny program…": the game's own program, picked (cancelled: as it was).
-    const auto apply = [this, game](const std::filesystem::path& picked) {
-        if (picked.empty() || !picked.is_absolute()) { InvalidateRect(hwnd_, nullptr, FALSE); return; }
-        setGameEmulator(game, LibraryState::GameEmulator{{}, picked.wstring()});
-    };
     std::filesystem::path initial;
     if (const auto own = library_state_.game_emulators.find(gameKey(game)); own != library_state_.game_emulators.end()) initial = own->second.program;
-    if (pick_path_) { apply(pick_path_(hwnd_, false, initial)); return; } // Tests: an injected picker answers at once.
+    pickGameEmulator(game, initial, [this, game](const std::filesystem::path& picked) {
+        if (picked.empty() || !picked.is_absolute()) { InvalidateRect(hwnd_, nullptr, FALSE); return; }
+        setGameEmulator(game, LibraryState::GameEmulator{{}, picked.wstring()});
+    });
+}
+
+// The game's own emulator program, picked (Opcje uruchamiania's "Emulator" too); cancelled: `done` never runs.
+void Launcher::pickGameEmulator(const Game& game, const std::filesystem::path& initial, std::function<void(const std::filesystem::path&)> done) {
+    if (pick_path_) { done(pick_path_(hwnd_, false, initial)); return; } // Tests: an injected picker answers at once.
     file_browser::Request request;
     request.title = std::wstring(tr(L"Emulator dla gry")) + L" · " + game.name;
     if (emulation_setup_ && emulation_setup_->environment.windows) {
@@ -121,5 +125,5 @@ void Launcher::cycleGameEmulator(const Game& game, int step) {
     request.native = [this, initial, extensions = request.extensions, label = request.filter_label, title = request.title] {
         return pickPath(hwnd_, false, title, extensions, label, true, initial);
     };
-    openFileBrowser(std::move(request), apply);
+    openFileBrowser(std::move(request), std::move(done));
 }

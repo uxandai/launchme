@@ -954,6 +954,7 @@ void Launcher::desktopView(desktop_ui::View& view) {
     }
     pane.rating = ratingLabel();
     pane.protondb = protonDbLabel(game); // Linux only.
+    pane.mod_badges = modBadges(game);   // Windows: its mods, once its folder was scanned.
     hardwareView(game, pane.hardware);
     for (const auto& c : settings_collections_) {
         if (favoriteCollection(c) || (srmCollectionsHidden() && srmCollection(c))) continue;

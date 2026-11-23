@@ -17,6 +17,7 @@
 #include "../platform/device_service.hpp"
 #include "../platform/library_state.hpp"
 #include "../platform/launch_scripts.hpp"
+#include "game_mods_state.hpp"
 #include "../friends/steam_friends.hpp"
 #include "../library/collections.hpp"
 #include "../library/versions.hpp"
@@ -1380,6 +1381,7 @@ private:
     void applyGameEmulators(std::vector<Game>& games) const;
     void setGameEmulator(const Game& game, std::optional<LibraryState::GameEmulator> choice);
     void cycleGameEmulator(const Game& game, int step = 1);
+    void pickGameEmulator(const Game& game, const std::filesystem::path& initial, std::function<void(const std::filesystem::path&)> done);
     bool isFavorite(const Game& game) const;
     void toggleFavorite(const Game& game);
     int favoriteDetailAction() const;
@@ -1930,7 +1932,31 @@ private:
     // "Opcje uruchamiania…" of a library game (my_games.cpp): user-added, DRM-free and Steam games.
     bool launchEditable(const Game& game) const;
     void openLaunchEditor(const Game& game);
-    void customEditorFlags(custom_game_ui::State& ui, const std::string& key);
+    // Opcje uruchamiania → Uruchamianie's options (launch_choices.cpp): the emulator, the Steam account,
+    // Aurelia, the logs and HDR, kept until Zapisz; the game they belong to and what was chosen.
+    struct LaunchChoices {
+        Game game;
+        std::vector<EmulatorChoice> emulators;
+        int emulator = -1;
+        std::filesystem::path picked; // "Inny program…", once picked.
+        std::vector<uint64_t> accounts;
+        int account = -1;
+        bool aurelia = false, aurelia_shown = false;
+    } launch_choices_;
+    void customEditorFlags(custom_game_ui::State& ui, const Game& game);
+    void launchChoicesShow(custom_game_ui::State& ui) const;
+    void customEditorOption(int index); // Focus on that option.
+    void customEditorOptionStep(int step);
+    void customEditorOptionAccept();
+    // The list a choice or a mod's method opens (custom_game_ui::Dropdown): its items, a step, a pick.
+    void customEditorDropdown(custom_game_ui::Item owner, int index);
+    void customEditorDropdownMove(int step);
+    void customEditorDropdownChoose(int item);
+    void customEditorDropdownClose();
+    void customEditorOptionMore();   // Aurelia's "…": Zarządzaj · Aurelia over the panel.
+    void launchChoicesAureliaClosed(); // Its page closed: the switch shows what it left.
+    unsigned customEditorFlagBits() const;
+    void launchChoicesSave(const std::string& key); // The switches, the scripts, the choices.
     void launchEditorSave();
     std::wstring launchArguments(const Game& game) const; // A Steam game's own launch options; empty: none.
     void closeCustomEditor();
@@ -3402,6 +3428,36 @@ private:
     void customEditorTestScript(int field);             // "Testuj" beside a script's field.
     LibraryState::LaunchScripts customEditorScripts() const;
     bool customEditorScriptsValid();
+    // Opcje uruchamiania → Mody (game_mods.cpp, game_mods_panel.cpp; Windows only): where a game's mods go,
+    // its folder's scan (a worker, once per session and after each change), the badges on its page, the
+    // panel's rows and the one install or removal at a time; Ustawienia → Uruchamianie → Mody gier.
+    std::filesystem::path modsData() const;
+    std::optional<GameModsState::Scanned> modTarget(const Game& game) const;
+    void requestModScan(const Game& game);
+    void forgetModScans(const std::string& key);  // Empty key: every game's.
+    void modsScanArrived(const std::string& key);
+    std::vector<std::wstring> modBadges(const Game& game); // Empty: none, off, or not scanned yet (asks).
+    bool modBadgesShown(const Game& game) const;           // Scanned with a badge, and the badges on.
+    std::vector<settings_ui::Row> gameModsSettingsRows() const;
+    bool gameModsSettingsToggle(const settings_ui::Row& row);
+    bool gameModsSettingsChoose(const settings_ui::Row& row);
+    bool gameModsSettingsActivate(const settings_ui::Row& row);
+    std::string preferredModMethod(game_mods::Mod mod) const;
+    void modsPanelOpen(const Game& game);     // openLaunchEditor: offers the tab when the game has a folder.
+    void modsPanelRefresh(bool scan);         // The rows from the last scan (and a new scan when asked).
+    std::vector<game_mods::Mod> modsPanelMods() const; // The rows' mods, in order.
+    void modsPanelMethod(int step);           // ‹ › on the focused row's method.
+    std::vector<std::wstring> modsPanelMethodLabels(int* chosen) const; // The focused row's methods, for its list.
+    void modsPanelChooseMethod(int index);
+    void modsPanelAction(bool remove);        // Its install/update, or "Usuń" (twice).
+    void modsPanelFolder();                   // "Zmień…": another folder for this game's mods.
+    void customEditorTabStep(int step);       // LB / RB, Left / Right on a tab: the next tab shown.
+    void modsJobDone(uint64_t generation, game_mods::Mod mod, bool remove, game_mods::Outcome outcome);
+    GameModsState mods_;
+    Game mods_game_; // The panel's game (mods_.key).
+    // Tests: the network and the shell of an install (game_mods::defaultServices when empty).
+    std::function<game_mods::Services(std::shared_ptr<std::atomic_bool>)> mod_services_;
+    bool mods_wait_ = false; // Tests: run the install on the UI thread.
     // Tests: runs a script instead of launch_scripts::run (no PowerShell or shell).
     std::function<launch_scripts::Result(std::wstring command, launch_scripts::Context context)> launch_script_run_;
     bool launch_script_wait_ = false;                   // The script before a launch runs: the launch waits.
@@ -3493,6 +3549,7 @@ private:
     BoxGlide psfive_action_glide_; // PSfive: the focus frame between "Graj" and "…".
     BoxGlide details_glide_, artwork_glide_; // Szczegóły: the focus between Back, the buttons and the cards; Zmień grafikę: its rail.
     BoxGlide library_bar_glide_, manager_glide_; // Library top bar; the Kolekcje / Wersje dialog.
+    BoxGlide editor_glide_; // Dodaj grę / Opcje uruchamiania in Tryb TV.
     BoxGlide downloads_glide_; // Pobierania: Back or a row.
     struct PsfiveMenuMotion { Spring row, scroll; bool valid = false; } psfive_menu_motion_;
     Spring psfive_top_opacity_{0.66f};

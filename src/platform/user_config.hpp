@@ -270,6 +270,11 @@ struct AppSettings {
     // While a game started here runs, the window is hidden (no taskbar button, no Alt+Tab) and an
     // icon in the notification area stands in for it; it comes back when the game closes.
     bool hide_while_playing = false;
+    // Opcje uruchamiania → Mody (src/library/game_mods.hpp): each mod's preferred method by its slug
+    // ("reshade" -> "dxgi.dll", "anr" -> "full"); missing: the mod's first. mod_badges: the mods a game
+    // has as badges on its page (Tryb TV and the desktop window).
+    std::map<std::string, std::string> mod_methods;
+    bool mod_badges = true;
     // A Steam game installed by another account remembered on this PC: Steam restarts signed in to
     // that account, then the game starts (src/library/steam_accounts.hpp).
     bool steam_account_switch = true;

@@ -289,6 +289,41 @@ int LauncherUiTest::customGames(HWND window) {
         Game steam_game = steam; steam_game.kind = GameKind::steam; steam_game.installed = true;
         Game gog = steam_game; gog.source = GameSource::gog; gog.kind = GameKind::store; gog.source_id = "1";
         if (!app.launchEditable(steam_game) || !app.launchEditable(gog)) return 650;
+        {
+            // Two remembered accounts (and Aurelia): "Konto Steam" among the options, a list to pick from
+            // (kept until Zapisz); Aurelia's row has its "…".
+            const auto accounts = app.steam_accounts_;
+            app.steam_accounts_ = [] {
+                using steam_accounts::Account;
+                return std::vector<Account>{{steam_accounts::steam_id_offset + 2, "second", L"Second", true, false},
+                                            {steam_accounts::steam_id_offset + 3, "third", L"Third", true, false}};
+            };
+            app.steam_accounts_cache_at_ = 0;
+            const bool aurelia = app.aurelia_active_;
+            app.aurelia_active_ = true;
+            app.openLaunchEditor(steam_game);
+            const auto find = [&](ui::Option::Kind kind) {
+                return static_cast<int>(std::find_if(editor.options.begin(), editor.options.end(), [&](const auto& o) { return o.kind == kind; }) - editor.options.begin());
+            };
+            const int account = find(ui::Option::Kind::steam_account), managed = find(ui::Option::Kind::aurelia);
+            if (account >= static_cast<int>(editor.options.size()) || managed >= static_cast<int>(editor.options.size()) ||
+                !editor.options[static_cast<size_t>(managed)].more) return 672;
+            app.customEditorOption(account);
+            app.customEditorKey(VK_RETURN, false);
+            if (!editor.dropdown.open || editor.dropdown.items.size() != 3 || editor.dropdown.chosen != 0 || editor.dropdown.focus != 0) return 673;
+            if (!capture(L"launch-options-steam-account.png")) return 674;
+            app.customEditorKey(VK_DOWN, false);
+            app.customEditorKey(VK_RETURN, false);
+            if (editor.dropdown.open || editor.options[static_cast<size_t>(account)].value != L"Second" ||
+                app.settings_.steam_launch_accounts.contains(std::to_string(steam_game.app_id))) return 675;
+            app.customEditorOption(managed);
+            app.customEditorKey(VK_RIGHT, false); // Right from Aurelia's switch: its "…".
+            if (editor.focus != Item::option_more || editor.option != managed) return 676;
+            if (!capture(L"launch-options-steam-aurelia.png")) return 677;
+            app.closeCustomEditor(); // Anuluj: nothing kept.
+            app.aurelia_active_ = aurelia;
+            app.steam_accounts_ = accounts; app.steam_accounts_cache_at_ = 0;
+        }
         app.openLaunchEditor(steam_game);
         if (!app.customEditorOpen() || editor.target != ui::Target::steam || editor.focus != Item::arguments || editor.editing() ||
             editor.shows(ui::file_field) || editor.shows(ui::name_field) || !editor.shows(ui::arguments_field)) return 651;
@@ -299,7 +334,9 @@ int LauncherUiTest::customGames(HWND window) {
         app.customEditorInsert(L"-dx11 -skipintro");
         if (!capture(L"launch-options-steam.png")) return 653;
         app.customEditorKey(VK_DOWN, false);
-        if (editor.focus != Item::log_toggle) return 654; // The switches under the field…
+        if (editor.focus != Item::option || editor.option != 0 || editor.managed.find(L"steam.exe") == std::wstring::npos) return 654; // The options under the field…
+        for (int option = 1; option < editor.optionCount(); ++option) app.customEditorKey(VK_DOWN, false); // A row each…
+        if (editor.focus != Item::option || editor.option != editor.optionCount() - 1) return 678;
         app.customEditorKey(VK_DOWN, false);
         if (editor.focus != Item::save) return 654; // …then the buttons.
         app.customEditorKey(VK_RETURN, false);
@@ -349,13 +386,13 @@ int LauncherUiTest::customGames(HWND window) {
     {
         Game gog; gog.source = GameSource::gog; gog.kind = GameKind::store; gog.source_id = "77"; gog.name = L"Wiedźmin: Dziki Gon"; gog.installed = true;
         app.openLaunchEditor(gog);
-        if (!app.customEditorOpen() || editor.target != ui::Target::other || editor.focus != Item::log_toggle || editor.toggles() != 2 ||
-            editor.shows(ui::arguments_field)) return 665;
+        if (!app.customEditorOpen() || editor.target != ui::Target::other || editor.focus != Item::option || editor.optionCount() != 2 ||
+            editor.option != 0 || editor.shows(ui::arguments_field) || editor.managed.empty()) return 665;
         app.customEditorAccept(); // Zapisuj logi on.
-        app.customEditorKey(VK_RIGHT, false);
-        if (editor.focus != Item::hdr_toggle) return 666;
+        app.customEditorKey(VK_DOWN, false); // Each option a row of its own.
+        if (editor.focus != Item::option || editor.option != 1) return 666;
         app.customEditorAccept(); // HDR on.
-        if (!editor.log || !editor.hdr) return 666;
+        if (!editor.switchOn(ui::Option::Kind::log) || !editor.switchOn(ui::Option::Kind::hdr)) return 666;
         if (!capture(L"launch-options-switches.png")) return 667;
         app.customEditorSave();
         if (app.customEditorOpen() || app.launchFlags(gog) != (launch_flag::log | launch_flag::hdr)) return 668;
@@ -375,7 +412,7 @@ int LauncherUiTest::customGames(HWND window) {
             text.find("HDR: switched back off") == std::string::npos) return 670;
         // Both switched off again: nothing of the game stays in the library state.
         app.openLaunchEditor(gog);
-        app.customEditorAccept(); app.customEditorKey(VK_RIGHT, false); app.customEditorAccept();
+        app.customEditorAccept(); app.customEditorKey(VK_DOWN, false); app.customEditorAccept();
         app.customEditorSave();
         if (app.library_state_.launch_flags.contains(gameKey(gog))) return 671;
         app.hdr_ = {};

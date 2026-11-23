@@ -32,6 +32,7 @@ struct Actions {
     int achievements = -2, rating = -2, plugin = -2;
     int description = -2;   // The Opis card (description_action): Enter shows the whole description.
     bool playtime = false;  // A Czas gry card (play time, last played, the plugin's comparison) even without the plugin.
+    bool badges = false;    // The game's mods: a line of badges under the facts (the facts and logo move up).
     // The rating pill ends the line of facts, after text only the renderer measures: its
     // rectangle as last drawn (Renderer::ratingLink); empty before the first frame.
     settings_ui::Rect rating_rect{};
@@ -113,7 +114,8 @@ struct Layout {
         return top;
     }
     // The line of facts (platform, year, genre, playtime, then the rating) on its centre line.
-    float factsCenter(const Actions& a) const { return buttonsTop(a) - 44; }
+    float factsCenter(const Actions& a) const { return buttonsTop(a) - 44 - (a.badges ? 46.0f : 0.0f); }
+    float badgesCenter(const Actions& a) const { return buttonsTop(a) - 44; }
     settings_ui::Rect rating(const Actions& a) const {
         if (a.rating_rect.right > a.rating_rect.left) return a.rating_rect;
         const float cy = factsCenter(a);

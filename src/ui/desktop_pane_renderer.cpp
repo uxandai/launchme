@@ -220,6 +220,16 @@ void Renderer::drawDesktopPane(const Layout& layout, const View& view) {
         desktop_chip_add_ = chip;
         y += chip_h + 22;
     }
+    if (!pane.mod_badges.empty()) { // The game's mods (Opcje uruchamiania → Mody).
+        float bx = left;
+        for (const auto& badge : pane.mod_badges) { // A line each when narrow.
+            const float w = std::ceil(textAdvance(badge, desktop_small_font_.Get())) + 24;
+            if (bx + w > left + width && bx > left) { bx = left; y += 30; }
+            drawModBadges({badge}, bx, y + 12, left + width, desktop_small_font_.Get(), 24);
+            bx += w + 10;
+        }
+        y += 34;
+    }
     // The rating link, the description and the facts.
     if (!pane.rating.empty()) {
         const auto label = pane.rating + L"  \u2197";

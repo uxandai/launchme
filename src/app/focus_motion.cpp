@@ -204,6 +204,13 @@ void Launcher::animateFocus(float dt, float target_x, float target_y, float targ
         if (frame) glideBox(manager_glide_, true, static_cast<int>(ui.page), frame->left, frame->top, frame->right, frame->bottom);
         else manager_glide_.valid = false;
     } else manager_glide_.valid = false;
+    // Dodaj grę / Opcje uruchamiania (Tryb TV): the tabs, the fields and their buttons, the options, a mod's
+    // controls and the bottom buttons; a tab of its own keeps the frame where it was.
+    if (customEditorOpen() && !desktop_mode_) { // The desktop window's dialog has its own focus ring.
+        const auto layout = custom_game_ui::Layout::of(custom_editor_, view.width, view.height);
+        if (const auto r = layout.focusRect(custom_editor_)) glideBox(editor_glide_, true, 0, r->left, r->top, r->right, r->bottom);
+        else editor_glide_.valid = false;
+    } else editor_glide_.valid = false;
     // Pobierania: Back or a row.
     if (downloadsOpen()) {
         const downloads_ui::Layout layout{view.width, view.height};
@@ -342,6 +349,7 @@ void Launcher::focusContext(ViewContext& context) const {
     if (library_bar_glide_.valid && libraryControls()) context.library_bar_glide = box(library_bar_glide_.box);
     if (downloads_glide_.valid && downloadsOpen()) context.downloads_glide = box(downloads_glide_.box);
     if (manager_glide_.valid && libraryDialogOpen()) context.manager_glide = box(manager_glide_.box);
+    if (editor_glide_.valid && customEditorOpen()) context.editor_glide = box(editor_glide_.box);
     if (artwork_glide_.valid && artworkOpen()) context.artwork_glide = box(artwork_glide_.box);
     if (devicesOpen() && device_glide_.valid && device_glide_.key == static_cast<int>(device_state_.panel)) context.device_glide = box(device_glide_.box);
     if (drawer_glide_.valid && drawer_glide_.key == (friends_list_ ? 1 : 0)) context.drawer_glide = box(drawer_glide_.box);

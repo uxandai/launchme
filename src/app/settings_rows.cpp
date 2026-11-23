@@ -590,6 +590,10 @@ void Launcher::buildSettingsRows() {
             add({Id::hide_while_playing, Control::toggle, tr(L"Chowaj do zasobnika podczas gry"),
                 tr(L"Gdy gra działa, launcher znika z paska zadań i Alt+Tab, a jego ikona czeka w zasobniku. Wraca po zamknięciu gry."),
                 {}, settings_.hide_while_playing});
+            // Opcje uruchamiania → Mody (game_mods.cpp): the badges and each mod's preferred method.
+            auto mods = gameModsSettingsRows();
+            if (!mods.empty()) section(tr(L"Mody gier"));
+            for (auto& row : mods) add(std::move(row));
             break;
         }
         if (settings_state_.at(Page::save_games)) {

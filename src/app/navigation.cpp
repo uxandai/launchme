@@ -234,7 +234,7 @@ void Launcher::back(bool escape) {
     case Modal::companion_picker: companionPicker(false); return;
     case Modal::theme_studio: themeStudioKey(VK_ESCAPE, false); return;
     case Modal::file_browser: closeFileBrowser(); return; // Over every panel that opens it.
-    case Modal::custom_editor: closeCustomEditor(); return;
+    case Modal::custom_editor: if (custom_editor_.dropdown.open) customEditorDropdownClose(); else closeCustomEditor(); return;
     case Modal::metadata: desktopMetaClose(); return;
     case Modal::identify: closeIdentify(); return;
     case Modal::gog_install: gogInstallKey(VK_ESCAPE, false); return;

@@ -139,6 +139,12 @@ bool parseRow(const std::string& line, LibraryState& result) {
             if ((!before.empty() && scripts.before.empty()) || (!started.empty() && scripts.started.empty()) ||
                 (!exited.empty() && scripts.exited.empty()) || scripts.empty()) return {};
             result.launch_scripts[std::move(key)] = std::move(scripts);
+        } else if (kind == "mod-folder") {
+            std::string key, folder;
+            if (!field(row, key) || !field(row, folder) || key.empty() || folder.empty()) return {};
+            auto wide = text_encoding::wide(folder);
+            if (wide.empty()) return {};
+            result.mod_folders[std::move(key)] = std::move(wide);
         } else if (kind == "recent-hidden") {
             std::string key; uint64_t time = 0;
             if (!(field(row, key) && row >> time && !key.empty())) return {};
@@ -274,6 +280,12 @@ bool saveLibraryState(const LibraryState& state, const std::filesystem::path& fi
             (!scripts.before.empty() && before.empty()) || (!scripts.started.empty() && started.empty()) || (!scripts.exited.empty() && exited.empty())) return false;
         output << "launch-scripts " << std::quoted(encoded(key)) << ' ' << std::quoted(encoded(before)) << ' ' << std::quoted(encoded(started)) << ' '
                << std::quoted(encoded(exited)) << '\n';
+        if (!bounded()) return false;
+    }
+    for (const auto& [key, folder] : state.mod_folders) {
+        const auto text = text_encoding::utf8(folder);
+        if (key.empty() || !validField(key) || text.empty() || !validField(text)) return false;
+        output << "mod-folder " << std::quoted(encoded(key)) << ' ' << std::quoted(encoded(text)) << '\n';
         if (!bounded()) return false;
     }
     for (const auto& [key, time] : state.recent_hidden) {

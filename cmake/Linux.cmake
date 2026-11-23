@@ -58,6 +58,9 @@ set(LAUNCHME_CORE_SOURCES
     src/library/emulators.cpp
     src/library/esde_gamelist.cpp
     src/library/game_index.cpp
+    src/library/game_mods.cpp
+    src/library/game_mods_install.cpp
+    src/library/game_mods_sources.cpp
     src/library/game_index_service.cpp
     src/library/game_index_sources.cpp
     src/library/game_ratings.cpp
@@ -344,6 +347,7 @@ if(BUILD_TESTING)
         DEFINES LAUNCHME_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     launchme_executable(failure_cache_tests TEST persistent_artwork_failure_cache SOURCES tests/failure_cache_tests.cpp)
     launchme_executable(launch_scripts_tests TEST launch_scripts_before_after_game SOURCES tests/launch_scripts_tests.cpp)
+    launchme_executable(game_mods_tests TEST game_mods_install_and_detection SOURCES tests/game_mods_tests.cpp)
     launchme_executable(protondb_tests TEST protondb_and_steam_deck_ratings SOURCES tests/protondb_tests.cpp)
     launchme_executable(system_requirements_tests TEST system_requirements_and_hardware_ratings SOURCES tests/system_requirements_tests.cpp)
     launchme_executable(metadata_sources_tests TEST metadata_sources SOURCES tests/metadata_sources_tests.cpp)

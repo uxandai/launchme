@@ -32,6 +32,8 @@ private:
 
 struct Entry { std::string name; uint64_t size = 0; bool folder = false; };
 
+// Reads a ZIP file, also one appended to a program (a setup's self-extracting archive, its offsets counted
+// from the archive's own start or from the file's).
 class Reader {
 public:
     Reader();

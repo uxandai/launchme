@@ -9,6 +9,7 @@ using namespace settings_ui;
 
 // A switch of these settings; false: not one of them.
 bool Launcher::settingsExtraToggle(const Row& row) {
+    if (gameModsSettingsToggle(row)) return true; // Uruchamianie → Mody gier (game_mods.cpp).
     if (studioSettingsToggle(row)) return true; // Wydawcy, Developerzy, the Steam rows, the tab icons (studio_libraries.cpp).
     if (row.id == Id::artwork_source) {
         if (row.key.empty()) return true;
@@ -94,6 +95,7 @@ bool Launcher::settingsExtraToggle(const Row& row) {
 // A choice picked from these rows' lists; false: not one of them.
 bool Launcher::settingsExtraChoose(const Row& row) {
     if (emulationSettingsChoose(row)) return true; // Gry emulowane (emulation_library.cpp).
+    if (gameModsSettingsChoose(row)) return true;  // Uruchamianie → Mody gier (game_mods.cpp).
     if (row.id == Id::boot_video_fill) {
         settings_.boot_video_fill = settings_state_.choice != 0;
         settings_state_.editing = false;
@@ -139,6 +141,7 @@ bool Launcher::settingsExtraChoose(const Row& row) {
 // The action rows: the wallpaper picker and "Bez tapety"; false: not one of them.
 bool Launcher::settingsExtraActivate(const Row& row) {
     if (emulationSettingsActivate(row)) return true; // Folder ROM-ów (emulation_library.cpp).
+    if (gameModsSettingsActivate(row)) return true;  // Uruchamianie → Mody gier: Pobrane mody (game_mods.cpp).
     // Biblioteka → Co pokazywać → Wykluczone gry (collections.cpp): back to the library, one or all.
     if (row.id == Id::excluded_games) { openSettingsPage(Page::excluded_games); return true; }
     if (row.id == Id::excluded_game || row.id == Id::excluded_restore_all) {

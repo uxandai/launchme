@@ -88,6 +88,7 @@ void Renderer::drawDetails() {
         actions.shots = media->shots; actions.similar = media->similar_names.size(); actions.shots_loading = media->loading;
         actions.shots_scroll = media->shots_scroll; actions.similar_scroll = media->similar_scroll;
     }
+    actions.badges = !context_->mod_badges.empty();
     // One line of facts: the platform's logo, the year, the genres, the playtime, then the rating
     // as a pill that opens its source (its rectangle goes to the hit tests: ratingLink).
     const float facts_y = layout.factsCenter(actions);
@@ -134,6 +135,7 @@ void Renderer::drawDetails() {
     }
 
     if (facts_width > 0) textLine(facts, facts_x, facts_y, facts_width + 4, menu_font_.Get(), gray(0.86f));
+    if (actions.badges) drawModBadges(context_->mod_badges, layout.left(), layout.badgesCenter(actions), layout.right(), settings_body_font_.Get(), 34);
     // The focused ✕ or cloud says what it is (Tryb TV has no tooltips), above the cards.
     if (focus && focus->kind == details_layout::Kind::close)
         textLine(tr(L"Zamknij grę"), layout.left(), layout.cardsTop() - 19, layout.right() - layout.left(), settings_body_font_.Get(), gray(0.86f));
@@ -362,4 +364,20 @@ void Renderer::drawPlaytimeBody(settings_ui::Rect r, const std::wstring& playtim
             }
         }
     } else if (!comparison->status.empty()) textLine(comparison->status, r.left + 24, r.bottom - 40, inner, settings_body_font_.Get(), palette::muted(alpha));
+}
+
+float Renderer::drawModBadges(const std::vector<std::wstring>& badges, float x, float cy, float right, IDWriteTextFormat* font, float height) {
+    const float radius = height * 0.5f;
+    for (const auto& label : badges) {
+        const float w = std::ceil(textAdvance(label, font)) + height;
+        if (x + w > right) break;
+        const auto r = D2D1::RoundedRect(D2D1::RectF(x, cy - radius, x + w, cy + radius), radius, radius);
+        brush(uiAccent(0.20f));
+        target_->FillRoundedRectangle(r, solid_.Get());
+        brush(uiAccent(0.65f));
+        target_->DrawRoundedRectangle(r, solid_.Get(), 1.0f);
+        textLine(label, x + radius, cy, w - height + 2, font, D2D1::ColorF(0.96f, 0.96f, 0.96f, 1.0f));
+        x += w + 10;
+    }
+    return x;
 }

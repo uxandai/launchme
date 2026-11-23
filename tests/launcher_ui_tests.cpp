@@ -137,6 +137,7 @@ public:
     static int emulationSettings(HWND window);
     static int manualGames(HWND window); // manual_games_ui_cases.hpp
     static int launchScripts(HWND window); // launch_scripts_ui_cases.hpp
+    static int gameMods(HWND window);      // game_mods_ui_cases.hpp
     static int metadataFind(HWND window); // metadata_find_ui_cases.hpp
     static int ux076(HWND window); // ux_076_ui_cases.hpp
     static int fileBrowserAndColors(HWND window);
@@ -2426,6 +2427,7 @@ int LauncherUiTest::language(HWND window) {
 #include "uninstall_ui_cases.hpp"
 #include "manual_games_ui_cases.hpp"
 #include "launch_scripts_ui_cases.hpp"
+#include "game_mods_ui_cases.hpp"
 #include "metadata_find_ui_cases.hpp"
 #include "ux_076_ui_cases.hpp"
 #include "hltb_ui_cases.hpp"
@@ -2731,6 +2733,15 @@ int main(int argc, char** argv) {
         if (window) DestroyWindow(window);
         CoUninitialize();
         if (code) std::cerr << "Organization regression: " << code << '\n';
+        return code;
+    }
+    if (argc == 2 && std::string_view(argv[1]) == "--game-mods") {
+        std::filesystem::create_directories(root);
+        const auto code = window ? LauncherUiTest::gameMods(window) : 99;
+        if (window) DestroyWindow(window);
+        CoUninitialize();
+        if (code) std::cerr << "Game mods regression: " << code << '\n';
+        else std::cout << "Game mods: tab, install, badges, remove, folder, settings passed\n";
         return code;
     }
     if (argc == 2 && std::string_view(argv[1]) == "--launch-scripts") {

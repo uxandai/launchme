@@ -66,6 +66,11 @@ bool Launcher::desktopModalClick(float mouse_x, float mouse_y, bool double_click
         using custom_game_ui::Item;
         auto& ui = custom_editor_;
         if (hit.kind == K::close) { closeCustomEditor(); return true; }
+        if (ui.dropdown.open) { // An open list: a row picks, anywhere else closes it.
+            if (hit.kind == K::dropdown_item) customEditorDropdownChoose(hit.index);
+            else if (hit.kind != K::dialog) customEditorDropdownClose();
+            return true;
+        }
         if (hit.kind == K::field && hit.index >= 0 && hit.index < custom_game_ui::field_count) {
             const Item item = custom_game_ui::fieldItem(hit.index);
             if (item == Item::platform) { // Picked, not typed: a click walks the consoles.
@@ -86,8 +91,24 @@ bool Launcher::desktopModalClick(float mouse_x, float mouse_y, bool double_click
             customEditorAccept();
             return true;
         }
+        if (hit.kind == K::action && static_cast<Item>(hit.index) == Item::option) { // A switch flips, a choice opens its list.
+            customEditorOption(hit.sub);
+            customEditorOptionAccept();
+            return true;
+        }
+        if (hit.kind == K::action && static_cast<Item>(hit.index) == Item::option_more) { // Aurelia's "…".
+            customEditorOption(hit.sub);
+            customEditorFocus(Item::option_more);
+            customEditorOptionMore();
+            return true;
+        }
         if (hit.kind == K::action) {
-            ui.focus = static_cast<Item>(hit.index);
+            const auto item = static_cast<Item>(hit.index);
+            if (custom_game_ui::modItem(item) && hit.sub >= 0 && hit.sub < ui.modCount()) {
+                if (hit.sub != ui.mod_row) mods_.remove_row = mods_.anticheat_row = -1;
+                ui.mod_row = hit.sub;
+            }
+            ui.focus = item;
             if (ui.focus != Item::remove) ui.confirm_remove = false;
             customEditorAccept();
         }

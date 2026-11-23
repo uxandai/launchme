@@ -285,6 +285,7 @@ void Launcher::paint(bool overlay) {
         }
     }
     if (screen_ == ScreenMode::details && !cards_.empty()) {
+        context.mod_badges = modBadges(cards_[0].game); // Asks for its folder's scan the first time.
         if (cards_[0].game.last_played) context.detail_last_played = desktopPlayedWhen(cards_[0].game.last_played);
         context.detail_text_view = details_text_view_;
     }
@@ -341,8 +342,6 @@ void Launcher::paint(bool overlay) {
     context.menu_hide = menu_rows.hide;
     context.menu_uninstall = menu_rows.uninstall;
     context.menu_remove = menu_rows.remove;
-    // A game added by hand: its launch options are the game's own editor.
-    context.menu_edit_game = selected_ < cards_.size() && cards_[selected_].game.source == GameSource::custom;
     context.menu_launch = menu_rows.launch;
     context.menu_compat = menu_rows.compat;
     context.menu_shortcuts = menu_rows.shortcuts;
@@ -400,7 +399,7 @@ void Launcher::paint(bool overlay) {
     }
     if (exit_prompt_ && prompt_kind_ == PromptKind::remove) {
         context.prompt_question = std::wstring(tr(L"Usunąć z biblioteki?")) + L" " + remove_game_.name;
-        context.prompt_labels = {std::wstring(tr(L"Usuń z biblioteki")), std::wstring(tr(L"Edytuj grę…")), std::wstring(tr(L"Anuluj"))};
+        context.prompt_labels = {std::wstring(tr(L"Usuń z biblioteki")), std::wstring(tr(L"Opcje uruchamiania…")), std::wstring(tr(L"Anuluj"))};
         context.prompt_body = tr(L"Zniknie tylko wpis w launcherze; plik gry na dysku zostaje.");
         context.prompt_danger = true;
     }
@@ -735,6 +734,11 @@ void Launcher::paint(bool overlay) {
             fact(L"Gracze", info.players);
             if (info.playtime_minutes && *info.playtime_minutes) fact(L"Czas gry", formatPlaytime(*info.playtime_minutes));
             fact(L"Ocena", info.score);
+            {
+                std::wstring mods; // Opcje uruchamiania: the mods in its folder, HDR and logs.
+                for (const auto& badge : modBadges(game)) mods += (mods.empty() ? L"" : L" · ") + badge;
+                fact(L"Uruchamianie", mods);
+            }
             for (const auto& similar : psfive_similar_games_) details_sheet.similar_names.push_back(similar.name);
             context.psfive_details = std::move(details_sheet);
             if (psfiveDetailsShown()) context.psfive_action = -1; // The buttons give their focus to the sheet.

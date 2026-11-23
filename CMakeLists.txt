@@ -399,6 +399,7 @@ if(BUILD_TESTING)
         SOURCES tests/system_requirements_tests.cpp src/library/system_requirements.cpp src/library/hardware_rating.cpp src/net/json.cpp)
     launchme_executable(launch_scripts_tests TEST launch_scripts_before_after_game
         SOURCES tests/launch_scripts_tests.cpp src/platform/launch_scripts.cpp)
+    launchme_executable(game_mods_tests TEST game_mods_install_and_detection SOURCES tests/game_mods_tests.cpp)
     launchme_executable(library_state_tests TEST library_view_state_and_sorting
         SOURCES tests/library_state_tests.cpp src/platform/library_state.cpp src/library/view_options.cpp)
     launchme_executable(device_tests TEST device_input_and_audio_transactions
@@ -463,6 +464,7 @@ if(BUILD_TESTING)
 add_test(NAME uninstall_from_game_menus COMMAND launcher_ui_tests --uninstall)
 add_test(NAME games_added_by_hand_without_file COMMAND launcher_ui_tests --manual-games)
 add_test(NAME launch_scripts_tabs_and_lifecycle COMMAND launcher_ui_tests --launch-scripts)
+add_test(NAME game_mods_tab_badges_and_installs COMMAND launcher_ui_tests --game-mods)
 add_test(NAME metadata_find_in_edit_metadata COMMAND launcher_ui_tests --metadata-find)
 add_test(NAME desktop_076 COMMAND launcher_ui_tests --ux-076)
 add_test(NAME low_memory_mode COMMAND launcher_ui_tests --low-memory)

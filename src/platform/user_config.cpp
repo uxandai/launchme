@@ -139,6 +139,7 @@ constexpr FlagSetting flag_settings[] = {
     {"show_emulation", &AppSettings::show_emulation}, {"home_rows_migrated", &AppSettings::home_rows_migrated},
     {"tarot", &AppSettings::tarot}, {"store_hub", &AppSettings::store_hub}, {"compat_auto_update", &AppSettings::compat_auto_update}, {"show_launchers", &AppSettings::show_launchers},
     {"hide_while_playing", &AppSettings::hide_while_playing},
+    {"mod_badges", &AppSettings::mod_badges},
     {"shelves_hero_facts", &AppSettings::shelves_hero_facts},
     {"wallpaper_snitch", &AppSettings::wallpaper_snitch},
     {"wallpaper_menus", &AppSettings::wallpaper_menus},
@@ -681,6 +682,11 @@ AppSettings parseAppSettings(std::string_view text) {
             if (!value.empty() && value.size() <= 64 && std::all_of(value.begin(), value.end(), [](char ch) {
                     return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9'); }))
                 settings.companion_voice_ids[std::string(key.substr(19))] = std::string(value);
+        }
+        else if (key.starts_with("mod_method.")) { // A mod's slug and a method's ID: file names and words.
+            const auto valid = [](std::string_view text) { return !text.empty() && text.size() <= 32 && std::all_of(text.begin(), text.end(), [](char ch) {
+                return (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '.' || ch == '_'; }); };
+            if (valid(key.substr(11)) && valid(value)) settings.mod_methods[std::string(key.substr(11))] = std::string(value);
         }
         else if (key == "companion_city" || (key.starts_with("companion_city_") && companionKey(key.substr(15)))) {
             const bool valid = value.size() <= 32 && std::all_of(value.begin(), value.end(), [](char ch) { return (ch >= 'a' && ch <= 'z') || ch == '-'; });

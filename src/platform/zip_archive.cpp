@@ -14,12 +14,41 @@ size_t writeStream(void* opaque, mz_uint64 offset, const void* data, size_t size
     stream.write(static_cast<const char*>(data), static_cast<std::streamsize>(size));
     return stream ? size : 0;
 }
+// The file read by miniz: `base` bytes in when the archive follows a program (a setup's stub).
+struct Source {
+    std::ifstream stream;
+    uint64_t base = 0;
+};
 size_t readStream(void* opaque, mz_uint64 offset, void* data, size_t size) {
-    auto& stream = *static_cast<std::ifstream*>(opaque);
-    stream.clear();
-    stream.seekg(static_cast<std::streamoff>(offset));
-    stream.read(static_cast<char*>(data), static_cast<std::streamsize>(size));
-    return static_cast<size_t>(stream.gcount());
+    auto& source = *static_cast<Source*>(opaque);
+    source.stream.clear();
+    source.stream.seekg(static_cast<std::streamoff>(source.base + offset));
+    source.stream.read(static_cast<char*>(data), static_cast<std::streamsize>(size));
+    return static_cast<size_t>(source.stream.gcount());
+}
+// An archive appended to a program whose offsets count from the archive's own start (ReShade's setup):
+// how far in it starts, from its end record (the central directory ends where that record begins).
+// 0: none, or offsets that already count from the file's start.
+uint64_t appendedStart(Source& source, uint64_t size) {
+    constexpr uint64_t record = 22, tail_limit = record + 0xFFFF;
+    const uint64_t tail = std::min(size, tail_limit);
+    std::string bytes(static_cast<size_t>(tail), '\0');
+    source.stream.clear();
+    source.stream.seekg(static_cast<std::streamoff>(size - tail));
+    if (!source.stream.read(bytes.data(), static_cast<std::streamsize>(tail))) return 0;
+    const auto u32 = [&](size_t at) {
+        return static_cast<uint32_t>(static_cast<unsigned char>(bytes[at])) | static_cast<uint32_t>(static_cast<unsigned char>(bytes[at + 1])) << 8 |
+               static_cast<uint32_t>(static_cast<unsigned char>(bytes[at + 2])) << 16 | static_cast<uint32_t>(static_cast<unsigned char>(bytes[at + 3])) << 24;
+    };
+    for (size_t at = bytes.size() >= record ? bytes.size() - record + 1 : 0; at-- > 0;) {
+        if (u32(at) != 0x06054b50) continue;
+        const uint64_t directory_size = u32(at + 12), directory_offset = u32(at + 16);
+        if (directory_offset == 0xFFFFFFFF) return 0; // Zip64: not a setup's archive.
+        const uint64_t end = size - tail + at;
+        if (end < directory_size + directory_offset) return 0;
+        return end - directory_size - directory_offset;
+    }
+    return 0;
 }
 }
 
@@ -94,7 +123,7 @@ uint64_t Writer::written() const { return state_->written; }
 
 struct Reader::State {
     mutable mz_zip_archive zip{};
-    mutable std::ifstream stream;
+    mutable Source source;
     std::vector<Entry> entries;
     bool open = false;
 };
@@ -102,12 +131,21 @@ Reader::Reader() : state_(std::make_unique<State>()) {}
 Reader::~Reader() { if (state_->open) mz_zip_reader_end(&state_->zip); }
 
 bool Reader::open(const std::filesystem::path& file) {
-    state_->stream.open(file, std::ios::binary | std::ios::ate);
-    if (!state_->stream || state_->stream.tellg() <= 0) return false;
-    const auto size = static_cast<uint64_t>(state_->stream.tellg());
-    state_->zip.m_pRead = readStream;
-    state_->zip.m_pIO_opaque = &state_->stream;
-    if (!mz_zip_reader_init(&state_->zip, size, 0)) return false;
+    auto& source = state_->source;
+    source.stream.open(file, std::ios::binary | std::ios::ate);
+    if (!source.stream || source.stream.tellg() <= 0) return false;
+    const auto size = static_cast<uint64_t>(source.stream.tellg());
+    const auto init = [&] {
+        state_->zip = {};
+        state_->zip.m_pRead = readStream;
+        state_->zip.m_pIO_opaque = &source;
+        return mz_zip_reader_init(&state_->zip, size - source.base, 0) != MZ_FALSE;
+    };
+    if (!init()) {
+        // A setup program with its archive appended (ReShade_Setup_*.exe): read from where the archive starts.
+        source.base = appendedStart(source, size);
+        if (!source.base || source.base >= size || !init()) return false;
+    }
     state_->open = true;
     const auto count = mz_zip_reader_get_num_files(&state_->zip);
     if (count > 400000) return false;

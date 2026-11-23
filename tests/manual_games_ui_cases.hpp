@@ -159,7 +159,7 @@ int LauncherUiTest::manualGames(HWND window) {
     app.askRemoveFromLibrary(game); app.exitPromptAccept();
     if (!app.customEditorOpen() || editor.id != id || app.custom_games_.size() != 1) return 9534;
     app.closeCustomEditor();
-    // "Opcje uruchamiania" of a game added by hand is its whole editor ("Edytuj grę" in the menu).
+    // "Opcje uruchamiania" of a game added by hand is its whole editor.
     if (!app.launchEditable(game)) return 9535;
 
     // Edytuj metadane (Tryb TV): Zidentyfikuj, in place of the dialog. A Steam game has none.
@@ -247,7 +247,7 @@ int LauncherUiTest::manualGames(HWND window) {
         const auto* remove = item(desktop_ui::Action::remove_game);
         const auto* edit = item(desktop_ui::Action::launch_options);
         const auto* play = item(desktop_ui::Action::play);
-        if (!remove || !remove->danger || &desk.desktop_menu_->items.back() != remove || !edit || edit->label != L"Edytuj grę…" ||
+        if (!remove || !remove->danger || &desk.desktop_menu_->items.back() != remove || !edit || edit->label != L"Opcje uruchamiania…" ||
             !play || play->label != L"Wskaż plik" || !play->enabled || item(desktop_ui::Action::uninstall)) return 9544;
         if (!capture(desk, L"manual-game-desktop-menu.png")) return 9545;
         desk.desktopMenuPick(*remove, false);

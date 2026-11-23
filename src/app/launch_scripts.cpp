@@ -112,12 +112,14 @@ void Launcher::launchScriptsEnded(const std::string& key) {
 void Launcher::customEditorTab(custom_game_ui::Tab tab) {
     auto& ui = custom_editor_;
     if (!ui.open || !ui.tabs()) return;
-    const auto item = tab == custom_game_ui::Tab::scripts ? custom_game_ui::Item::tab_scripts : custom_game_ui::Item::tab_launch;
+    if (tab == custom_game_ui::Tab::mods && !ui.mods_offered) return;
+    const auto item = ui.tabItemOf(tab);
     if (ui.tab == tab && ui.focus == item) return;
     if (ui.tab != tab) audio_.navigate();
     ui.tab = tab;
     ui.focus = item;
     ui.selected = ui.confirm_remove = false;
+    if (tab == custom_game_ui::Tab::mods) modsPanelRefresh(true);
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 

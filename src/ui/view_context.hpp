@@ -369,7 +369,7 @@ struct ViewContext {
     bool menu_session = false; // Running or suspended: "Zamknij grę" replaces "Ponów grafiki".
     bool menu_detail_options = false, menu_folder = false, menu_exclude = false;
     bool menu_hide = false, menu_hidden = false; // Details options: "Ukryj" / "Pokaż".
-    bool menu_remove = false, menu_edit_game = false; // "Usuń z biblioteki" (red, last) / "Opcje uruchamiania" read "Edytuj grę".
+    bool menu_remove = false; // "Usuń z biblioteki" (red, last).
     bool menu_uninstall = false, menu_launch = false; // "Odinstaluj" (red, last) / Details' "Opcje uruchamiania".
     bool menu_compat = false; // Details' "Proton / Wine" (Linux).
     bool menu_shortcuts = false; // Details' "Skróty" (the game can have shortcuts).
@@ -388,6 +388,9 @@ struct ViewContext {
     // Szczegóły: the cloud icon after "…" (Aurelia-managed games), its state and its action's index.
     std::optional<aurelia::CloudState> detail_cloud;
     int detail_cloud_action = -2;
+    // The details page's game: its mods found in its folder (Opcje uruchamiania → Mody), a badge each on a
+    // line of their own under the facts; empty: none, not scanned yet, or the badges are off.
+    std::vector<std::wstring> mod_badges;
     int detail_close_action = -2; // "Zamknij grę" beside Wróć while the game runs; -2 = none.
     bool menu_beside = false;  // The game menu opens beside the card (XMB, Flix, list view).
     std::optional<settings_ui::Rect> menu_anchor;
@@ -593,6 +596,7 @@ struct ViewContext {
     std::optional<GlideBox> library_bar_glide; // Library top bar: the white pill between Back, the filters and the magnifier.
     std::optional<GlideBox> downloads_glide; // Pobierania: Back or a row.
     std::optional<GlideBox> manager_glide; // Kolekcje / Wersje dialog: the highlight gliding between Back, the field and the rows.
+    std::optional<GlideBox> editor_glide;  // Dodaj grę / Opcje uruchamiania (Tryb TV): the focus between the tabs, fields, options and buttons.
     std::optional<GlideBox> artwork_glide; // Zmień grafikę: the white pill between the rail's entries and buttons.
     std::optional<float> friends_scroll_glide;
     bool friends_back = false;           // Friends list: Back has the keyboard/pad focus.

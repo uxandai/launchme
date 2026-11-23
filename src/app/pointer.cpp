@@ -317,6 +317,7 @@ bool Launcher::hoverButton(float mouse_x, float mouse_y) const {
     case Modal::library_dialog:
         return library_manager_ui::Layout::of(view.width, view.height, library_dialog_).hit(library_dialog_, x, y) != -3;
     case Modal::custom_editor: {
+        if (custom_editor_.dropdown.open) return custom_game_ui::Layout::of(custom_editor_, view.width, view.height).dropdownAt(x, y) >= 0;
         const auto hit = custom_game_ui::Layout::of(custom_editor_, view.width, view.height).hit(x, y, custom_editor_.editing());
         return hit && custom_game_ui::field(*hit) < 0;
     }
