@@ -419,7 +419,7 @@ bool Launcher::hoverButton(float mouse_x, float mouse_y) const {
             const auto tile = dashboardLayout().hit(drawer_left, x, y, dashboard_scroll_, view.height);
             using friends_layout::dashboard::Tile;
             constexpr int plugins = friends_layout::dashboard::tile_count;
-            return tile == friends_layout::dashboard::reorganize || (dashboard_editing_ && tile >= 0) ||
+            return tile == friends_layout::dashboard::reorganize || tile == friends_layout::dashboard::power || (dashboard_editing_ && tile >= 0) ||
                 tile == static_cast<int>(Tile::steam) || tile == static_cast<int>(Tile::discord) || tile == static_cast<int>(Tile::profile) ||
                 (tile >= plugins && tile < plugins + static_cast<int>(plugin_widgets_.size()));
         }

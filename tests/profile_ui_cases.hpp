@@ -15,7 +15,7 @@ int LauncherUiTest::profilePage(HWND window) {
     app.settings_.launch_animation = false; app.settings_.tour_done = true;
     app.settings_.glance = app.settings_.companion = false;
     app.read_sensors_ = [] { return sensors::Reading{true, 48, 61}; };
-    app.discord_.running = [] { return false; };
+    app.discord_.running = [](const std::filesystem::path&) { return false; };
     app.steam_accounts_ = [] { return std::vector<steam_accounts::Account>{{1, "fixture", L"Kasia Pikselowa", true, true}}; };
     if (!app.renderer_.initialize(window)) return 9700;
     const auto capture = [&](const wchar_t* name) {

@@ -47,6 +47,12 @@ struct NOTIFYICONDATAW {
 // The icon's clicks reach hWnd as uCallbackMessage (NOTIFYICON_VERSION_4: LOWORD(lparam) is
 // NIN_SELECT or WM_CONTEXTMENU, wparam the anchor point in screen coordinates).
 BOOL Shell_NotifyIconW(DWORD message, NOTIFYICONDATAW* data);
+#define NIIF_NONE 0x00000000
+#define NIIF_INFO 0x00000001
+// Launchme's own: Linux tray hosts show the icon's menu themselves, so it is handed over beforehand
+// (copied; the caller still destroys it). A chosen entry reaches hWnd as uCallbackMessage with
+// LOWORD(lparam) WM_COMMAND and wparam the entry's id. Balloons (NIF_INFO) are not shown.
+BOOL Shell_NotifyIconMenu(HMENU menu);
 
 // MSVC's bounded copies, used next to the shell structures' fixed buffers.
 #define _TRUNCATE ((size_t)-1)

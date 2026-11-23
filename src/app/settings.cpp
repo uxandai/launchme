@@ -418,6 +418,29 @@ void Launcher::settingsActivate() {
     if (companionSetting(row)) return; // Towarzyszka's rows (companion_settings.cpp).
     if (row.id == Id::screenscraper_test) { testScreenScraper(); return; }
     if (row.id == Id::screenscraper_clear) { clearScreenScraper(); return; }
+    if (row.id == Id::discord_program_reset) {
+        settings_.discord_program.clear();
+        settingsChanged(); audio_.context();
+        settings_state_.selected[settings_state_.category] = std::max(0, settings_state_.row() - 1); // Its row is gone.
+        return;
+    }
+    if (row.id == Id::discord_program) {
+        const auto apply = [this](const std::filesystem::path& picked) {
+            if (!settingsOpen() || picked.empty()) return;
+            settings_.discord_program = picked;
+            settingsChanged(); audio_.context();
+        };
+        file_browser::Request request;
+        request.title = tr(L"Wybierz program Discorda");
+#ifdef _WIN32
+        request.extensions = {L".exe"};
+        request.filter_label = tr(L"Programy (.exe)");
+        request.all_files_option = true;
+#endif
+        request.initial = settings_.discord_program.empty() ? std::filesystem::path{} : settings_.discord_program.parent_path();
+        openFileBrowser(std::move(request), apply);
+        return;
+    }
     if (row.id == Id::video_folder_reset) {
         settings_.video_folder.clear();
         settingsChanged(); audio_.context();
@@ -786,8 +809,9 @@ void Launcher::settingsToggle(const Row& row) {
         settingsChanged(); audio_.context(); return; // Visual only: no shelf rebuild.
     }
     else if (row.id == Id::steam_silent_launch || row.id == Id::steam_account_switch || row.id == Id::steam_install_dialog ||
-             row.id == Id::hide_while_playing || row.id == Id::steam_hide_launch_window || row.id == Id::gog_comet) {
+             row.id == Id::hide_while_playing || row.id == Id::close_to_tray || row.id == Id::steam_hide_launch_window || row.id == Id::gog_comet) {
         auto& flag = row.id == Id::steam_silent_launch ? settings_.steam_silent_launch :
+                     row.id == Id::close_to_tray ? settings_.close_to_tray : // The icon comes or goes at the next tick (tray.cpp).
                      row.id == Id::gog_comet ? settings_.gog_comet :
                      row.id == Id::steam_hide_launch_window ? settings_.steam_hide_launch_window :
                      row.id == Id::steam_account_switch ? settings_.steam_account_switch :
@@ -800,6 +824,13 @@ void Launcher::settingsToggle(const Row& row) {
     else if (row.id == Id::panel_borders) {
         settings_.panel_borders = !settings_.panel_borders;
         settingsChanged(); audio_.context(); return; // Visual only: no shelf rebuild.
+    }
+    else if (row.id == Id::sidebar_store || row.id == Id::sidebar_platforms || row.id == Id::sidebar_studios) {
+        auto& value = row.id == Id::sidebar_store ? settings_.desktop_sidebar_store :
+                      row.id == Id::sidebar_platforms ? settings_.desktop_sidebar_platforms : settings_.desktop_sidebar_studios;
+        value = !value;
+        buildDesktopSidebar();
+        settingsChanged(); audio_.context(); return;
     }
     else if (row.id == Id::desktop_platform_badges || row.id == Id::desktop_gray_uninstalled || row.id == Id::desktop_poster_glow) {
         auto& value = row.id == Id::desktop_platform_badges ? settings_.desktop_platform_badges :

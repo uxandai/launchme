@@ -4,6 +4,8 @@
 // fields they wait for Zapisz (launchChoicesSave); the line under the panel's title says what starts the
 // game. A choice, and a mod's method, opens a list (custom_game_ui::Dropdown).
 #include "launcher.hpp"
+#include "../library/game_log.hpp"
+#include <shellapi.h>
 #include "../library/custom_games.hpp"
 #include "../library/emulators.hpp"
 #include "../store/aurelia.hpp"
@@ -59,8 +61,25 @@ void Launcher::customEditorFlags(custom_game_ui::State& ui, const Game& game) {
                             !(aurelia_library_source_ && !aurelia_steam_client_);
     choices.aurelia = aureliaManaged(game);
     if (choices.aurelia_shown) ui.options.push_back({Kind::aurelia, tr(L"Zarządzaj przez Aurelię"), {}, choices.aurelia, true});
+    // A plugin launch provider offered for the game: a switch choosing it as the launch route.
+    choices.launch_provider.clear(); choices.launch_on = false;
+    if (game.app_id && game.installed) {
+        const auto providers = plugins_.contributions("launch", &game);
+        if (!providers.empty()) {
+            const auto chosen = selectedLaunchProvider(game);
+            const auto& provider = chosen ? *chosen : providers.front();
+            choices.launch_provider = provider.plugin;
+            choices.launch_on = chosen.has_value();
+            auto label = provider.item.title.localized();
+            if (label.empty()) label = tr(L"Uruchom przez wtyczkę");
+            ui.options.push_back({Kind::launch, label, {}, choices.launch_on});
+        }
+    }
     const unsigned bits = launchFlags(game);
     ui.options.push_back({Kind::log, tr(L"Zapisuj logi"), {}, (bits & launch_flag::log) != 0});
+    // Aurelia's own output (-vv) of its launches and saves' syncs, where Aurelia can run the game.
+    if (aurelia_active_ && aurelia::validGame(game) && (choices.aurelia_shown || choices.aurelia))
+        ui.options.push_back({Kind::aurelia_log, tr(L"Zapisuj log Aurelii"), {}, (bits & launch_flag::aurelia_log) != 0});
 #ifdef _WIN32
     ui.options.push_back({Kind::hdr, tr(L"HDR na czas gry"), {}, (bits & launch_flag::hdr) != 0});
 #endif
@@ -81,6 +100,8 @@ void Launcher::launchChoicesShow(custom_game_ui::State& ui) const {
         }
     }
     for (auto& option : ui.options) {
+        // Zapisuj logi, Zapisuj log Aurelii: while on, "…" opens their folder.
+        if (option.kind == Kind::log || option.kind == Kind::aurelia_log) option.more = option.on && !gameKey(game).empty();
         if (option.kind == Kind::emulator && choices.emulator >= 0 && choices.emulator < static_cast<int>(choices.emulators.size())) {
             const auto& choice = choices.emulators[static_cast<size_t>(choices.emulator)];
             option.value = choice.pick && !choices.picked.empty() ? fileName(choices.picked) : choice.label;
@@ -91,7 +112,11 @@ void Launcher::launchChoicesShow(custom_game_ui::State& ui) const {
     const bool aurelia = choices.aurelia_shown ? ui.switchOn(Kind::aurelia) : choices.aurelia;
     std::wstring line;
     if (game.source == GameSource::steam && game.kind == GameKind::steam)
-        line = aurelia ? tr(L"Uruchamia Aurelia, bez klienta Steam; opcje niżej działają tylko przez Steam.") :
+#ifdef _WIN32
+        line = aurelia ? tr(L"Uruchamia Aurelia: czas gry i osiągnięcia tylko przy Steamie włączonym na tym koncie; opcje niżej działają tylko przez Steam.") :
+#else
+        line = aurelia ? tr(L"Uruchamia Aurelia, bez Steam: bez czasu gry i osiągnięć; opcje niżej działają tylko przez Steam.") :
+#endif
                          tr(L"Uruchamia Steam: opcje niżej dopisuje do steam.exe -applaunch.");
     else if (!game.rom.empty()) {
         if (ui.target == custom_game_ui::Target::custom && !custom_games::trim(ui.fields[custom_game_ui::arguments_field]).empty())
@@ -227,9 +252,23 @@ void Launcher::customEditorDropdownChoose(int item) {
 }
 
 void Launcher::customEditorOptionMore() {
-    if (!custom_editor_.open || !launch_choices_.aurelia_shown) return;
-    custom_editor_.dropdown = {};
+    auto& ui = custom_editor_;
+    if (!ui.open || ui.option < 0 || ui.option >= ui.optionCount()) return;
+    const auto kind = ui.options[static_cast<size_t>(ui.option)].kind;
     const auto game = launch_choices_.game;
+    if (kind == Kind::log || kind == Kind::aurelia_log) { // The logs' folder (made when there are none yet).
+        const auto key = gameKey(game);
+        if (key.empty()) return;
+        const auto folder = game_log::folder(userConfigDirectory(), game.name, key, kind == Kind::aurelia_log ? L"aurelia" : L"");
+        std::error_code error;
+        std::filesystem::create_directories(folder, error);
+        const bool shown = !error && (reveal_download_ ? reveal_download_(folder) :
+                           reinterpret_cast<INT_PTR>(ShellExecuteW(hwnd_, L"open", folder.wstring().c_str(), nullptr, nullptr, SW_SHOWNORMAL)) > 32);
+        if (!shown) showNotification(NotificationKind::error, tr(L"Nie można otworzyć folderu"), folder.wstring());
+        return;
+    }
+    if (kind != Kind::aurelia || !launch_choices_.aurelia_shown) return;
+    ui.dropdown = {};
     openAurelia(&game);
 }
 
@@ -248,7 +287,11 @@ void Launcher::launchChoicesAureliaClosed() {
 
 unsigned Launcher::customEditorFlagBits() const {
     const auto& ui = custom_editor_;
-    return (ui.switchOn(Kind::log) ? launch_flag::log : 0u) | (ui.switchOn(Kind::hdr) ? launch_flag::hdr : 0u);
+    // Not offered now (Aurelia off): the Aurelia log switch stays as it was.
+    const bool offered = std::any_of(ui.options.begin(), ui.options.end(), [](const auto& o) { return o.kind == Kind::aurelia_log; });
+    const unsigned aurelia_log = offered ? (ui.switchOn(Kind::aurelia_log) ? launch_flag::aurelia_log : 0u) :
+                                           launchFlags(launch_choices_.game) & launch_flag::aurelia_log;
+    return (ui.switchOn(Kind::log) ? launch_flag::log : 0u) | (ui.switchOn(Kind::hdr) ? launch_flag::hdr : 0u) | aurelia_log;
 }
 
 // Zapisz: the switches, the scripts and the choices that changed.
@@ -288,6 +331,19 @@ void Launcher::launchChoicesSave(const std::string& key) {
             if (settings_.aurelia_default) { if (wanted) settings_.aurelia_steam.erase(id); else settings_.aurelia_steam.insert(id); }
             else { if (wanted) settings_.aurelia_standalone.insert(id); else settings_.aurelia_standalone.erase(id); }
             settings_changed = true;
+            if (wanted) aureliaManagedNow(game); // Its cloud saves synced at once (aurelia.cpp).
+        }
+    }
+    if (!choices.launch_provider.empty()) {
+        const bool wanted = ui.switchOn(Kind::launch);
+        const auto id = std::to_string(game.app_id);
+        const auto found = settings_.plugin_launch.find(id);
+        const bool current = found != settings_.plugin_launch.end();
+        if (wanted != current) {
+            if (wanted) settings_.plugin_launch[id] = choices.launch_provider; else settings_.plugin_launch.erase(id);
+            settings_changed = true;
+        } else if (wanted && found->second != choices.launch_provider) {
+            found->second = choices.launch_provider; settings_changed = true;
         }
     }
     if (settings_changed) { settings_dirty_ = true; saveSettings(); }

@@ -193,7 +193,7 @@ void Launcher::startDashboardPoll() {
     const auto alive = alive_;
     const auto hwnd = hwnd_;
     afterburner_cpu_->store(settings_.cpu_temp_source == 0);
-    work_.start([queue, generation, alive, hwnd, read = read_sensors_, running = discord_.running, afterburner = afterburner_cpu_] {
+    work_.start([queue, generation, alive, hwnd, read = read_sensors_, running = discord_.running, program = settings_.discord_program, afterburner = afterburner_cpu_] {
         const auto current = [&] { return alive->load() && queue->generation.load() == generation; };
         std::unique_ptr<sensors::Reader> reader;
         while (current()) {
@@ -209,7 +209,7 @@ void Launcher::startDashboardPoll() {
                     if (sensors::readAfterburner(other) && other.cpu) message->sensors.cpu = other.cpu;
                 }
             }
-            message->discord_running = running && running();
+            message->discord_running = running && running(program);
             if (!current()) return;
             if (PostMessageW(hwnd, dashboard_message, 0, reinterpret_cast<LPARAM>(message.get()))) message.release();
             std::unique_lock lock(queue->mutex);
@@ -356,7 +356,8 @@ void Launcher::dashboardMove(int horizontal, int vertical) {
     }
     if (!friends_open_ || friends_list_) return;
     dashboardPollHold(GetTickCount64());
-    const int next = dashboardLayout().move(dashboard_tile_, horizontal, vertical);
+    int next = dashboardLayout().move(dashboard_tile_, horizontal, vertical);
+    if (next == dashboard::power && dashboardEditing()) next = dashboard::reorganize; // Organizing: its check alone up there.
     if (next == dashboard_tile_) { navigationBoundary(); return; }
     if (dashboard_press_source_) {
         if (!dashboard_grabbed_ || next < 0) return;
@@ -368,8 +369,16 @@ void Launcher::dashboardMove(int horizontal, int vertical) {
 }
 
 void Launcher::dashboardActivate(int tile) {
-    if (!friends_open_ || friends_list_ || plugin_drawer_active_ || tile < dashboard::reorganize || tile >= dashboardTileCount()) return;
+    if (!friends_open_ || friends_list_ || plugin_drawer_active_ || tile < dashboard::power || tile >= dashboardTileCount()) return;
     dashboard_tile_ = tile;
+    if (tile == dashboard::power) { // Zasilanie: the power menu over the screen (it closes the drawer).
+        if (dashboard_editing_) dashboardEdit(false);
+        // Opened again, the drawer starts on its first tile.
+        const auto layout = dashboardLayout();
+        dashboard_tile_ = layout.items.empty() ? 0 : layout.items.front().source;
+        openPowerMenu();
+        return;
+    }
     if (tile == dashboard::reorganize) { dashboardEdit(!dashboard_editing_); return; }
     if (dashboard_editing_) {
         const auto layout = dashboardLayout();
@@ -402,13 +411,17 @@ void Launcher::dashboardActivate(int tile) {
     }
 }
 
-// Focus a visible Discord window, otherwise start the client (Update.exe or discord://).
-// Launch/focus only: no Discord API or RPC.
+// Focus a visible Discord window, otherwise start the client (Update.exe or discord://), or the one
+// chosen in Ustawienia → System → Discord w Widżetach. Launch/focus only: no Discord API or RPC.
 void Launcher::openDiscord() {
-    if (discord_.focus && discord_.focus()) { closeFriends(); return; }
-    const auto action = discord_.locate ? discord_.locate() : std::nullopt;
+    const auto program = settings_.discord_program;
+    if (discord_.focus && discord_.focus(program)) { closeFriends(); return; }
+    std::optional<GameAction> action;
+    if (program.empty()) action = discord_.locate ? discord_.locate() : std::nullopt;
+    else if (std::error_code error; std::filesystem::is_regular_file(program, error))
+        action = GameAction{program.wstring(), {}, program.parent_path(), ActionKind::open_client};
     if (!action) {
-        showNotification(NotificationKind::error, tr(L"Nie znaleziono Discorda"), L"");
+        showNotification(NotificationKind::error, tr(L"Nie znaleziono Discorda"), program.wstring());
         return;
     }
     AllowSetForegroundWindow(ASFW_ANY); // Discord's window may take the foreground from us.

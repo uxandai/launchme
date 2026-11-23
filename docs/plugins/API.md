@@ -50,6 +50,7 @@ restarting the DLL or a separate event. `locale` is `pl` or `en` (users of the o
 | `widget` | `command`; optionally `library` | `text`: short widget text |
 | `details` | `command`, `game`, `refresh`, `playtimeSeconds` | `comparison`: reference playtimes |
 | `library` | `command` from the `library` extension | `steamAppIds`: supplementary game identifiers |
+| `launch` | `command`, `game` (with `installDirectory`, `executable`) | `{"launched":true}`, or `{"launched":false, "message", "steamRequired"?}` |
 | `downloads` | `command` from the `downloads` extension | `downloads`: full job snapshot, no UI effects |
 | `achievements` | `command`, `game` (with paths, below), `accounts`, `refresh`; then `responses`, `state` | `achievements`, `storeRequests` or `message` |
 
@@ -112,8 +113,34 @@ on the plugin tile. They do not affect routing, library access or permissions.
   Szczegóły → Osiągnięcia; see [Achievements](#achievements).
 - `library`: one per plugin, with `source: "steam"`; additional game identifiers,
   with no UI slot of its own. This is a separate feature from the `library: true` flag, which passes the snapshot to the DLL.
+- `launch`: one per plugin, with a required `source` filter; an alternative way to start an
+  installed game. It adds `title` to the game's launch options (Opcje uruchamiania → Uruchamianie);
+  when chosen for a game, the host starts it through the plugin instead of the store's own path.
+  See [Launch provider](#launch-provider).
 
 ## Responses and effects
+
+### Launch provider
+
+A `launch` contribution is invoked with the `launch` method when the user has chosen the plugin as a
+game's launch route and starts it. `params.game` carries the game snapshot including
+`installDirectory` and `executable` (the same fields as the achievements snapshot). The plugin starts
+the game itself and returns promptly; it does not block until the game exits. The host shows the launch
+and then tracks the real process through its own activity watch (the program running inside the game's
+install folder), exactly as for a game started outside the launcher.
+
+```json
+{"launched": true}
+```
+
+- `launched: true`: the game was started. The host begins the session and lets the activity watch
+  confirm and follow the process. No further fields are required.
+- `launched: false`: the game was not started. `message` is shown to the user. Optional
+  `steamRequired: true` tells the host the title needs the store client, so when the plugin was the
+  default route (not an explicit per-game choice) the host falls back to the normal client path.
+
+The call runs on the plugin worker; keep it short (spawn and return). Long work (preparation, downloads)
+belongs to a `command`/`downloads` contribution invoked beforehand, not to `launch`.
 
 ### Download jobs
 

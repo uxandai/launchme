@@ -31,8 +31,8 @@ no HTML UI. English, Polish, Brazilian Portuguese and Spanish.
 - **Library**: grid, list, coverflow, game-case shelf and more; collections synced with Steam; Recently played.
 - **Playing**: Steam account switching, installs and downloads in one list, per-game logs, HDR switching and scripts before the launch, after the start and after the exit, one-click game mods (ReShade, RenoDX, OptiScaler, DLSS, DLSS 5, ANR frame generation), Proton per game on Linux (Steam games too), an in-game overlay (experimental), GOG achievements and GOG's overlay without Galaxy (Comet).
 - **Details**: metadata, playtime, achievements (also GOG, Epic, RetroAchievements and local saves of DRM-free games, with an unlock card over the game), ratings, system requirements, screenshots and similar games.
-- **Aurelia** (optional): Steam games without the Steam client ([guide](docs/AURELIA.md)).
-- **Extras**: Glance news hub, Tarot game picker, an AI companion, widgets, profile with play stats, save backups (Ludusavi), a profile backup to move launchme to another PC or Steam Deck, import from Playnite.
+- **Aurelia** (optional): Steam games without the Steam client, with cloud saves around play; Launchme installs the Aurelia release it was checked with ([guide](docs/AURELIA.md)).
+- **Extras**: Glance news hub, Tarot game picker, an AI companion, widgets (with a power button and any Discord client), close to tray, profile with play stats, save backups (Ludusavi), a profile backup to move launchme to another PC or Steam Deck, import from Playnite.
 - **Plugins**: HowLongToBeat and Achievements built in; write your own with the [Plugin SDK](docs/plugins/README.md).
 - **Light on the PC**: drops to low priority and almost no drawing while a game runs; updates itself.
 

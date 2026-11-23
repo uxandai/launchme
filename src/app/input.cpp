@@ -238,7 +238,7 @@ void Launcher::powerMenuAccept() {
     closePowerMenu();
     if (item == power_menu::Item::cancel) return;
     // Same path as the window's close button: suspended games still ask first.
-    if (item == power_menu::Item::exit) { PostMessageW(hwnd_, WM_CLOSE, 0, 0); return; }
+    if (item == power_menu::Item::exit) { quit_requested_ = true; PostMessageW(hwnd_, WM_CLOSE, 0, 0); return; }
     if (item == power_menu::Item::tv_mode) { setDesktopMode(!desktop_mode_); return; }
     // Windows may end the session without destroying the window: persist first.
     if (settings_dirty_) saveSettings();

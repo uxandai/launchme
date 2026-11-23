@@ -21,8 +21,9 @@ struct LibraryBookmark {
     std::string epic_account;
     bool operator==(const LibraryBookmark&) const = default;
 };
-// A game's switches in Opcje uruchamiania: its launches logged (logs/games/<slug>), HDR on while it runs (Windows).
-namespace launch_flag { inline constexpr unsigned log = 1, hdr = 2, all = log | hdr; }
+// A game's switches in Opcje uruchamiania: its launches logged (logs/games/<slug>), HDR on while it runs (Windows),
+// Aurelia's own output of its launches and syncs logged (<time>.aurelia.log beside them).
+namespace launch_flag { inline constexpr unsigned log = 1, hdr = 2, aurelia_log = 4, all = log | hdr | aurelia_log; }
 struct LibraryState {
     std::optional<LibraryBookmark> bookmark;
     std::map<std::string, library_view::Options> options;

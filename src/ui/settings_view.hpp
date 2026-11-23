@@ -44,6 +44,10 @@ enum class Id { font, home_layout, ui_accent, accent, uninstalled, emulation, mu
                   pad_cursor, // Interfejs → Tryb TV: L3 + R3 as a mouse.
                   // Interfejs  Okno desktopowe: posters' marks of their store; games not installed in black and white.
                   desktop_platform_badges, desktop_gray_uninstalled,
+                  // Interfejs → Panel boczny (the desktop window): Sklep, Platformy, Wydawcy i developerzy shown.
+                  sidebar_store, sidebar_platforms, sidebar_studios,
+                  // System → Funkcje: the program the Widżety's Discord tile opens, and back to Discord's own.
+                  discord_program, discord_program_reset,
                   // Interfejs → Okno desktopowe: the window's colours; the selected poster's outline and glow.
                   desktop_theme, desktop_poster_glow, desktop_accent, desktop_button,
                   // Towarzyszka: the Tavily key for her web search (szukaj_w_sieci).
@@ -83,8 +87,9 @@ enum class Id { font, home_layout, ui_accent, accent, uninstalled, emulation, mu
                    // System → Wydajność: the low memory mode (AppSettings::low_memory) and Kompresja grafik
                    // (AppSettings::texture_compression).
                    low_memory, texture_compression, background_yield,
-                   // Biblioteka → Uruchamianie: hidden in the notification area while a game runs (src/app/tray.cpp).
-                   hide_while_playing, aurelia, aurelia_open, aurelia_cloud, aurelia_default,
+                   // System → Okno i język: hidden in the notification area while a game runs, and closing
+                   // the window hides it there (src/app/tray.cpp).
+                   hide_while_playing, close_to_tray, aurelia, aurelia_open, aurelia_cloud, aurelia_default,
                    // Biblioteka → Uruchamianie → Mody gier (src/app/game_mods.cpp): the badges, each mod's preferred
                    // method (Row::key: its slug), the downloaded releases' cache.
                    mod_badges, mod_method, mod_cache,

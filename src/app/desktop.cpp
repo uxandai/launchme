@@ -131,7 +131,7 @@ void Launcher::buildDesktopSidebar() {
         const auto moving = static_cast<size_t>(std::count_if(desktop_download_rows_.begin(), desktop_download_rows_.end(), [](const auto& row) { return row.moving; }));
         add(EntryKind::downloads, Group::library, "downloads", tr(L"Pobierania"), moving, glyph::download).counted = moving > 0;
         add(EntryKind::settings, Group::library, "settings", tr(L"Ustawienia"), 0, glyph::settings).counted = false;
-        add(EntryKind::store, Group::library, "store", tr(L"Sklep"), 0, glyph::shop).counted = false;
+        if (settings_.desktop_sidebar_store) add(EntryKind::store, Group::library, "store", tr(L"Sklep"), 0, glyph::shop).counted = false;
         if (settings_.glance) add(EntryKind::glance, Group::library, "glance", L"Glance", 0, glyph::info).counted = false; // News and releases.
     }
     for (size_t i = 0; i < desktop_recent_games_.size(); ++i) {
@@ -150,7 +150,7 @@ void Launcher::buildDesktopSidebar() {
     for (const auto source : {GameSource::steam, GameSource::gog, GameSource::epic, GameSource::battlenet, GameSource::ea, GameSource::ubisoft,
                               GameSource::amazon, GameSource::xbox, GameSource::multimc, GameSource::drmfree}) {
         const auto found = per_source.find(source);
-        if (found == per_source.end() || !found->second) continue;
+        if (!settings_.desktop_sidebar_platforms || found == per_source.end() || !found->second) continue;
         auto& entry = add(EntryKind::source, Group::platforms, std::string("source:") + sourceSlug(source), sourceName(source), found->second,
                           source == GameSource::drmfree ? glyph::folder : glyph::shop);
         entry.source = source;
@@ -182,6 +182,7 @@ void Launcher::buildDesktopSidebar() {
     // Wydawcy and Developerzy (src/app/studio_libraries.cpp): folded by default.
     for (const auto role : {studios::Role::publisher, studios::Role::developer})
         for (const auto& studio : studio_groups_[static_cast<size_t>(role)]) {
+            if (!settings_.desktop_sidebar_studios) break;
             const auto key = studios::key(role, studio.studio->id);
             const auto* games = consoleGames(text_encoding::wide(key));
             if (!games || games->empty()) continue;
@@ -193,6 +194,9 @@ void Launcher::buildDesktopSidebar() {
     // A section not (yet) in the list shows every game meanwhile: stores and consoles may still be
     // scanning. A collection missing once the library is read is gone.
     if (desktopEntryIndex(desktop_section_) < 0 && !scanning_ && desktop_section_.starts_with("collection:")) desktop_section_ = "all";
+    // Taken off the sidebar (Interfejs → Panel boczny): back to every game.
+    if ((!settings_.desktop_sidebar_store && desktop_section_ == "store") || (!settings_.desktop_sidebar_platforms && desktop_section_.starts_with("source:")) ||
+        (!settings_.desktop_sidebar_studios && studios::parse(desktop_section_))) desktop_section_ = "all";
     if (desktopEntryIndex(desktop_section_) < 0 && studios::parse(desktop_section_) && (!studiosShown() || settings_.hidden_studios.contains(desktop_section_)))
         desktop_section_ = "all"; // Switched off or hidden; one the index has not described yet may still come.
 }

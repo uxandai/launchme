@@ -114,7 +114,10 @@ void Launcher::tickUpdates() {
     if (!runtime_started_ || !settings_.update_check || !update_.next_check) return;
     const auto now = GetTickCount64();
     if (now < update_.next_check) return;
-    if (anyActiveSession()) { update_.next_check = now + game_retry_ms; return; } // Never while a game runs.
+    // Never while a game runs (one seen running: a session only dispatched must not hold it off for good).
+    if (std::any_of(game_sessions_.begin(), game_sessions_.end(), [](const auto& s) { return s.second.running() && !s.second.frozen(); })) {
+        update_.next_check = now + game_retry_ms; return;
+    }
     update_.next_check = now + check_interval_ms;
     checkForUpdate(false);
 }
@@ -183,8 +186,8 @@ void Launcher::updateAction() {
     using Phase = UpdateState::Phase;
     if (update_.phase == Phase::checking || update_.phase == Phase::downloading || update_.phase == Phase::installing) return;
     if (!updateAvailable()) { checkForUpdate(true); return; }
-    if (!game_sessions_.empty()) { // It restarts Launchme: not under a running or suspended game.
-        showNotification(NotificationKind::error, tr(L"Najpierw zamknij grę"), tr(L"Aktualizacja uruchomi Launchme ponownie."));
+    if (const auto game = blockingGame()) { // It restarts Launchme: not under a running or suspended game.
+        showNotification(NotificationKind::error, std::wstring(tr(L"Najpierw zamknij grę")) + L": " + *game, tr(L"Aktualizacja uruchomi Launchme ponownie."));
         return;
     }
     if (update_.phase == Phase::ready && !update_.files.empty()) { installUpdate(); return; }
@@ -284,7 +287,7 @@ void Launcher::updateStaged(uint32_t generation, std::wstring error, std::vector
     } else {
         update_.phase = Phase::ready;
         update_.files = std::move(files);
-        if (!game_sessions_.empty()) showNotification(NotificationKind::download, tr(L"Aktualizacja gotowa"), tr(L"Zamknij grę i kliknij Aktualizuj."));
+        if (blockingGame()) showNotification(NotificationKind::download, tr(L"Aktualizacja gotowa"), tr(L"Zamknij grę i kliknij Aktualizuj."));
         else installUpdate();
     }
     if (settingsOpen()) buildSettingsRows();
@@ -293,7 +296,7 @@ void Launcher::updateStaged(uint32_t generation, std::wstring error, std::vector
 
 void Launcher::installUpdate() {
     using Phase = UpdateState::Phase;
-    if (update_.phase != Phase::ready || update_.files.empty() || !update_.available || !game_sessions_.empty()) return;
+    if (update_.phase != Phase::ready || update_.files.empty() || !update_.available || blockingGame()) return;
     update_.phase = Phase::installing;
     const auto app = update_app_dir_.empty() ? moduleFolder() : update_app_dir_;
     const auto& release = *update_.available;

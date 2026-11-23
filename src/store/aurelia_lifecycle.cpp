@@ -1,4 +1,5 @@
 #include "aurelia.hpp"
+#include "../library/game_log.hpp"
 #include "../platform/atomic_file.hpp"
 #include <fstream>
 
@@ -26,19 +27,30 @@ Reply checked(const Request& request, Reply reply) {
 Reply launchStandalone(const Transport& invoke, Request request, const Cancel& cancel, const Event& event) {
     if (!invoke || !request.app) return {false, false, {}, tr(L"Nieprawidłowe polecenie Aurelii")};
     const auto stopped = [&] { return cancel && cancel(); };
-    json::Value saves; bool finished = false;
+    // launch_finished: `play` ran (the game started, or tried to); cloud_uploaded: its saves went up after it.
+    json::Value saves; bool finished = false, uploaded = false;
     const auto result = [&](Reply reply) {
         auto data = json::object(); data.properties["launch_finished"] = json::boolean(finished);
+        data.properties["cloud_uploaded"] = json::boolean(uploaded);
         if (saves.type != json::Value::Type::null_value) data.properties["cloud_result"] = saves;
         reply.data = std::move(data); return reply;
     };
+    // Opcje uruchamiania → Log Aurelii: each step and its outcome; the syncs and play add Aurelia's own -vv output.
+    const auto note = [&](std::wstring_view line) { if (!request.log.empty()) game_log::write(request.log, line); };
     // The game cannot run without the Steam client here (preflight): the caller may use the client.
     const auto refuse = [&](const wchar_t* message) {
         auto reply = result({false, false, {}, message}); reply.data.properties["steam_required"] = json::boolean(true); return reply;
     };
     const auto send = [&](Request r) {
         if (stopped()) return Reply{false, true, {}, tr(L"Anulowano")};
-        return checked(r, invoke(r, cancel, event));
+        if (!request.log.empty()) {
+            std::wstring line = L"aurelia";
+            for (const auto& argument : arguments(r)) line += L' ' + argument;
+            note(line);
+        }
+        auto reply = checked(r, invoke(r, cancel, event));
+        if (!request.log.empty()) note(reply.ok ? std::wstring(L"  ok") : reply.cancelled ? std::wstring(L"  cancelled") : L"  failed: " + reply.error);
+        return reply;
     };
     // Upstream forces Steam for unowned/Family-Shared games even without --steam. Refuse that
     // path explicitly rather than silently violating the user's "Launch without Steam" choice.
@@ -68,13 +80,22 @@ Reply launchStandalone(const Transport& invoke, Request request, const Cancel& c
 #endif
     if (!standalone) return refuse(tr(L"Aurelia nie udostępnia zainstalowanej wersji Windows bez Steam dla tej gry."));
     const auto sync = [&](Request::Direction direction) {
-        Request r{Command::cloud_sync, request.app}; r.direction = direction;
+        Request r{Command::cloud_sync, request.app}; r.direction = direction; r.log = request.log;
         auto reply = send(r); saves = reply.ok ? reply.data : json::object();
         if (!reply.ok) { saves.properties["status"] = json::string("failed"); return reply; }
         const auto state = cloud(reply, true);
         if (state.state != CloudState::synced) { reply.ok = false; reply.error = cloudLabel(state.state); }
         return reply;
     };
+    if (request.auto_cloud) {
+        // Turned off for this game in Aurelia (`config game <id> --cloud-sync off`): no sync here either.
+        const auto config = send({Command::game_config, request.app});
+        if (const auto* effective = config.ok ? config.data.get("cloud_sync_effective") : nullptr;
+            effective && effective->type == json::Value::Type::boolean && !effective->flag) {
+            request.auto_cloud = false;
+            note(L"  cloud sync is off for this game in Aurelia: no sync");
+        }
+    }
     if (request.auto_cloud) {
         if (event) { auto e = json::object(); e.properties["event"] = json::string("launchme-cloud-down"); event(e); }
         auto before = sync(Request::Direction::down);
@@ -84,11 +105,16 @@ Reply launchStandalone(const Transport& invoke, Request request, const Cancel& c
     if (event) { auto e = json::object(); e.properties["event"] = json::string("launchme-starting"); event(e); }
     request.command = Command::play; request.steam = false;
     auto played = send(request);
-    if (!played.ok) return result(std::move(played));
-    finished = true;
-    if (request.auto_cloud) {
+    // The game ran, or tried to: its saves go up even when `play` reported an error (a crash, an exit
+    // code still leaves what it saved). Not when this was cancelled (Launchme closing): Launchme sends
+    // them at its next start (Launcher::aureliaCloudCatchUp).
+    finished = !played.cancelled;
+    if (request.auto_cloud && !played.cancelled && !stopped()) {
         if (event) { auto e = json::object(); e.properties["event"] = json::string("launchme-cloud-up"); event(e); }
-        return result(sync(Request::Direction::up));
+        auto after = sync(Request::Direction::up);
+        uploaded = after.ok;
+        // A failed upload is what matters most; otherwise play's own outcome.
+        return result(after.ok && !played.ok ? std::move(played) : std::move(after));
     }
     return result(std::move(played));
 }

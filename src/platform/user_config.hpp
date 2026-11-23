@@ -30,6 +30,10 @@ struct AppSettings {
     bool pad_cursor = true; // Tryb TV: L3 + R3 turns the pad into a mouse (left stick moves, R2 clicks, L2 goes back).
     bool desktop_platform_badges = false;     // The desktop window's posters: the store's or console's mark top right.
     bool desktop_gray_uninstalled = false;    // ...and games not installed in black and white.
+    // The desktop window's sidebar (Interfejs → Panel boczny): Sklep, Platformy, Wydawcy and Developerzy shown.
+    bool desktop_sidebar_store = true, desktop_sidebar_platforms = true, desktop_sidebar_studios = true;
+    // Widżety → Discord: the client its tile opens (Vesktop, Legcord…); empty: Discord's own (stable, PTB, Canary).
+    std::filesystem::path discord_program;
     // The selected poster: an outline in the cover's colour (Kolor akcentu okładek) and its art's glow behind it.
     bool desktop_poster_glow = true;
     int desktop_theme = 0; // The window's colours: desktop_themes in settings_view.hpp (desktop_theme.hpp).
@@ -67,6 +71,9 @@ struct AppSettings {
     bool steam_enabled = true;
     // Szczegóły → "…" → Konto Steam: a game's chosen account (app id → SteamID64); absent: the default.
     std::map<std::string, uint64_t> steam_launch_accounts; // Ustawienia → Biblioteka → Steam: off hides its games, shortcuts and collections.
+    // Opcje uruchamiania → Uruchamianie: a game started through a plugin launch provider instead of the
+    // store's own path (Steam app id → plugin id); absent: the normal path.
+    std::map<std::string, std::string> plugin_launch;
     // Platformy PC → MultiMC / Prism: a launcher the user pointed at (portable MultiMC is never
     // installed anywhere Launchme looks); empty: only the ones found on their own.
     std::filesystem::path multimc_path;
@@ -270,6 +277,10 @@ struct AppSettings {
     // While a game started here runs, the window is hidden (no taskbar button, no Alt+Tab) and an
     // icon in the notification area stands in for it; it comes back when the game closes.
     bool hide_while_playing = false;
+    // The window's ✕, Alt+F4 and the taskbar hide the launcher in the notification area, whose icon
+    // stays while it runs (src/app/tray.cpp); close_to_tray_told: the balloon saying so was shown.
+    bool close_to_tray = false;
+    bool close_to_tray_told = false;
     // Opcje uruchamiania → Mody (src/library/game_mods.hpp): each mod's preferred method by its slug
     // ("reshade" -> "dxgi.dll", "anr" -> "full"); missing: the mod's first. mod_badges: the mods a game
     // has as badges on its page (Tryb TV and the desktop window).
@@ -301,6 +312,9 @@ struct AppSettings {
     bool aurelia_cloud = true; // Cloud state and sync of the games Aurelia manages.
     // Games whose saves are not synced before and after standalone play (pulled before, pushed after for the others).
     std::unordered_set<std::string> aurelia_cloud_skip;
+    // Standalone sessions Launchme did not see end (closed or crashed while the game ran): their saves
+    // go up at its next start, once Aurelia no longer runs the game.
+    std::unordered_set<std::string> aurelia_cloud_pending;
     // Videos downloaded from ScreenScraper: <video_folder>\<ES-DE system>\videos\<ROM name>.mp4, the
     // layout of ES-DE's downloaded_media (pointing it there shares them). Empty: <config>\media.
     std::filesystem::path video_folder;

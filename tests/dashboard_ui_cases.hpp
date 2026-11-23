@@ -23,8 +23,9 @@ int LauncherUiTest::dashboard(HWND window) {
     app.hwnd_ = window; app.execute_ = dashboardExecute;
     app.local_time_ = [moment] { return moment; };
     app.read_sensors_ = [] { return sensors::Reading{true, 48, 61}; }; // Polled on the worker.
-    app.discord_.running = [] { return false; };
-    app.discord_.focus = [&] { ++focus_requests; return discord_window; };
+    std::filesystem::path focused_program; // The client the last focus asked for (empty: Discord's own).
+    app.discord_.running = [](const std::filesystem::path&) { return false; };
+    app.discord_.focus = [&](const std::filesystem::path& program) { ++focus_requests; focused_program = program; return discord_window; };
     app.discord_.locate = [&]() -> std::optional<GameAction> {
         if (!discord_installed) return std::nullopt;
         return GameAction{L"C:\\Fixture\\Discord\\Update.exe", L"--processStart Discord.exe", L"C:\\Fixture\\Discord", ActionKind::open_client};
@@ -162,6 +163,26 @@ int LauncherUiTest::dashboard(HWND window) {
     if (dashboard_launches.size() != 1 || app.notifications_.empty() ||
         app.notifications_.back().title != L"Nie znaleziono Discorda" || !app.friendsOpen()) return 731;
     app.closeFriends();
+    // Another client (Ustawienia → System → Discord w Widżetach): that program is focused or started.
+    {
+        const auto folder = std::filesystem::temp_directory_path() / (L"launchme-discord-client-" + std::to_wstring(GetCurrentProcessId()));
+        std::filesystem::create_directories(folder);
+        const auto program = folder / L"Vesktop.exe";
+        { std::ofstream(program, std::ios::binary) << "fixture"; }
+        app.settings_.discord_program = program;
+        if (!open()) return 756;
+        app.navigate(1); app.friendsAccept();
+        if (focused_program != program || dashboard_launches.size() != 2 || dashboard_launches.back().target != program.wstring() ||
+            !dashboard_launches.back().arguments.empty() || dashboard_launches.back().working_directory != folder || app.friendsOpen()) return 757;
+        // Gone from the disk: said so, with its path; nothing started.
+        std::error_code ignored; std::filesystem::remove_all(folder, ignored);
+        if (!open()) return 758;
+        app.navigate(1); app.notifications_.clear(); app.friendsAccept();
+        if (dashboard_launches.size() != 2 || app.notifications_.empty() || app.notifications_.back().subtitle != program.wstring()) return 759;
+        app.closeFriends();
+        app.settings_.discord_program.clear();
+        discord_installed = true;
+    }
 
     // Steam error (no Web API key) wraps inside the tile; a missing CPU sensor says so.
     if (!open()) return 732;
@@ -186,10 +207,22 @@ int LauncherUiTest::dashboard(HWND window) {
 
     // Reorganization: real input routes, no widget actions while editing.
     if (!open()) return 737;
+    // Up from the tiles: Zasilanie first, then Right to the organizing switch.
     app.friendsMove(-1);
-    if (app.dashboard_tile_ != board::reorganize) return 738;
+    if (app.dashboard_tile_ != board::power) return 738;
+    if (!capture(L"drawer-widgets-power-focus.png")) return 760;
+    app.navigate(1);
+    if (app.dashboard_tile_ != board::reorganize) return 761;
+    app.navigate(-1);
+    if (app.dashboard_tile_ != board::power) return 762;
+    app.friendsMove(1);
+    if (app.dashboard_tile_ != app.dashboardLayout().items.front().source) return 763;
+    app.friendsMove(-1); app.navigate(1);
     app.enterDown(false); app.enterUp();
     if (!app.dashboardEditing()) return 739;
+    // Organizing: Up reaches only its switch.
+    app.friendsMove(1); app.friendsMove(-1);
+    if (app.dashboard_tile_ != board::reorganize) return 764;
     app.friendsMove(1);
     app.enterDown(false); app.enterDown(true);
     if (app.dashboardLayout().items.front().size != widgets::Size::square) return 740; // Deferred until release.
@@ -229,6 +262,24 @@ int LauncherUiTest::dashboard(HWND window) {
     app.friendsBack(); // Exit editing and persist, keeping the drawer open.
     if (app.dashboardEditing() || !app.friendsOpen() || loadAppSettings().widget_layout != app.settings_.widget_layout) return 751;
     app.closeFriends();
+    // Zasilanie: Up, A opens the power menu over the screen, the drawer goes; a click on it does the same.
+    const int remembered = app.dashboard_tile_;
+    app.tabDown(false); app.tabUp();
+    if (!app.friendsOpen() || app.friends_list_) return 765;
+    app.dashboard_tile_ = app.dashboardLayout().items.front().source; app.friendsMove(-1); app.enterDown(false); app.enterUp();
+    if (!app.powerMenuOpen() || app.friendsOpen()) return 766;
+    app.power_menu_.reset();
+    app.tabDown(false); app.tabUp();
+    if (!app.friendsOpen()) return 767;
+    {
+        center(board::powerButton(left), x, y);
+        app.click(x, y, false); app.pointerUp();
+        if (!app.powerMenuOpen() || app.friendsOpen()) return 768;
+        app.power_menu_.reset();
+        // The drawer opens on a tile again, not on Zasilanie.
+        if (app.dashboard_tile_ == board::power) return 769;
+        app.dashboard_tile_ = remembered;
+    }
     app.tabDown(false); app.tabUp();
     if (app.dashboard_tile_ != 1 || app.dashboardEditing()) return 752;
     // A long layout scrolls, and navigation brings the focused tile fully on-screen.

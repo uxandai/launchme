@@ -91,8 +91,11 @@ inline int move(int index, int horizontal, int vertical, int count = tile_count)
     return std::min(row * columns + column, count - 1);
 }
 
-constexpr int reorganize = -1, no_hit = -2;
+// The toolbar over the tiles: Zasilanie (the power menu), then the organizing switch. Up from the top
+// tiles reaches Zasilanie first; Right/Left walk between the two, Down returns to the tiles.
+constexpr int reorganize = -1, no_hit = -2, power = -3;
 inline Rect organizeButton(float left = 0) { return {left + drawer_width - margin - 44, 40, left + drawer_width - margin, 84}; }
+inline Rect powerButton(float left = 0) { return {left + drawer_width - margin - 98, 40, left + drawer_width - margin - 54, 84}; }
 struct Item {
     std::string id;
     int source = 0;
@@ -136,6 +139,7 @@ struct Layout {
     }
     Rect tile(int source, float left = 0, float scroll = 0) const {
         if (source == reorganize) return organizeButton(left);
+        if (source == power) return powerButton(left);
         for (const auto& i : items) if (i.source == source)
             return {left + i.box.left, i.box.top - scroll, left + i.box.right, i.box.bottom - scroll};
         return {};
@@ -143,12 +147,17 @@ struct Layout {
     float maxScroll(float height) const { return std::max(0.0f, bottom - height + 20); }
     int hit(float left, float x, float y, float scroll, float height) const {
         if (organizeButton(left).contains(x, y)) return reorganize;
+        if (powerButton(left).contains(x, y)) return power;
         if (y < grid_top - 8 || y >= height - 12) return no_hit;
         for (const auto& i : items) if (tile(i.source, left, scroll).contains(x, y)) return i.source;
         return no_hit;
     }
     int move(int source, int horizontal, int vertical) const {
-        if (source == reorganize) return vertical > 0 && !items.empty() ? items.front().source : source;
+        if (source == power || source == reorganize) {
+            if (vertical > 0 && !items.empty()) return items.front().source;
+            if (horizontal) return horizontal > 0 ? reorganize : power;
+            return source;
+        }
         const auto from = tile(source);
         const float fx = (from.left + from.right) / 2, fy = (from.top + from.bottom) / 2;
         float best = std::numeric_limits<float>::max();
@@ -162,7 +171,7 @@ struct Layout {
             const float score = (overlap ? 0 : 10000) + (horizontal ? std::abs(dx) + std::abs(dy) * 2 : std::abs(dy) + std::abs(dx) * 2);
             if (score < best) { best = score; next = i.source; }
         }
-        return next == source && vertical < 0 ? reorganize : next;
+        return next == source && vertical < 0 ? power : next;
     }
 };
 } // namespace dashboard

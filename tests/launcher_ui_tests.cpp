@@ -1,5 +1,6 @@
 #include "../src/app/launcher.hpp"
 #include "../src/app/launcher_internal.hpp"
+#include "../src/library/game_log.hpp"
 #include "../src/library/screenscraper_config.hpp"
 #include "../src/library/system_logos.hpp"
 #include "../src/ui/game_details_layout.hpp"
@@ -292,7 +293,7 @@ public:
         if (GetEnvironmentVariableW(L"LAUNCHME_PERF_DRAWER", drawer_scene, 4) == 1 && drawer_scene[0] == L'1') {
             // Right drawer dashboard (clock, tiles) over the shelf; sensors/Discord are fixtures.
             app.read_sensors_ = [] { return sensors::Reading{true, 48, 61}; };
-            app.discord_.running = [] { return false; };
+            app.discord_.running = [](const std::filesystem::path&) { return false; };
             app.tabDown(false); app.tabUp();
         }
         const auto private_mb = [] {

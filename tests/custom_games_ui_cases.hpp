@@ -308,6 +308,26 @@ int LauncherUiTest::customGames(HWND window) {
             const int account = find(ui::Option::Kind::steam_account), managed = find(ui::Option::Kind::aurelia);
             if (account >= static_cast<int>(editor.options.size()) || managed >= static_cast<int>(editor.options.size()) ||
                 !editor.options[static_cast<size_t>(managed)].more) return 672;
+            // Aurelia's own log: a switch, off until chosen, right after the game's logs; the line above says what Aurelia leaves out.
+            const int aurelia_log = find(ui::Option::Kind::aurelia_log), logs = find(ui::Option::Kind::log);
+            if (aurelia_log != logs + 1 || editor.options[static_cast<size_t>(aurelia_log)].choice() || editor.options[static_cast<size_t>(aurelia_log)].on ||
+                editor.options[static_cast<size_t>(aurelia_log)].more) return 679;
+            // Switched on, each gets its "…": the logs' own folder, Aurelia's inside the game's.
+            std::vector<std::filesystem::path> shown;
+            const auto reveal = app.reveal_download_;
+            app.reveal_download_ = [&](const std::filesystem::path& path) { shown.push_back(path); return true; };
+            for (const int option : {logs, aurelia_log}) {
+                app.customEditorOption(option); app.customEditorOptionAccept();
+                if (!editor.options[static_cast<size_t>(option)].on || !editor.options[static_cast<size_t>(option)].more) return 680;
+                app.customEditorFocus(Item::option_more); app.customEditorAccept();
+            }
+            const auto logs_folder = game_log::folder(userConfigDirectory(), steam_game.name, gameKey(steam_game));
+            if (shown != std::vector<std::filesystem::path>{logs_folder, logs_folder / L"aurelia"} || !std::filesystem::is_directory(logs_folder / L"aurelia") ||
+                app.aurelia_ui_.open) return 681;
+            if (!capture(L"launch-options-log-folders.png")) return 682;
+            app.customEditorOption(logs); app.customEditorOptionAccept(); // Off: no "…".
+            if (editor.options[static_cast<size_t>(logs)].more) return 683;
+            app.reveal_download_ = reveal;
             app.customEditorOption(account);
             app.customEditorKey(VK_RETURN, false);
             if (!editor.dropdown.open || editor.dropdown.items.size() != 3 || editor.dropdown.chosen != 0 || editor.dropdown.focus != 0) return 673;

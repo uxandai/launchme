@@ -79,7 +79,11 @@ int main() {
     const std::vector<widgets::Preference> saved{{"plugin/widget", Size::wide}, {"cpu", Size::icon}, {"steam", Size::square}};
     const dashboard::Layout mixed{ids, saved}, disabled{{"steam", "discord", "cpu", "gpu"}, saved};
     if (mixed.items.front().source != 4 || disabled.items.front().source != 2 || disabled.items.front().size != Size::icon ||
-        mixed.move(4, 0, -1) != dashboard::reorganize || mixed.move(dashboard::reorganize, 0, 1) != 4 ||
-        mixed.hit(left, left + 390, 60, 0, 900) != dashboard::reorganize || mixed.maxScroll(450) <= 0) return 13;
+        mixed.move(4, 0, -1) != dashboard::power || mixed.move(dashboard::reorganize, 0, 1) != 4 ||
+        mixed.move(dashboard::power, 0, 1) != 4 || mixed.move(dashboard::power, 1, 0) != dashboard::reorganize ||
+        mixed.move(dashboard::reorganize, -1, 0) != dashboard::power || mixed.move(dashboard::power, -1, 0) != dashboard::power ||
+        mixed.move(dashboard::power, 0, -1) != dashboard::power ||
+        mixed.hit(left, left + 390, 60, 0, 900) != dashboard::reorganize || mixed.hit(left, left + 340, 60, 0, 900) != dashboard::power ||
+        mixed.tile(dashboard::power, left).right >= mixed.tile(dashboard::reorganize, left).left || mixed.maxScroll(450) <= 0) return 13;
     return 0;
 }

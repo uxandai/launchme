@@ -41,8 +41,9 @@ struct HdrBackend {
 // Discord dashboard tile: launch/focus only. Injectable, so UI tests never touch a real client.
 // `running` is called on the dashboard worker; `focus` and `locate` on the UI thread.
 struct DiscordBackend {
-    std::function<bool()> running = discord::running;
-    std::function<bool()> focus = discord::focus;
+    // The chosen client (AppSettings::discord_program), empty: Discord's own.
+    std::function<bool(const std::filesystem::path&)> running = discord::running;
+    std::function<bool(const std::filesystem::path&)> focus = discord::focus;
     std::function<std::optional<GameAction>()> locate = discord::launchAction;
 };
 

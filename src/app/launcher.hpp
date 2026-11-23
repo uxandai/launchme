@@ -105,6 +105,7 @@
 #include "steam_game_state.hpp"
 #endif
 #include "store_hub_state.hpp"
+#include "tray_menu.hpp"
 
 #include <Windows.h>
 #include <shellapi.h> // HDROP: files dropped on the desktop window.
@@ -983,11 +984,16 @@ public:
     // "Chowaj do zasobnika podczas gry" (src/app/tray.cpp): once a game started here is confirmed
     // running, the window leaves the taskbar and Alt+Tab and an icon in the notification area stands
     // in for it. The last game's end, the icon, a second instance or Guide bring it back.
+    // "Zamknięcie okna chowa do zasobnika": the icon stays while the launcher runs, and closing the
+    // window hides it there (only the icon, a second instance or Guide bring it back).
     static constexpr UINT tray_message = WM_APP + 60; // The icon's callback (worker messages use 1…42).
     void trayIconEvent(WPARAM wparam, LPARAM lparam);
     void taskbarCreated(); // Explorer restarted: the icon is added again.
     bool inTray() const { return in_tray_; }
     void showFromTray() { leaveTray(); } // Shown again (a second instance's request); focus is the caller's.
+    // --minimized (started with the system) with "Zamknięcie okna chowa do zasobnika": the desktop window
+    // starts hidden in the tray instead of minimized. False: shown as before (Tryb TV, no tray).
+    bool startInTray();
 
 private:
     // Worker queues (app/launcher_queues.hpp).
@@ -1092,11 +1098,16 @@ private:
     uint64_t aurelia_account_ = 0, aurelia_poll_at_ = 0, aurelia_cloud_at_ = 0;
     uint32_t aurelia_page_generation_ = 0;
     std::wstring aurelia_account_name_, aurelia_version_, aurelia_setup_status_;
+    bool aurelia_version_told_ = false; // aureliaVersionNotice: once a run.
+    void aureliaVersionNotice();
     std::map<uint32_t, aurelia::Cloud> aurelia_cloud_;
     std::map<uint32_t, aurelia::Download> aurelia_downloads_;
     std::set<uint32_t> aurelia_operations_;
     std::set<uint32_t> aurelia_playing_;
     std::map<uint32_t, uint64_t> aurelia_stopping_; // Zamknij grę through Aurelia: the deadline (0 while asked).
+    uint64_t aurelia_catch_up_at_ = 0;
+    bool aurelia_catch_up_busy_ = false;
+    std::unordered_set<std::string> aurelia_caught_up_; // Pending uploads tried in this run.
     json::Value aurelia_page_data_;
     aurelia_ui::Action aurelia_library_action_ = aurelia_ui::Action::install;
     const wchar_t* aureliaLibraryTitle() const;
@@ -1140,6 +1151,19 @@ private:
     void aureliaSyncInstallations(const std::set<uint32_t>& released = {});
     void aureliaCheckCloud(const Game& game, bool force = false);
     std::wstring aureliaCloudText(const Game& game) const;
+    // A game switched to Aurelia by hand (its launch options, its Aurelia page): its cloud saves synced
+    // at once (aurelia.cpp); a conflict or failure opens its cloud page.
+    void aureliaManagedNow(const Game& game);
+    void aureliaCloudFailed(const Game& game, const std::wstring& title, const std::wstring& reason);
+    // Its saves synced now (both ways, or up alone), told in notifications; a failure as above.
+    void aureliaCloudSync(const Game& game, bool upload);
+    // Standalone sessions Launchme did not see end (AppSettings::aurelia_cloud_pending): their saves go up
+    // once Aurelia no longer runs the game, asked every minute, once per game in a run.
+    void aureliaCloudCatchUp(uint64_t now);
+    void aureliaCloudSettled(uint32_t app); // Its saves are in the cloud: nothing pending.
+    // Opcje uruchamiania → Zapisuj log Aurelii: a new log in the game's aurelia/ log folder for one of its
+    // commands, its first line saying what for; empty when the switch is off.
+    std::filesystem::path aureliaLog(const Game& game, std::wstring_view what);
     std::shared_ptr<std::atomic_bool> profile_cancel_ = std::make_shared<std::atomic_bool>(false);
     // Czy to u mnie zadziała (src/app/hardware_check.cpp): the desktop pane's check of a PC game's
     // requirements against this PC. Read on a worker once per game; UI tests answer it themselves.
@@ -1742,6 +1766,29 @@ private:
     bool addTrayIcon();
     bool in_tray_ = false, tray_icon_ = false;
     std::wstring tray_game_;
+    // Zamknięcie okna chowa do zasobnika (tray.cpp). closeToTray: requestClose hides the window instead
+    // (false: no setting or no icon, it closes). Zamknij launchme (the icon's menu, the power menu) sets
+    // quit_requested_ so that the next WM_CLOSE quits.
+    bool closeToTray();
+    bool tray_closed_ = false;      // Hidden by a close: a game's end leaves it there.
+    bool tray_unavailable_ = false; // The icon could not be added (no tray host): no permanent icon.
+    bool tray_never_shown_ = false; // Started in the tray: shown the first time in the window's own state.
+    bool quit_requested_ = false;
+    // The icon's menu (tray_menu.hpp) and what its entries stand for.
+    std::vector<tray_menu::Entry> trayMenu();
+    void trayCommand(unsigned command);
+    std::vector<Game> trayRecentGames() const;
+    std::optional<Game> trayPlayingGame() const;
+    std::optional<std::wstring> trayDownloads() const;
+    std::vector<Game> tray_recent_;
+    std::optional<Game> tray_playing_;
+    // Each second while the icon is there: its tooltip (the game being played) and, on Linux, its menu.
+    void refreshTray();
+    std::wstring trayTip() const;
+    void trayBalloon(const std::wstring& title, const std::wstring& text);
+    std::wstring tray_tip_;
+    uint64_t tray_refresh_at_ = 0;
+    std::vector<tray_menu::Entry> tray_menu_shown_; // Linux: the menu the tray host has.
     // Shell_NotifyIconW; UI tests record the calls instead of touching the notification area.
     std::function<BOOL(DWORD, NOTIFYICONDATAW*)> tray_call_ = [](DWORD message, NOTIFYICONDATAW* data) { return Shell_NotifyIconW(message, data); };
     void requestGameFocus(const Game& game, uint64_t focus_ms = default_focus_ms);
@@ -1942,6 +1989,8 @@ private:
         std::vector<uint64_t> accounts;
         int account = -1;
         bool aurelia = false, aurelia_shown = false;
+        std::string launch_provider; // A plugin launch provider offered for the game (empty: none).
+        bool launch_on = false;      // It is the chosen launch route.
     } launch_choices_;
     void customEditorFlags(custom_game_ui::State& ui, const Game& game);
     void launchChoicesShow(custom_game_ui::State& ui) const;
@@ -2159,6 +2208,12 @@ private:
     void pluginAction(const plugins::Action& action, const Game& game = {}, bool refresh = false,
                       const std::wstring* query = nullptr, bool background = false);
     std::vector<plugins::Action> pluginContext(const Game& game) const;
+    // Opcje uruchamiania → Uruchamianie: the launch provider chosen for a game (settings_.plugin_launch),
+    // when its plugin is still enabled and matches the game. pluginLaunch starts the game through it and
+    // lets the activity watch follow the real process; onPluginLaunch handles the provider's reply.
+    std::optional<plugins::Action> selectedLaunchProvider(const Game& game) const;
+    void pluginLaunch(const Game& game, const plugins::Action& provider);
+    void onPluginLaunch(const PluginsMessage& message);
     void refreshPluginContributions();
     void refreshPluginLibraries();
     void refreshPluginWidgets(bool active_only = false);
@@ -2320,6 +2375,8 @@ private:
     // Experimental quick resume (src/app/quick_resume.cpp).
     SessionState sessionState(const Game& game) const;
     bool anyActiveSession() const;
+    // The name of a game seen running or suspended (steam_only: a Steam game or shortcut), if any.
+    std::optional<std::wstring> blockingGame(bool steam_only = false) const;
     // A tile stands for the game `key` (itself, or the version group it was launched from).
     bool sameTile(const Game& tile, const std::string& key) const;
     // The running, starting or suspended session of a tile's game, if any.
@@ -2789,7 +2846,8 @@ private:
     std::map<std::string, std::vector<uint32_t>> plugin_library_ids_;
     bool plugins_busy_ = false, plugin_command_pending_ = false, plugin_refresh_pending_ = false;
     std::function<std::filesystem::path(HWND)> pick_plugin_; // Tests only; empty = the launcher's file picker.
-    std::function<bool(const std::filesystem::path&)> reveal_download_; // Tests; default uses Explorer's PIDL API.
+    // Tests: a download's file, a game's log folder (Opcje uruchamiania's "…"); default: the file manager.
+    std::function<bool(const std::filesystem::path&)> reveal_download_;
     std::shared_ptr<ArtworkBrowserQueue> artwork_jobs_ = std::make_shared<ArtworkBrowserQueue>();
     std::shared_ptr<MusicQueue> music_jobs_ = std::make_shared<MusicQueue>();
     std::shared_ptr<GameActivityQueue> game_activity_jobs_ = std::make_shared<GameActivityQueue>();

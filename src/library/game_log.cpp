@@ -45,19 +45,21 @@ std::string slug(std::wstring_view title, std::string_view key) {
     return result.empty() ? std::string("game") : result;
 }
 
-std::filesystem::path folder(const std::filesystem::path& data, std::wstring_view title, std::string_view key) {
-    return data / L"logs" / L"games" / text_encoding::wideLenient(slug(title, key));
+std::filesystem::path folder(const std::filesystem::path& data, std::wstring_view title, std::string_view key, std::wstring_view kind) {
+    auto where = data / L"logs" / L"games" / text_encoding::wideLenient(slug(title, key));
+    if (!kind.empty()) where /= std::wstring(kind);
+    return where;
 }
 
-std::filesystem::path begin(const std::filesystem::path& data, std::wstring_view title, std::string_view key) {
+std::filesystem::path begin(const std::filesystem::path& data, std::wstring_view title, std::string_view key, std::wstring_view kind) {
     try {
-        const auto where = folder(data, title, key);
+        const auto where = folder(data, title, key, kind);
         std::error_code error;
         std::filesystem::create_directories(where, error);
         if (error) return {};
         std::vector<std::filesystem::path> logs;
         for (std::filesystem::directory_iterator it(where, error), end; !error && it != end; it.increment(error))
-            if (it->path().extension() == L".log") logs.push_back(it->path());
+            if (it->is_regular_file(error) && it->path().extension() == L".log") logs.push_back(it->path());
         std::sort(logs.begin(), logs.end()); // Named by their time: oldest first.
         for (size_t i = 0; i + max_files <= logs.size(); ++i) std::filesystem::remove(logs[i], error);
         auto file = where / (stamp(true) + L".log");

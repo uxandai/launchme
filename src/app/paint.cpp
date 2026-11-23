@@ -923,6 +923,8 @@ void Launcher::showNotification(NotificationKind kind, std::wstring title,
                                 std::wstring subtitle, float level) {
     if (kind == NotificationKind::volume) { showVolume(level, false); return; }
     if (kind == NotificationKind::error) diagnostics::log("error", title + (subtitle.empty() ? std::wstring{} : L" — " + subtitle));
+    // Closed into the tray (a game started from the icon's menu, say): an error shows by the icon too.
+    if (kind == NotificationKind::error && tray_closed_) trayBalloon(title, subtitle);
     // The same message already waiting (e.g. a save retried every frame) is not queued twice.
     const bool queued = std::any_of(notifications_.begin(), notifications_.end(), [&](const Notification& notice) {
         return notice.kind == kind && notice.title == title && notice.subtitle == subtitle;

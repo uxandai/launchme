@@ -107,12 +107,14 @@ std::vector<std::wstring> arguments(const Request& r) {
         break;
 #endif
     case C::launch_targets: add({L"launch-targets", app}); break;
+    case C::game_config: add({L"config", L"game", app}); break;
     case C::running: add({L"running"}); break;
     case C::stop: add({L"stop", app}); if (r.force) add({L"--force"}); break;
     case C::available: add({L"available", app}); break;
     case C::cloud_list: add({L"cloud", L"list", app}); break;
     case C::cloud_sync:
         add({L"cloud", L"sync", app});
+        if (!r.log.empty()) add({L"-vv"}); // Log Aurelii: the daemon relays a request's own -vv output.
         if (r.direction == Request::Direction::down) add({L"--down"});
         if (r.direction == Request::Direction::up) add({L"--up"});
         if (!r.text.empty()) { if (r.text != L"cloud" && r.text != L"local") return {}; add({L"--resolve", r.text}); }
@@ -173,6 +175,18 @@ std::optional<std::vector<SteamCollection>> collectionList(const json::Value& va
     }
     return result;
 }
+std::optional<std::vector<uint32_t>> runningApps(const json::Value& value) {
+    const auto* games = value.get("running");
+    if (!games || games->type != Type::array || games->elements.size() > 10000) return {};
+    std::vector<uint32_t> result;
+    for (const auto& item : games->elements) {
+        const auto id = integer(item.get("app_id"));
+        if (!id || !*id || *id > UINT32_MAX) return {};
+        result.push_back(static_cast<uint32_t>(*id));
+    }
+    return result;
+}
+
 std::optional<std::vector<uint32_t>> collectionMembers(const json::Value& value) {
     const auto* ids = value.get("app_ids");
     if (!ids || ids->type != Type::array || ids->elements.size() > 100000) return {};

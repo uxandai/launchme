@@ -34,7 +34,7 @@ int LauncherUiTest::aureliaIntegration(HWND window) {
         std::mutex mutex; std::vector<aurelia::Request> calls;
         std::atomic_bool bare_friends{false}, send_failure{false}, download{false}, stop_download{false}, helper_failure{false}, stop_failure{false};
         std::atomic_int helper_calls{0};
-        std::atomic_bool logged_in{true}, bad_health{false}, qr_approve{false};
+        std::atomic_bool logged_in{true}, bad_health{false}, qr_approve{false}, cloud_ok{false}, game_running{false};
         std::atomic_uint64_t account{76561198000000001ULL};
         int count(C c) { std::lock_guard lock(mutex); return static_cast<int>(std::count_if(calls.begin(), calls.end(), [c](const auto& r) { return r.command == c; })); }
         aurelia::Request last(C c) { std::lock_guard lock(mutex); for (auto it = calls.rbegin(); it != calls.rend(); ++it) if (it->command == c) return *it; return {}; }
@@ -76,7 +76,8 @@ int LauncherUiTest::aureliaIntegration(HWND window) {
         case C::play: return ok(R"({"app_id":902,"status":"finished"})");
         case C::downgrade: return ok(R"({"app_id":902,"status":"downgraded","pinned":true})");
         case C::cloud_list: return ok(R"({"app_id":902,"files":[{"filename":"save/slot-1.dat","size":8192},{"filename":"settings.ini","size":123}]})");
-        case C::cloud_sync: return r.text.empty() ? ok(R"({"status":"conflicts","conflicts":[{"filename":"slot-1.dat"}]})") : ok(R"({"status":"ok","conflicts":[],"skipped":[],"failed":[]})");
+        case C::cloud_sync: return r.text.empty() && !fake->cloud_ok ? ok(R"({"status":"conflicts","conflicts":[{"filename":"slot-1.dat"}]})") : ok(R"({"status":"ok","conflicts":[],"skipped":[],"failed":[]})");
+        case C::running: return fake->game_running ? ok(R"({"running":[{"app_id":902,"name":"The Moonlit Archive","pid":4242}]})") : ok(R"({"running":[]})");
         case C::dlc: return ok(R"({"dlc":[{"app_id":903,"name":"The Moonlit Archive","owned":true,"installed":true,"disabled":false},{"app_id":904,"name":"Beyond the Fog","owned":true,"installed":false,"disabled":false},{"app_id":905,"name":"Soundtrack","owned":false,"installed":false,"disabled":false}]})");
         case C::manifests: return ok(R"([{"depot_id":903,"depot_name":"Windows content","branch":"public","manifest_id":8593343465227540543}])");
         case C::branches: return ok(R"({"branches":["public","beta"]})");
@@ -103,15 +104,16 @@ int LauncherUiTest::aureliaIntegration(HWND window) {
         default: return ok(R"({"status":"ok"})");
         }
     };
-    app.aurelia_version_ = L"v0.1.40";
+    app.aurelia_version_ = L"v0.3.1";
     app.aurelia_get_ = [](const std::wstring& url, const std::wstring&, size_t) {
-        if (url != aurelia::latest_url) return HttpResponse{};
-        const auto body = std::string(R"({"tag_name":"v0.1.40","assets":[{"name":"aurelia_windows_x86_64.exe","browser_download_url":"https://github.com/Drackrath/Aurelia/releases/download/v0.1.40/aurelia_windows_x86_64.exe","size":8693760,"digest":"sha256:)") + std::string(64, 'a') + R"("}]})";
+        // The pinned release by its tag (aurelia::compatible_versions), never "latest".
+        if (url != L"https://api.github.com/repos/Drackrath/Aurelia/releases/tags/v0.3.1") return HttpResponse{};
+        const auto body = std::string(R"({"tag_name":"v0.3.1","assets":[{"name":"aurelia_windows_x86_64.exe","browser_download_url":"https://github.com/Drackrath/Aurelia/releases/download/v0.3.1/aurelia_windows_x86_64.exe","size":8693760,"digest":"sha256:)") + std::string(64, 'a') + R"("}]})";
         return HttpResponse{200, std::vector<uint8_t>(body.begin(), body.end())};
     };
     app.aurelia_installer_ = [fake](const aurelia::Release& r, const aurelia::Cancel&, const std::function<void(uint64_t, uint64_t)>& progress) {
         ++fake->helper_calls;
-        if (r.version != L"v0.1.40" || r.size != 8693760) return aurelia::Reply{false, false, {}, L"Bad release"};
+        if (r.version != L"v0.3.1" || r.size != 8693760) return aurelia::Reply{false, false, {}, L"Bad release"};
         progress(r.size, r.size);
         return fake->helper_failure ? aurelia::Reply{false, false, {}, L"Fixture digest mismatch"} : aurelia::Reply{true};
     };
@@ -125,9 +127,29 @@ int LauncherUiTest::aureliaIntegration(HWND window) {
     dispatched.clear(); app.aureliaActivate({{}, {}, {}, A::repository});
     if (dispatched != std::vector<std::wstring>{L"https://github.com/Drackrath/Aurelia"}) return 10351;
     app.installAurelia();
-    if (!wait([&] { return !app.aurelia_helper_busy_; }) || fake->helper_calls != 1 || app.aurelia_version_ != L"v0.1.40") return 10347;
+    if (!wait([&] { return !app.aurelia_helper_busy_; }) || fake->helper_calls != 1 || app.aurelia_version_ != L"v0.3.1") return 10347;
     fake->helper_failure = true; app.installAurelia();
-    if (!wait([&] { return !app.aurelia_helper_busy_; }) || app.aurelia_setup_status_ != L"Fixture digest mismatch" || app.aurelia_version_ != L"v0.1.40") return 10348;
+    if (!wait([&] { return !app.aurelia_helper_busy_; }) || app.aurelia_setup_status_ != L"Fixture digest mismatch" || app.aurelia_version_ != L"v0.3.1") return 10348;
+    fake->helper_failure = false;
+    // Newer than the compat list: kept, never downgraded.
+    app.aurelia_version_ = L"v9.0.0"; app.installAurelia();
+    if (app.aurelia_helper_busy_ || fake->helper_calls != 2 || app.aurelia_setup_status_.find(L"v0.3.1") == std::wstring::npos) return 10444;
+    // Older than supported: said once at start, in the panel's helper row, and games do not start through it.
+    app.aurelia_version_ = L"v0.2.6"; app.aurelia_version_told_ = false; app.notifications_.clear(); app.aurelia_setup_status_.clear();
+    {
+        const bool enabled = app.settings_.aurelia; app.settings_.aurelia = true;
+        app.aureliaVersionNotice(); app.aureliaVersionNotice();
+        app.settings_.aurelia = enabled;
+    }
+    if (app.notifications_.size() != 1 || app.notifications_.front().kind != NotificationKind::error ||
+        app.notifications_.front().title.find(L"v0.3.1") == std::wstring::npos) return 10445;
+    app.aureliaRows();
+    {
+        const auto helper = std::find_if(app.aurelia_ui_.rows.begin(), app.aurelia_ui_.rows.end(), [](const auto& r) { return r.action == A::helper; });
+        if (helper == app.aurelia_ui_.rows.end() || helper->title.find(L"v0.3.1") == std::wstring::npos || helper->description.empty()) return 10446;
+    }
+    if (!capture(L"aurelia-outdated-tv.png")) return 10447;
+    app.aurelia_version_ = L"v0.3.1"; app.notifications_.clear();
     app.aureliaActivate({{}, {}, {}, A::toggle});
     if (!app.settings_.aurelia || app.aurelia_active_ || app.aurelia_ui_.status.empty()) return 10303; // Restart, no half-switched services.
     app.closeAurelia();
@@ -206,6 +228,7 @@ int LauncherUiTest::aureliaIntegration(HWND window) {
     // A Steam game the client manages: the dialog offers only the choice; nothing goes through Aurelia.
     app.openAurelia(&game); if (!wait([&] { return !app.aurelia_ui_.busy; })) return 10306;
     if (app.aureliaManaged(game) || app.aurelia_ui_.rows.size() != 1 || app.aurelia_ui_.rows[0].action != A::steam || !app.aurelia_ui_.rows[0].toggle) return 10370;
+    app.settings_.aurelia_cloud_skip.insert("902"); // The sync at once is checked after the toggles.
     app.aureliaActivate(app.aurelia_ui_.rows[0]);
     if (!app.settings_.aurelia_standalone.contains("902") || !app.aureliaManaged(game) || app.aurelia_ui_.rows.size() < 5) return 10308;
     if (!capture(L"aurelia-game-tv.png")) return 10307;
@@ -216,6 +239,13 @@ int LauncherUiTest::aureliaIntegration(HWND window) {
     if (app.aureliaManaged(game) || !app.settings_.aurelia_steam.contains("902")) return 10372;
     app.aureliaActivate(app.aurelia_ui_.rows[0]); app.settings_.aurelia_default = false; app.aureliaRows();
     if (!app.aureliaManaged(game)) return 10373;
+    // Switched to Aurelia by hand: its saves are synced at once, a conflict said on its page.
+    app.settings_.aurelia_cloud_skip.erase("902");
+    app.aureliaActivate(app.aurelia_ui_.rows[0]); app.aureliaActivate(app.aurelia_ui_.rows[0]); // Off, then on again.
+    if (!app.aureliaManaged(game) || !wait([&] { return !app.aurelia_operations_.contains(902); }) || fake->count(C::cloud_sync) != 1 ||
+        fake->last(C::cloud_sync).direction != aurelia::Request::Direction::both || app.aurelia_cloud_[902].state != aurelia::CloudState::conflicts ||
+        app.aurelia_ui_.page == P::cloud || app.aurelia_ui_.status.empty()) return 10430;
+    app.aurelia_cloud_.erase(902); app.aurelia_ui_.status.clear(); // Listed afresh below.
     // Cloud: its state from the listing, no file list; a sync detects the conflict.
     app.aureliaPage(P::cloud);
     if (!wait([&] { return app.aurelia_cloud_[902].state == aurelia::CloudState::files; })) return 10310;
@@ -224,13 +254,13 @@ int LauncherUiTest::aureliaIntegration(HWND window) {
     if (!wait([&] { return !app.aurelia_ui_.busy; }) || app.aurelia_cloud_[902].state != aurelia::CloudState::conflicts) return 10311;
     if (!capture(L"aurelia-cloud-conflict-tv.png")) return 10312;
     app.aureliaActivate({L"Use cloud saves", L"Replace local saves", {}, A::resolve_cloud});
-    if (!app.aurelia_ui_.confirmation || fake->count(C::cloud_sync) != 1) return 10313;
-    app.modalKey(VK_ESCAPE, false); if (app.aurelia_ui_.confirmation || fake->count(C::cloud_sync) != 1 || !app.aurelia_ui_.open) return 10314;
+    if (!app.aurelia_ui_.confirmation || fake->count(C::cloud_sync) != 2) return 10313;
+    app.modalKey(VK_ESCAPE, false); if (app.aurelia_ui_.confirmation || fake->count(C::cloud_sync) != 2 || !app.aurelia_ui_.open) return 10314;
     app.aureliaActivate({L"Use cloud saves", {}, {}, A::resolve_cloud}, true);
     if (!wait([&] { return !app.aurelia_ui_.busy; }) || app.aurelia_cloud_[902].state != aurelia::CloudState::synced) return 10315;
     // Not signed in (or Aurelia not answering): Synchronizuj teraz says so where it is, never jumps to the setup page.
     app.aurelia_authenticated_ = false; app.aureliaActivate({{}, {}, {}, A::sync});
-    if (!app.aurelia_ui_.open || app.aurelia_ui_.page != P::cloud || app.aurelia_ui_.status.empty() || fake->count(C::cloud_sync) != 2) return 10417;
+    if (!app.aurelia_ui_.open || app.aurelia_ui_.page != P::cloud || app.aurelia_ui_.status.empty() || fake->count(C::cloud_sync) != 3) return 10417;
     app.aurelia_authenticated_ = true;
     // The cloud toggle: no state shown or checked while off.
     app.aureliaPage(P::setup); app.aureliaActivate({{}, {}, {}, A::cloud_toggle});
@@ -422,6 +452,49 @@ int LauncherUiTest::aureliaIntegration(HWND window) {
     if (!wait([&] { return !app.aurelia_playing_.contains(902) && !app.aurelia_ui_.busy; }) || fake->count(C::play) != before_play ||
         app.aurelia_cloud_[902].state != aurelia::CloudState::conflicts) return 10355;
     app.closeAurelia();
+    // Zapisuj log Aurelii: the launch writes <time>.aurelia.log, its steps and the syncs given that log;
+    // its saves went up, so nothing is pending.
+    {
+        fake->cloud_ok = true; app.aurelia_cloud_.clear();
+        app.setLaunchFlags(gameKey(routed), launch_flag::aurelia_log);
+        const auto plays = fake->count(C::play);
+        app.launchGame(routed);
+        if (!wait([&] { return !app.aurelia_playing_.contains(902); }) || fake->count(C::play) != plays + 1) return 10431;
+        const auto log = fake->last(C::play).log;
+        std::ifstream input(log, std::ios::binary);
+        const std::string written((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+        if (log.empty() || log.parent_path() != game_log::folder(userConfigDirectory(), routed.name, gameKey(routed), L"aurelia") || fake->last(C::cloud_sync).log != log ||
+            written.find("Routing fixture (902), launch") == std::string::npos || written.find("cloud sync 902 -vv --up") == std::string::npos ||
+            !app.settings_.aurelia_cloud_pending.empty() || app.aurelia_cloud_[902].state != aurelia::CloudState::synced) return 10432;
+        app.setLaunchFlags(gameKey(routed), 0);
+        app.closeAurelia(); app.notifications_.clear();
+    }
+    // Launchme closed or crashed while the game ran: at its next start the saves go up, once Aurelia no
+    // longer runs the game; tried once in a run.
+    {
+        const auto installed = app.installed_library_;
+        if (std::none_of(installed.begin(), installed.end(), [](const Game& g) { return g.app_id == 902 && g.installed; })) return 10433;
+        app.settings_.aurelia_cloud_pending = {"902"}; app.aurelia_caught_up_.clear(); app.aurelia_catch_up_at_ = 0;
+        fake->game_running = true;
+        const auto syncs = fake->count(C::cloud_sync), asked = fake->count(C::running);
+        app.aureliaCloudCatchUp(GetTickCount64());
+        if (!wait([&] { return !app.aurelia_catch_up_busy_; }) || fake->count(C::running) != asked + 1 || fake->count(C::cloud_sync) != syncs ||
+            !app.settings_.aurelia_cloud_pending.contains("902")) return 10434;
+        app.aureliaCloudCatchUp(GetTickCount64()); // Asked again a minute later, not before.
+        if (fake->count(C::running) != asked + 1) return 10435;
+        fake->game_running = false; app.aurelia_catch_up_at_ = 0;
+        app.aureliaCloudCatchUp(GetTickCount64());
+        if (!wait([&] { return !app.aurelia_catch_up_busy_ && !app.aurelia_operations_.contains(902); }) || fake->count(C::cloud_sync) != syncs + 1 ||
+            fake->last(C::cloud_sync).direction != aurelia::Request::Direction::up || !app.settings_.aurelia_cloud_pending.empty() ||
+            !app.aurelia_caught_up_.contains("902")) return 10436;
+        // Its sync turned off since: dropped, nothing sent.
+        app.settings_.aurelia_cloud_pending = {"902"}; app.aurelia_caught_up_.clear(); app.aurelia_catch_up_at_ = 0;
+        app.settings_.aurelia_cloud_skip.insert("902");
+        app.aureliaCloudCatchUp(GetTickCount64());
+        if (!wait([&] { return !app.aurelia_catch_up_busy_; }) || fake->count(C::cloud_sync) != syncs + 1 || !app.settings_.aurelia_cloud_pending.empty()) return 10437;
+        app.settings_.aurelia_cloud_skip.erase("902");
+        fake->cloud_ok = false; app.aurelia_cloud_.clear(); app.notifications_.clear();
+    }
     fake->logged_in = false; app.aureliaRescan();
     if (!wait([&] { return !app.aurelia_authenticated_ && app.aurelia_setup_status_.find(L"offline") != std::wstring::npos; }) || app.installed_library_.size() != 2) return 10356;
     fake->bad_health = true; app.aureliaRescan();

@@ -29,6 +29,19 @@ bool Launcher::anyActiveSession() const {
     return std::any_of(game_sessions_.begin(), game_sessions_.end(), [](const auto& entry) { return !entry.second.frozen(); });
 }
 
+// A game that keeps Launchme (or Steam) from restarting: seen running, or suspended in RAM. A session
+// only dispatched (a client that never reported its game, a start that failed with unknown telemetry)
+// does not count: it made "Close the game first" appear with nothing running.
+std::optional<std::wstring> Launcher::blockingGame(bool steam_only) const {
+    for (const auto& [key, session] : game_sessions_) {
+        if (!session.running() && !session.frozen()) continue;
+        if (steam_only && !key.starts_with("steam:") && !key.starts_with("shortcut:")) continue;
+        auto name = trackedGame(key).name;
+        return name.empty() ? std::wstring(L"?") : name;
+    }
+    return std::nullopt;
+}
+
 bool Launcher::sameTile(const Game& tile, const std::string& key) const {
     if (key.empty() || !isGame(tile)) return false;
     if (gameKey(tile) == key) return true;
@@ -345,6 +358,10 @@ void Launcher::restoreFrozenGames() {
 }
 
 bool Launcher::requestClose() {
+    // Zamknięcie okna chowa do zasobnika (tray.cpp): the window's ✕, Alt+F4 and the taskbar hide it;
+    // Zamknij launchme (the icon's menu, the power menu) asked to quit.
+    const bool quit = std::exchange(quit_requested_, false);
+    if (!closing_ && !quit && closeToTray()) return true;
     stopLaunchAnimation();
     if (closing_) return !close_ready_;
     if (gameOverlayOpen()) overlayDashboard();

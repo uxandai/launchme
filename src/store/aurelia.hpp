@@ -8,6 +8,8 @@
 #include "../model/game_details.hpp"
 #include "../library/collections.hpp"
 #include <functional>
+#include <iterator>
+#include <string_view>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -17,6 +19,20 @@
 
 namespace aurelia {
 inline constexpr wchar_t latest_url[] = L"https://api.github.com/repos/Drackrath/Aurelia/releases/latest";
+// The compat list: the Aurelia releases this Launchme was checked with, oldest first. The first is the
+// oldest it works with: an older one is reported (a notification at start, the Aurelia panel, Ustawienia)
+// and games do not start through it until it is updated. The last is the one Launchme installs and
+// updates to. A newer Launchme moves the list on (adds releases, raises the first).
+inline constexpr const wchar_t* compatible_versions[] = {L"v0.3.1"};
+inline constexpr std::wstring_view minimum_version = compatible_versions[0];
+inline constexpr std::wstring_view pinned_version = compatible_versions[std::size(compatible_versions) - 1];
+// missing: none installed (or its version unreadable); outdated: older than the minimum, refused;
+// older: supported, the pinned one is newer (an update is offered); supported: from the list's range;
+// newer: past the list, not checked with this Launchme (it is used, and said so).
+enum class Support { missing, outdated, older, supported, newer };
+Support support(std::wstring_view installed);
+// GitHub's API address of one release (a tag from the list).
+std::wstring releaseUrl(std::wstring_view version);
 // The release asset for this system and the name it is installed under (<root>/<release>/<name>).
 #ifdef _WIN32
 inline constexpr wchar_t asset_name[] = L"aurelia_windows_x86_64.exe";
@@ -56,6 +72,8 @@ enum class Command {
     // Steam's collections, read only: pull fetches the cloud's into Aurelia's store (never push or sync,
     // which change the account), list names them, show (text: its id) gives one's games.
     collections_pull, collections_list, collections_show,
+    // `config game <id>`, read only: the game's own settings (cloud_sync_effective: whether `play` syncs its saves).
+    game_config,
     standalone // Host-side workflow; never passed directly to the CLI.
 };
 struct Request {
@@ -76,8 +94,9 @@ struct Request {
     // login_password: the password, given to the child as AURELIA_PASSWORD (never on a command line).
     std::wstring secret;
     std::shared_ptr<Input> input; // login_qr, login_password: lines for the child's stdin.
-    // play: the game's log (Opcje uruchamiania → Zapisuj logi). Aurelia then runs in this child
-    // (AURELIA_NO_DAEMON) with -vv, and all it writes is appended there.
+    // play, cloud_sync, standalone: the game's Aurelia log (Opcje uruchamiania → Log Aurelii). They run
+    // with -vv and all they write is appended there (play in this child, AURELIA_NO_DAEMON; a sync
+    // through the daemon, which relays its output); standalone notes each step.
     std::filesystem::path log;
 };
 struct Reply {
@@ -119,6 +138,8 @@ std::optional<std::vector<Game>> library(const json::Value& value, uint64_t acco
 std::optional<std::vector<SteamCollection>> collectionList(const json::Value& value);
 // `collections show <id>`: that collection's games.
 std::optional<std::vector<uint32_t>> collectionMembers(const json::Value& value);
+// `running`: the games Aurelia runs now (launched through `play`); nothing when the answer is not that list.
+std::optional<std::vector<uint32_t>> runningApps(const json::Value& value);
 // Aurelia is the library (account, owned and installed games, collections, play time) instead of the
 // Steam client: it is on and either replaces Steam for every game ("Aurelia jako zamiennik Steam") or
 // there is no Steam client signed in here (no steam.exe or no account in loginusers.vdf).

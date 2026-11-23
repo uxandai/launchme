@@ -385,6 +385,9 @@ void Launcher::onGameActivity(std::unique_ptr<GameActivityMessage> message) {
     const bool another_play = pending_launch_ && primaryGameAction(pending_game_).kind == ActionKind::play;
     bool returned = false;
     for (const auto& key : finished) returned |= launched_here_.erase(key) > 0;
+    if (update_.phase == UpdateState::Phase::ready && !update_.files.empty() && !blockingGame())
+        showNotification(NotificationKind::download, tr(L"Aktualizacja gotowa"),
+                         desktop_mode_ ? tr(L"Czeka w Ustawienia → System (albo ikona na górnym pasku)") : tr(L"Czeka w Ustawienia → System → Aktualizacje"));
     if (!anyActiveSession() && !another_play) {
         audio_.resumeMusic();
         // The last game started here has ended: the launcher comes back, as a console's home
@@ -454,6 +457,7 @@ bool takeForegroundWindow(HWND window) {
 
 void Launcher::returnFromGame([[maybe_unused]] uint64_t ended_at) { // Linux: other programs are never seen.
     if (closing_ || !hwnd_) return;
+    if (tray_closed_) return; // Closed into the tray (tray.cpp): it stays there when a game ends.
     const HWND front = frontWindow();
     if (front == hwnd_) { leaveTray(); return; }
 #ifndef _WIN32

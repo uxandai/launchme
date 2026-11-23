@@ -651,8 +651,12 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show_command) {
     const bool tv_startup = start_minimized && launcher && !launcher->desktopMode();
     const bool minimized = (start_minimized && !tv_startup) || show_command == SW_SHOWMINNOACTIVE || show_command == SW_MINIMIZE ||
                            show_command == SW_SHOWMINIMIZED || show_command == SW_FORCEMINIMIZE;
-    ShowWindow(hwnd, minimized ? SW_SHOWMINNOACTIVE : launcher && launcher->startMaximized() ? SW_SHOWMAXIMIZED : SW_SHOW);
-    UpdateWindow(hwnd);
+    // With "Zamknięcie okna chowa do zasobnika" the desktop window started with Windows waits in the tray.
+    auto* starting = reinterpret_cast<Launcher*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    if (!(start_minimized && starting && starting->startInTray())) {
+        ShowWindow(hwnd, minimized ? SW_SHOWMINNOACTIVE : launcher && launcher->startMaximized() ? SW_SHOWMAXIMIZED : SW_SHOW);
+        UpdateWindow(hwnd);
+    }
     if (auto* app = reinterpret_cast<Launcher*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA)); app && tv_startup && !minimized) app->claimStartupForeground();
     if (auto* app = reinterpret_cast<Launcher*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA)); app && !jump.empty()) app->jumpCommand(jump);
     MSG message{};
@@ -946,8 +950,13 @@ int main(int argc, char** argv) {
     // --minimized (autostart, Uruchamiaj z systemem): the desktop window ready, without taking the
     // screen; Tryb TV takes it, as a console does after power-on.
     const bool tv_startup = start_minimized && launcher && !launcher->desktopMode();
-    ShowWindow(hwnd, start_minimized && !tv_startup ? SW_SHOWMINNOACTIVE : launcher && launcher->startMaximized() ? SW_SHOWMAXIMIZED : SW_SHOW);
-    UpdateWindow(hwnd);
+    // With "Zamknięcie okna chowa do zasobnika" the desktop window started with the session waits in the
+    // tray (when the desktop has one: otherwise minimized, as before).
+    auto* starting = reinterpret_cast<Launcher*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    if (!(start_minimized && starting && starting->startInTray())) {
+        ShowWindow(hwnd, start_minimized && !tv_startup ? SW_SHOWMINNOACTIVE : launcher && launcher->startMaximized() ? SW_SHOWMAXIMIZED : SW_SHOW);
+        UpdateWindow(hwnd);
+    }
     if (auto* app = reinterpret_cast<Launcher*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA)); app && tv_startup) app->claimStartupForeground();
     if (auto* app = reinterpret_cast<Launcher*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA)); app && !jump.empty()) app->jumpCommand(jump);
     // Started by Launchme's shortcut in Steam (--jump=play:): it ends with its game, as Steam expects.

@@ -1,0 +1,12 @@
+{
+  "apiVersion": 1,
+  "architecture": "windows-x64",
+  "id": "example.launch",
+  "version": "1.0.0",
+  "entry": "launch.dll",
+  "name": "Launch provider example",
+  "description": "An alternative way to start an installed game, reported to the host.",
+  "contributions": [
+    {"id": "run", "kind": "launch", "source": "steam", "title": "Start (example)", "command": "run"}
+  ]
+}

@@ -186,6 +186,26 @@ int main() {
     // Hiding to the tray while playing is opt-in, strict 0/1 too.
     if (AppSettings{}.hide_while_playing || parseAppSettings("hide_while_playing=yes\n").hide_while_playing ||
         !parseAppSettings("hide_while_playing=1\n").hide_while_playing) return 155;
+    if (AppSettings{}.close_to_tray || !parseAppSettings("close_to_tray=1\nclose_to_tray_told=1\n").close_to_tray ||
+        !parseAppSettings("close_to_tray=1\nclose_to_tray_told=1\n").close_to_tray_told) return 15501;
+    // Standalone sessions whose saves are still to go up (Aurelia): app ids alone.
+    if (!AppSettings{}.aurelia_cloud_pending.empty() ||
+        parseAppSettings("aurelia_cloud_pending=902\naurelia_cloud_pending=../x\n").aurelia_cloud_pending != std::unordered_set<std::string>{"902"}) return 15502;
+    {
+        auto chosen = config; chosen.aurelia_cloud_pending = {"902", "620"};
+        if (!saveAppSettings(chosen, file) || loadAppSettings(file).aurelia_cloud_pending != chosen.aurelia_cloud_pending) return 15503;
+    }
+    // The desktop sidebar's entries (shown by default) and the Widżety's Discord client (absolute paths only).
+    {
+        const AppSettings defaults;
+        if (!defaults.desktop_sidebar_store || !defaults.desktop_sidebar_platforms || !defaults.desktop_sidebar_studios || !defaults.discord_program.empty()) return 15504;
+        auto chosen = config; chosen.desktop_sidebar_store = false; chosen.desktop_sidebar_studios = false;
+        chosen.discord_program = std::filesystem::temp_directory_path() / L"Vesktop" / L"Vesktop.exe";
+        if (!saveAppSettings(chosen, file)) return 15505;
+        const auto loaded = loadAppSettings(file);
+        if (loaded.desktop_sidebar_store || !loaded.desktop_sidebar_platforms || loaded.desktop_sidebar_studios || loaded.discord_program != chosen.discord_program) return 15506;
+        if (!parseAppSettings("discord_program=Vesktop.exe\n").discord_program.empty()) return 15507;
+    }
     for (const bool enabled : {false, true}) {
         auto chosen = config; chosen.hide_while_playing = enabled;
         if (!saveAppSettings(chosen, file) || loadAppSettings(file).hide_while_playing != enabled) return 156;

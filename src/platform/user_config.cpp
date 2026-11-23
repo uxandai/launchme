@@ -139,6 +139,7 @@ constexpr FlagSetting flag_settings[] = {
     {"show_emulation", &AppSettings::show_emulation}, {"home_rows_migrated", &AppSettings::home_rows_migrated},
     {"tarot", &AppSettings::tarot}, {"store_hub", &AppSettings::store_hub}, {"compat_auto_update", &AppSettings::compat_auto_update}, {"show_launchers", &AppSettings::show_launchers},
     {"hide_while_playing", &AppSettings::hide_while_playing},
+    {"close_to_tray", &AppSettings::close_to_tray}, {"close_to_tray_told", &AppSettings::close_to_tray_told},
     {"mod_badges", &AppSettings::mod_badges},
     {"shelves_hero_facts", &AppSettings::shelves_hero_facts},
     {"wallpaper_snitch", &AppSettings::wallpaper_snitch},
@@ -205,6 +206,9 @@ constexpr FlagSetting flag_settings[] = {
     {"background_yield", &AppSettings::background_yield},
     {"desktop_platform_badges", &AppSettings::desktop_platform_badges},
     {"desktop_gray_uninstalled", &AppSettings::desktop_gray_uninstalled},
+    {"desktop_sidebar_store", &AppSettings::desktop_sidebar_store},
+    {"desktop_sidebar_platforms", &AppSettings::desktop_sidebar_platforms},
+    {"desktop_sidebar_studios", &AppSettings::desktop_sidebar_studios},
     {"desktop_maximized", &AppSettings::desktop_maximized},
     {"desktop_installed", &AppSettings::desktop_installed},
     {"desktop_narrow", &AppSettings::desktop_narrow},
@@ -523,10 +527,20 @@ AppSettings parseAppSettings(std::string_view text) {
                 error == std::errc{} && parsed == id.data() + id.size() && steam_id) settings.steam_launch_accounts[std::string(app)] = steam_id;
             continue;
         }
+        if (key == "plugin_launch") { // <app id>:<plugin id>
+            const auto colon = value.find(':');
+            const auto app = value.substr(0, colon == std::string_view::npos ? 0 : colon), id = colon == std::string_view::npos ? std::string_view{} : value.substr(colon + 1);
+            const auto plugin_id = [&] { return !id.empty() && id.size() <= 80 && std::all_of(id.begin(), id.end(), [](char c) {
+                return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '.' || c == '-'; }); };
+            if (!app.empty() && app.size() <= 10 && std::all_of(app.begin(), app.end(), [](char c) { return c >= '0' && c <= '9'; }) && plugin_id())
+                settings.plugin_launch[std::string(app)] = std::string(id);
+            continue;
+        }
         if (key == "aurelia_auto_cloud") continue; // 0.4.1 and earlier: an opt-in; syncing is on by default now.
-        if (key == "aurelia_standalone" || key == "aurelia_cloud_skip" || key == "aurelia_steam") {
+        if (key == "aurelia_standalone" || key == "aurelia_cloud_skip" || key == "aurelia_steam" || key == "aurelia_cloud_pending") {
             if (!value.empty() && value.size() <= 10 && std::all_of(value.begin(), value.end(), [](char c) { return c >= '0' && c <= '9'; }))
-                (key == "aurelia_standalone" ? settings.aurelia_standalone : key == "aurelia_steam" ? settings.aurelia_steam : settings.aurelia_cloud_skip).insert(std::string(value));
+                (key == "aurelia_standalone" ? settings.aurelia_standalone : key == "aurelia_steam" ? settings.aurelia_steam :
+                 key == "aurelia_cloud_pending" ? settings.aurelia_cloud_pending : settings.aurelia_cloud_skip).insert(std::string(value));
             continue;
         }
         // Outside the else-if chain below: MSVC refuses one level more of it (C1061).
@@ -738,6 +752,10 @@ AppSettings parseAppSettings(std::string_view text) {
             const auto decoded = text_encoding::wide(value);
             if (std::filesystem::path(decoded).is_absolute()) settings.video_folder = decoded;
         }
+        else if (key == "discord_program") {
+            const auto decoded = text_encoding::wide(value);
+            if (std::filesystem::path(decoded).is_absolute()) settings.discord_program = decoded;
+        }
         else if (key == "sound_folder" || key == "file_browser_folder" || key == "music_file" || key == "boot_file" || key == "multimc_path") {
             // UTF-8; a folder must be absolute, a file a plain name (no folders, no line breaks).
             const auto decoded = text_encoding::wide(value);
@@ -912,6 +930,9 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
            << "tv_monitor=" << (settings.tv_monitor.find_first_of(L"\r\n") == std::wstring::npos ? text_encoding::utf8(settings.tv_monitor) : std::string()) << '\n'
          << "desktop_platform_badges=" << settings.desktop_platform_badges << '\n'
          << "desktop_gray_uninstalled=" << settings.desktop_gray_uninstalled << '\n'
+         << "desktop_sidebar_store=" << settings.desktop_sidebar_store << '\n'
+         << "desktop_sidebar_platforms=" << settings.desktop_sidebar_platforms << '\n'
+         << "desktop_sidebar_studios=" << settings.desktop_sidebar_studios << '\n'
          << "desktop_poster_glow=" << settings.desktop_poster_glow << '\n'
          << "desktop_theme=" << std::clamp(settings.desktop_theme, 0, 9) << '\n'
            << "desktop_maximized=" << settings.desktop_maximized << '\n'
@@ -1139,6 +1160,8 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
     output << "steam_hide_launch_window=" << settings.steam_hide_launch_window << '\n';
     output << "xbox_own_install=" << settings.xbox_own_install << '\n';
     output << "hide_while_playing=" << settings.hide_while_playing << '\n';
+    output << "close_to_tray=" << settings.close_to_tray << '\n';
+    output << "close_to_tray_told=" << settings.close_to_tray_told << '\n';
     output << "steam_account_switch=" << settings.steam_account_switch << '\n';
     output << "steam_install_dialog=" << settings.steam_install_dialog << '\n';
     output << "gog_comet=" << settings.gog_comet << '\n';
@@ -1147,8 +1170,10 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
     output << "aurelia=" << settings.aurelia << '\n' << "aurelia_intro_done=" << settings.aurelia_intro_done << '\n';
     for (const auto& id : settings.aurelia_standalone) output << "aurelia_standalone=" << id << '\n';
     for (const auto& id : settings.aurelia_cloud_skip) output << "aurelia_cloud_skip=" << id << '\n';
+    for (const auto& id : settings.aurelia_cloud_pending) output << "aurelia_cloud_pending=" << id << '\n';
     output << "steam_enabled=" << settings.steam_enabled << '\n';
     for (const auto& [app, steam_id] : settings.steam_launch_accounts) output << "steam_account=" << app << ':' << steam_id << '\n';
+    for (const auto& [app, plugin_id] : settings.plugin_launch) output << "plugin_launch=" << app << ':' << plugin_id << '\n';
     output << "aurelia_default=" << settings.aurelia_default << '\n' << "aurelia_cloud=" << settings.aurelia_cloud << '\n';
     for (const auto& id : settings.aurelia_steam) output << "aurelia_steam=" << id << '\n';
     output << "game_videos=" << settings.game_videos << '\n';
@@ -1159,6 +1184,7 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
     output << "emulation_names=" << settings.emulation_names << '\n';
     output << "emulation_rom_art=" << settings.emulation_rom_art << '\n';
     output << "video_folder=" << text_encoding::utf8Lenient(settings.video_folder.wstring()) << '\n';
+    output << "discord_program=" << text_encoding::utf8Lenient(settings.discord_program.wstring()) << '\n';
     output << "console_colors=" << settings.console_colors << '\n';
     output << "metro_3d=" << settings.metro_3d << '\n';
     output << "metro_category_tabs=" << settings.metro_category_tabs << '\n';

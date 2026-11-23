@@ -115,13 +115,13 @@ std::vector<std::wstring> Launcher::modBadges(const Game& game) {
 #endif
     const unsigned flags = launchFlags(game);
     if (flags & launch_flag::hdr) badges.push_back(L"HDR");
-    if (flags & launch_flag::log) badges.push_back(tr(L"Logi"));
+    if (flags & (launch_flag::log | launch_flag::aurelia_log)) badges.push_back(tr(L"Logi"));
     return badges;
 }
 
 bool Launcher::modBadgesShown(const Game& game) const {
     if (!settings_.mod_badges || gameKey(game).empty()) return false;
-    if (launchFlags(game) & (launch_flag::hdr | launch_flag::log)) return true;
+    if (launchFlags(game) & launch_flag::all) return true;
 #ifdef _WIN32
     const auto found = mods_.scanned.find(gameKey(game));
     return found != mods_.scanned.end() && !game_mods::badges(found->second.state).empty();

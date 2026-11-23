@@ -118,8 +118,9 @@ Manifest parseManifest(std::string_view bytes) {
             require(!c.active_game || c.kind == "widget", "activeGame requires a widget");
         }
         require(identifier(c.id) && ids.insert(c.id).second && identifier(c.command), "Invalid contribution ID or command");
-        require(c.kind == "menu" || c.kind == "context" || c.kind == "catalog" || c.kind == "widget" || c.kind == "details" || c.kind == "library" || c.kind == "downloads" || c.kind == "achievements", "Unknown contribution kind");
+        require(c.kind == "menu" || c.kind == "context" || c.kind == "catalog" || c.kind == "widget" || c.kind == "details" || c.kind == "library" || c.kind == "downloads" || c.kind == "achievements" || c.kind == "launch", "Unknown contribution kind");
         require(c.kind != "library" || c.source == "steam", "Library supplements require a Steam source");
+        require(c.kind != "launch" || !c.source.empty(), "Launch providers require a game source");
         require(c.source.empty() || c.source == "steam" || c.source == "gog" || c.source == "epic" || c.source == "ea" ||
             c.source == "ubisoft" || c.source == "battlenet" || c.source == "custom" || c.source == "xbox" || c.source == "drmfree", "Unknown game source");
         out.contributions.push_back(std::move(c));
@@ -129,6 +130,7 @@ Manifest parseManifest(std::string_view bytes) {
     require(std::count_if(out.contributions.begin(), out.contributions.end(), [](const auto& c) { return c.kind == "library"; }) <= 1, "One library supplement per plugin");
     require(std::count_if(out.contributions.begin(), out.contributions.end(), [](const auto& c) { return c.kind == "downloads"; }) <= 1, "One download provider per plugin");
     require(std::count_if(out.contributions.begin(), out.contributions.end(), [](const auto& c) { return c.kind == "achievements"; }) <= 1, "One achievements provider per plugin");
+    require(std::count_if(out.contributions.begin(), out.contributions.end(), [](const auto& c) { return c.kind == "launch"; }) <= 1, "One launch provider per plugin");
     return out;
 }
 bool matches(const Contribution& c, const Game& game) {

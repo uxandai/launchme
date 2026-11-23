@@ -5,7 +5,7 @@ int LauncherUiTest::tour(HWND window) {
     Launcher app; app.hwnd_ = window; app.execute_ = fakeExecute;
     app.foreground_ = [](HWND) { return true; };
     app.read_sensors_ = [] { return sensors::Reading{true, 48, 61}; };
-    app.discord_.running = [] { return false; };
+    app.discord_.running = [](const std::filesystem::path&) { return false; };
     if (!app.renderer_.initialize(window)) return 2400;
     const auto view = app.renderer_.viewport();
     wchar_t folder[4096]{};

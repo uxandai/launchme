@@ -197,6 +197,15 @@ void Launcher::launchGame(const Game& original, bool via_steam) {
         if (!launchScriptBefore(active, [active](Launcher& app) { app.aureliaLaunch(active); })) aureliaLaunch(active);
         return;
     }
+    // Opcje uruchamiania → Uruchamianie: an installed game chosen to start through a plugin launch
+    // provider goes through it instead of the store's own path (the activity watch follows the process).
+    if (!via_steam && active.installed) {
+        if (const auto provider = selectedLaunchProvider(active)) {
+            const auto chosen = *provider;
+            if (!launchScriptBefore(active, [active, chosen](Launcher& app) { app.pluginLaunch(active, chosen); })) pluginLaunch(active, chosen);
+            return;
+        }
+    }
     if (active.source == GameSource::gog && !active.installed && !gog_state_.account.empty() &&
         (!active.account_id.empty() || active.installation.active())) { openGogInstall(active); return; }
     if (active.source == GameSource::epic && !active.installed && !epic_state_.account.empty() &&

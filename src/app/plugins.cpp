@@ -95,6 +95,8 @@ void Launcher::initializePlugins() {
                 }
                 case Kind::search: case Kind::command: case Kind::widget: case Kind::details:
                     result->response = manager.invoke(job.plugin, job.kind == Kind::search ? "search" : job.kind == Kind::widget ? "widget" : job.kind == Kind::details ? "details" : "command", job.value, job.locale); break;
+                case Kind::launch:
+                    result->response = manager.invoke(job.plugin, "launch", job.value, job.locale); break;
                 case Kind::library:
                     result->response = manager.invoke(job.plugin, "library", job.value, job.locale); break;
                 case Kind::downloads:
@@ -222,8 +224,53 @@ void Launcher::pluginAction(const plugins::Action& action, const Game& game, boo
     if (background) { plugin_refresh_pending_ = true; plugin_refresh_generation_ = job.generation; submitPlugin(std::move(job)); return; }
     plugin_command_pending_ = true; submitPlugin(std::move(job)); dismissMenu();
 }
+std::optional<plugins::Action> Launcher::selectedLaunchProvider(const Game& game) const {
+    if (!game.app_id) return std::nullopt;
+    const auto it = settings_.plugin_launch.find(std::to_string(game.app_id));
+    if (it == settings_.plugin_launch.end()) return std::nullopt;
+    for (const auto& action : plugins_.contributions("launch", &game))
+        if (action.plugin == it->second) return action;
+    return std::nullopt;
+}
+void Launcher::pluginLaunch(const Game& game, const plugins::Action& provider) {
+    if (plugins_busy_) { showNotification(NotificationKind::error, tr(L"Wtyczki"), tr(L"Wtyczki są zajęte")); return; }
+    if (const auto it = game_sessions_.find(gameKey(game)); it != game_sessions_.end() && it->second.running()) return;
+    plugins::Job job; job.kind = plugins::Job::Kind::launch; job.plugin = provider.plugin; job.key = provider.item.id; job.game = game;
+    job.value = object();
+    job.value.properties["game"] = *json::parse(plugins::achievementGameJson(game));
+    job.value.properties["command"] = string(provider.item.command);
+    dismissMenu();
+    if (settings_.launch_animation) startLaunchAnimation(game);
+    audio_.launch(); audio_.stopMusic();
+    beginGameSession(game, default_focus_ms);
+    showNotification(NotificationKind::launch, game.name, tr(L"Uruchamianie przez wtyczkę…"));
+    submitPlugin(std::move(job));
+}
+void Launcher::onPluginLaunch(const PluginsMessage& message) {
+    const auto& job = message.job;
+    if (job.epoch != plugin_epoch_) return;
+    const auto key = gameKey(job.game);
+    if (message.error.empty() && field(message.response, "launched").flag) { InvalidateRect(hwnd_, nullptr, FALSE); return; }
+    // Not started: drop the optimistic session unless a process is already running for the game.
+    if (const auto it = game_sessions_.find(key); it != game_sessions_.end() && !it->second.running()) {
+        game_sessions_.erase(it);
+        launched_here_.erase(key);
+        std::lock_guard lock(game_activity_jobs_->mutex); game_activity_jobs_->active.erase(key);
+    }
+    if (launch_artwork_key_ == key) stopLaunchAnimation();
+    if (!anyActiveSession()) audio_.resumeMusic();
+    if (message.error.empty() && field(message.response, "steamRequired").flag) {
+        showNotification(NotificationKind::launch, job.game.name, tr(L"Uruchamianie przez klienta Steam"));
+        launchGame(job.game, true);
+    } else {
+        const auto detail = message.error.empty() ? text_encoding::wideLenient(text(message.response, "message")) : text_encoding::wideLenient(message.error);
+        showNotification(NotificationKind::error, tr(L"Nie udało się uruchomić gry"), detail);
+    }
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
 void Launcher::onPlugins(std::unique_ptr<PluginsMessage> message) {
     const auto& job = message->job;
+    if (job.kind == plugins::Job::Kind::launch) { onPluginLaunch(*message); return; }
     if (job.kind == plugins::Job::Kind::downloads) {
         const auto pending = plugin_download_pending_.find(job.plugin);
         if (pending != plugin_download_pending_.end() && pending->second == job.epoch) plugin_download_pending_.erase(pending);

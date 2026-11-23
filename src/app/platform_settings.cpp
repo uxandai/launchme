@@ -141,6 +141,8 @@ void Launcher::pcSettingsRows() {
         cloud.locked = !settings_.aurelia; add(std::move(cloud));
         // Its version and who is signed in (or that nobody is).
         std::wstring state = aurelia_version_.empty() ? std::wstring(tr(L"Instalacja i konto.")) : aurelia_version_;
+        if (aurelia::support(aurelia_version_) == aurelia::Support::outdated)
+            state += L" · " + std::wstring(tr(L"Wymagana aktualizacja Aurelii do ")) + std::wstring(aurelia::pinned_version);
         if (!aurelia_version_.empty() && aurelia_authenticated_)
             state += L" · " + (aurelia_account_name_.empty() ? std::wstring(tr(L"Zalogowano")) : tr(L"Zalogowano: ") + aurelia_account_name_);
         else if (!aurelia_version_.empty() && aurelia_session_known_) state += L" · " + std::wstring(tr(L"Nie zalogowano"));

@@ -15,7 +15,7 @@ int LauncherUiTest::psfive(HWND window) {
     app.settings_.launch_animation = false;
     app.hwnd_ = window; app.execute_ = fakeExecute;
     app.read_sensors_ = [] { return sensors::Reading{true, 48, 61}; };
-    app.discord_.running = [] { return false; };
+    app.discord_.running = [](const std::filesystem::path&) { return false; };
     if (!app.renderer_.initialize(window)) return 4900;
     const auto capture = [&](const wchar_t* name) {
         wchar_t folder[4096]{};

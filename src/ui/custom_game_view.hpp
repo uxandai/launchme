@@ -62,9 +62,9 @@ struct ModRow {
 // An option under the launch tab's fields, a row each: a choice opens a list of its values (Left/Right step
 // it), a switch flips. emulator: an emulated game's own emulator (Launcher's game_emulator.cpp);
 // steam_account: the remembered account it starts from; aurelia: managed by Aurelia instead of the Steam
-// client, with "…" (Zarządzaj · Aurelia); log, hdr: its switches.
+// client, with "…" (Zarządzaj · Aurelia); log, hdr, aurelia_log (Aurelia's own log): its switches.
 struct Option {
-    enum class Kind { emulator, steam_account, aurelia, log, hdr } kind = Kind::log;
+    enum class Kind { emulator, steam_account, aurelia, launch, log, hdr, aurelia_log } kind = Kind::log;
     std::wstring label;
     std::wstring value; // A choice's current value.
     bool on = false;    // A switch's state.

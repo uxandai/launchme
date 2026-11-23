@@ -40,12 +40,19 @@ bool listening(const std::filesystem::path& socket_path) {
     return connected;
 }
 
-bool processRunning() {
+// program: a chosen client, known by its file name (the kernel keeps 15 characters of it); empty: Discord's own.
+bool processRunning(const std::filesystem::path& program) {
+    std::string wanted = program.filename().string().substr(0, 15);
+    for (auto& c : wanted) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
     std::error_code error;
     for (std::filesystem::directory_iterator entry("/proc", error), end; !error && entry != end; entry.increment(error)) {
         const auto name = entry->path().filename().string();
         if (name.empty() || !std::isdigit(static_cast<unsigned char>(name[0]))) continue;
-        if (clientProcessName(firstLine(entry->path() / "comm"))) return true;
+        auto comm = firstLine(entry->path() / "comm");
+        if (wanted.empty()) { if (clientProcessName(comm)) return true; continue; }
+        while (!comm.empty() && (comm.back() == '\n' || comm.back() == '\r')) comm.pop_back();
+        for (auto& c : comm) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        if (comm == wanted) return true;
     }
     return false;
 }
@@ -85,9 +92,9 @@ bool ipcListening(const std::filesystem::path& runtime) {
     return false;
 }
 
-bool running() { return processRunning() || ipcListening(environmentPath(L"XDG_RUNTIME_DIR")); }
+bool running(const std::filesystem::path& program) { return processRunning(program) || ipcListening(environmentPath(L"XDG_RUNTIME_DIR")); }
 
-bool focus() { return false; }
+bool focus(const std::filesystem::path&) { return false; }
 
 std::optional<GameAction> launchAction() {
     const auto start = [](const std::filesystem::path& path) {

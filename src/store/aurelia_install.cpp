@@ -44,6 +44,19 @@ bool executable64(const std::filesystem::path& file) {
 }
 #endif
 }
+Support support(std::wstring_view installed) {
+    // Tags carry a "v": compared without it.
+    const auto bare = [](std::wstring_view v) { if (!v.empty() && (v.front() == L'v' || v.front() == L'V')) v.remove_prefix(1); return v; };
+    const auto v = bare(installed);
+    if (v.empty() || !(updater::newer(v, L"0.0.0") || v == L"0.0.0")) return Support::missing;
+    if (updater::newer(bare(minimum_version), v)) return Support::outdated;
+    if (updater::newer(v, bare(pinned_version))) return Support::newer;
+    if (updater::newer(bare(pinned_version), v)) return Support::older;
+    return Support::supported;
+}
+std::wstring releaseUrl(std::wstring_view version) {
+    return L"https://api.github.com/repos/Drackrath/Aurelia/releases/tags/" + std::wstring(version);
+}
 InstallationInfo installed(const std::filesystem::path& root) {
     const auto v = text_encoding::wideLenient(readSmall(root / L"current.txt"));
     if (!version(v)) return {};

@@ -234,8 +234,10 @@ void Manager::remove(const std::string& id) {
 json::Value Manager::invoke(const std::string& id, const std::string& method, const json::Value& params, const std::string& locale) {
     auto& e = get(id);
     if (!e.plugin.enabled || !e.module) throw std::runtime_error("Plugin is disabled");
-    if (method != "command" && method != "search" && method != "widget" && method != "details" && method != "library" && method != "downloads" && method != "achievements")
+    if (method != "command" && method != "search" && method != "widget" && method != "details" && method != "library" && method != "downloads" && method != "achievements" && method != "launch")
         throw std::runtime_error("Unknown plugin method");
+    if (method == "launch" && std::none_of(e.plugin.manifest.contributions.begin(), e.plugin.manifest.contributions.end(),
+        [](const auto& c) { return c.kind == "launch"; })) throw std::runtime_error("Plugin has no launch provider");
     if (method == "achievements" && std::none_of(e.plugin.manifest.contributions.begin(), e.plugin.manifest.contributions.end(),
         [](const auto& c) { return c.kind == "achievements"; })) throw std::runtime_error("Plugin has no achievements provider");
     if (method == "downloads" && std::none_of(e.plugin.manifest.contributions.begin(), e.plugin.manifest.contributions.end(),

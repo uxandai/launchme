@@ -422,6 +422,23 @@ int LauncherUiTest::desktop(HWND window) {
             if (store < 0 || glance_entry != store + 1) return 27684;
             app.settings_.glance = false; app.buildDesktopSidebar();
             if (app.desktopEntryIndex("glance") >= 0) return 27685;
+            // Interfejs → Panel boczny: Sklep, Platformy, Wydawcy i developerzy taken off; a section that goes
+            // falls back to every game.
+            {
+                const auto listed = [&](std::string_view prefix) {
+                    return std::any_of(app.desktop_entries_.begin(), app.desktop_entries_.end(), [&](const auto& e) { return e.id.starts_with(prefix); });
+                };
+                const auto section = app.desktop_section_;
+                app.desktop_section_ = "store"; app.settings_.desktop_sidebar_store = false; app.buildDesktopSidebar();
+                if (app.desktopEntryIndex("store") >= 0 || app.desktop_section_ != "all") return 27690;
+                app.settings_.desktop_sidebar_platforms = false; app.settings_.desktop_sidebar_studios = false; app.buildDesktopSidebar();
+                if (listed("source:") || listed("publisher:") || listed("developer:")) return 27691;
+                if (!capture(L"desktop-sidebar-trimmed.png")) return 27692;
+                app.settings_.desktop_sidebar_store = app.settings_.desktop_sidebar_platforms = app.settings_.desktop_sidebar_studios = true;
+                app.buildDesktopSidebar();
+                if (app.desktopEntryIndex("store") < 0) return 27693;
+                app.desktop_section_ = section;
+            }
             // Picked: Glance opens, its entry active; the section pills keep their whole names.
             app.settings_.glance = true; app.buildDesktopSidebar();
             const auto get = app.glance_get_;

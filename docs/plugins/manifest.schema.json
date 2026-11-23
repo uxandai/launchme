@@ -51,7 +51,7 @@
       "type": "object", "required": ["id", "kind", "title", "command"],
       "properties": {
         "id": {"$ref": "#/$defs/id"}, "command": {"$ref": "#/$defs/id"},
-        "kind": {"enum": ["menu", "context", "widget", "catalog", "details", "library", "downloads", "achievements"]},
+        "kind": {"enum": ["menu", "context", "widget", "catalog", "details", "library", "downloads", "achievements", "launch"]},
         "activeGame": {"type": "boolean", "default": false},
         "glyph": {"enum":["store","server-download"]},
         "title": {"$ref": "#/$defs/text"}, "text": {"$ref": "#/$defs/text"},
@@ -60,7 +60,8 @@
       "allOf": [
         {"if":{"required":["glyph"]},"then":{"properties":{"kind":{"const":"menu"}}}},
         {"if": {"required": ["activeGame"], "properties": {"activeGame": {"const": true}}}, "then": {"properties": {"kind": {"const": "widget"}}}},
-        {"if": {"properties": {"kind": {"const": "library"}}}, "then": {"required": ["source"], "properties": {"source": {"const": "steam"}}}}
+        {"if": {"properties": {"kind": {"const": "library"}}}, "then": {"required": ["source"], "properties": {"source": {"const": "steam"}}}},
+        {"if": {"properties": {"kind": {"const": "launch"}}}, "then": {"required": ["source"]}}
       ]
     }
   }

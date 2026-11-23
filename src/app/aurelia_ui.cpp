@@ -156,8 +156,19 @@ void Launcher::aureliaRows() {
             replaces.description = tr(L"Konto, gry, kolekcje i czas gry z Aurelii; gry bez klienta Steam.");
             replaces.locked = !settings_.aurelia;
         }
-        add(A::helper, s.installed ? tr(L"Sprawdź aktualizację") : tr(L"Zainstaluj Aurelię"),
-            aurelia_helper_busy_ ? tr(L"Pobieranie…") : aurelia_version_).locked = aurelia_helper_busy_;
+        {
+            // The compat list (aurelia::compatible_versions): what this Launchme installs, and whether the one here fits.
+            const auto support = aurelia::support(aurelia_version_);
+            const std::wstring pinned(aurelia::pinned_version);
+            auto& helper = add(A::helper, !s.installed ? tr(L"Zainstaluj Aurelię") :
+                               support == aurelia::Support::outdated || support == aurelia::Support::older ? tr(L"Zaktualizuj Aurelię do ") + pinned :
+                               tr(L"Sprawdź aktualizację"),
+                               aurelia_helper_busy_ ? tr(L"Pobieranie…") : aurelia_version_);
+            helper.locked = aurelia_helper_busy_;
+            if (support == aurelia::Support::outdated) helper.description = tr(L"Ta wersja Launchme wymaga Aurelii ") + pinned + tr(L" lub nowszej: gry nie uruchomią się przez starszą.");
+            else if (support == aurelia::Support::newer) helper.description = tr(L"Nowsza niż sprawdzona z Launchme: ") + pinned;
+            else if (!s.installed) helper.description = tr(L"Wersja sprawdzona z Launchme: ") + pinned;
+        }
         if (aurelia_authenticated_ && s.installed) {
             auto& duplicates = add(A::duplicates, tr(L"Sprawdź zdublowane instalacje"));
             duplicates.description = tr(L"Gry zainstalowane w kilku bibliotekach naraz; nic nie jest usuwane.");
@@ -170,9 +181,14 @@ void Launcher::aureliaRows() {
     case P::game: {
         s.title = tr(L"Zarządzaj · Aurelia");
         // The choice first; a game the Steam client manages has nothing else here.
-        if (settings_.aurelia_default)
-            toggle(A::steam, tr(L"Zarządzaj przez Steam"), settings_.aurelia_steam.contains(std::to_string(s.game.app_id)));
-        else toggle(A::steam, tr(L"Zarządzaj przez Aurelię"), settings_.aurelia_standalone.contains(std::to_string(s.game.app_id)));
+        auto& managed = settings_.aurelia_default ?
+            toggle(A::steam, tr(L"Zarządzaj przez Steam"), settings_.aurelia_steam.contains(std::to_string(s.game.app_id))) :
+            toggle(A::steam, tr(L"Zarządzaj przez Aurelię"), settings_.aurelia_standalone.contains(std::to_string(s.game.app_id)));
+#ifdef _WIN32
+        managed.description = tr(L"Bez klienta Steam: czas gry i osiągnięcia liczą się tylko, gdy Steam działa na tym koncie.");
+#else
+        managed.description = tr(L"Przez Aurelię gra działa bez klienta Steam: Steam nie liczy jej czasu ani osiągnięć.");
+#endif
         const auto transfer = aurelia_downloads_.find(s.game.app_id);
         const bool downloading = transfer != aurelia_downloads_.end();
         // Its transfer: running (pause, cancel) or waiting in Aurelia's backlog (resume, forget).
@@ -381,7 +397,9 @@ void Launcher::aureliaActivate(Row row, bool confirmed) {
         const auto id = std::to_string(s.game.app_id);
         auto& games = settings_.aurelia_default ? settings_.aurelia_steam : settings_.aurelia_standalone;
         if (!games.erase(id)) games.insert(id);
-        settings_dirty_ = true; saveSettings(); aureliaRows(); return;
+        settings_dirty_ = true; saveSettings(); aureliaRows();
+        if (aureliaManaged(s.game)) aureliaManagedNow(s.game); // Its saves synced at once.
+        return;
     }
     case A::auto_cloud: {
         const auto id = std::to_string(s.game.app_id);

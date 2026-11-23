@@ -8,7 +8,7 @@
 
 namespace plugins {
 struct Job {
-    enum class Kind { initialize, install, enable, setting, remove, search, command, widget, details, playtime, library, downloads, achievements } kind = Kind::initialize;
+    enum class Kind { initialize, install, enable, setting, remove, search, command, widget, details, playtime, library, downloads, achievements, launch } kind = Kind::initialize;
     std::string plugin, key;
     json::Value value;
     std::filesystem::path file;

@@ -15,10 +15,8 @@ bool steamGame(const Game& game) { return game.source == GameSource::steam && ga
 }
 
 bool Launcher::steamGameRunning() const {
-    // Steam closes its games when it quits: a switch or a restart waits for them.
-    return std::any_of(game_sessions_.begin(), game_sessions_.end(), [](const auto& entry) {
-        return entry.first.starts_with("steam:") || entry.first.starts_with("shortcut:");
-    });
+    // Steam closes its games when it quits: a switch or a restart waits for them (only those seen running).
+    return blockingGame(true).has_value();
 }
 
 // ---- Instalacja Steam w launcherze --------------------------------------------------------------

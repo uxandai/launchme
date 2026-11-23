@@ -160,9 +160,9 @@ Reply invoke(const Runtime& runtime, const Request& request, const Cancel& cance
     // forwarded to the daemon, which sees only the command line (not AURELIA_PASSWORD) and its own
     // stdin. The session file they write is what the daemon reads on the next command.
     const bool interactive = request.command == Command::login_qr || request.command == Command::login_password;
-    // A logged play runs here too: its -vv output is the game's log.
-    const bool logged = request.command == Command::play && !request.log.empty();
-    if (local || interactive || logged) env[L"AURELIA_NO_DAEMON"] = L"1";
+    // Log Aurelii: a logged play runs here too; a logged cloud sync keeps the daemon, which relays its -vv output.
+    const bool logged = (request.command == Command::play || request.command == Command::cloud_sync) && !request.log.empty();
+    if (local || interactive || (logged && request.command == Command::play)) env[L"AURELIA_NO_DAEMON"] = L"1";
     else if (request.command != Command::login && !daemonReady(endpoint, runtime.executable)) {
         result.error = tr(L"Nie można potwierdzić tożsamości daemona Aurelii. Spróbuj ponownie po zakończeniu jego uruchamiania."); return result;
     }
@@ -585,9 +585,9 @@ Reply invoke(const Runtime& runtime, const Request& request, const Cancel& cance
     // forwarded to the daemon, which sees only the command line (not AURELIA_PASSWORD) and its own
     // stdin. The session file they write is what the daemon reads on the next command.
     const bool interactive = request.command == Command::login_qr || request.command == Command::login_password;
-    // A logged play runs here too: its -vv output is the game's log.
-    const bool logged = request.command == Command::play && !request.log.empty();
-    if (local || interactive || logged) own.push_back("AURELIA_NO_DAEMON=1");
+    // Log Aurelii: a logged play runs here too; a logged cloud sync keeps the daemon, which relays its -vv output.
+    const bool logged = (request.command == Command::play || request.command == Command::cloud_sync) && !request.log.empty();
+    if (local || interactive || (logged && request.command == Command::play)) own.push_back("AURELIA_NO_DAEMON=1");
     else if (request.command != Command::login && !daemonReady(endpoint, runtime.executable)) {
         result.error = tr(L"Nie można potwierdzić tożsamości daemona Aurelii. Spróbuj ponownie po zakończeniu jego uruchamiania."); return result;
     }

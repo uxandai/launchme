@@ -1,8 +1,11 @@
-// Included after LauncherUiTest (0.3.0, issue #6). Biblioteka → Uruchamianie → "Chowaj do zasobnika
-// podczas gry" (src/app/tray.cpp): off by default; on, a game started here hides the window once the
+// Included after LauncherUiTest (0.3.0, issue #6). System → "Chowaj do zasobnika podczas gry"
+// (src/app/tray.cpp): off by default; on, a game started here hides the window once the
 // game holds the foreground, an icon (recorded, never added to the real notification area) stands in,
 // the icon brings it back, Explorer's restart adds it again and the game's end shows the window.
 // The game's end returns the foreground (0.4.7) unless the user chose another program meanwhile.
+// System → "Zamknięcie okna chowa do zasobnika": the icon stays, a close hides the window (a balloon
+// once), a game's end leaves it there, the icon's menu (recent games, the game being played, Settings)
+// works, Zamknij launchme quits, and a start with the system waits in the tray.
 // Then "Popraw kadr" on Tło (src/app/crop.cpp): the screen-shaped window moves over a wide
 // background, is saved bound to its bytes and reset by "Wyśrodkuj"; "Zmień grafikę" keeps the pages seen
 // during a visit; and the empty library view's
@@ -98,14 +101,130 @@ int LauncherUiTest::trayAndBackgroundCrop(HWND window) {
         if (!app.inTray()) return 1959;
         app.settings_.hide_while_playing = false; app.pollTray();
         if (app.inTray() || !IsWindowVisible(window)) return 1960;
-        // The row (Biblioteka → Uruchamianie) and its toggle.
-        app.openSettings(); app.settings_state_.selectCategory(static_cast<int>(settings_ui::Category::library)); app.buildSettingsRows();
-        app.openSettingsPage(settings_ui::Page::launching);
-        const auto row = std::find_if(app.settings_rows_.begin(), app.settings_rows_.end(), [](const auto& r) { return r.id == settings_ui::Id::hide_while_playing; });
+        // The rows (System → Okno i język) and their toggles.
+        app.openSettings(); app.settings_state_.selectCategory(static_cast<int>(settings_ui::Category::system)); app.buildSettingsRows();
+        const auto find = [&](settings_ui::Id id) {
+            return std::find_if(app.settings_rows_.begin(), app.settings_rows_.end(), [&](const auto& r) { return r.id == id; });
+        };
+        const auto row = find(settings_ui::Id::hide_while_playing);
         if (row == app.settings_rows_.end() || row->control != settings_ui::Control::toggle || row->checked) return 1961;
         app.settingsToggle(*row);
         if (!app.settings_.hide_while_playing) return 1962;
+        const auto close_row = find(settings_ui::Id::close_to_tray);
+        if (close_row == app.settings_rows_.end() || close_row->control != settings_ui::Control::toggle || close_row->checked) return 28400;
+        app.settingsToggle(*close_row);
+        if (!app.settings_.close_to_tray) return 28401;
+        app.settings_.close_to_tray = app.settings_.hide_while_playing = false;
         app.game_sessions_.clear(); app.launched_here_.clear();
+        ShowWindow(window, SW_HIDE);
+    }
+    {
+        // Zamknięcie okna chowa do zasobnika.
+        if (AppSettings{}.close_to_tray || AppSettings{}.close_to_tray_told) return 28402;
+        Launcher app; app.hwnd_ = window; app.execute_ = fakeExecute;
+        app.settings_.launch_animation = false; app.settings_.exit_animation = true;
+        std::vector<DWORD> calls;
+        std::vector<std::wstring> balloons;
+        app.tray_call_ = [&](DWORD message, NOTIFYICONDATAW* data) {
+            calls.push_back(message);
+            if (message == NIM_MODIFY && (data->uFlags & NIF_INFO)) balloons.push_back(data->szInfoTitle);
+            return TRUE;
+        };
+        HWND front = window;
+        app.foreground_window_ = [&] { return front; };
+        app.take_foreground_ = [&](HWND) { front = window; return true; };
+        ShowWindow(window, SW_SHOWNOACTIVATE);
+        const auto code = [&]() -> int {
+            // Off: no icon, and a close is a close.
+            app.pollTray();
+            if (app.closeToTray() || app.inTray() || !calls.empty()) return 28403;
+            // On: the icon comes at once and stays with the window shown.
+            app.settings_.close_to_tray = true; app.pollTray();
+            if (!app.tray_icon_ || calls != std::vector<DWORD>{NIM_ADD, NIM_SETVERSION} || !IsWindowVisible(window)) return 28404;
+            // The window's close hides it, with the balloon the first time only.
+            if (!app.requestClose() || app.closing_ || !app.inTray() || IsWindowVisible(window) || balloons.size() != 1 ||
+                !app.settings_.close_to_tray_told) return 28405;
+            app.trayIconEvent(0, MAKELPARAM(NIN_SELECT, 0)); // A click on the icon.
+            if (app.inTray() || !IsWindowVisible(window) || !app.tray_icon_ || calls.back() == NIM_DELETE) return 28406;
+            app.requestClose();
+            if (!app.inTray() || balloons.size() != 1) return 28407;
+            // A game's end leaves the closed window in the tray; the tooltip and the menu name the game meanwhile.
+            const Game game{6410, L"Closed tray game"};
+            const auto activity = [&](GameActivity state, uint64_t time) {
+                auto message = std::make_unique<GameActivityMessage>();
+                message->generation = app.game_activity_jobs_->generation.load(); message->observed_at = time;
+                message->activities.emplace_back(gameKey(game), state);
+                app.onGameActivity(std::move(message));
+            };
+            const auto start = GetTickCount64();
+            app.beginGameSession(game);
+            activity(GameActivity::running, start + 100);
+            app.tray_refresh_at_ = 0; app.pollTray();
+            if (app.tray_tip_ != L"launchme · Closed tray game" || !app.inTray()) return 28408;
+            const auto playing = app.trayMenu();
+            if (std::none_of(playing.begin(), playing.end(), [](const auto& entry) {
+                    return entry.command == tray_menu::end_game && entry.label.find(L"Closed tray game") != std::wstring::npos; })) return 28409;
+            activity(GameActivity::stopped, start + 900);
+            activity(GameActivity::stopped, start + 2700);
+            app.pollTray();
+            if (!app.game_sessions_.empty() || !app.inTray() || IsWindowVisible(window)) return 28410;
+            // The menu: Pokaż launchme first, the five last played public games, the mode, Ustawienia,
+            // a separator and Zamknij launchme last.
+            std::vector<Game> library;
+            for (int i = 0; i < 7; ++i) {
+                Game played{static_cast<uint32_t>(6420 + i), L"Played " + std::to_wstring(i)};
+                played.installed = true; played.last_played = 1000 + static_cast<uint64_t>(i);
+                library.push_back(played);
+            }
+            library[6].visibility = GameVisibility::private_game; // Never in the notification area.
+            library[0].name = L"Ratchet & Clank: a name much longer than the menu would ever want to show";
+            library[0].last_played = 999999;
+            app.grouped_library_ = library;
+            const auto menu = app.trayMenu();
+            if (menu.size() != 6 || menu[0].command != tray_menu::show || !menu[0].bold || menu[1].children.size() != 5 ||
+                menu[2].command != tray_menu::switch_mode || menu[3].command != tray_menu::settings || !menu[4].separator() ||
+                menu.back().command != tray_menu::close) return 28411;
+            const auto& recent = menu[1].children;
+            if (recent[0].command != tray_menu::recent_first || recent[0].label.size() != tray_menu::label_limit ||
+                recent[1].label != L"Played 5" || recent[4].label != L"Played 2") return 28412;
+            // A recent game starts from the menu while the window stays in the tray.
+            app.trayCommand(tray_menu::recent_first + 1);
+            if (!app.pending_launch_ || gameKey(app.pending_game_) != gameKey(library[5]) || !app.inTray() || IsWindowVisible(window)) return 28413;
+            app.pending_launch_ = false;
+            // Ustawienia: the window comes back with Settings open.
+            app.trayCommand(tray_menu::settings);
+            if (app.inTray() || !IsWindowVisible(window) || !app.settingsOpen()) return 28414;
+            // Zamknij launchme (the icon's menu or the power menu): the next close quits, the icon goes.
+            app.quit_requested_ = true;
+            if (!app.requestClose() || !app.closing_ || app.inTray() || calls.back() != NIM_DELETE) return 28415;
+            return 0;
+        }();
+        ShowWindow(window, SW_HIDE);
+        if (code) return code;
+    }
+    {
+        // Started with the system: the desktop window waits in the tray and its first show is a normal one;
+        // Tryb TV takes the screen as before.
+        Launcher app; app.hwnd_ = window; app.execute_ = fakeExecute;
+        app.settings_.close_to_tray = true; app.settings_.desktop_maximized = false;
+        app.tray_call_ = [](DWORD, NOTIFYICONDATAW*) { return TRUE; };
+        HWND front = nullptr;
+        app.foreground_window_ = [&] { return front; };
+        app.take_foreground_ = [&](HWND) { front = window; return true; };
+        ShowWindow(window, SW_HIDE);
+        if (app.startInTray()) return 28416; // Tryb TV.
+        app.desktop_mode_ = true;
+        if (!app.startInTray() || !app.inTray() || !app.tray_never_shown_ || IsWindowVisible(window)) return 28417;
+        app.pollTray(); // A game's absence does not show it.
+        if (!app.inTray() || IsWindowVisible(window)) return 28418;
+        app.trayCommand(tray_menu::show);
+        if (app.inTray() || app.tray_never_shown_ || !IsWindowVisible(window) || !app.tray_icon_) return 28419;
+        // No notification area: the window's close closes.
+        app.settings_.exit_animation = true;
+        app.removeTrayIcon();
+        app.tray_call_ = [](DWORD, NOTIFYICONDATAW*) { return FALSE; };
+        if (app.closeToTray() || app.inTray() || !IsWindowVisible(window)) return 28420;
+        app.desktop_mode_ = false;
         ShowWindow(window, SW_HIDE);
     }
     {
@@ -204,6 +323,54 @@ int LauncherUiTest::trayAndBackgroundCrop(HWND window) {
         return app.renderer_.captureForTest(std::filesystem::path(folder) / name, [&] { app.paint(); });
     };
     const auto settle = [&] { for (int i = 0; i < 40; ++i) { app.tick(); app.paint(); Sleep(5); } };
+    {
+        // System → Okno i język: the two tray rows under Uruchamiaj z systemem Windows.
+        app.openSettings(); app.settings_state_.selectCategory(static_cast<int>(settings_ui::Category::system)); app.buildSettingsRows();
+        const auto row = std::find_if(app.settings_rows_.begin(), app.settings_rows_.end(), [](const auto& r) { return r.id == settings_ui::Id::close_to_tray; });
+        if (row == app.settings_rows_.end()) return 28421;
+        app.settings_state_.options = true;
+        app.settings_state_.selected[app.settings_state_.category] = static_cast<int>(row - app.settings_rows_.begin()); app.ensureSettingVisible();
+        settle();
+        if (!capture(L"settings-system-tray.png")) return 28422;
+        app.back();
+    }
+    {
+        // System → Funkcje: the client the Widżety's Discord tile opens.
+        app.openSettings(); app.settings_state_.selectCategory(static_cast<int>(settings_ui::Category::system)); app.buildSettingsRows();
+        const auto row = std::find_if(app.settings_rows_.begin(), app.settings_rows_.end(), [](const auto& r) { return r.id == settings_ui::Id::discord_program; });
+        if (row == app.settings_rows_.end() || std::any_of(app.settings_rows_.begin(), app.settings_rows_.end(), [](const auto& r) { return r.id == settings_ui::Id::discord_program_reset; })) return 28423;
+        app.settings_state_.options = true;
+        app.settings_state_.selected[app.settings_state_.category] = static_cast<int>(row - app.settings_rows_.begin()); app.ensureSettingVisible();
+        settle();
+        if (!capture(L"settings-system-discord.png")) return 28424;
+        app.back();
+        // Chosen: its path, and the way back to Discord's own client.
+        app.settings_.discord_program = std::filesystem::temp_directory_path() / L"Vesktop" / L"Vesktop.exe";
+        app.openSettings(); app.settings_state_.selectCategory(static_cast<int>(settings_ui::Category::system)); app.buildSettingsRows();
+        const auto reset = std::find_if(app.settings_rows_.begin(), app.settings_rows_.end(), [](const auto& r) { return r.id == settings_ui::Id::discord_program_reset; });
+        if (reset == app.settings_rows_.end()) return 28425;
+        app.settings_state_.options = true;
+        app.settings_state_.selected[app.settings_state_.category] = static_cast<int>(reset - app.settings_rows_.begin()); app.ensureSettingVisible();
+        app.settingsActivate();
+        if (!app.settings_.discord_program.empty()) return 28426;
+        app.back();
+    }
+    {
+        // Wygląd → Okno desktopowe → Panel boczny (desktop window): Sklep, Platformy, Wydawcy i developerzy.
+        app.desktop_mode_ = true;
+        app.openSettings(); app.settings_state_.selectCategory(static_cast<int>(settings_ui::Category::appearance)); app.buildSettingsRows();
+        const auto row = std::find_if(app.settings_rows_.begin(), app.settings_rows_.end(), [](const auto& r) { return r.id == settings_ui::Id::sidebar_store; });
+        if (row == app.settings_rows_.end()) return 28427;
+        app.settings_state_.options = true;
+        app.settings_state_.selected[app.settings_state_.category] = static_cast<int>(row - app.settings_rows_.begin()); app.ensureSettingVisible();
+        app.settingsActivate();
+        if (app.settings_.desktop_sidebar_store) return 28428;
+        settle();
+        if (!capture(L"settings-desktop-sidebar.png")) return 28429;
+        app.settingsActivate();
+        if (!app.settings_.desktop_sidebar_store) return 28430;
+        app.back(); app.desktop_mode_ = false;
+    }
     // A wide background (3.1:1, as SteamGridDB's heroes) of a game from another store.
     Game game; game.kind = GameKind::store; game.source = GameSource::epic; game.source_id = "wide"; game.name = L"Wide Background";
     game.installed = true;

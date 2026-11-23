@@ -1,5 +1,6 @@
 // Protocol and filesystem contracts, using this executable as the fake child. No Steam session,
 // network or real Aurelia executable is ever used by this test.
+#include "../src/library/game_log.hpp"
 #include "../src/store/aurelia.hpp"
 #include "../src/store/aurelia_stream.hpp"
 #include "../src/platform/atomic_file.hpp"
@@ -10,6 +11,9 @@
 #include <iostream>
 #include <thread>
 #include <atomic>
+#include <cwchar>
+#include <fstream>
+#include <iterator>
 #ifndef _WIN32
 #include <csignal>
 #include <cstring>
@@ -25,7 +29,22 @@ extern char** environ;
 using C = aurelia::Command;
 json::Value parsed(std::string_view text) { const auto v = json::parse(text); if (!v) throw std::runtime_error("fixture"); return *v; }
 
+// The compat list: the minimum and the pinned release; tags with or without "v".
+int compatList() {
+    using S = aurelia::Support;
+    if (aurelia::minimum_version != L"v0.3.1" || aurelia::pinned_version != aurelia::compatible_versions[std::size(aurelia::compatible_versions) - 1]) return 1;
+    if (aurelia::support(L"") != S::missing || aurelia::support(L"garbage") != S::missing) return 2;
+    if (aurelia::support(L"v0.2.6") != S::outdated || aurelia::support(L"0.3.0") != S::outdated) return 3;
+    if (aurelia::support(L"v0.3.1") != S::supported || aurelia::support(L"0.3.1") != S::supported) return 4;
+    if (aurelia::support(L"v0.3.2") != S::newer || aurelia::support(L"v1.0.0") != S::newer) return 5;
+    if (aurelia::releaseUrl(L"v0.3.1") != L"https://api.github.com/repos/Drackrath/Aurelia/releases/tags/v0.3.1") return 6;
+    // config game: read only, the game's id.
+    if (aurelia::arguments({aurelia::Command::game_config, 902}) != std::vector<std::wstring>{L"--json", L"config", L"game", L"902"}) return 7;
+    return 0;
+}
+
 int main(int argc, char** argv) {
+    if (const int code = compatList()) { std::cerr << "Aurelia compat list check failed: " << code << '\n'; return 900 + code; }
     // A stand-in for Aurelia's daemon: it serves the endpoint until it is ended.
     if (argc > 2 && std::string_view(argv[1]) == "--fixture-daemon") {
 #ifdef _WIN32
@@ -121,6 +140,18 @@ int main(int argc, char** argv) {
     CHECK(aurelia::arguments({C::uninstall, 0}).empty());
     request = {C::cloud_sync, 902}; request.direction = aurelia::Request::Direction::down;
     CHECK(aurelia::arguments(request).back() == L"--down");
+    {
+        // Log Aurelii: a logged sync asks for Aurelia's -vv output too.
+        const auto plain = aurelia::arguments(request);
+        request.log = L"saves.aurelia.log";
+        const auto logged = aurelia::arguments(request);
+        CHECK(std::find(plain.begin(), plain.end(), L"-vv") == plain.end() && std::find(logged.begin(), logged.end(), L"-vv") != logged.end());
+        request.log.clear();
+    }
+    // `running`: the games Aurelia runs now; anything else is no answer.
+    CHECK(aurelia::runningApps(*json::parse(R"({"running":[{"app_id":902,"name":"Fixture","pid":4242}]})")) == std::vector<uint32_t>{902});
+    CHECK(aurelia::runningApps(*json::parse(R"({"running":[]})")) && aurelia::runningApps(*json::parse(R"({"running":[]})"))->empty());
+    CHECK(!aurelia::runningApps(*json::parse(R"({"status":"ok"})")) && !aurelia::runningApps(*json::parse(R"({"running":[{"app_id":0}]})")));
     // The in-app sign-in: the account on the command line, the password never (the child's environment).
     CHECK(aurelia::arguments({C::login_qr}) == std::vector<std::wstring>({L"--json", L"login", L"--qr", L"--timeout", L"300"}));
     request = {C::login_password}; request.text = L"fixture"; request.secret = L"hunter2";
@@ -224,8 +255,9 @@ int main(int argc, char** argv) {
     CHECK(aurelia::loadLibraryCache(root / L"cache", 76561198000000001ULL));
     CHECK(!aurelia::loadLibraryCache(root / L"cache", 76561198000000002ULL));
     CHECK(!aurelia::saveLibraryCache(root / L"cache", 0, roster));
-    std::vector<C> calls; bool shared = false, target = true, conflict = false, upload_failure = false, native = false;
+    std::vector<C> calls; bool shared = false, target = true, conflict = false, upload_failure = false, native = false, play_failure = false, play_cancel = false, cloud_off = false;
     std::wstring played; // The build `play` was asked for (Linux).
+    std::filesystem::path synced_log; // The log a sync was given.
     aurelia::Transport workflow = [&](const aurelia::Request& r, const aurelia::Cancel&, const aurelia::Event&) {
         calls.push_back(r.command);
         auto reply = [&](std::string_view value) { return aurelia::Reply{true, false, parsed(value)}; };
@@ -233,8 +265,16 @@ int main(int argc, char** argv) {
         if (r.command == C::launch_targets && native)
             return reply(R"({"targets":[{"id":"linux","platform":"linux","steam_mode":null,"available":true},{"platform":"windows","steam_mode":"none","available":true}]})");
         if (r.command == C::launch_targets) return target ? reply(R"({"targets":[{"platform":"windows","steam_mode":"none","available":true}]})") : reply(R"({"targets":[{"platform":"windows","steam_mode":"host","available":true}]})");
-        if (r.command == C::play) { played = r.text; return reply(R"({"app_id":902,"status":"finished"})"); }
+        if (r.command == C::play) {
+            played = r.text;
+            if (play_cancel) return aurelia::Reply{false, true, {}, L"Cancelled"};
+            if (play_failure) return aurelia::Reply{false, false, {}, L"Exited with code 1"};
+            return reply(R"({"app_id":902,"status":"finished"})");
+        }
+        // Aurelia 0.3: the game's own switch; off, `play` leaves its saves alone and so does Launchme.
+        if (r.command == C::game_config) return cloud_off ? reply(R"({"app_id":902,"cloud_sync":false,"cloud_sync_effective":false})") : reply(R"({"app_id":902,"cloud_sync":null,"cloud_sync_effective":true})");
         if (r.command == C::cloud_sync) {
+            synced_log = r.log;
             if (conflict && r.direction == aurelia::Request::Direction::down) return reply(R"({"status":"conflicts","conflicts":[{"filename":"save.dat"}]})");
             if (upload_failure && r.direction == aurelia::Request::Direction::up) return reply(R"({"status":"failed","failed":[{"filename":"save.dat"}]})");
             return reply(R"({"status":"ok","failed":[],"skipped":[],"conflicts":[]})");
@@ -243,15 +283,62 @@ int main(int argc, char** argv) {
     };
     request = {C::standalone, 902}; request.auto_cloud = true;
     CHECK(aurelia::launchStandalone(workflow, request, [] { return false; }).ok);
-    CHECK(calls == std::vector<C>({C::library, C::launch_targets, C::cloud_sync, C::play, C::cloud_sync}));
+    CHECK(calls == std::vector<C>({C::library, C::launch_targets, C::game_config, C::cloud_sync, C::play, C::cloud_sync}));
     shared = true; calls.clear(); CHECK(!aurelia::launchStandalone(workflow, request, [] { return false; }).ok && calls.size() == 1);
     shared = false; target = false; calls.clear(); CHECK(!aurelia::launchStandalone(workflow, request, [] { return false; }).ok && calls.size() == 2);
     target = true; conflict = true; calls.clear();
     auto blocked = aurelia::launchStandalone(workflow, request, [] { return false; });
-    CHECK(!blocked.ok && !aurelia::flag(blocked.data, "launch_finished") && calls.size() == 3);
+    CHECK(!blocked.ok && !aurelia::flag(blocked.data, "launch_finished") && calls.size() == 4);
     conflict = false; upload_failure = true; calls.clear();
     auto failed_upload = aurelia::launchStandalone(workflow, request, [] { return false; });
-    CHECK(!failed_upload.ok && aurelia::flag(failed_upload.data, "launch_finished") && calls.size() == 5);
+    CHECK(!failed_upload.ok && aurelia::flag(failed_upload.data, "launch_finished") && !aurelia::flag(failed_upload.data, "cloud_uploaded") && calls.size() == 6);
+    // A game that ended with an error still had its saves sent up; the error is play's.
+    upload_failure = false; play_failure = true; calls.clear();
+    auto crashed = aurelia::launchStandalone(workflow, request, [] { return false; });
+    CHECK(!crashed.ok && crashed.error == L"Exited with code 1" && aurelia::flag(crashed.data, "launch_finished") &&
+          aurelia::flag(crashed.data, "cloud_uploaded") && calls == std::vector<C>({C::library, C::launch_targets, C::game_config, C::cloud_sync, C::play, C::cloud_sync}));
+    // Cancelled (Launchme closing): nothing more is sent; Launchme sends the saves at its next start.
+    play_failure = false; play_cancel = true; calls.clear();
+    auto detached = aurelia::launchStandalone(workflow, request, [] { return false; });
+    CHECK(!detached.ok && detached.cancelled && !aurelia::flag(detached.data, "cloud_uploaded") && calls.size() == 5);
+    play_cancel = false;
+    // Cloud turned off for the game in Aurelia: no sync before or after, the game still starts.
+    cloud_off = true; calls.clear();
+    auto unsynced = aurelia::launchStandalone(workflow, request, [] { return false; });
+    CHECK(unsynced.ok && aurelia::flag(unsynced.data, "launch_finished") && !aurelia::flag(unsynced.data, "cloud_uploaded") &&
+          calls == std::vector<C>({C::library, C::launch_targets, C::game_config, C::play}));
+    cloud_off = false;
+    // Log Aurelii: each step and its outcome noted; the syncs are given the log (their -vv output goes there).
+    {
+        request.log = root / L"standalone.aurelia.log"; calls.clear(); synced_log.clear();
+        CHECK(aurelia::launchStandalone(workflow, request, [] { return false; }).ok && synced_log == request.log);
+        std::ifstream input(request.log, std::ios::binary);
+        const std::string written((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+        CHECK(written.find("aurelia --json list") != std::string::npos && written.find("cloud sync 902 -vv --down") != std::string::npos &&
+              written.find("cloud sync 902 -vv --up") != std::string::npos && written.find("  ok") != std::string::npos);
+        request.log.clear();
+    }
+    // Aurelia's logs in a folder of their own inside the game's: each keeps its own last max_files.
+    {
+        const auto data = root / L"logs-data";
+        const auto folder = game_log::folder(data, L"Fixture", "steam:902"), aurelia = game_log::folder(data, L"Fixture", "steam:902", L"aurelia");
+        CHECK(aurelia == folder / L"aurelia");
+        std::filesystem::create_directories(aurelia);
+        for (int i = 0; i < 12; ++i) {
+            wchar_t name[64]{}; swprintf(name, std::size(name), L"2020-01-01_00-00-%02d.log", i);
+            std::ofstream(folder / name) << "launch";
+            std::ofstream(aurelia / name) << "aurelia";
+        }
+        const auto launch_log = game_log::begin(data, L"Fixture", "steam:902");
+        const auto aurelia_log = game_log::begin(data, L"Fixture", "steam:902", L"aurelia");
+        CHECK(launch_log.parent_path() == folder && aurelia_log.parent_path() == aurelia);
+        const auto count = [](const std::filesystem::path& where) {
+            size_t files = 0;
+            for (const auto& entry : std::filesystem::directory_iterator(where)) files += entry.is_regular_file() ? 1 : 0;
+            return files;
+        };
+        CHECK(count(folder) == game_log::max_files - 1 && count(aurelia) == game_log::max_files - 1 && std::filesystem::is_directory(aurelia));
+    }
 #ifndef _WIN32
     // Linux: the native build when it is installed, else the Windows build through Aurelia's Proton.
     upload_failure = false; calls.clear();

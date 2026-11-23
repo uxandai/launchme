@@ -47,6 +47,18 @@ int wmain(int argc, wchar_t** argv) {
         }
         icon_manifest.properties.erase("icon"); icon_manifest.properties["iconText"] = string("TOO LONG");
         rejects([&] { parseManifest(encode(icon_manifest)); }, "invalid icon text accepted");
+        {
+            const auto base = R"({"apiVersion":1,"architecture":"windows-x64","id":"test.launch","version":"1.0.0","entry":"plugin.dll","name":"Launch",)";
+            const auto parsed = parseManifest(std::string(base) +
+                R"("contributions":[{"id":"run","kind":"launch","source":"steam","title":"Run","command":"run"}]})");
+            check(parsed.contributions.size() == 1 && parsed.contributions[0].kind == "launch", "launch contribution parsed");
+            Game steam{620, L"Portal 2"}; Game gog = steam; gog.source = GameSource::gog; gog.kind = GameKind::nonsteam;
+            check(matches(parsed.contributions[0], steam) && !matches(parsed.contributions[0], gog), "launch provider source filtering");
+            rejects([&] { parseManifest(std::string(base) +
+                R"("contributions":[{"id":"run","kind":"launch","title":"Run","command":"run"}]})"); }, "launch provider without source accepted");
+            rejects([&] { parseManifest(std::string(base) +
+                R"("contributions":[{"id":"a","kind":"launch","source":"steam","title":"A","command":"a"},{"id":"b","kind":"launch","source":"gog","title":"B","command":"b"}]})"); }, "two launch providers accepted");
+        }
         const auto dll = readFile(argv[1], 32 * 1024 * 1024), bad_dll = readFile(argv[2], 32 * 1024 * 1024);
         const auto package = root / L"test.zip", broken = root / L"bad.zip", profile = root / L"profile";
         const auto lifecycle = profile / L"data/test.lifecycle/lifecycle.txt";

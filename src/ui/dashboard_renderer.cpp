@@ -1,6 +1,7 @@
 // Drawer dashboard: clock header and the Steam friends / Discord / CPU / GPU tiles.
 #include "renderer.hpp"
 #include "friends_layout.hpp"
+#include "power_menu.hpp"
 
 #include <d2d1helper.h>
 
@@ -39,14 +40,20 @@ void Renderer::drawDashboard(float x) {
         return std::none_of(context_->plugin_widgets.begin(), context_->plugin_widgets.end(), [&](const auto& w) { return w.plugin == pair.first && w.icon; });
     });
     const float left = x + dashboard::margin, inner = friends_layout::drawer_width - 2 * dashboard::margin;
-    text(board.time, left - 3, 30, inner - 52, 84, clock_font_.Get(), gray(0.97f));
+    text(board.time, left - 3, 30, inner - 106, 84, clock_font_.Get(), gray(0.97f));
     text(board.date, left, 111, inner, 30, clock_date_font_.Get(), gray(0.66f));
     const auto organize = dashboard::organizeButton(x);
-    const bool toolbar_focus = board.focus == dashboard::reorganize;
+    const bool toolbar_focus = board.focus == dashboard::reorganize || board.focus == dashboard::power;
+    {
+        // Zasilanie: the same round glass button, the power symbol.
+        const auto power = dashboard::powerButton(x);
+        const auto power_ink = drawButton(D2D1::RectF(power.left, power.top, power.right, power.bottom), board.focus == dashboard::power ? 1.0f : 0.0f, 1, false);
+        desktopGlyph(power_menu::icon(power_menu::Item::shutdown), (power.left + power.right) / 2, (power.top + power.bottom) / 2, 20, power_ink);
+    }
     // A round glass button (the drawer is frosted already), white with the focus; while
     // organizing, its check keeps the accent unless focused.
-    const auto ink = drawButton(D2D1::RectF(organize.left, organize.top, organize.right, organize.bottom), toolbar_focus ? 1.0f : 0.0f, 1, false);
-    const auto glyph = board.editing && !toolbar_focus ? uiAccent(1) : ink;
+    const auto ink = drawButton(D2D1::RectF(organize.left, organize.top, organize.right, organize.bottom), board.focus == dashboard::reorganize ? 1.0f : 0.0f, 1, false);
+    const auto glyph = board.editing && board.focus != dashboard::reorganize ? uiAccent(1) : ink;
     const float bx = organize.left + 10, by = organize.top + 10;
     brush(glyph);
     if (board.editing) {

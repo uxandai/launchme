@@ -22,13 +22,14 @@ bool discordExecutable(const wchar_t* name) {
                        [name](const Flavor& flavor) { return _wcsicmp(name, flavor.executable) == 0; });
 }
 
-std::unordered_set<DWORD> processes() {
+std::unordered_set<DWORD> processes(const std::filesystem::path& program) {
     std::unordered_set<DWORD> result;
+    const auto name = program.filename().wstring();
     const HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (snapshot == INVALID_HANDLE_VALUE) return result;
     PROCESSENTRY32W entry{sizeof(entry)};
     for (BOOL more = Process32FirstW(snapshot, &entry); more; more = Process32NextW(snapshot, &entry))
-        if (discordExecutable(entry.szExeFile)) result.insert(entry.th32ProcessID);
+        if (name.empty() ? discordExecutable(entry.szExeFile) : _wcsicmp(entry.szExeFile, name.c_str()) == 0) result.insert(entry.th32ProcessID);
     CloseHandle(snapshot);
     return result;
 }
@@ -50,10 +51,10 @@ BOOL CALLBACK findWindow(HWND window, LPARAM parameter) {
 }
 } // namespace
 
-bool running() { return !processes().empty(); }
+bool running(const std::filesystem::path& program) { return !processes(program).empty(); }
 
-bool focus() {
-    const auto owners = processes();
+bool focus(const std::filesystem::path& program) {
+    const auto owners = processes(program);
     if (owners.empty()) return false;
     WindowSearch search{&owners};
     EnumWindows(findWindow, reinterpret_cast<LPARAM>(&search));

@@ -198,13 +198,21 @@ BOOL RegisterHotKey(HWND, int, UINT, UINT) { return FALSE; }
 BOOL UnregisterHotKey(HWND, int) { return TRUE; }
 
 namespace {
-struct Menu { std::vector<std::pair<UINT_PTR, std::wstring>> items; UINT_PTR default_item = 0; };
+struct Menu {
+    struct Item {
+        UINT_PTR id = 0; // MF_POPUP: the submenu (owned, destroyed with this one, as Windows does).
+        std::wstring text;
+        UINT flags = 0;
+    };
+    std::vector<Item> items;
+    UINT_PTR default_item = 0;
+};
 }
 
 HMENU CreatePopupMenu() { return reinterpret_cast<HMENU>(new Menu); }
 BOOL AppendMenuW(HMENU menu, UINT flags, UINT_PTR id, const wchar_t* text) {
     if (!menu) return FALSE;
-    if (!(flags & MF_SEPARATOR)) reinterpret_cast<Menu*>(menu)->items.emplace_back(id, text ? text : L"");
+    reinterpret_cast<Menu*>(menu)->items.push_back({id, (flags & MF_SEPARATOR) || !text ? std::wstring{} : std::wstring(text), flags});
     return TRUE;
 }
 BOOL SetMenuDefaultItem(HMENU menu, UINT item, UINT) {
@@ -212,10 +220,16 @@ BOOL SetMenuDefaultItem(HMENU menu, UINT item, UINT) {
     reinterpret_cast<Menu*>(menu)->default_item = item;
     return TRUE;
 }
-// Popup menus come only from the notification-area icon, whose own menu (Shell_NotifyIconW)
-// lists the same entries; an explicit popup chooses nothing.
+// Popup menus come only from the notification-area icon, whose host shows the menu handed to it
+// (Shell_NotifyIconMenu); an explicit popup chooses nothing.
 BOOL TrackPopupMenuEx(HMENU, UINT, int, int, HWND, void*) { return 0; }
-BOOL DestroyMenu(HMENU menu) { delete reinterpret_cast<Menu*>(menu); return TRUE; }
+BOOL DestroyMenu(HMENU handle) {
+    auto* menu = reinterpret_cast<Menu*>(handle);
+    if (!menu) return FALSE;
+    for (const auto& item : menu->items) if (item.flags & MF_POPUP) DestroyMenu(reinterpret_cast<HMENU>(item.id));
+    delete menu;
+    return TRUE;
+}
 
 int MessageBoxW(HWND owner, const wchar_t* text, const wchar_t* caption, UINT type) {
     const SDL_MessageBoxFlags flags = (type & 0xF0) == MB_ICONERROR ? SDL_MESSAGEBOX_ERROR :
@@ -317,12 +331,37 @@ struct TrayIcon {
 };
 TrayIcon tray_icon;
 
+// A chosen entry reaches the window as the icon's callback message: WM_COMMAND, wparam its id.
 void trayActivate(void* command, SDL_TrayEntry*) {
-    const auto code = static_cast<UINT>(reinterpret_cast<uintptr_t>(command));
     if (!tray_icon.window) return;
-    // "Show" selects the icon; "Close" asks the window to close (the launcher's own menu does the same).
-    if (code == 1) PostMessageW(tray_icon.window, tray_icon.callback, 0, MAKELPARAM(NIN_SELECT, 0));
-    else PostMessageW(tray_icon.window, WM_CLOSE, 0, 0);
+    PostMessageW(tray_icon.window, tray_icon.callback, static_cast<WPARAM>(reinterpret_cast<uintptr_t>(command)), MAKELPARAM(WM_COMMAND, 0));
+}
+
+// The Win32 menu's entries as the host's (labels as given: the launcher doubles no ampersands here).
+void fillTrayMenu(SDL_TrayMenu* target, const Menu& menu) {
+    for (const auto& item : menu.items) {
+        if (item.flags & MF_SEPARATOR) { SDL_InsertTrayEntryAt(target, -1, nullptr, SDL_TRAYENTRY_BUTTON); continue; }
+        const auto label = text_encoding::utf8Lenient(item.text);
+        if (item.flags & MF_POPUP) {
+            SDL_TrayEntry* entry = SDL_InsertTrayEntryAt(target, -1, label.c_str(), SDL_TRAYENTRY_SUBMENU);
+            if (!entry || !item.id) continue;
+            if (SDL_TrayMenu* submenu = SDL_CreateTraySubmenu(entry)) fillTrayMenu(submenu, *reinterpret_cast<const Menu*>(item.id));
+            continue;
+        }
+        const SDL_TrayEntryFlags flags = SDL_TRAYENTRY_BUTTON | ((item.flags & (MF_GRAYED | MF_DISABLED)) ? SDL_TRAYENTRY_DISABLED : 0u);
+        if (SDL_TrayEntry* entry = SDL_InsertTrayEntryAt(target, -1, label.c_str(), flags))
+            SDL_SetTrayEntryCallback(entry, trayActivate, reinterpret_cast<void*>(item.id));
+    }
+}
+
+void clearTrayMenu(SDL_TrayMenu* menu) {
+    int count = 0;
+    const SDL_TrayEntry** listed = SDL_GetTrayEntries(menu, &count);
+    if (!listed || count <= 0) return;
+    // The list is SDL's own and goes stale with the first removal: copied first.
+    std::vector<SDL_TrayEntry*> entries;
+    for (int i = 0; i < count; ++i) entries.push_back(const_cast<SDL_TrayEntry*>(listed[i]));
+    for (auto* entry : entries) SDL_RemoveTrayEntry(entry);
 }
 }
 
@@ -340,7 +379,8 @@ BOOL Shell_NotifyIconW(DWORD message, NOTIFYICONDATAW* data) {
                 if (SDL_TrayEntry* entry = SDL_InsertTrayEntryAt(menu, -1, label, SDL_TRAYENTRY_BUTTON))
                     SDL_SetTrayEntryCallback(entry, trayActivate, reinterpret_cast<void*>(command));
             };
-            // The labels of the launcher's own tray menu (src/app/tray.cpp).
+            // Until the launcher hands over its menu (Shell_NotifyIconMenu): show and close, with the
+            // ids of src/app/tray_menu.hpp.
             add(text_encoding::utf8(tr(L"Pokaż launchme")).c_str(), 1);
             add(text_encoding::utf8(tr(L"Zamknij launchme")).c_str(), 2);
         }
@@ -356,6 +396,17 @@ BOOL Shell_NotifyIconW(DWORD message, NOTIFYICONDATAW* data) {
     case NIM_SETVERSION: return tray_icon.tray != nullptr;
     default: return FALSE;
     }
+}
+
+BOOL Shell_NotifyIconMenu(HMENU handle) {
+    const auto* menu = reinterpret_cast<const Menu*>(handle);
+    if (!tray_icon.tray || !menu) return FALSE;
+    SDL_TrayMenu* target = SDL_GetTrayMenu(tray_icon.tray);
+    if (!target) target = SDL_CreateTrayMenu(tray_icon.tray);
+    if (!target) return FALSE;
+    clearTrayMenu(target);
+    fillTrayMenu(target, *menu);
+    return TRUE;
 }
 
 // ---- GDI: no device contexts on Linux --------------------------------------------------------

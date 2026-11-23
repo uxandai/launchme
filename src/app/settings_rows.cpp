@@ -217,6 +217,14 @@ void Launcher::buildSettingsRows() {
                 accentRow(Id::accent, tr(L"Kolor akcentu okładek"), tr(L"Automatycznie: kolor samej okładki. Albo jeden mocny kolor dla wszystkich."),
                           settings_.cover_accent_rgb, accents, accent_names);
         };
+        // The desktop window's sidebar: what it lists besides the library itself.
+        const auto sidebarRows = [&] {
+            section(tr(L"Panel boczny"));
+            add({Id::sidebar_store, Control::toggle, tr(L"Sklep"), tr(L"Pozycja pod Ustawieniami: wyszukiwanie gier w sklepach."), {}, settings_.desktop_sidebar_store});
+            add({Id::sidebar_platforms, Control::toggle, tr(L"Platformy"), tr(L"Biblioteki sklepów i launcherów: Steam, GOG, Epic i inne."), {}, settings_.desktop_sidebar_platforms});
+            if (studiosShown())
+                add({Id::sidebar_studios, Control::toggle, tr(L"Wydawcy i developerzy"), tr(L"Loga wydawców i developerów gier z Twojej biblioteki."), {}, settings_.desktop_sidebar_studios});
+        };
         using HomeLayout = AppSettings::HomeLayout;
         if (settings_state_.at(Page::layout_options)) {
             // The chosen Tryb TV layout's own options.
@@ -365,6 +373,7 @@ void Launcher::buildSettingsRows() {
                 add({Id::desktop_gray_uninstalled, Control::toggle, tr(L"Niezainstalowane w czerni i bieli"),
                     tr(L"Okładki gier, których nie ma na dysku, bez kolorów - zainstalowane od razu się wyróżniają."), {}, settings_.desktop_gray_uninstalled});
                 desktopRows();
+                sidebarRows();
             }
             section(tr(L"Tryb TV"));
             if (desktop_mode_) {
@@ -418,6 +427,7 @@ void Launcher::buildSettingsRows() {
             add({Id::desktop_gray_uninstalled, Control::toggle, tr(L"Niezainstalowane w czerni i bieli"),
                 tr(L"Okładki gier, których nie ma na dysku, bez kolorów - zainstalowane od razu się wyróżniają."), {}, settings_.desktop_gray_uninstalled});
             desktopRows();
+            sidebarRows();
         }
         // The console layouts are Tryb TV; the desktop window is the other mode (src/app/desktop*.cpp).
         section(tr(L"Tryb TV"));
@@ -587,9 +597,6 @@ void Launcher::buildSettingsRows() {
             choiceRow(Id::accept_action, tr(L"Domyślna akcja gry"),
                       tr(L"Wybranie gry w każdym widoku. Menu gry i ekran szczegółów zawsze uruchamiają."),
                       accept_actions, static_cast<int>(settings_.accept_action));
-            add({Id::hide_while_playing, Control::toggle, tr(L"Chowaj do zasobnika podczas gry"),
-                tr(L"Gdy gra działa, launcher znika z paska zadań i Alt+Tab, a jego ikona czeka w zasobniku. Wraca po zamknięciu gry."),
-                {}, settings_.hide_while_playing});
             // Opcje uruchamiania → Mody (game_mods.cpp): the badges and each mod's preferred method.
             auto mods = gameModsSettingsRows();
             if (!mods.empty()) section(tr(L"Mody gier"));
@@ -1085,7 +1092,20 @@ void Launcher::buildSettingsRows() {
             add(std::move(language));
         }
         add({Id::autostart, Control::toggle, tr(L"Uruchamiaj z systemem Windows"),
-            tr(L"Po zalogowaniu. Tryb TV zajmuje ekran, okno desktopowe czeka zminimalizowane na pasku zadań."), {}, settings_.autostart});
+            settings_.close_to_tray ? tr(L"Po zalogowaniu. Tryb TV zajmuje ekran, okno desktopowe czeka w zasobniku.")
+                                    : tr(L"Po zalogowaniu. Tryb TV zajmuje ekran, okno desktopowe czeka zminimalizowane na pasku zadań."),
+            {}, settings_.autostart});
+        // The notification area (src/app/tray.cpp).
+        add({Id::close_to_tray, Control::toggle, tr(L"Zamknięcie okna chowa do zasobnika"),
+#ifdef _WIN32
+            tr(L"✕, Alt+F4 i pasek zadań chowają launchme do zasobnika, a jego ikona zostaje tam cały czas. Prawy klik na ikonie: ostatnio grane, tryby, pobierania i Zamknij launchme."),
+#else
+            tr(L"✕ i Alt+F4 chowają launchme do zasobnika, a jego ikona zostaje tam cały czas. Pulpit musi mieć zasobnik (KDE; GNOME z rozszerzeniem AppIndicator), inaczej okno zamyka się jak dotąd."),
+#endif
+            {}, settings_.close_to_tray});
+        add({Id::hide_while_playing, Control::toggle, tr(L"Chowaj do zasobnika podczas gry"),
+            tr(L"Gdy gra działa, launcher znika z paska zadań i Alt+Tab, a jego ikona czeka w zasobniku. Wraca po zamknięciu gry."),
+            {}, settings_.hide_while_playing});
         section(tr(L"Funkcje"));
         add({Id::glance, Control::toggle, L"Glance",
             tr(L"Nowości, premiery i artykuły. Kafel na ekranie głównym (w Flix pasek u góry): kliknięcie, G lub R2/RT."), {}, settings_.glance});
@@ -1095,6 +1115,14 @@ void Launcher::buildSettingsRows() {
         add({Id::store_hub, Control::toggle, tr(L"Launchery i promocje w Sklepach"),
             tr(L"Dwie zakładki w Sklepach: instalacja Steama, GOG Galaxy, Epic, RetroArch i innych jednym kliknięciem oraz darmowe gry i przeceny ze sklepów."),
             {}, settings_.store_hub});
+        // The Widżety's Discord tile: Discord's own client, or another one picked here (Vesktop, Legcord…).
+        add({Id::discord_program, Control::action, tr(L"Discord w Widżetach"),
+             settings_.discord_program.empty() ? std::wstring(tr(L"Kafel otwiera Discorda (także PTB i Canary). Możesz wybrać inny program, np. Vesktop lub Legcord."))
+                                               : tr(L"Kafel otwiera: ") + settings_.discord_program.wstring(),
+             settings_.discord_program.empty() ? tr(L"Wybierz program") : tr(L"Zmień")});
+        if (!settings_.discord_program.empty())
+            add({Id::discord_program_reset, Control::action, tr(L"Discord w Widżetach: zwykły Discord"),
+                 tr(L"Kafel znów otwiera Discorda, PTB lub Canary."), tr(L"Przywróć")});
         pageRow(Page::screensaver, tr(L"Wygaszacz ekranu"), tr(L"Grafiki gier, gdy launcher jest bezczynny: styl, czas i podgląd."),
                 settings_.screensaver ? tr(L"Po ") + std::to_wstring(screensaver::normalizedMinutes(settings_.screensaver_minutes)) + tr(L" min") :
                                         std::wstring(tr(L"Wyłączony")));

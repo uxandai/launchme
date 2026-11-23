@@ -204,7 +204,7 @@ int LauncherUiTest::gameOverlay(HWND window) {
     app.overlay_snapshot_ = snapshot;
     // The same widget editor in Guide, including key-up, pad holds and mouse capture.
     app.dashboard_tile_ = 0;
-    app.overlayKey(VK_UP); app.overlayKey(VK_RETURN); app.overlayKey(VK_DOWN);
+    app.overlayKey(VK_UP); app.overlayKey(VK_RIGHT); app.overlayKey(VK_RETURN); app.overlayKey(VK_DOWN); // Up: Zasilanie, Right: organize.
     if (!app.dashboardEditing() || app.dashboard_tile_ != 0) return 1870;
     const HWND overlay_hwnd = app.game_overlay_->handle();
     app.overlayMessage(overlay_hwnd, WM_KEYDOWN, VK_RETURN, 0);

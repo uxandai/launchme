@@ -12,8 +12,9 @@ launch depends on the game. The integration does not promise offline authenticat
 ## Setup
 
 1. Open **Settings → Library → Steam → Manage Aurelia**.
-2. Choose **Install Aurelia**. Launchme selects `aurelia_windows_x86_64.exe` from the latest stable
-   GitHub release, verifies its advertised SHA-256 and Windows x64 PE header, and publishes it atomically.
+2. Choose **Install Aurelia**. Launchme selects `aurelia_windows_x86_64.exe` from the Aurelia release it was
+   checked with (see [Supported versions](#supported-versions)), verifies its advertised SHA-256 and Windows x64
+   PE header, and publishes it atomically.
 3. **Sign in** (the first row says who is signed in, or *Not signed in*). One page, desktop and TV, as Steam's
    own sign-in: Steam's QR code (scan it in the Steam Mobile app, Steam Guard → Scan a QR code, and approve;
    Steam rotates the code and the page follows it) and, below it, the field for the account name and then its
@@ -46,6 +47,21 @@ usable marker (cleaned from the temp folder, or removed by a newer CLI whose res
 running an older installed version's executable after an update, is ended, so the command starts a fresh
 daemon. Anything else at the endpoint is refused, avoiding the upstream fallback that stops all Aurelia
 daemons.
+
+## Supported versions
+
+Each Launchme release carries a compat list (`aurelia::compatible_versions` in `src/store/aurelia.hpp`): the
+Aurelia releases it was checked with, oldest first. Launchme 0.7.24 supports **v0.3.1** (0.3 reworked the CLI and
+the automatic cloud saves of `play`).
+
+- **Install Aurelia** and **Update Aurelia** fetch the last release on the list by its tag, never simply the
+  latest one, so a new Aurelia waits until a Launchme release has been checked with it.
+- An installed Aurelia older than the first entry is reported: a notification at start, the Aurelia page's
+  update row (*Update Aurelia to v0.3.1*) and the Settings row. Games do not start through it until it is
+  updated; everything else keeps working.
+- One newer than the list is kept (never downgraded) and noted as not checked with this Launchme.
+
+New Launchme releases move the list on: they add the releases they were checked with and raise the minimum.
 
 ## Games and downloads
 
@@ -128,7 +144,10 @@ successful sync. Conflicts, skipped paths, transfer failures and unknown state s
 automatically. **Use cloud saves** or **Use local saves** requires confirmation. File/save operations are
 blocked while the launcher knows that the game is running. **Sync before and after playing** is on
 for every managed game while **Cloud saves** is on (switch it off per game in **Manage · Aurelia**): it
-downloads before standalone play and uploads after the game has finished. A failed, partial or conflicting pre-launch sync prevents launch; resolve it in
+downloads before standalone play and uploads after the game has finished, also when the game ended with an
+error. Saves left to upload when Launchme closed during a game go up at its next start. Aurelia 0.3's `play`
+syncs too, unless cloud sync is off for the game in Aurelia (`aurelia config game <id> --cloud-sync off`):
+Launchme reads that switch (`config game --json`, `cloud_sync_effective`) and then skips its own syncs as well. A failed, partial or conflicting pre-launch sync prevents launch; resolve it in
 the Cloud page and retry. A failed upload is reported separately from a launch failure. The ordinary
 Steam launch path leaves save synchronization to Steam. Listing status never uploads or overwrites saves,
 and a delayed file-list reply cannot erase a newer sync outcome.
@@ -169,8 +188,9 @@ keyboard is not available there.
 Contract reviewed against Aurelia **v0.1.40** (`a47e90bf42aa9f99818bd8d0de286a5c33da9b44`),
 including the JSON command handlers and NDJSON progress/chat events; the in-app sign-in (`login --json`
 events `qr_challenge`, `qr_scanned`, `guard_required`, its stdin control channel) and `is_family_shared`
-against **v0.1.41**. The installer deliberately selects the latest stable release; incompatible responses
-are reported rather than guessed. QR codes are drawn with Nayuki's
+against **v0.1.41**; the command set, `play`'s cloud sync and `config game --json` rechecked against
+**v0.3.1**. The installer selects the pinned release of the compat list; incompatible responses are reported
+rather than guessed. QR codes are drawn with Nayuki's
 [QR Code generator](https://github.com/nayuki/QR-Code-generator) (MIT, fetched at build time).
 
 - `src/store/aurelia*`: typed requests/parsers, Win32 child-process transport, release installer.
