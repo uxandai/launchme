@@ -19,7 +19,14 @@ struct Source {
     std::ifstream stream;
     uint64_t base = 0;
 };
-size_t readStream(void* opaque, mz_uint64 offset, void* data, size_t size) {
+size_t readStream(void* opaque, mz_uint64 offset, void* data, size_t size) { // A file added to an archive.
+    auto& stream = *static_cast<std::ifstream*>(opaque);
+    stream.clear();
+    stream.seekg(static_cast<std::streamoff>(offset));
+    stream.read(static_cast<char*>(data), static_cast<std::streamsize>(size));
+    return static_cast<size_t>(stream.gcount());
+}
+size_t readSource(void* opaque, mz_uint64 offset, void* data, size_t size) { // The archive being read.
     auto& source = *static_cast<Source*>(opaque);
     source.stream.clear();
     source.stream.seekg(static_cast<std::streamoff>(source.base + offset));
@@ -137,7 +144,7 @@ bool Reader::open(const std::filesystem::path& file) {
     const auto size = static_cast<uint64_t>(source.stream.tellg());
     const auto init = [&] {
         state_->zip = {};
-        state_->zip.m_pRead = readStream;
+        state_->zip.m_pRead = readSource;
         state_->zip.m_pIO_opaque = &source;
         return mz_zip_reader_init(&state_->zip, size - source.base, 0) != MZ_FALSE;
     };
