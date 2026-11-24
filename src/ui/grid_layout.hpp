@@ -163,50 +163,55 @@ inline std::pair<size_t, size_t> visibleRange(size_t count, float width, float h
 // covers, the name, how many games), as a console's game library shows its lists; under them the
 // shown games' count and order. It scrolls with the rows; the tiles slide sideways to the focused one.
 namespace collection_band {
-constexpr float caption = 44, gap = 25, pad = 12, cover_gap = 8, text = 62, under = 26, summary = 40;
+constexpr float caption = 44, text = 58, under = 26, summary = 40, seam = 4;
 using Options = library_view::Options;
-// The grid's art: square covers, posters (2:3) or capsules (920:430); the tiles' covers take its shape.
+// A tile is one of the grid's cells, in its art's shape (square covers, 2:3 posters, 920:430
+// capsules), in the grid's columns: the collections read as a first row of the grid.
 inline float coverAspect(const Options& o) { return o.grid_landscape ? 430.0f / 920.0f : o.grid_posters ? 1.5f : 1.0f; }
-// The grid's cell width (capsules are wider than the square cells).
 inline float cellWidth(float width, const Options& o) {
     return o.grid_landscape ? landscape_grid::cellWidth(width, o.grid_columns) : grid_layout::cell(width, o.grid_columns);
 }
-// The band spans the grid's width: from its first column to its last.
-inline float left(float width, const Options& o) {
-    return o.grid_landscape ? landscape_grid::left(width, 0, o.grid_columns) : grid_layout::left(width, 0, o.grid_columns);
+inline float columnLeft(float width, size_t index, const Options& o) {
+    return o.grid_landscape ? landscape_grid::left(width, index, o.grid_columns) : grid_layout::left(width, index, o.grid_columns);
 }
+// The band spans the grid's width: from its first column to its last.
+inline float left(float width, const Options& o) { return columnLeft(width, 0, o); }
 inline float right(float width, const Options& o) { return width - left(width, o); }
-// A tile: as wide as two of the grid's cells with their gap (at least 300).
-inline float tileWidth(float width, const Options& o) { return std::max(300.0f, 2 * cellWidth(width, o) + gap); }
-inline float coverWidth(float width, const Options& o) { return std::floor((tileWidth(width, o) - 2 * pad - 2 * cover_gap) / 3); }
-inline float coverHeight(float width, const Options& o) { return std::floor(coverWidth(width, o) * coverAspect(o)); }
-inline float tileHeight(float width, const Options& o) { return pad + coverHeight(width, o) + text; }
-// The room the band takes above the rows.
-inline float height(float width, const Options& o) { return caption + tileHeight(width, o) + under + summary; }
+inline float tileWidth(float width, const Options& o) { return cellWidth(width, o); }
+inline float tileHeight(float width, const Options& o) { return std::floor(cellWidth(width, o) * coverAspect(o)); } // The picture.
+// The room the band takes above the rows: "Kolekcje: N", the tiles with their names, the line under them.
+inline float height(float width, const Options& o) { return caption + tileHeight(width, o) + text + under + summary; }
 inline float top(float scroll) { return 190.0f - scroll; }
 inline float tilesTop(float scroll) { return top(scroll) + caption; }
-inline float step(float width, const Options& o) { return tileWidth(width, o) + gap; }
-// Tile `index` with the row slid by `slide` (px).
+inline float step(float width, const Options& o) { return columnLeft(width, 1, o) - columnLeft(width, 0, o); }
+// Tile `index`'s picture with the row slid by `slide` (px); its name and count are under it.
 inline settings_ui::Rect tile(int index, float width, float scroll, float slide, const Options& o) {
     const float x = left(width, o) + static_cast<float>(index) * step(width, o) - slide, y = tilesTop(scroll);
     return {x, y, x + tileWidth(width, o), y + tileHeight(width, o)};
 }
-inline settings_ui::Rect cover(const settings_ui::Rect& tile, int slot, float width, const Options& o) {
-    const float w = coverWidth(width, o), x = tile.left + pad + static_cast<float>(slot) * (w + cover_gap);
-    return {x, tile.top + pad, x + w, tile.top + pad + coverHeight(width, o)};
+// Its covers: one fills a collection of one game; more make four quarters of the tile's own shape.
+inline settings_ui::Rect cover(const settings_ui::Rect& tile, int slot, size_t games) {
+    if (games <= 1) return tile;
+    const float w = (tile.right - tile.left - seam) * 0.5f, h = (tile.bottom - tile.top - seam) * 0.5f;
+    const float x = tile.left + static_cast<float>(slot % 2) * (w + seam), y = tile.top + static_cast<float>(slot / 2) * (h + seam);
+    return {x, y, x + w, y + h};
 }
 // The line under the tiles: "Wszystkie gry: 513" on the left, the order on the right.
-inline float summaryMiddle(float width, float scroll, const Options& o) { return tilesTop(scroll) + tileHeight(width, o) + under + summary * 0.5f; }
+inline float summaryMiddle(float width, float scroll, const Options& o) { return tilesTop(scroll) + tileHeight(width, o) + text + under + summary * 0.5f; }
 // The slide that keeps `focus` in view (whole tiles; the first stays at the left edge).
 inline float slideFor(int focus, int count, float width, const Options& o) {
     const float span = right(width, o) - left(width, o), s = step(width, o);
-    const int fit = std::max(1, static_cast<int>((span + gap) / s));
+    const int fit = std::max(1, static_cast<int>((span + s - tileWidth(width, o)) / s + 0.01f));
     const int first = std::clamp(focus - fit + 1, 0, std::max(0, count - fit));
     return static_cast<float>(std::max(0, first)) * s;
 }
 inline int hit(float x, float y, int count, float width, float scroll, float slide, const Options& o) {
     if (x < left(width, o) - 4 || x > right(width, o) + 4) return -1;
-    for (int i = 0; i < count; ++i) if (tile(i, width, scroll, slide, o).contains(x, y)) return i;
+    for (int i = 0; i < count; ++i) {
+        auto r = tile(i, width, scroll, slide, o);
+        r.bottom += text; // Its name and count too.
+        if (r.contains(x, y)) return i;
+    }
     return -1;
 }
 } // namespace collection_band

@@ -621,7 +621,11 @@ bool Launcher::adjustLibraryView(int amount) {
 bool Launcher::libraryHorizontal(int amount, bool edge_menu) {
     if (!libraryControls() || menu_open_ || pending_launch_ || quick_open_) return false;
     using library_ui::Panel;
-    if (libraryBandFocused()) { libraryBandMove(amount); return true; }
+    if (libraryBandFocused()) {
+        // Left on the first tile opens Opcje widoku, as from the grid's first column.
+        if (amount < 0 && band_focus_ == 0 && edge_menu) { openLibraryPanel(Panel::views); return true; }
+        libraryBandMove(amount); return true;
+    }
     if (library_controls_.panel == Panel::views) {
         if (library_controls_.view_dropdown) return true;
         if (library_controls_.view_row > 0 && library_controls_.view_row < library_ui::views::closeRow(libraryView())) adjustLibraryView(amount);

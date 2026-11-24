@@ -61,9 +61,18 @@ int LauncherUiTest::collectionBand(HWND window) {
     app.navigate(1); app.navigate(1); app.navigate(1); app.navigate(1);
     if (app.band_focus_ != 3) return 13007;
     settle();
-    if (app.band_slide_ <= 0) return 13008; // The last tile slid into view (four do not fit at this width).
+    // The tiles stand in the grid's columns: the row slides only when there are more of them.
+    if ((app.band_slide_ > 0) != (app.libraryBandTiles().size() > static_cast<size_t>(app.libraryColumns()))) return 13008;
     if (!capture(L"collection-band-focus.png")) return 13009;
     if (app.libraryTabsShown()) return 13022; // The tiles lead to the collections: no tabs above them.
+    { // Left on the first tile opens Opcje widoku, as from the grid's first column; Back returns to the tile.
+        const int last = app.band_focus_;
+        app.libraryBandFocus(0); app.libraryHorizontal(-1, true);
+        if (app.library_controls_.panel != library_ui::Panel::views) return 13026;
+        app.back();
+        if (app.library_controls_.open() || !app.libraryBandFocused() || app.band_focus_ != 0) return 13027;
+        app.libraryBandFocus(last);
+    }
     app.changeCategory(-1);
     if (app.libraryBandFocused() || app.library_controls_.focus != library_ui::filters_button) return 13010;
     app.changeCategory(1);
@@ -94,7 +103,7 @@ int LauncherUiTest::collectionBand(HWND window) {
     app.renderer_.setTileShape(AppSettings::TileShape::square); app.focusCard(0); app.changeCategory(-1); settle();
     {
         const auto posters = app.libraryPresentation();
-        if (!app.libraryBandFocused() || collection_band::coverHeight(view.width, posters) < collection_band::coverWidth(view.width, posters) * 1.4f) return 13023;
+        if (!app.libraryBandFocused() || collection_band::tileHeight(view.width, posters) < collection_band::tileWidth(view.width, posters) * 1.4f) return 13023;
         ViewContext context; app.focusContext(context);
         if (!context.band_glide) return 13024; // The ring springs.
     }

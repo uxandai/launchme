@@ -23,7 +23,7 @@ bool Launcher::libraryBandFocused() const {
 }
 
 // The user's collections in their order (those kept off the library's tabs and SRM's left out), each
-// with its games and the first three of them for the tile's covers.
+// with its games and the first four of them for the tile's covers.
 std::vector<Launcher::BandTile> Launcher::libraryBandTiles() const {
     std::vector<BandTile> tiles;
     for (const auto& collection : settings_collections_) {
@@ -133,7 +133,7 @@ void Launcher::libraryBandContext(ViewContext& context) {
     const auto tiles = libraryBandTiles();
     const auto kind = bandKind(library_controls_.options);
     for (const auto& tile : tiles) {
-        ViewContext::BandTile view{tile.name, gamesLabel(tile.count), {}};
+        ViewContext::BandTile view{tile.name, gamesLabel(tile.count), {}, tile.count};
         for (size_t i = 0; i < tile.games.size(); ++i) {
             if (!tile.games[i]) continue;
             const auto* found = art_.find(gameKey(*tile.games[i]));

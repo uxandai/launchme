@@ -302,7 +302,7 @@ struct ViewContext {
     std::wstring library_note; // Under the tabs: what the screen is (the board of studio logos).
     // Siatka's "Kolekcje jako kafle" (collection_band): the tiles (name, games, three covers), the focused and
     // pointed ones, the row's sideways slide, the line under them ("Wszystkie gry: 513", the order).
-    struct BandTile { std::wstring name, count; std::array<ImageBytes, 3> covers; };
+    struct BandTile { std::wstring name, count; std::array<ImageBytes, 4> covers; size_t games = 0; };
     bool band = false;
     std::vector<BandTile> band_tiles;
     int band_focus = -1, band_hover = -1;

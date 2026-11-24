@@ -724,7 +724,7 @@ public:
     // The library's tab of every game (empty id) or of a shelf, in `view` (its own order and filters stay).
     bool showLibraryCategory(const std::string& id, library_view::View view);
     // Siatka's "Kolekcje jako kafle" (src/app/library_collections.cpp).
-    struct BandTile { std::string id; std::wstring name; size_t count = 0; std::array<const Game*, 3> games{}; };
+    struct BandTile { std::string id; std::wstring name; size_t count = 0; std::array<const Game*, 4> games{}; };
     bool libraryBandShown() const;
     bool libraryBandFocused() const;
     std::vector<BandTile> libraryBandTiles() const;
