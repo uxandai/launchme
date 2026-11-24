@@ -1337,6 +1337,7 @@ constexpr Entry entries[] = {
      L"While a game runs, the launcher leaves the taskbar and Alt+Tab and its icon waits in the tray. It comes back when the game closes."},
     {L"Pokaż launchme", L"Show launchme"},
     {L"Zamknij launchme", L"Close launchme"},
+    {L"Scena", L"Stage"},
     {L"Nowsza niż sprawdzona z Launchme: ", L"Newer than the one checked with Launchme: "},
     {L"Wymagana aktualizacja Aurelii do ", L"Aurelia must be updated to "},
     {L"Masz ", L"You have "},

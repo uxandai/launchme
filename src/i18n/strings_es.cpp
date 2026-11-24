@@ -1006,6 +1006,7 @@ constexpr Entry entries[] = {
     {L"Gdy gra działa, launcher znika z paska zadań i Alt+Tab, a jego ikona czeka w zasobniku. Wraca po zamknięciu gry.", L"Mientras el juego está abierto, el launcher sale de la barra de tareas y de Alt+Tab y su icono espera en la bandeja. Vuelve al cerrar el juego."},
     {L"Pokaż launchme", L"Mostrar launchme"},
     {L"Zamknij launchme", L"Cerrar launchme"},
+    {L"Scena", L"Escenario"},
     {L"Nowsza niż sprawdzona z Launchme: ", L"Más nueva que la probada con Launchme: "},
     {L"Wymagana aktualizacja Aurelii do ", L"Hay que actualizar Aurelia a "},
     {L"Masz ", L"Tienes "},

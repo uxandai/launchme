@@ -172,7 +172,7 @@ bool Launcher::libraryButtons() const { return libraryActions() || libraryOvervi
 settings_ui::Rect Launcher::libraryButton(int index) const {
     const auto view = renderer_.viewport();
     if (libraryOverview()) return overview_layout::Panel{view.width, view.height}.button(index);
-    return library_presentation::Layout{view.width, view.height}.action(index);
+    return library_presentation::Layout{view.width, view.height, libraryView() == library_view::View::stage}.action(index);
 }
 int Launcher::libraryColumns() const { return library_layout::columns(libraryView(), renderer_.viewport().width, libraryPresentation()); }
 bool Launcher::menuBeside() const { return xmbActive() || flixActive() || metroActive() || psfiveActive() || snitchActive() || libraryList() || libraryCarousel(); }
@@ -185,7 +185,7 @@ std::optional<settings_ui::Rect> Launcher::libraryMenuAnchor() const {
     const auto view = renderer_.viewport();
     if (psfiveActive()) return psfive_layout::action(1, view.height, psfiveScale(), 0, psfiveRaise()); // "…" under the row.
     if (!libraryActions()) return std::nullopt;
-    return library_presentation::Layout{view.width, view.height}.action(1);
+    return library_presentation::Layout{view.width, view.height, libraryView() == library_view::View::stage}.action(1);
 }
 bool Launcher::libraryTypeAhead() const {
     return screen_ == ScreenMode::library && !library_controls_.open() && !menu_open_ && !friends_open_ && !pending_launch_ &&
@@ -623,7 +623,7 @@ bool Launcher::libraryHorizontal(int amount, bool edge_menu) {
             else { const int next = std::clamp(action + amount, 0, library_presentation::action_count - 1); if (next == action) navigationBoundary(); action = next; }
             audio_.navigate(); InvalidateRect(hwnd_, nullptr, FALSE); return true;
         }
-        if (libraryView() == library_view::View::detailed && amount > 0) {
+        if ((libraryView() == library_view::View::detailed || libraryView() == library_view::View::stage) && amount > 0) {
             action = 0; audio_.navigate(); InvalidateRect(hwnd_, nullptr, FALSE); return true;
         }
     }
@@ -808,7 +808,7 @@ bool Launcher::libraryClick(float x, float y, bool double_click) {
     }
     library_controls_.focus = -1;
     if (libraryActions() && !cards_.empty()) {
-        const int action = library_presentation::Layout{view.width, view.height}.hitAction(x, y);
+        const int action = library_presentation::Layout{view.width, view.height, libraryView() == library_view::View::stage}.hitAction(x, y);
         if (action >= 0) {
             if (!double_click) { library_controls_.action = action; launch(); InvalidateRect(hwnd_, nullptr, FALSE); }
             return true;

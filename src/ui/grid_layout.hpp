@@ -258,12 +258,35 @@ struct Layout {
 };
 }
 
+// Scena: the titles in a narrow column; the focused game beside them as on PSfive's home (the background
+// behind the whole view): its logo, a line of facts, Graj / Instaluj with "…", then its badges.
+namespace stage_layout {
+inline float listRight(float width) { return std::clamp(width * 0.27f, 340.0f, 470.0f); }
+struct Layout {
+    float width, height;
+    float left() const { return listRight(width) + 80; }
+    float right() const { return width - 68; }
+    float logoBottom() const { return std::max(list_layout::list_top + 150.0f, height * 0.52f); }
+    settings_ui::Rect logo() const {
+        return {left(), logoBottom() - std::clamp(height * 0.2f, 120.0f, 210.0f), left() + std::min(620.0f, (right() - left()) * 0.75f), logoBottom()};
+    }
+    float factsCenter() const { return logoBottom() + 34; }
+    settings_ui::Rect action(int index) const {
+        const float top = logoBottom() + 66, primary = std::min(300.0f, right() - left() - 84);
+        const float x = left() + (index == 0 ? 0 : primary + 14);
+        return {x, top, x + (index == 0 ? primary : 60), top + 60};
+    }
+    float badgesCenter() const { return action(0).bottom + 52; }
+};
+}
+
 // Shared drawing/hit-test geometry of the larger inline detail panel and its actions.
 namespace library_presentation {
 constexpr int action_count = 2; // Primary action and the compact game menu.
 inline float listRight(float width) { return std::clamp(width * 0.33f, 420.0f, 600.0f); } // Room for longer titles.
 struct Layout {
     float width, height;
+    bool stage = false; // Scena: its actions (stage_layout); the rest is Szczegółowy's panel.
     float left() const { return listRight(width) + 44; }
     float right() const { return width - 68; }
     float heroHeight() const { return std::clamp((height - list_layout::list_top - list_layout::bottom_margin) * 0.46f, 250.0f, 340.0f); }
@@ -272,6 +295,7 @@ struct Layout {
     float factsCenter() const { return hero().bottom - 104; }
     float actionTop() const { return hero().bottom - 76; }
     settings_ui::Rect action(int index) const {
+        if (stage) return stage_layout::Layout{width, height}.action(index);
         const float primary_width = std::min(218.0f, right() - left() - 116);
         const float x = left() + 28 + (index == 0 ? 0 : primary_width + 12);
         return {x, actionTop(), x + (index == 0 ? primary_width : 48), actionTop() + 48};
@@ -293,7 +317,7 @@ inline float rowLeft(View view, float width, float height) {
 }
 inline float rowRight(View view, float width, float height) {
     return view == View::list_plus ? list_plus_layout::Layout{width, height}.listRight() :
-        view == View::detailed ? library_presentation::listRight(width) : list_layout::right(width);
+        view == View::detailed ? library_presentation::listRight(width) : view == View::stage ? stage_layout::listRight(width) : list_layout::right(width);
 }
 inline float rowThumbLeft(View view, float width, float height) {
     return rowLeft(view, width, height) + (list_layout::row_height - list_layout::thumb) * 0.5f;

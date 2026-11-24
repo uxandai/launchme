@@ -452,6 +452,17 @@ int LauncherUiTest::libraryViews(HWND window) {
     settle();
     if (!capture(L"library-detailed.png")) return 1965;
     {
+        // Scena: the titles alone, the focused game as on PSfive's home (captures only).
+        chooseView(library_view::View::stage);
+        app.focusCard(0); settle();
+        capture(L"library-stage.png");
+        app.navigate(1); settle();
+        capture(L"library-stage-actions.png");
+        app.navigate(-1);
+        chooseView(library_view::View::detailed);
+        app.focusCard(0); settle();
+    }
+    {
         // A name too long for its row fades out on the right; the focused one glides (and asks for frames).
         const auto saved = app.cards_[0].game.name, other = app.cards_[2].game.name;
         app.cards_[0].game.name = app.cards_[2].game.name = L"The Legend of Heroes: Trails through Daybreak II Deluxe Edition";
@@ -721,7 +732,7 @@ int LauncherUiTest::libraryViews(HWND window) {
     // The drawer lists Przegląd beside Kinowy; Półka has no row of its own; the saved numbers stay.
     if (library_view::drawerView(library_view::drawerRow(library_view::View::cinematic) + 1) != library_view::View::overview ||
         library_view::drawerRow(library_view::View::bookshelf) != library_view::drawerRow(library_view::View::coverflow) ||
-        library_view::view_count != 7 || static_cast<int>(library_view::View::overview) != 9 || static_cast<int>(library_view::View::bookshelf) != 10) return 2670;
+        library_view::view_count != 8 || static_cast<int>(library_view::View::overview) != 9 || static_cast<int>(library_view::View::bookshelf) != 10) return 2670;
     const auto screen = app.renderer_.viewport();
     // Półka in the steam library: Cover Flow. The focused poster faces front in the middle with
     // its title, year and developer under it; the others stand turned on both sides in perspective

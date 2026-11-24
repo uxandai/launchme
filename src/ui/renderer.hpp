@@ -861,6 +861,8 @@ private:
     void drawLibraryOverview(); // Przegląd: tiles, then drawOverviewPanel.
     void drawOverviewPanel();
     void drawLibraryDetailed();
+    void drawLibraryStage();      // Scena: the focused game beside the titles (library_renderer.cpp).
+    void drawLibraryStageShade(); // Scena: its background darkened under the titles, the top bar and the badges.
     void drawListPlusPoster();
     void drawLibraryActions();
     void drawLibraryLogo(D2D1_RECT_F rect, float alpha);

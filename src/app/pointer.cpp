@@ -449,7 +449,7 @@ bool Launcher::hoverButton(float mouse_x, float mouse_y) const {
             for (const int i : {library_ui::filters_button, library_ui::search_button, library_ui::views_button})
                 if ((i == library_ui::filters_button || screen_ == ScreenMode::library) && layout.button(i).contains(x, y)) return true;
         if (!menu_open_ && libraryActions() && !cards_.empty()) {
-            const int action = library_presentation::Layout{view.width, view.height}.hitAction(x, y);
+            const int action = library_presentation::Layout{view.width, view.height, libraryView() == library_view::View::stage}.hitAction(x, y);
             if (action >= 0) return action != 0 || actionEnabled(cards_[selected_].game);
         }
         if (!menu_open_ && libraryOverview() && !cards_.empty()) {

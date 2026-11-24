@@ -224,7 +224,7 @@ int main() {
     if (!migrated || migrated->options.at("1:all").view != library_view::View::list_plus ||
         migrated->options.at("2:all").view != library_view::View::bookshelf || migrated->options.at("2:all").list_plus_steelbook ||
         migrated->options.at("3:all").view != library_view::View::bookshelf || migrated->options.at("4:all").view != library_view::View::bookshelf) return 28;
-    { std::ofstream beyond(file); beyond << "launchme-library 1\noption \"" << key_codec::encode("1:all") << "\" 1 0 12\n"; }
+    { std::ofstream beyond(file); beyond << "launchme-library 1\noption \"" << key_codec::encode("1:all") << "\" 1 0 13\n"; }
     if (loadLibraryState(file)) return 29;
     // 4 is the release-date order (added later); 5 is out of range.
     { std::ofstream release(file); release << "launchme-library 1\noption \"" << key_codec::encode("1:all") << "\" 4 0\n"; }

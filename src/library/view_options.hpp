@@ -25,16 +25,19 @@ constexpr int persisted_order_count = 5;
 // a view of its own inside (its own perspective geometry, saved as 10) but no row of its own in the
 // drawer: Cover Flow in perspective, the focused game case facing front in the middle above a floor
 // reflection, the others turned on both sides. Enter opens the case (game_case_view.hpp).
-enum class View { grid = 0, list = 1, cinematic = 2, detailed = 3, coverflow = 5, overview = 9, bookshelf = 10, list_plus = 11 };
-constexpr int view_count = 7;            // Views offered (drawer rows).
-constexpr int persisted_view_count = 12; // Saved numbers 0..11, including the removed ones.
+// stage (Scena): the titles alone in a narrow column on the left; the focused game over the rest of the
+// screen as on PSfive's home: its background, logo, Graj / Instaluj with "…", and badges (playtime,
+// achievements, platform).
+enum class View { grid = 0, list = 1, cinematic = 2, detailed = 3, coverflow = 5, overview = 9, bookshelf = 10, list_plus = 11, stage = 12 };
+constexpr int view_count = 8;            // Views offered (drawer rows).
+constexpr int persisted_view_count = 13; // Saved numbers 0..12, including the removed ones.
 inline View viewFromPersisted(int value) {
     return value == 4 ? View::list_plus : value >= 6 && value <= 8 ? View::bookshelf : static_cast<View>(value);
 }
 // The view drawer lists them in this order (the numbers above are only what is saved). Coverflow's
 // row starts on Półka; its Wariant row turns it into the flat Steelbook or Piracka płyta carousel.
 inline constexpr View drawer_order[view_count] = {View::grid, View::list, View::list_plus, View::cinematic, View::overview, View::detailed,
-                                                  View::coverflow};
+                                                  View::stage, View::coverflow};
 inline int drawerRow(View view) {
     if (view == View::bookshelf) view = View::coverflow;
     for (int i = 0; i < view_count; ++i) if (drawer_order[i] == view) return i;
@@ -50,13 +53,13 @@ inline bool coverflowFamily(View view) { return view == View::coverflow || view 
 inline bool carousel(View view) { return coverflowFamily(view); }
 inline bool posterArt(View view) { return view == View::list_plus || view == View::coverflow || view == View::bookshelf; }
 // Półka and Coverflow show the focused game's year, developer and playtime under its cover.
-inline bool metadata(View view) { return view == View::list || view == View::list_plus || view == View::detailed || view == View::overview || carousel(view); }
-inline bool rows(View view) { return view == View::list || view == View::list_plus || view == View::detailed; }
+inline bool metadata(View view) { return view == View::list || view == View::list_plus || view == View::detailed || view == View::stage || view == View::overview || carousel(view); }
+inline bool rows(View view) { return view == View::list || view == View::list_plus || view == View::detailed || view == View::stage; }
 inline bool landscape(View view) { return view == View::cinematic || view == View::overview; } // 920:430 capsules.
 inline bool tabs(View view) { return view == View::cinematic || view == View::overview; }    // Category strip, LB/RB.
 inline bool preview(View view) { return metadata(view) || view == View::cinematic || carousel(view); }
 inline bool pinnedHeader(View view) { return rows(view) || view == View::cinematic || view == View::overview || carousel(view); }
-inline bool actions(View view) { return view == View::detailed; }
+inline bool actions(View view) { return view == View::detailed || view == View::stage; }
 struct Options {
     Order order = Order::last_played;
     bool installed_only = false;
@@ -116,6 +119,7 @@ inline const wchar_t* label(View view) {
     case View::list_plus: return tr(L"Lista+");
     case View::cinematic: return tr(L"Kinowy");
     case View::detailed: return tr(L"Szczegółowy");
+    case View::stage: return tr(L"Scena");
     case View::coverflow: return tr(L"Coverflow");
     case View::overview: return tr(L"Przegląd");
     case View::bookshelf: return tr(L"Coverflow"); // Its Półka variant: one drawer row.

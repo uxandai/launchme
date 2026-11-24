@@ -1,6 +1,7 @@
 #include "renderer.hpp"
 #include "renderer_internal.hpp"
 #include "grid_layout.hpp"
+#include "desktop_view.hpp"
 #include "plugin_page.hpp"
 #include "../library/steam_stats.hpp"
 
@@ -275,6 +276,11 @@ void Renderer::drawViewDrawer() {
             line(gx - 4, gy - 11, gx - 4, gy + 11, ink, 1.8f);
             line(gx + 1, gy + 3, gx + 8, gy + 3, ink, 1.5f);
             line(gx + 1, gy + 7, gx + 8, gy + 7, ink, 1.5f);
+        } else if (row_view == library_view::View::stage) {
+            // Short title lines beside a wide picture with its button.
+            for (int bar = -1; bar <= 1; ++bar) line(gx - 15, gy + bar * 7.0f, gx - 7, gy + bar * 7.0f, ink, 1.6f);
+            target_->DrawRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(gx - 3, gy - 11, gx + 16, gy + 11), 2.5f, 2.5f), solid_.Get(), 1.6f);
+            target_->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(gx + 0.5f, gy + 3, gx + 8.5f, gy + 7), 2, 2), solid_.Get());
         } else if (row_view == library_view::View::coverflow || row_view == library_view::View::bookshelf) {
             // Cover Flow: one cover facing front between two turned in perspective, over a floor line.
             target_->DrawRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(gx - 5, gy - 11, gx + 5, gy + 5), 1.5f, 1.5f), solid_.Get(), 1.6f);
@@ -308,10 +314,11 @@ void Renderer::drawLibraryList() {
     const auto& cards = *cards_;
     const bool detailed = context_->library_mode == library_view::View::detailed;
     const bool plus = context_->library_mode == library_view::View::list_plus;
+    const bool stage = context_->library_mode == library_view::View::stage; // Titles alone, over the game's background.
     const float left = library_layout::rowLeft(context_->library_mode, width, height);
     const float right = library_layout::rowRight(context_->library_mode, width, height);
     const list_layout::Columns columns{width, context_->library_options};
-    if (!detailed && !plus && context_->library_search_progress < 0.005f) {
+    if (!detailed && !plus && !stage && context_->library_search_progress < 0.005f) {
         const auto heading = [&](const wchar_t* title, settings_ui::Rect r) {
             textLine(upper(title), r.left - 20, list_layout::list_top - 26, r.right - r.left + 20, friend_status_font_.Get(), palette::muted(), DWRITE_TEXT_ALIGNMENT_TRAILING);
         };
@@ -321,8 +328,10 @@ void Renderer::drawLibraryList() {
     }
     const float bottom = height - list_layout::bottom_margin;
     // A quiet surface keeps the browser legible even over very bright artwork.
-    brush(gray(0.025f, 0.48f));
-    target_->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(left - 12, list_layout::list_top - 12, right + 12, bottom + 8), 22, 22), solid_.Get());
+    if (!stage) { // Scena: its shade does it (drawLibraryStageShade).
+        brush(gray(0.025f, 0.48f));
+        target_->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(left - 12, list_layout::list_top - 12, right + 12, bottom + 8), 22, 22), solid_.Get());
+    }
     target_->PushAxisAlignedClip(D2D1::RectF(0, list_layout::list_top - 10, width, bottom), D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
     const bool row_focus = !context_->library_controls || (context_->library_controls->focus < 0 &&
         context_->library_controls->action < 0 && !context_->library_controls->open());
@@ -364,21 +373,23 @@ void Renderer::drawLibraryList() {
         // row says "Do instalacji" (every row of a store's library would otherwise repeat it).
         const bool uninstalled = !game.installed && game.kind != GameKind::catalog && session == SessionState::none &&
                                  !game.installation.active() && !localFileGame(game.source);
-        const auto thumb = D2D1::RectF(card.x, card.y, card.x + card.size, card.y + card.size);
-        const auto shape = tileShape(thumb, tile_shape_);
-        brush(D2D1::ColorF(0.13f, 0.17f, 0.2f, card.opacity));
-        if (shape) target_->FillGeometry(shape.Get(), solid_.Get());
-        if (shape && i < covers_.size())
-            fillImage(covers_[i], thumb, 9, card.opacity * card.cover_opacity * reveal(covers_[i]) * (uninstalled && !focused ? 0.55f : 1.0f),
-                      session == SessionState::frozen, shape.Get());
+        if (!stage) {
+            const auto thumb = D2D1::RectF(card.x, card.y, card.x + card.size, card.y + card.size);
+            const auto shape = tileShape(thumb, tile_shape_);
+            brush(D2D1::ColorF(0.13f, 0.17f, 0.2f, card.opacity));
+            if (shape) target_->FillGeometry(shape.Get(), solid_.Get());
+            if (shape && i < covers_.size())
+                fillImage(covers_[i], thumb, 9, card.opacity * card.cover_opacity * reveal(covers_[i]) * (uninstalled && !focused ? 0.55f : 1.0f),
+                          session == SessionState::frozen, shape.Get());
+        }
         // Only what is happening to the game: no platform.
         const std::wstring status = session == SessionState::frozen ? std::wstring(tr(L"Wstrzymana")) :
                                     session == SessionState::running ? std::wstring(tr(L"W grze")) :
                                     game.installation.active() ? installationText(game.installation) :
                                     !game.installed && localFileGame(game.source) ? std::wstring(missingFileLabel(game)) :
                                     uninstalled && focused ? std::wstring(tr(L"Do instalacji")) : std::wstring();
-        const float text_left = card.x + card.size + 18;
-        const float title_right = detailed ? right - 20 : columns.titleRight();
+        const float text_left = stage ? left + 22 : card.x + card.size + 18;
+        const float title_right = detailed || stage ? right - 20 : columns.titleRight();
         const float title_light = focused ? 0.98f : uninstalled ? 0.6f : 0.86f;
         // A name too long for its row fades out on the right; the focused one glides to its end and back.
         if (status.empty() && textAdvance(game.name, menu_font_.Get()) > title_right - text_left)
@@ -386,7 +397,7 @@ void Renderer::drawLibraryList() {
                        gray(title_light, card.opacity), focused && i == selected_);
         else textGroup(game.name, status, text_left, card.y + card.size * 0.5f, title_right - text_left, menu_font_.Get(),
                        gray(title_light, card.opacity), settings_body_font_.Get(), gray(focused ? 0.66f : 0.5f, card.opacity), 1);
-        if (!detailed) {
+        if (!detailed && !stage) {
             const auto found = context_->library_rows.find(i);
             const auto* facts = found == context_->library_rows.end() ? nullptr : &found->second;
             const auto value = [&](const std::wstring& text, settings_ui::Rect r, bool rating = false) {
@@ -400,7 +411,7 @@ void Renderer::drawLibraryList() {
         }
     }
     target_->PopAxisAlignedClip();
-    if (plus) drawLibraryListPlus(); else if (detailed) drawLibraryDetailed(); else drawLibraryPreview();
+    if (plus) drawLibraryListPlus(); else if (detailed) drawLibraryDetailed(); else if (stage) drawLibraryStage(); else drawLibraryPreview();
 }
 
 void Renderer::drawLibraryListPlus() {
@@ -585,7 +596,8 @@ void Renderer::drawLibraryLogo(D2D1_RECT_F rect, float alpha) {
 
 void Renderer::drawLibraryActions() {
     if (!context_->library_controls || !library_view::actions(context_->library_mode) || selected_ >= cards_->size()) return;
-    const library_presentation::Layout layout{viewport_.width, viewport_.height};
+    const bool stage = context_->library_mode == library_view::View::stage;
+    const library_presentation::Layout layout{viewport_.width, viewport_.height, stage};
     const auto& state = *context_->library_controls;
     // PSfive's pair: glass pills, the white one gliding to the focused button.
     const bool on_actions = state.action >= 0 && !state.open() && state.focus < 0;
@@ -602,11 +614,12 @@ void Renderer::drawLibraryActions() {
         if (i == 0) {
             const bool focused = on_actions && state.action == 0;
             if (!drawInstallProgress((*cards_)[selected_].game, box(r), ink, focused ? gray(0.05f, 0.15f) : gray(1, 0.2f), settings_body_font_.Get()))
-                text(context_->primary_action, r.left + 20, r.top, r.right - r.left - 40, r.bottom - r.top, action_font_.Get(), ink);
+                text(context_->primary_action, r.left + 20, r.top, r.right - r.left - 40, r.bottom - r.top, stage ? psfive_button_font_.Get() : action_font_.Get(), ink);
         } else {
             brush(ink);
+            const float spacing = stage ? 11.0f : 8.5f, radius = stage ? 3.1f : 2.7f;
             for (int dot = -1; dot <= 1; ++dot)
-                target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F((r.left + r.right) * 0.5f + dot * 8.5f, (r.top + r.bottom) * 0.5f), 2.7f, 2.7f), solid_.Get());
+                target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F((r.left + r.right) * 0.5f + dot * spacing, (r.top + r.bottom) * 0.5f), radius, radius), solid_.Get());
         }
     }
 }
@@ -812,6 +825,70 @@ void Renderer::drawLibraryDetailed() {
     drawLibraryActions();
     const float rating_left = layout.action(1).right + 24;
     drawRating(rating_left, layout.actionTop() + 9, layout.right() - 28 - rating_left, fade);
+}
+
+// Scena's background: dark under the titles on the left, fading out across the picture; the top bar
+// and the badges along the bottom on a soft shade.
+void Renderer::drawLibraryStageShade() {
+    const float width = viewport_.width, height = viewport_.height;
+    const stage_layout::Layout layout{width, height};
+    const auto fill = [&](D2D1_POINT_2F from, D2D1_POINT_2F to, std::initializer_list<D2D1_GRADIENT_STOP> stops) {
+        Microsoft::WRL::ComPtr<ID2D1GradientStopCollection> collection;
+        Microsoft::WRL::ComPtr<ID2D1LinearGradientBrush> shade;
+        if (SUCCEEDED(target_->CreateGradientStopCollection(stops.begin(), static_cast<UINT32>(stops.size()), collection.GetAddressOf())) &&
+            SUCCEEDED(target_->CreateLinearGradientBrush(D2D1::LinearGradientBrushProperties(from, to), collection.Get(), shade.GetAddressOf())))
+            target_->FillRectangle(D2D1::RectF(0, 0, width, height), shade.Get());
+    };
+    const auto dark = [](float a) { return D2D1::ColorF(0.008f, 0.01f, 0.014f, a); };
+    const float list_end = std::clamp((stage_layout::listRight(width) + 40) / width, 0.05f, 0.9f);
+    const float picture = std::clamp((layout.left() + (layout.right() - layout.left()) * 0.55f) / width, list_end + 0.05f, 0.98f);
+    fill({0, 0}, {width, 0}, {{0, dark(0.9f)}, {list_end, dark(0.78f)}, {picture, dark(0.28f)}, {1, dark(0.05f)}});
+    fill({0, 0}, {0, height}, {{0, dark(0.62f)}, {150 / height, dark(0)}, {0.62f, dark(0)}, {1, dark(0.82f)}});
+}
+
+void Renderer::drawLibraryStage() {
+    if (selected_ >= cards_->size()) return;
+    const stage_layout::Layout layout{viewport_.width, viewport_.height};
+    const auto& game = (*cards_)[selected_].game;
+    const float fade = smoothFade(detail_), left = layout.left(), width = layout.right() - left;
+    const auto logo = box(layout.logo(), 8 * (1 - fade));
+    if (selected_ < logos_.size() && logos_[selected_].bitmap) drawLibraryLogo(logo, fade);
+    else if (!context_->logo_pending && (selected_ >= logos_.size() || !logos_[selected_].decoding)) {
+        // No logo: the name, large, standing on the same line.
+        const float title_height = paragraph(game.name, logo.left, 0, logo.right - logo.left, hero_font_.Get(), palette::text(fade), 2, false);
+        paragraph(game.name, logo.left, logo.bottom - title_height, logo.right - logo.left, hero_font_.Get(), palette::text(fade), 2);
+    }
+    const auto* info = context_->preview;
+    std::wstring facts = libraryStatus(game, sessionOf(game));
+    if (info && !info->release_date.empty()) facts += (facts.empty() ? L"" : L"   ·   ") + gameReleaseYear(info->release_date);
+    if (info && !info->genres.empty()) facts += (facts.empty() ? L"" : L"   ·   ") + info->genres;
+    textLine(facts, left, layout.factsCenter(), width, settings_body_font_.Get(), gray(0.86f, fade));
+    drawLibraryActions();
+    // Badges: the platform, playtime and achievements, each on its own glass pill.
+    const float cy = layout.badgesCenter(), h = 46;
+    float x = left;
+    const auto platform = activePlatformName(game);
+    if (!platform.empty()) x += drawPsfiveBadge(platform, x, cy, fade) + 12;
+    const auto pill = [&](const std::wstring& value, const wchar_t* label, auto icon) {
+        const float value_w = std::ceil(textAdvance(value, category_font_.Get()));
+        const std::wstring caption = upper(label);
+        const float caption_w = std::ceil(textAdvance(caption, friend_section_font_.Get()));
+        const float w = 18 + 24 + 12 + value_w + 10 + caption_w + 20;
+        if (x + w > layout.right()) return;
+        const auto r = D2D1::RectF(x, cy - h * 0.5f, x + w, cy + h * 0.5f);
+        glassFill(glassPanel(D2D1::RoundedRect(r, h * 0.5f, h * 0.5f), 12), gray(0.06f, 0.62f), fade);
+        icon(x + 18 + 12, cy);
+        textLine(value, x + 18 + 24 + 12, cy, value_w + 2, category_font_.Get(), gray(0.97f, fade));
+        textLine(caption, x + 18 + 24 + 12 + value_w + 10, cy + 1, caption_w + 2, friend_section_font_.Get(), palette::muted(fade));
+        x += w + 12;
+    };
+    if (info && info->playtime_minutes && *info->playtime_minutes)
+        pill(formatPlaytime(*info->playtime_minutes), tr(L"Czas gry"), [&](float ix, float iy) { desktopGlyph(desktop_ui::glyph::history, ix, iy, 18, gray(0.92f, fade)); });
+    if (info && info->achievements_total)
+        pill(std::to_wstring(info->achievements_unlocked) + L" / " + std::to_wstring(info->achievements_total), tr(L"Osiągnięcia"),
+             [&](float ix, float iy) { drawTrophy(ix, iy, fade); });
+    const float rating_left = layout.action(1).right + 24;
+    drawRating(rating_left, layout.action(0).top + 15, layout.right() - rating_left, fade);
 }
 
 // The category tabs in the top bar, in place of the title (every view). The first active tab

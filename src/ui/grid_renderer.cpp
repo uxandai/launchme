@@ -40,9 +40,10 @@ void Renderer::drawGrid() {
     // List view: the focused game's background, faint, behind the header, rows and panel. Półka:
     // only a hint of it above the black stage (its floor reflects the covers).
     if (library_view::preview(context_->library_mode) && context_->library_mode != library_view::View::cinematic)
-        drawLibraryAmbient(context_->library_mode == library_view::View::detailed ? 0.12f :
+        drawLibraryAmbient(context_->library_mode == library_view::View::stage ? 0.96f : context_->library_mode == library_view::View::detailed ? 0.12f :
             context_->library_mode == library_view::View::list ? 0.18f : context_->library_mode == library_view::View::list_plus ? 0.08f :
             bookshelf ? 0.14f : 0.32f);
+    if (context_->library_mode == library_view::View::stage) drawLibraryStageShade();
     beginScreenForeground();
     // Back: a glass circle with the white dot (white with a dark dot while it has the focus; in
     // the library the bar's white pill glides onto it: drawLibraryControls).
