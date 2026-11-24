@@ -189,6 +189,13 @@ int main() {
     const std::unordered_map<std::string, int> dates{{"steam:1", 19981119}, {"steam:3", 20110419}};
     const auto by_release = library_view::arrange({back, a, b, c}, {library_view::Order::release, false}, state.first_seen, false, &dates);
     if (by_release[0].kind != GameKind::back || by_release[1].app_id != 3 || by_release[2].app_id != 1 || by_release[3].app_id != 2) return 26;
+    // Ostatnio zainstalowane / Najdłużej grane: the launcher's values, largest first; none last, in title order.
+    const std::unordered_map<std::string, uint64_t> minutes{{"steam:2", 30}, {"steam:3", 900}};
+    const auto by_playtime = library_view::arrange({back, a, b, c}, {library_view::Order::playtime, false}, state.first_seen, false, nullptr, &minutes);
+    if (by_playtime[0].kind != GameKind::back || by_playtime[1].app_id != 3 || by_playtime[2].app_id != 2 || by_playtime[3].app_id != 1) return 68;
+    for (const auto order : {library_view::Order::installed, library_view::Order::playtime})
+        if (library_view::orderFromPersisted(library_view::persistedOrder(order)) != order ||
+            library_view::persistedOrder(order) >= library_view::persisted_order_count) return 69;
     Game gog; gog.source = GameSource::gog; gog.kind = GameKind::store; gog.source_id = "123"; gog.name = L"GOG fixture";
     auto mixed = std::vector<Game>{a, gog};
     recent_games::apply(mixed, restored->last_played, 42, "A");
@@ -226,11 +233,14 @@ int main() {
         migrated->options.at("3:all").view != library_view::View::bookshelf || migrated->options.at("4:all").view != library_view::View::bookshelf) return 28;
     { std::ofstream beyond(file); beyond << "launchme-library 1\noption \"" << key_codec::encode("1:all") << "\" 1 0 13\n"; }
     if (loadLibraryState(file)) return 29;
-    // 4 is the release-date order (added later); 5 is out of range.
+    // 4 is the release-date order, 5 and 6 Ostatnio zainstalowane and Najdłużej grane (added later); 7 is out of range.
     { std::ofstream release(file); release << "launchme-library 1\noption \"" << key_codec::encode("1:all") << "\" 4 0\n"; }
     const auto released = loadLibraryState(file);
     if (!released || released->options.at("1:all").order != library_view::Order::release) return 25;
-    { std::ofstream beyond(file); beyond << "launchme-library 1\noption \"" << key_codec::encode("1:all") << "\" 5 0\n"; }
+    { std::ofstream played(file); played << "launchme-library 1\noption \"" << key_codec::encode("1:all") << "\" 6 0\n"; }
+    const auto most_played = loadLibraryState(file);
+    if (!most_played || most_played->options.at("1:all").order != library_view::Order::playtime) return 70;
+    { std::ofstream beyond(file); beyond << "launchme-library 1\noption \"" << key_codec::encode("1:all") << "\" 7 0\n"; }
     if (loadLibraryState(file)) return 24;
     { std::ofstream older(file); older << "launchme-library 1\noption \"" << key_codec::encode("1:all") << "\" 1 1\n"; }
     { std::ofstream invalid(file, std::ios::app); invalid << "option \"" << key_codec::encode("2:all") << "\" 0 0 99\n"; }

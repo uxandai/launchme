@@ -1007,6 +1007,8 @@ constexpr Entry entries[] = {
     {L"Minimalny (UI SFX)", L"Mínimo (UI SFX)"},
     {L"Syntetyczny", L"Sintetizado"},
     {L"Przyciemnij tło", L"Oscurecer fondo"},
+    {L"Ostatnio zainstalowane", L"Instalados recientemente"},
+    {L"Najdłużej grane", L"Más jugados"},
     {L"Zestaw dźwięków", L"Conjunto de sonidos"},
     {L"Nawigacja, menu, uruchomienie gry i powiadomienia.", L"Navegación, menús, inicio de un juego y notificaciones."},
     {L"Głośność interfejsu", L"Volumen de la interfaz"},

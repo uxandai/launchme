@@ -1463,6 +1463,11 @@ private:
     uint32_t localPlaytime(const Game& game) const; // Launchme's own count (minutes), never Steam's.
     // Czas gry shown for a game: Steam's value (`steam`), the store's or Launchme's count, the player's own.
     std::optional<uint32_t> gamePlaytime(const Game& game, std::optional<uint32_t> steam = std::nullopt) const;
+    // Ostatnio zainstalowane / Najdłużej grane: each game's install time or play time by gameKey for
+    // library_view::arrange (library_view.cpp); empty for the other orders.
+    std::unordered_map<std::string, uint64_t> orderValues(const std::vector<Game>& games, library_view::Order order) const;
+    uint64_t installTime(const Game& game) const;
+    mutable std::unordered_map<std::wstring, uint64_t> install_times_; // By path: a folder's creation, read once.
     std::optional<uint32_t> automaticPlaytime(const Game& game, std::optional<uint32_t> steam = std::nullopt) const; // Without the player's own.
     bool playtime_dirty_ = false;
     uint64_t next_playtime_save_ = 0;

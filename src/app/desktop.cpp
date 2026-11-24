@@ -278,7 +278,9 @@ std::vector<Game> Launcher::desktopGames() const {
     if (options.order == library_view::Order::release && game_index_)
         released = game_index_->read([](const game_index::Index& index) { return index.releases(); });
     const bool include_private = private_shelf_ || (entry && !gameEntry(entry->kind));
-    auto games = library_view::arrange(desktopSource(), options, library_state_.first_seen, include_private, &released);
+    const auto& source = desktopSource();
+    const auto values = orderValues(source, options.order); // Ostatnio zainstalowane, Najdłużej grane.
+    auto games = library_view::arrange(source, options, library_state_.first_seen, include_private, &released, &values);
     std::erase_if(games, [](const Game& game) { return !isGame(game); });
     applyLibraryFilters(games, options.filters);
     // Search: the title, a genre/tag the game index knows ("rpg", "roguelike") or its developer or publisher.

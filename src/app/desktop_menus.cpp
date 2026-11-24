@@ -250,7 +250,7 @@ void Launcher::desktopOpenSortMenu() {
     menu.kind = Menu::Kind::sort;
     menu.x = r.left; menu.y = r.bottom + 6;
     using library_view::Order;
-    for (const auto order : {Order::alphabetical, Order::last_played, Order::added, Order::release}) {
+    for (const auto order : {Order::alphabetical, Order::last_played, Order::added, Order::installed, Order::playtime, Order::release}) {
         MenuItem item{Action::sort, library_view::label(order), {}, 0};
         item.value = library_view::persistedOrder(order);
         item.checked = settings_.desktop_sort == item.value;

@@ -267,6 +267,46 @@ void Launcher::closeLibraryPanel() {
     library_controls_.panel = library_ui::Panel::none;
     if (hwnd_) InvalidateRect(hwnd_, nullptr, FALSE);
 }
+std::unordered_map<std::string, uint64_t> Launcher::orderValues(const std::vector<Game>& games, library_view::Order order) const {
+    std::unordered_map<std::string, uint64_t> values;
+    if (order != library_view::Order::installed && order != library_view::Order::playtime) return values;
+    values.reserve(games.size());
+    for (const auto& game : games) {
+        if (!isGame(game)) continue;
+        const uint64_t value = order == library_view::Order::playtime ? gamePlaytime(game).value_or(0) : installTime(game);
+        if (value) values.emplace(gameKey(game), value);
+    }
+    return values;
+}
+
+// When the game's folder was made (updates keep it), else its manifest's or program's; Steam without
+// any: its manifest's last update. Unix seconds; 0 for a game that is not installed.
+uint64_t Launcher::installTime(const Game& game) const {
+    if (!game.installed) return 0;
+    for (const auto* path : {&game.install_directory, &game.manifest_path, &game.executable}) {
+        if (path->empty()) continue;
+        if (const auto found = install_times_.find(path->native()); found != install_times_.end()) return found->second;
+        uint64_t created = 0;
+#ifdef _WIN32
+        WIN32_FILE_ATTRIBUTE_DATA data{};
+        if (GetFileAttributesExW(path->c_str(), GetFileExInfoStandard, &data)) {
+            const uint64_t ticks = (static_cast<uint64_t>(data.ftCreationTime.dwHighDateTime) << 32) | data.ftCreationTime.dwLowDateTime;
+            if (ticks > 116444736000000000ULL) created = (ticks - 116444736000000000ULL) / 10000000ULL; // 1601 → 1970, 100 ns.
+        }
+#else
+        std::error_code error;
+        if (const auto changed = std::filesystem::last_write_time(*path, error); !error) { // No creation time: its last change.
+            const auto seconds = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::file_clock::to_sys(changed).time_since_epoch()).count();
+            if (seconds > 0) created = static_cast<uint64_t>(seconds);
+        }
+#endif
+        if (!created) continue;
+        install_times_.emplace(path->native(), created);
+        return created;
+    }
+    return game.last_updated;
+}
+
 void Launcher::focusCard(size_t index, bool reveal) {
     if (cards_.empty()) return;
     snitch_profile_focus_ = false; // Snitch: a card takes the focus back from the profile picture.

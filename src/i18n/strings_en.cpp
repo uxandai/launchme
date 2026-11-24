@@ -1090,6 +1090,8 @@ constexpr Entry entries[] = {
     {L"Kontroler połączony", L"Controller connected"},
     {L"Nie znaleziono lub nie można odczytać pliku motywu. Wskaż folder dźwięków powyżej.", L"The theme's file is missing or unreadable. Choose the sound folder above."},
     {L"Folder dźwięków", L"Sound folder"},
+    {L"Ostatnio zainstalowane", L"Recently installed"},
+    {L"Najdłużej grane", L"Most played"},
     {L"Zestaw dźwięków", L"Sound set"},
     {L"Nawigacja, menu, uruchomienie gry i powiadomienia.", L"Navigation, menus, starting a game and notifications."},
     {L"Głośność interfejsu", L"Interface volume"},
