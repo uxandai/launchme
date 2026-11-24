@@ -34,8 +34,20 @@ int main() {
         if (!wave->nAvgBytesPerSec || !decodeFlac(file, music_pcm_limit, [] { return true; }).samples.empty()) return finish(6);
         std::wcout << theme.file << L": " << double(clip.samples.size()) / wave->nAvgBytesPerSec << L" seconds\n";
     }
-    // The interface sounds name no file that Launchme does not ship.
-    for (const auto* options : {&ui_sounds, &toast_sounds}) for (const auto& option : *options) if (option.file) return finish(7);
+    // The interface sounds name no file that Launchme does not ship; UI SFX's cues beside its focus one too.
+    const auto decodes = [](const std::filesystem::path& file) {
+        const auto clip = decodeFlac(file, 8 * 1024 * 1024);
+        return !file.empty() && clip.format.size() >= sizeof(WAVEFORMATEX) && !clip.samples.empty();
+    };
+    for (const auto* options : {&ui_sounds, &toast_sounds})
+        for (const auto& option : *options) {
+            if (!option.file) continue;
+            const auto file = localSoundFile(option.file);
+            if (!decodes(file)) { std::wcerr << L"Interface sound missing or failed to decode: " << option.file << L'\n'; return finish(7); }
+            if (uiSoundPack(&option))
+                for (const auto* name : {L"open.mp3", L"back.mp3", L"start.mp3"})
+                    if (!decodes(file.parent_path() / name)) { std::wcerr << L"UI SFX cue missing: " << name << L'\n'; return finish(7); }
+        }
     for (const auto& option : boot_sounds) if (option.file && localSoundFile(option.file).empty()) return finish(8);
     // Only assets/ are searched for built-in names; a sound folder lists its own files.
     if (!localSoundFile(L"2-04. (Bonus) Home Menu - No Intro.flac").empty()) return finish(9);
