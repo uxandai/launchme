@@ -587,6 +587,7 @@ bool Launcher::adjustLibraryView(int amount) {
         else toggle(library_controls_.view_row == 2 ? options.bookshelf_gray : options.bookshelf_platform);
         break;
     case View::list_plus: toggle(options.list_plus_steelbook); break;
+    case View::stage: toggle(options.stage_summary); break;
     default: return true;
     }
     if (options != before) { applyLibraryOptions(); audio_.navigate(); }
@@ -851,8 +852,11 @@ bool Launcher::heroFactsShown() const {
     return settings_.shelves_hero_facts && screen_ == ScreenMode::shelves && settings_.home_layout == AppSettings::HomeLayout::shelves &&
            !desktopActive() && !cards_.empty() && selected_ < cards_.size() && isGame(cards_[selected_].game);
 }
+bool Launcher::psfiveSummaryShown() const {
+    return settings_.psfive_summary && psfiveActive() && !cards_.empty() && selected_ < cards_.size() && isGame(cards_[selected_].game);
+}
 void Launcher::requestPreview() {
-    const bool hero = heroFactsShown();
+    const bool hero = heroFactsShown() || psfiveSummaryShown(); // The focused game alone (a Steam game's store text).
     if (!runtime_started_ || (!library_view::metadata(libraryPresentation()) && !hero) || cards_.empty()) return;
     const auto& selected = cards_[selected_].game;
     preview_.request(selected, account_);
@@ -874,7 +878,8 @@ void Launcher::requestPreview() {
 }
 void Launcher::onPreview(std::unique_ptr<PreviewMessage> message) {
     if (message->app_id) gameIndexTouch({"steam:" + std::to_string(message->app_id)}); // Its store page is cached now.
-    if (preview_.accept(std::move(*message)) && (library_view::metadata(libraryPresentation()) || heroFactsShown() || psfiveDetailsShown())) InvalidateRect(hwnd_, nullptr, FALSE);
+    if (preview_.accept(std::move(*message)) && (library_view::metadata(libraryPresentation()) || heroFactsShown() || psfiveDetailsShown() || psfiveSummaryShown()))
+        InvalidateRect(hwnd_, nullptr, FALSE);
 }
 void Launcher::noteFastScroll() {
     if (screen_ != ScreenMode::library || library_controls_.options.order != library_view::Order::alphabetical) return;

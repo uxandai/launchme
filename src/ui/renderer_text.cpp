@@ -44,6 +44,7 @@ bool Renderer::createFonts() {
     type_metrics_.clear();
     shelf_spines_.clear(); // Printed in the interface's font.
     text_layouts_.clear();
+    summary_fit_ = {};
     cd_pen_font_.Reset();
     if (FAILED(dwrite_->CreateTextFormat(L"Segoe Print", nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL,
         DWRITE_FONT_STRETCH_NORMAL, 23, L"pl-PL", cd_pen_font_.GetAddressOf())) && !font(cd_pen_font_, 23, DWRITE_FONT_WEIGHT_NORMAL)) return false;
@@ -72,6 +73,7 @@ bool Renderer::createFonts() {
            font(psfive_tab_font_, 30, DWRITE_FONT_WEIGHT_SEMI_BOLD) &&
            font(psfive_tab_idle_font_, 30, DWRITE_FONT_WEIGHT_NORMAL) &&
            font(psfive_button_font_, 27, DWRITE_FONT_WEIGHT_SEMI_BOLD, DWRITE_TEXT_ALIGNMENT_CENTER) &&
+           font(psfive_summary_font_, 24, DWRITE_FONT_WEIGHT_MEDIUM) &&
            SUCCEEDED(psfive_button_font_->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER)) &&
            font(clock_date_font_, 19, DWRITE_FONT_WEIGHT_NORMAL) &&
            font(tile_value_font_, 20, DWRITE_FONT_WEIGHT_SEMI_BOLD) &&

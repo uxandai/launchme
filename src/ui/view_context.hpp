@@ -506,6 +506,8 @@ struct ViewContext {
     float psfive_intro = 1; // The start-up intro (psfive_layout::intro): the top bar, logo and buttons fading in.
     std::optional<float> psfive_menu_glide; // Fractional category index; scroll uses category_scroll.
     bool psfive_clock_shown = true;
+    bool psfive_summary_shown = false; // Krótki opis: the logo stands higher, the summary under it (empty: not known yet).
+    std::wstring psfive_summary;
     std::wstring psfive_clock;   // The time in the top bar (drawer_clock::time).
     std::wstring psfive_caption; // Beside a focused "Wszystkie gry" / "Wszystkie" tile: games (and category).
     // PSfive → Szczegóły pod rzędem (psfive_details_renderer.cpp): the sheet under the row.

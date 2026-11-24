@@ -78,6 +78,7 @@ struct Options {
     bool list_plus_steelbook = false; // Lista+: the poster turns into Coverflow's steelbook (no disc).
     bool bookshelf_gray = true;       // Półka: the cases beside the middle one lose their colour.
     bool bookshelf_platform = true;   // Półka: the platform's logo on a band of its colour atop the spine.
+    bool stage_summary = true;        // Scena: the game's short summary under its logo (Krótki opis).
     bool operator==(const Options&) const = default;
 };
 inline bool metadata(const Options& options) {

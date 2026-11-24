@@ -264,15 +264,19 @@ namespace stage_layout {
 inline float listRight(float width) { return std::clamp(width * 0.27f, 340.0f, 470.0f); }
 struct Layout {
     float width, height;
+    bool summary = false; // Krótki opis: the logo and its facts stand higher, two lines under them; the buttons stay.
     float left() const { return listRight(width) + 80; }
     float right() const { return width - 68; }
-    float logoBottom() const { return std::max(list_layout::list_top + 150.0f, height * 0.52f); }
+    float actionsTop() const { return std::max(list_layout::list_top + 150.0f, height * 0.52f) + 66; }
+    float logoBottom() const { return actionsTop() - 66 - (summary ? 92.0f : 0.0f); }
+    float summaryTop() const { return logoBottom() + 60; }
+    float summaryWidth() const { return std::min(720.0f, right() - left()); }
     settings_ui::Rect logo() const {
         return {left(), logoBottom() - std::clamp(height * 0.2f, 120.0f, 210.0f), left() + std::min(620.0f, (right() - left()) * 0.75f), logoBottom()};
     }
     float factsCenter() const { return logoBottom() + 34; }
     settings_ui::Rect action(int index) const {
-        const float top = logoBottom() + 66, primary = std::min(300.0f, right() - left() - 84);
+        const float top = actionsTop(), primary = std::min(300.0f, right() - left() - 84);
         const float x = left() + (index == 0 ? 0 : primary + 14);
         return {x, top, x + (index == 0 ? primary : 60), top + 60};
     }

@@ -82,11 +82,13 @@ void Renderer::drawPsfive() {
     const float chrome = std::clamp(context_->psfive_intro, 0.0f, 1.0f) * (1.0f - opened);
     if (chrome >= 0.999f) {
         drawPsfiveLogo(lift);
+        drawPsfiveSummary(lift);
         drawPsfiveButtons(); // Last before the shade: its glass blurs everything drawn so far.
     } else if (chrome > 0.004f) {
         target_->PushLayer(D2D1::LayerParameters(D2D1::InfiniteRect(), nullptr, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
                                                  D2D1::IdentityMatrix(), chrome), nullptr);
         drawPsfiveLogo(lift);
+        drawPsfiveSummary(lift);
         drawPsfiveButtons(false);
         target_->PopLayer();
     }
@@ -287,7 +289,7 @@ void Renderer::drawPsfiveMoreMenu() {
 // has none. It rises with the buttons over the quick bar and fades with a new focus.
 void Renderer::drawPsfiveLogo(float lift) {
     if (selected_ >= cards_->size() || !isGame((*cards_)[selected_].game)) return;
-    const float width = viewport_.width, bottom = psfive_layout::logoBottom(viewport_.height, lift, context_->psfive_raise);
+    const float width = viewport_.width, bottom = psfive_layout::logoBottom(viewport_.height, lift, context_->psfive_raise, context_->psfive_summary_shown);
     const float left = psfive_layout::anchorX(context_->psfive_scale);
     if (auto box = cornerLogoRect(std::min(psfive_layout::logo_width, width * 0.4f), psfive_layout::logo_height, left, bottom)) {
         const float w = box->right - box->left;
@@ -300,6 +302,58 @@ void Renderer::drawPsfiveLogo(float lift) {
     if (fade < 0.01f) return;
     text((*cards_)[selected_].game.name, left, bottom - 76 + (1.0f - fade) * 10.0f, std::min(width * 0.5f, width - left - 64), 76,
          hero_font_.Get(), gray(0.97f, fade));
+}
+
+std::wstring Renderer::shortSummary(const std::wstring& description, float width, IDWriteTextFormat* font, int lines) {
+    if (description.empty() || !font || width <= 0) return {};
+    if (summary_fit_.font == font && summary_fit_.width == width && summary_fit_.source == description) return summary_fit_.text;
+    // One line of text: the whitespace and line breaks of a store page collapsed.
+    std::wstring flat;
+    for (const wchar_t c : description) {
+        const bool space = c == L' ' || c == L'\n' || c == L'\r' || c == L'\t' || c == 0xA0;
+        if (space) { if (!flat.empty() && flat.back() != L' ') flat += L' '; }
+        else flat += c;
+    }
+    while (!flat.empty() && flat.back() == L' ') flat.pop_back();
+    // Its first sentences while they stay short (the first one always).
+    std::wstring text;
+    for (size_t at = 0; at < flat.size();) {
+        size_t end = flat.find_first_of(L".!?", at);
+        while (end != std::wstring::npos && end + 1 < flat.size() && flat[end + 1] != L' ') end = flat.find_first_of(L".!?", end + 1);
+        const size_t stop = end == std::wstring::npos ? flat.size() : end + 1;
+        if (!text.empty() && stop > 170) break;
+        text = flat.substr(0, stop);
+        at = stop;
+        while (at < flat.size() && flat[at] == L' ') ++at;
+    }
+    // Then cut word by word to the lines it has, ending in "…".
+    const float line = typeMetrics(font).line;
+    const auto fits = [&](const std::wstring& value) { return paragraph(value, 0, 0, width, font, {}, lines + 1, false) <= line * lines + 0.5f; };
+    if (!fits(text)) {
+        std::wstring cut = text;
+        while (!cut.empty()) {
+            const size_t space = cut.find_last_of(L' ');
+            cut.erase(space == std::wstring::npos ? 0 : space);
+            while (!cut.empty() && (cut.back() == L',' || cut.back() == L';' || cut.back() == L':' || cut.back() == L' ')) cut.pop_back();
+            if (cut.empty() || fits(cut + L"…")) break;
+        }
+        text = cut.empty() ? std::wstring{} : cut + L"…";
+    }
+    summary_fit_ = {description, width, font, text};
+    return text;
+}
+
+// Krótki opis (Ustawienia → PSfive): between the logo, standing higher, and the buttons, as on the PS5.
+void Renderer::drawPsfiveSummary(float lift) {
+    if (!context_->psfive_summary_shown || context_->psfive_summary.empty() || selected_ >= cards_->size() || !isGame((*cards_)[selected_].game)) return;
+    const float fade = smoothFade(detail_) * (1.0f - smoothFade(context_->quick_progress));
+    if (fade < 0.01f) return;
+    const float left = psfive_layout::anchorX(context_->psfive_scale);
+    const float width = std::min(psfive_layout::summary_width, viewport_.width - left - 64);
+    const auto summary = shortSummary(context_->psfive_summary, width, psfive_summary_font_.Get(), 2);
+    const float top = psfive_layout::summaryTop(viewport_.height, lift, context_->psfive_raise) + (1.0f - fade) * 8.0f;
+    paragraph(summary, left + 1, top + 1.5f, width, psfive_summary_font_.Get(), D2D1::ColorF(0, 0, 0, 0.55f * fade), 2);
+    paragraph(summary, left, top, width, psfive_summary_font_.Get(), gray(0.97f, fade), 2);
 }
 
 // "Graj" (the game's primary action) and "…" (its menu) on grey frosted glass: the background

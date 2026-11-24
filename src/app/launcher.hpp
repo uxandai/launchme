@@ -1614,6 +1614,7 @@ private:
     // Focused game's description in the list view (worker, debounced).
     void requestPreview();
     bool heroFactsShown() const; // Default home: the focused game's facts under its logo.
+    bool psfiveSummaryShown() const; // PSfive: the focused game's short summary over Graj / … (Krótki opis).
     // Szczegóły → Osiągnięcia (src/app/achievements.cpp).
     void initializeAchievements();
     bool achievementsOpen() const { return achievements_.open && screen_ == ScreenMode::details; }

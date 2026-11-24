@@ -597,7 +597,7 @@ void Launcher::tick() {
                              now - fast_scroll_started_ >= std::chrono::milliseconds(1000);
     fast_scroll_alpha_ += ((fast_scroll ? 1.0f : 0.0f) - fast_scroll_alpha_) * ease(dt, fast_scroll ? 16.0f : 6.0f);
     if (!alphabetic_scroll) fast_scroll_alpha_ = 0;
-    if (library_view::metadata(libraryPresentation()) || heroFactsShown()) requestPreview(); // The preview component debounces focus changes.
+    if (library_view::metadata(libraryPresentation()) || heroFactsShown() || psfiveSummaryShown()) requestPreview(); // The preview component debounces focus changes.
     // Library search field: unfolds under the title; typed text filters the games a moment later.
     const bool library_search = screen_ == ScreenMode::library && library_controls_.search;
     library_search_progress_ += ((library_search ? 1.0f : 0.0f) - library_search_progress_) * ease(dt, 12.0f);

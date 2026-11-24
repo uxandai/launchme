@@ -66,7 +66,7 @@ inline int optionCount(library_view::View view) {
     // Kinowy: its scrolling, then the platform, last played and playtime beside the year. Coverflow:
     // its variant; on Półka also the grey side cases and the platform band.
     return view == View::cinematic ? 4 : view == View::list ? 3 : view == View::bookshelf ? 3 : view == View::grid || view == View::overview || view == View::coverflow ||
-        view == View::list_plus ? 1 : 0;
+        view == View::list_plus || view == View::stage ? 1 : 0;
 }
 inline int closeRow(library_view::View view) { return optionCount(view) + 1; }
 inline float eased(float progress) { const float t = std::clamp(progress, 0.0f, 1.0f); return t * t * (3 - 2 * t); }

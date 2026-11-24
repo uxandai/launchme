@@ -125,11 +125,14 @@ void Launcher::paint(bool overlay) {
         context.preview = preview_.find(game);
         if (!context.preview) context.preview = localDetails(game);
         const auto* own = metadataOverride(game);
-        if (!steamArtwork(game) || (own && own->playtime)) {
+        // Scena shows playtime and achievements side by side: every source of both, a Steam game's too
+        // (Steam's own file, Aurelia's or the store's count; the game index's achievements).
+        const bool stage = libraryView() == library_view::View::stage;
+        if (!steamArtwork(game) || (own && own->playtime) || stage) {
             if (context.preview) local_preview = *context.preview;
             local_preview.playtime_minutes = gamePlaytime(game, context.preview ? context.preview->playtime_minutes : std::nullopt);
             // What Szczegóły shows: the game index fills the gaps (store descriptions, RAWG, Edytuj metadane).
-            if (!steamArtwork(game)) completeDetails(local_preview, game);
+            if (!steamArtwork(game) || stage) completeDetails(local_preview, game);
             context.preview = &local_preview;
         }
         // A Steam game's store details are on their way (the worker always answers, empty on failure).
@@ -671,6 +674,11 @@ void Launcher::paint(bool overlay) {
         if (psfiveTopFocused() && psfive_top_ >= tab_count) context.psfive_top = psfive_top_ - tab_count; // An icon (a tab: it is the bold one).
         context.psfive_clock_shown = settings_.psfive_clock;
         context.psfive_dim = settings_.psfive_dim;
+        context.psfive_summary_shown = settings_.psfive_summary;
+        if (psfiveSummaryShown()) { // Szczegóły's description: the store's own short text, else the game index's.
+            bool loading = false;
+            context.psfive_summary = desktopDetails(cards_[selected_].game, loading).description;
+        }
         context.psfive_visible_tabs = psfiveVisibleTabs();
         if (settings_.psfive_clock) {
             const auto local = local_time_();

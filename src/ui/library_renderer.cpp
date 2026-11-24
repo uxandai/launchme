@@ -217,6 +217,7 @@ void Renderer::drawViewDrawer() {
                 }
                 break;
             case View::list_plus: label = tr(L"Efekt steelbooka"); toggle = true; checked = state.options.list_plus_steelbook; break;
+            case View::stage: label = tr(L"Krótki opis"); toggle = true; checked = state.options.stage_summary; break;
             default: break;
             }
             if (toggle) {
@@ -346,7 +347,7 @@ void Renderer::drawLibraryList() {
         // sofa over the game's background.
         brush(gray(1, (row_focus ? (plus ? 0.92f : 0.22f) : 0.07f) * card.opacity));
         target_->FillRoundedRectangle(row.bottom - row.top <= 64 ? pill(row) : D2D1::RoundedRect(row, 16, 16), solid_.Get());
-        if (!plus) {
+        if (!plus && !stage) {
             // Keep the selected game identifiable while its actions or the top bar have focus.
             brush(uiAccent((row_focus ? 0.95f : 0.4f) * card.opacity));
             target_->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(left - 8, row.top + 16, left - 3, row.bottom - 16), 2.5f, 2.5f), solid_.Get());
@@ -848,7 +849,7 @@ void Renderer::drawLibraryStageShade() {
 
 void Renderer::drawLibraryStage() {
     if (selected_ >= cards_->size()) return;
-    const stage_layout::Layout layout{viewport_.width, viewport_.height};
+    const stage_layout::Layout layout{viewport_.width, viewport_.height, context_->library_options.stage_summary};
     const auto& game = (*cards_)[selected_].game;
     const float fade = smoothFade(detail_), left = layout.left(), width = layout.right() - left;
     const auto logo = box(layout.logo(), 8 * (1 - fade));
@@ -863,6 +864,13 @@ void Renderer::drawLibraryStage() {
     if (info && !info->release_date.empty()) facts += (facts.empty() ? L"" : L"   ·   ") + gameReleaseYear(info->release_date);
     if (info && !info->genres.empty()) facts += (facts.empty() ? L"" : L"   ·   ") + info->genres;
     textLine(facts, left, layout.factsCenter(), width, settings_body_font_.Get(), gray(0.86f, fade));
+    if (layout.summary && info && !info->description.empty()) {
+        const float summary_width = layout.summaryWidth();
+        const auto summary = shortSummary(info->description, summary_width, psfive_summary_font_.Get(), 2);
+        const float top = layout.summaryTop() + (1.0f - fade) * 6.0f;
+        paragraph(summary, left + 1, top + 1.5f, summary_width, psfive_summary_font_.Get(), D2D1::ColorF(0, 0, 0, 0.5f * fade), 2);
+        paragraph(summary, left, top, summary_width, psfive_summary_font_.Get(), gray(0.96f, fade), 2);
+    }
     drawLibraryActions();
     // Badges: the platform, playtime and achievements, each on its own glass pill.
     const float cy = layout.badgesCenter(), h = 46;

@@ -212,7 +212,7 @@ int main() {
     if (!saveLibraryState(*legacy, file)) return 22;
     {
         std::ifstream written(file); const std::string text{std::istreambuf_iterator<char>{written}, {}};
-        if (text.find("\" 2 0 0 0 1 1 1 0 5 0 0 0 0 0 0 0 1 1\n") == std::string::npos || text.find("\" 0 0") != std::string::npos) return 23;
+        if (text.find("\" 2 0 0 0 1 1 1 0 5 0 0 0 0 0 0 0 1 1 1\n") == std::string::npos || text.find("\" 0 0") != std::string::npos) return 23;
     }
     // Removed views keep their numbers out of new files: Plakat (4) reads as Lista+, the media
     // carousels (6 Dyskietka, 7 Kartridż Switch, 8 Kartridż NES) as Półka; 12 is out of range. Rows

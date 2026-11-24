@@ -116,7 +116,12 @@ inline int hitAction(float x, float y, float height, float scale = 1, float rais
     for (int i = 0; i < action_count; ++i) if (action(i, height, scale, 0, raise).contains(x, y)) return i;
     return -1;
 }
-inline float logoBottom(float height, float lift = 0, float raise = 0) { return buttonsTop(height, lift, raise) - logo_gap; }
+// Krótki opis: two lines between the logo and the buttons; the logo stands summary_space higher.
+constexpr float summary_space = 100, summary_width = 760;
+inline float logoBottom(float height, float lift = 0, float raise = 0, bool summary = false) {
+    return buttonsTop(height, lift, raise) - logo_gap - (summary ? summary_space : 0);
+}
+inline float summaryTop(float height, float lift = 0, float raise = 0) { return logoBottom(height, lift, raise, true) + 30; }
 // The hub's progress as drawn: Launcher moves it on critically damped springs (a soft start, a
 // quick middle, a settle without overshoot; a reversal mid-way keeps its speed); this only clamps it.
 // Two of them: `hub` lifts the logo and buttons and raises the details' peek; `corner`, quicker,

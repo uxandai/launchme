@@ -153,6 +153,7 @@ constexpr FlagSetting flag_settings[] = {
     {"exit_animation", &AppSettings::exit_animation},
     {"add_game_tile", &AppSettings::add_game_tile},
     {"psfive_details", &AppSettings::psfive_details},
+    {"psfive_summary", &AppSettings::psfive_summary},
     {"details_media", &AppSettings::details_media},
     {"menu_dialog", &AppSettings::menu_dialog},
     {"metro_light", &AppSettings::metro_light},
@@ -1076,6 +1077,7 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
                                 settings.home_tiles == AppSettings::HomeTiles::last ? "last" : "layout") << '\n';
     output << "add_game_tile=" << settings.add_game_tile << '\n';
     output << "psfive_details=" << settings.psfive_details << '\n';
+    output << "psfive_summary=" << settings.psfive_summary << '\n';
     output << "details_media=" << settings.details_media << '\n';
     output << "menu_dialog=" << settings.menu_dialog << '\n';
     output << "metro_light=" << settings.metro_light << '\n';

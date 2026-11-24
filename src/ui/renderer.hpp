@@ -862,6 +862,9 @@ private:
     void drawOverviewPanel();
     void drawLibraryDetailed();
     void drawLibraryStage();      // Scena: the focused game beside the titles (library_renderer.cpp).
+    // A game's description cut to its first sentences, then to `lines` lines of `width` with "…" (PSfive, Scena).
+    std::wstring shortSummary(const std::wstring& description, float width, IDWriteTextFormat* font, int lines);
+    void drawPsfiveSummary(float lift);
     void drawLibraryStageShade(); // Scena: its background darkened under the titles, the top bar and the badges.
     void drawListPlusPoster();
     void drawLibraryActions();
@@ -1543,6 +1546,9 @@ private:
     Microsoft::WRL::ComPtr<IDWriteTextFormat> psfive_clock_font_; // PSfive: the clock in the top bar.
     Microsoft::WRL::ComPtr<IDWriteTextFormat> psfive_tab_font_, psfive_tab_idle_font_; // PSfive tabs: active, the others.
     Microsoft::WRL::ComPtr<IDWriteTextFormat> psfive_button_font_; // PSfive "Graj".
+    Microsoft::WRL::ComPtr<IDWriteTextFormat> psfive_summary_font_; // PSfive and Scena: Krótki opis.
+    struct SummaryFit { std::wstring source; float width = 0; IDWriteTextFormat* font = nullptr; std::wstring text; };
+    SummaryFit summary_fit_; // The last shortSummary (it measures word by word: once per game).
     Microsoft::WRL::ComPtr<IDWriteTextFormat> tile_value_font_; // All widget values/statuses, wrapping.
     Microsoft::WRL::ComPtr<IDWriteTextFormat> index_font_; // Quick scroll initial, centred.
     // Desktop mode: compact type for the mouse and the icon font (Segoe Fluent Icons / MDL2 Assets).

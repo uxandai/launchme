@@ -188,6 +188,7 @@ int LauncherUiTest::psfive(HWND window) {
         app.desktop_details_.developer = L"Fixture Studio"; app.desktop_details_.genres = L"Akcja, RPG"; app.desktop_details_.players = L"1-2";
         app.desktop_details_.achievements_unlocked = 17; app.desktop_details_.achievements_total = 42;
         app.settings_.psfive_details = true;
+        app.paint(); capture(L"psfive-summary.png"); // Krótki opis between the logo and "Graj" (a capture only).
         app.psfiveVertical(1); // Down from "Graj".
         // Down from "Graj": the activity cards first (achievements, Czas gry, Opis, Informacje), then the screenshots.
         if (app.psfive_details_ != 0 || app.psfiveActions()) return 5130;

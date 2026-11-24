@@ -487,6 +487,8 @@ struct AppSettings {
     bool add_game_tile = false; // A "+" tile opening Dodaj grę.
     // PSfive: Down from Graj / … scrolls to the game's details, screenshots and similar games.
     bool psfive_details = true;
+    // PSfive: a sentence or two about the focused game between its logo and Graj / … (as on the PS5).
+    bool psfive_summary = true;
     // Szczegóły (Tryb TV and the desktop window): the game's screenshots and similar games below its cards.
     bool details_media = true;
     // The game menu as a large scrollable dialog with an icon beside each option.

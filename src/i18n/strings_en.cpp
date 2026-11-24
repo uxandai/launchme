@@ -1338,6 +1338,8 @@ constexpr Entry entries[] = {
     {L"Pokaż launchme", L"Show launchme"},
     {L"Zamknij launchme", L"Close launchme"},
     {L"Scena", L"Stage"},
+    {L"Krótki opis", L"Short summary"},
+    {L"Zdanie lub dwa o grze między jej logo a przyciskami Graj / …, jak na PS5.", L"A sentence or two about the game between its logo and the Play / … buttons, as on the PS5."},
     {L"Nowsza niż sprawdzona z Launchme: ", L"Newer than the one checked with Launchme: "},
     {L"Wymagana aktualizacja Aurelii do ", L"Aurelia must be updated to "},
     {L"Masz ", L"You have "},

@@ -153,6 +153,7 @@ void Launcher::themeBuildOptions() {
             toggle(Id::psfive_clock, L"Zegar", s.psfive_clock);
             slider(Id::psfive_dim, L"Przyciemnienie tła", s.psfive_dim, percent(s.psfive_dim));
             toggle(Id::psfive_details, L"Szczegóły pod rzędem", s.psfive_details);
+            toggle(Id::psfive_summary, L"Krótki opis", s.psfive_summary);
             toggle(Id::psfive_category_tabs, L"Pasek kategorii", s.psfive_category_tabs);
             if (!s.psfive_category_tabs) toggle(Id::home_tab_icons, L"Ikony zamiast nazw", s.home_tab_icons);
         } else if (s.home_layout == HomeLayout::snitch) {

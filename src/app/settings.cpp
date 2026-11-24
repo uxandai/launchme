@@ -889,6 +889,10 @@ void Launcher::settingsToggle(const Row& row) {
         settings_.psfive_clock = !settings_.psfive_clock;
         settingsChanged(); audio_.context(); return; // Visual only: the icons take the clock's place.
     }
+    else if (row.id == Id::psfive_summary) {
+        settings_.psfive_summary = !settings_.psfive_summary;
+        settingsChanged(); audio_.context(); return; // Visual only: the logo makes room for it or comes back down.
+    }
     else if (row.id == Id::steam_trailers || row.id == Id::emulation_rom_art) {
         auto& flag = row.id == Id::steam_trailers ? settings_.steam_trailers : settings_.emulation_rom_art;
         flag = !flag;

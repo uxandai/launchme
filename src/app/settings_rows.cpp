@@ -299,6 +299,8 @@ void Launcher::buildSettingsRows() {
                 add({Id::psfive_details, Control::toggle, tr(L"Szczegóły pod rzędem"),
                     tr(L"W dół z przycisków Graj / …: opis, informacje, zrzuty ekranu i podobne gry. Menu otwiera się wtedy ruchem w górę nad zakładkami."),
                     {}, settings_.psfive_details});
+                add({Id::psfive_summary, Control::toggle, tr(L"Krótki opis"),
+                    tr(L"Zdanie lub dwa o grze między jej logo a przyciskami Graj / …, jak na PS5."), {}, settings_.psfive_summary});
                 add({Id::psfive_category_tabs, Control::toggle, tr(L"Pasek kategorii"),
                     tr(L"Kategorie jak w bibliotece, na środku u góry, zamiast zakładek; zmieniają je LB/RB albo Page Up/Down."), {}, settings_.psfive_category_tabs});
                 if (!settings_.psfive_category_tabs)
