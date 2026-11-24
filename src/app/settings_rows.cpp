@@ -810,9 +810,21 @@ void Launcher::buildSettingsRows() {
             add(std::move(row));
         };
         if (settings_state_.at(Page::sounds)) {
-            // The interface's own sounds: moving between items, notifications and the start.
-            soundRow(Id::ui_sound, tr(L"Zmiana elementu"), tr(L"Dźwięk przy przejściu między elementami interfejsu."), settings_.ui_sound, ui_sounds, nullptr);
-            soundRow(Id::toast_sound, tr(L"Powiadomienie"), tr(L"Dźwięk przy powiadomieniu."), settings_.toast_sound, toast_sounds, nullptr);
+            // One set of interface sounds (or none), its volume with a mute that keeps it, and the moments it
+            // plays at; the start sound is a file of its own.
+            soundRow(Id::ui_sound, tr(L"Zestaw dźwięków"), tr(L"Nawigacja, menu, uruchomienie gry i powiadomienia."), settings_.ui_sound, ui_sounds, nullptr);
+            if (settings_.ui_sound != ui_sound_none) {
+                const float volume = std::clamp(settings_.ui_volume, 0, 100) / 100.0f;
+                add({Id::ui_volume, Control::slider, tr(L"Głośność interfejsu"), tr(L"0% wycisza dźwięki interfejsu."),
+                     percent(volume), false, volume}); // Muted: the switch below says so; the level is kept.
+                add({Id::ui_muted, Control::toggle, tr(L"Wycisz dźwięki interfejsu"), tr(L"Głośność zostaje zapamiętana."), {}, settings_.ui_muted});
+                section(tr(L"Odtwarzane dźwięki"));
+                add({Id::ui_sound_moves, Control::toggle, tr(L"Przejście między elementami"), tr(L"Ruch po listach, półkach i menu."), {}, settings_.ui_sound_moves});
+                add({Id::ui_sound_menus, Control::toggle, tr(L"Otwieranie menu i powrót"), tr(L"Menu kontekstowe, szybkie menu i Wstecz."), {}, settings_.ui_sound_menus});
+                add({Id::ui_sound_launch, Control::toggle, tr(L"Uruchomienie gry"), tr(L"Dźwięk przy starcie gry."), {}, settings_.ui_sound_launch});
+                add({Id::toast_sound, Control::toggle, tr(L"Powiadomienia"), tr(L"Dźwięk przy powiadomieniu."), {}, settings_.toast_sound != 0});
+            }
+            section(tr(L"Start launchera"));
             soundRow(Id::boot_sound, tr(L"Dźwięk startu"), tr(L"Odtwarzany przy uruchomieniu launchera."), settings_.boot_sound, boot_sounds, &settings_.boot_file);
             break;
         }
@@ -853,9 +865,12 @@ void Launcher::buildSettingsRows() {
         theme.choice = theme_index;
         for (const auto& music : music_themes) theme.choices.push_back({tr(music.name)});
         withFiles(theme, settings_.music_file);
+        // Własny plik…: any .mp3, .wav or .flac on the disk; the row then names it.
+        theme.choices.push_back({tr(L"Własny plik…")});
+        if (!settings_.music_path.empty()) { theme.choice = static_cast<int>(theme.choices.size()) - 1; theme.value = settings_.music_path.filename().wstring(); }
         add(std::move(theme));
         // No value: one of its three sounds would read as the state of all of them.
-        pageRow(Page::sounds, tr(L"Dźwięki interfejsu"), tr(L"Zmiana elementu, powiadomienie i dźwięk startu."), L"");
+        pageRow(Page::sounds, tr(L"Dźwięki interfejsu"), tr(L"Zestaw, głośność, powiadomienia i dźwięk startu."), L"");
         add({Id::sound_folder, Control::action, tr(L"Folder dźwięków"),
             settings_.sound_folder.empty() ? std::wstring(tr(L"Pliki .mp3, .flac, .wav do motywu muzycznego i dźwięku startu.")) :
                                              settings_.sound_folder.wstring() + L" · " + std::to_wstring(sound_files_.size()) + tr(L" plików"),

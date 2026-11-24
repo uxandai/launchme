@@ -154,6 +154,7 @@ context_menu::Rows Launcher::menuRows() const {
                          shortcutAvailable(game, ShortcutPlace::steam);
         rows.emulator = gameEmulatorEditable(game);
         rows.metadata = !gameKey(game).empty();
+        rows.collections = rows.metadata;
         rows.identify = rows.metadata && !steamArtwork(game);
         rows.identified = rows.identify && !unidentifiedGame(game);
         rows.remove = canRemoveFromLibrary(game) && state == SessionState::none;

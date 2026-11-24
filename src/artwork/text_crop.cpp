@@ -389,9 +389,11 @@ CropFocus cachedAutomaticCrop(const std::filesystem::path& image, const std::fil
         int64_t cached_modified = 0;
         CropFocus cached;
         input.imbue(std::locale::classic());
-        if (input >> version >> cached_bytes >> cached_modified >> cached_title >> cached.x >> cached.y &&
+        const bool read = input >> version >> cached_bytes >> cached_modified >> cached_title >> cached.x >> cached.y &&
             cached_bytes == bytes && cached_modified == modified && cached_title == signature &&
-            cached.x >= 0 && cached.x <= 1 && cached.y >= 0 && cached.y <= 1)
+            cached.x >= 0 && cached.x <= 1 && cached.y >= 0 && cached.y <= 1;
+        input.close(); // Before an upgrade rewrites it: Windows does not replace a file open for reading.
+        if (read)
             if (const auto upgraded = upgradedCrop(version, cached, image)) {
                 if (version != crop_cache_version) storeAutomaticTextCrop(image, metadata, title, *upgraded);
                 return *upgraded;
@@ -480,8 +482,10 @@ std::optional<CropFocus> storedTextCrop(const std::filesystem::path& image, cons
     if (ec) return {};
     std::ifstream input(metadata); input.imbue(std::locale::classic());
     int version = 0; uint64_t cached_bytes = 0, title_hash = 0; int64_t cached_modified = 0; CropFocus focus;
-    if (input >> version >> cached_bytes >> cached_modified >> title_hash >> focus.x >> focus.y &&
-        cached_bytes == bytes && cached_modified == modified && title_hash == titleSignature(title) && validFocus(focus))
+    const bool read = input >> version >> cached_bytes >> cached_modified >> title_hash >> focus.x >> focus.y &&
+        cached_bytes == bytes && cached_modified == modified && title_hash == titleSignature(title) && validFocus(focus);
+    input.close(); // Before an upgrade rewrites it (see cachedAutomaticCrop).
+    if (read)
         if (const auto upgraded = upgradedCrop(version, focus, image)) {
             if (version != crop_cache_version) storeAutomaticTextCrop(image, metadata, title, *upgraded);
             return upgraded;

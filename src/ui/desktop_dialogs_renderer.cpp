@@ -34,9 +34,10 @@ bool Renderer::desktopDialogs() const {
 Rect Renderer::desktopDialogFrame(const Viewport& view, float width, float height, const std::wstring& title, bool back,
                                   std::optional<DialogMotion>* motion) {
     desktop_modal_hotspots_.clear(); // Only the topmost dialog answers the pointer.
-    // Dimmed as Windows dialogs are: the window behind stays recognisable but no longer competes.
+    // Dimmed clearly, as the window's sheets and Tryb TV's dialogs: the window behind stays recognisable,
+    // the lighter panel stands out (desktop_theme::dialog_dim, Edytuj metadane's too).
     const float dim = motion ? std::clamp(dialog_motion_, 0.0f, 1.0f) : 1.0f; // With a motion the dim fades with it.
-    brush(rgb(0.01f, 0.012f, 0.016f, 0.36f * dim));
+    brush(rgb(0.01f, 0.012f, 0.016f, desktop_theme::dialog_dim * dim));
     target_->FillRectangle(D2D1::RectF(0, 0, view.width, view.height), solid_.Get());
     width = std::min(width, view.width - 48);
     height = std::min(height, view.height - 48);
@@ -118,14 +119,14 @@ void Renderer::drawDesktopCollectionsDialog() {
     target_->SetTransform(D2D1::Matrix3x2F::Scale(view.scale, view.scale));
     const bool versions = ui.page == Page::versions, field = ui.textField();
     const int count = versions ? static_cast<int>(ui.versions.size()) : static_cast<int>(ui.rows.size());
-    const float line_h = 50, card_h = 92;
+    const float line_h = versions ? 50.0f : 58.0f, card_h = 92;
     const float chrome = sheet_header + 24 + (field ? 52.0f : 0.0f) + (ui.error.empty() ? 0.0f : 28.0f) + (versions ? 58.0f : 0.0f);
     const float most = std::min(660.0f, view.height - 80);
     const int capacity = std::max(2, static_cast<int>((most - chrome) / (versions ? card_h + 10 : line_h)));
     const int needed = versions ? (count + 1) / 2 : count;
     const int shown = std::clamp(needed, 1, capacity);
     const float height = chrome + static_cast<float>(shown) * (versions ? card_h + 10 : line_h);
-    const auto p = desktopDialogFrame(view, versions ? 640.0f : 560.0f, height, ui.title, ui.page != Page::collections);
+    const auto p = desktopDialogFrame(view, versions ? 640.0f : 600.0f, height, ui.title, ui.page != Page::collections);
     float y = p.top + sheet_header + 14;
     if (field) {
         const Rect f{p.left + 20, y, p.right - 20, y + 40};
@@ -202,10 +203,10 @@ void Renderer::drawDesktopCollectionsDialog() {
                 right = cx - 22;
             }
             const auto ink = confirming ? palette::danger() : palette::text();
-            if (row.subtitle.empty()) textLine(row.title, r.left + 12, middle(r), right - r.left - 12, desktop_font_.Get(), ink);
+            if (row.subtitle.empty()) textLine(row.title, r.left + 14, middle(r), right - r.left - 14, desktop_body_font_.Get(), ink);
             else {
-                textLine(row.title, r.left + 12, r.top + 16, right - r.left - 12, desktop_font_.Get(), ink);
-                textLine(row.subtitle, r.left + 12, r.top + 34, right - r.left - 12, desktop_small_font_.Get(), palette::muted());
+                textLine(row.title, r.left + 14, r.top + 18, right - r.left - 14, desktop_body_font_.Get(), ink);
+                textLine(row.subtitle, r.left + 14, r.top + 39, right - r.left - 14, desktop_font_.Get(), palette::muted());
             }
             desktopModalHot({Kind::row, i}, r);
         }
@@ -216,7 +217,7 @@ void Renderer::drawDesktopCollectionsDialog() {
         }
         if (ui.page == Page::excluded && ui.rows.empty())
             textLine(ui.input.empty() ? tr(L"Brak wykluczonych gier") : tr(L"Brak wyników"), p.left + 24, y + 22, p.right - p.left - 48,
-                     desktop_font_.Get(), palette::muted());
+                     desktop_body_font_.Get(), palette::muted());
     }
     if (!ui.error.empty()) textLine(ui.error, p.left + 22, p.bottom - 20, p.right - p.left - 44, desktop_small_font_.Get(), palette::danger());
     desktop_modal_ = DialogKind::collections;

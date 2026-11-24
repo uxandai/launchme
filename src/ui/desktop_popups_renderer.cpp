@@ -333,7 +333,7 @@ void Renderer::drawDesktopMeta(const MetaView& meta) {
     const bool finding = meta.find.open;
     const std::wstring action = finding ? (meta.identify ? tr(L"Identyfikuj grę") : tr(L"Znajdź metadane")) : tr(L"Edytuj metadane");
     // desktopDialogFrame's look; it fades in and out with the motion of Tryb TV's dialogs.
-    dialogScrim(D2D1::ColorF(0.01f, 0.012f, 0.016f, 0.36f));
+    dialogScrim(D2D1::ColorF(0.01f, 0.012f, 0.016f, desktop_theme::dialog_dim));
     const DialogMotion motion(*this, p);
     desktopDialogSheet(p, action + L" · " + meta.game,
                        finding ? meta.find.hover == meta_find::item::close : meta.hover == static_cast<int>(MetaItem::close));

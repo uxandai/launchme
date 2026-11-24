@@ -27,7 +27,9 @@ void Launcher::requestMusic() {
     // A file the sound folder still holds (its full path), else the chosen built-in theme (a name
     // in assets/).
     const wchar_t* theme = music_themes[std::clamp(settings_.music_theme, 0, static_cast<int>(music_themes.size()) - 1)].file;
-    const auto chosen = soundFolderFile(settings_.sound_folder, settings_.music_file);
+    auto chosen = soundFolderFile(settings_.sound_folder, settings_.music_file);
+    std::error_code missing;
+    if (!settings_.music_path.empty() && std::filesystem::is_regular_file(settings_.music_path, missing)) chosen = settings_.music_path; // Własny plik….
     const std::wstring file = !chosen.empty() ? chosen.wstring() : theme ? std::wstring(theme) : std::wstring{};
     if (file.empty()) {
         music_jobs_->pending.reset();
@@ -38,6 +40,12 @@ void Launcher::requestMusic() {
     music_status_ = trKey(L"Wczytywanie…"); // Polish key; the settings row translates it.
     music_jobs_->pending = file;
     music_jobs_->wake.notify_one();
+}
+
+void Launcher::applyUiSounds() {
+    audio_.setUiSounds({settings_.ui_sound != ui_sound_none && !settings_.ui_muted && settings_.ui_volume > 0,
+                        settings_.ui_sound_moves, settings_.ui_sound_menus, settings_.ui_sound_launch,
+                        std::clamp(settings_.ui_volume, 0, 100) / 100.0f});
 }
 
 void Launcher::requestSound(SoundCue cue, int index, bool preview) {
@@ -52,6 +60,7 @@ void Launcher::requestSound(SoundCue cue, int index, bool preview) {
     if (file.empty() && (!option || !option->file)) {
         audio_.setCue(cue, {});
         if (cue == SoundCue::boot) { audio_.boot(); boot_played_ = true; }
+        if (cue == SoundCue::navigation && preview) audio_.navigate(true); // Syntetyczny: its tone at once.
         return;
     }
     MusicQueue::CueRequest request{cue, index, preview, generation, file};

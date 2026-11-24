@@ -220,6 +220,10 @@ constexpr FlagSetting flag_settings[] = {
     {"shelves_posters", &AppSettings::shelves_posters},
     {"shelves_category_all", &AppSettings::shelves_category_all},
     {"panel_borders", &AppSettings::panel_borders},
+    {"ui_sound_moves", &AppSettings::ui_sound_moves},
+    {"ui_sound_menus", &AppSettings::ui_sound_menus},
+    {"ui_sound_launch", &AppSettings::ui_sound_launch},
+    {"ui_muted", &AppSettings::ui_muted},
     {"screen_transitions", &AppSettings::screen_transitions},
     {"input_hints", &AppSettings::input_hints},
     {"glance", &AppSettings::glance},
@@ -397,6 +401,7 @@ bool parseExtraSetting(AppSettings& settings, std::string_view key, std::string_
         return true;
     }
     if (key == "boot_video_file") { settings.boot_video_file = std::filesystem::path(text_encoding::wideLenient(value)); return true; }
+    if (key == "music_path") { settings.music_path = std::filesystem::path(text_encoding::wideLenient(value)); return true; }
     if (key == "boot_video_title") {
         auto title = text_encoding::wideLenient(value);
         if (title.size() > 120) title.resize(120);
@@ -496,6 +501,13 @@ AppSettings parseAppSettings(std::string_view text) {
         }
         if (key == "hud_layout") { if (value == "0" || value == "1") settings.hud_layout = value[0] - '0'; continue; }
         if (key == "cpu_temp_source") { if (value == "0" || value == "1") settings.cpu_temp_source = value[0] - '0'; continue; }
+        if (key == "ui_volume") {
+            if (!value.empty() && value.size() <= 3 && std::all_of(value.begin(), value.end(), [](char c) { return c >= '0' && c <= '9'; })) {
+                const int percent = std::stoi(std::string(value));
+                if (percent <= 100) settings.ui_volume = percent;
+            }
+            continue;
+        }
         if (key == "hud_size") {
             if (!value.empty() && value.size() <= 3 && std::all_of(value.begin(), value.end(), [](char c) { return c >= '0' && c <= '9'; })) {
                 const int percent = std::stoi(std::string(value));
@@ -1074,6 +1086,7 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
     output << "wallpaper_artwork=" << settings.wallpaper_artwork << '\n';
     output << "wallpaper_tiles=" << settings.wallpaper_tiles << '\n';
     output << "boot_video_file=" << text_encoding::utf8Lenient(settings.boot_video_file.wstring()) << '\n';
+    output << "music_path=" << text_encoding::utf8Lenient(settings.music_path.wstring()) << '\n';
     output << "boot_video_id=" << settings.boot_video_id << '\n';
     {
         std::wstring title = settings.boot_video_title;
@@ -1114,6 +1127,11 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
     output << "tile_shape=" << (settings.tile_shape == AppSettings::TileShape::rounded ? "rounded" :
                                 settings.tile_shape == AppSettings::TileShape::square ? "square" : "squircle") << '\n';
     output << "panel_borders=" << settings.panel_borders << '\n';
+    output << "ui_sound_moves=" << settings.ui_sound_moves << '\n';
+    output << "ui_sound_menus=" << settings.ui_sound_menus << '\n';
+    output << "ui_sound_launch=" << settings.ui_sound_launch << '\n';
+    output << "ui_muted=" << settings.ui_muted << '\n';
+    output << "ui_volume=" << std::clamp(settings.ui_volume, 0, 100) << '\n';
     output << "screen_transitions=" << settings.screen_transitions << '\n';
     output << "glass=" << std::clamp(settings.glass, 0.0f, 1.0f) << '\n';
     output << "wallpaper_upscale=" << settings.wallpaper_upscale << '\n';

@@ -276,8 +276,9 @@ void Launcher::focusCard(size_t index, bool reveal) {
     if (metroActive()) { metroFocus(std::min(index, cards_.size() - 1)); return; }
     category_rail_focus_ = false;
     library_controls_.action = -1;
-    // A library refresh focusing the shelf's same card again keeps its settled background and title.
-    const bool same_focus = screen_ == ScreenMode::shelves && std::min(index, cards_.size() - 1) == selected_;
+    // A library refresh focusing the same card again (rebuildCards kept it by key: a download's progress
+    // on the shelves or in the library, Scena included) keeps its settled background, logo and title.
+    const bool same_focus = (screen_ == ScreenMode::shelves || screen_ == ScreenMode::library) && std::min(index, cards_.size() - 1) == selected_;
     if (!same_focus) psfive_action_ = psfive_top_ = psfive_details_ = -1; // PSfive: another tile takes the focus back from the buttons and the top bar.
     selected_ = std::min(index, cards_.size() - 1);
     if (screen_ == ScreenMode::shelves) {
@@ -286,8 +287,7 @@ void Launcher::focusCard(size_t index, bool reveal) {
         const auto view = renderer_.viewport();
         grid_scroll_ = library_layout::reveal(libraryView(), selected_, cards_.size(), view.width, view.height, grid_scroll_, libraryPresentation());
     }
-    if (!same_focus) detail_ = 0;
-    library_focus_age_ = 0;
+    if (!same_focus) { detail_ = 0; library_focus_age_ = 0; }
     if (library_view::metadata(libraryPresentation())) preview_.settle();
     if (screen_ == ScreenMode::shelves && cards_[selected_].game.kind == GameKind::category) flixFocusArt(); // "Wszystkie": its category's background.
     if (const auto* found = art_.find(gameKey(cards_[selected_].game))) {

@@ -173,6 +173,26 @@ int LauncherUiTest::psfive(HWND window) {
     settle();
     if (app.cards_[2].emphasis > 0.01f || std::abs(app.cards_[2].size - layout::focus_tile) > 1 || !app.psfive_action_glide_.valid) return 4911;
     if (!capture(L"psfive-play.png")) return 4912;
+    { // A download on the focused game (Steam's manifest, every 800 ms): its start, progress and end rebuild
+      // the row, but the focus stays on the game and its button, and its logo and Krótki opis stay settled
+      // (jumping to the first tile and back made them fade in again at each rebuild).
+        const auto key = gameKey(app.cards_[app.selected_].game);
+        const auto selected = app.selected_;
+        for (int step = 0; step <= 5; ++step) {
+            auto progress = std::make_unique<LibraryMessage>();
+            progress->account = app.account_; progress->installation_update = true; progress->excluded = app.excluded_ids_;
+            progress->games = app.installed_library_;
+            for (auto& game : progress->games)
+                if (gameKey(game) == key) game.installation = step == 5 ? Installation{} :
+                    Installation{InstallPhase::downloading, static_cast<uint64_t>(100 + step * 100), 1000, true, true};
+            app.onLibrary(std::move(progress));
+            frame();
+            if (app.selected_ != selected || gameKey(app.cards_[app.selected_].game) != key || app.detail_ < 0.9f || app.psfive_action_ != 0) return 4972;
+            if (step == 4 && app.cards_[app.selected_].game.installation.done != 500) return 4974;
+        }
+        if (app.cards_[app.selected_].game.installation.active()) return 4975;
+        app.notifications_.clear();
+    }
     { // Down from "Graj": the sheet as on Szczegóły (frosted cards, no title line), the screenshots
       // focused with the tiles' outline; Down to the similar games, Up back, Up again to "Graj".
         app.psfive_details_key_ = gameKey(app.cards_[app.selected_].game);
@@ -228,12 +248,13 @@ int LauncherUiTest::psfive(HWND window) {
     app.navigate(1); app.enterDown(false);
     if (!app.menu_open_ || !app.libraryMenuAnchor() || app.enter_held_) return 4915;
     using MenuItem = context_menu::Item;
-    if (context_menu::item(0, app.menuRows()) != MenuItem::details ||
+    if (context_menu::item(0, app.menuRows()) != MenuItem::details || context_menu::item(1, app.menuRows()) != MenuItem::collections ||
         context_menu::row(MenuItem::primary, app.menuRows()) != -1 || app.menu_selected_ != 0) return 5051;
     // Details stays first with a live session; every other option follows (plugins' too), no Więcej opcji.
     auto session_menu = app.menuRows(); session_menu.suspend = session_menu.session = true; session_menu.plugins = 2;
     if (context_menu::item(0, session_menu) != MenuItem::details || context_menu::item(1, session_menu) != MenuItem::suspend ||
-        context_menu::item(2, session_menu) != MenuItem::close || context_menu::row(MenuItem::plugin, session_menu) < 3 ||
+        context_menu::item(2, session_menu) != MenuItem::close || context_menu::item(3, session_menu) != MenuItem::collections ||
+        context_menu::row(MenuItem::plugin, session_menu) < 4 ||
         context_menu::row(MenuItem::more, session_menu) != -1) return 5052;
     app.menu_progress_ = 1; settle();
     const auto menu = context_menu::bounds(app.cards_[app.selected_], app.menuRows(), app.menuBeside(), view.width, view.height, app.libraryMenuAnchor());

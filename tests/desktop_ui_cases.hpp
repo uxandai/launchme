@@ -60,6 +60,16 @@ int LauncherUiTest::desktop(HWND window) {
 
     // Ostatnio grane: the sidebar's three latest games (and Kontynuuj grę's); Ulubione keeps its two.
     if (app.desktop_recent_games_.size() != 3 || app.desktop_recent_games_[0].app_id != 7604 || entry("game:" + library_view::selectionKey(app.desktop_recent_games_[0])) < 0) return 7605;
+    { // Their square covers are cut as Tryb TV and the grid cut them (a poster's logo at its top stays whole),
+      // also when a crop is saved meanwhile.
+        const auto recent = app.desktop_recent_games_[0];
+        auto square = std::make_unique<CoverMessage>(); square->key = gameKey(recent); square->generation = app.jobs_->generation.load();
+        square->kind = CoverMessage::Kind::cover; square->bytes = pngFixture(90, 60, 90); square->focus = {0.5f, 0.3f};
+        app.onCover(std::move(square));
+        if (std::abs(app.renderer_.desktopRecentFocus(0).y - 0.3f) > 0.001f) return 7671;
+        app.desktopRecentArtArrived(gameKey(recent), CoverMessage::Kind::cover, app.art_.find(gameKey(recent))->cover, {0.5f, 0.7f});
+        if (std::abs(app.renderer_.desktopRecentFocus(0).y - 0.7f) > 0.001f) return 7672;
+    }
     // Kontynuuj grę in either order, Ostatnio grane too.
     {
         const int sort = app.settings_.desktop_sort;

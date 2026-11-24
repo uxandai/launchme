@@ -33,7 +33,11 @@ class Audio {
 public:
     Audio();
     ~Audio();
-    void navigate();
+    // Dźwięki interfejsu: a set chosen (not Brak), not muted and above 0%; which of its moments play; its volume.
+    struct UiSounds { bool on = true, moves = true, menus = true, launch = true; float volume = 1; };
+    void setUiSounds(UiSounds sounds) { ui_ = sounds; }
+    // preview: a choice in Ustawienia, heard in the desktop window too and with moves switched off.
+    void navigate(bool preview = false);
     void toast();
     void achievement(); // An achievement unlocked over a game (assets/achievement.mp3), at half volume.
     void prepareBoot() { boot_pending_ = true; }
@@ -92,6 +96,7 @@ private:
     AudioClip toast_clip_;
     AudioClip open_clip_, back_clip_, start_clip_; // UI SFX (Minimal).
     float navigation_volume_ = 0.28f, toast_volume_ = 0.28f; // A whole short file plays louder than a shaped excerpt.
+    UiSounds ui_;
     uint64_t last_back_ = 0;
     AudioClip boot_clip_;
     AudioClip achievement_clip_;

@@ -623,8 +623,14 @@ void Launcher::rebuildCards(bool preserve_background) {
                          screen_ != ScreenMode::shelves ? size_t{0} :
                          categories_[category_].selected,
                           cards_.empty() ? size_t{0} : cards_.size() - 1);
-    if (same_list && screen_ != ScreenMode::shelves && !old_focus.empty())
-        if (const auto kept = std::find(keys.begin(), keys.end(), old_focus); kept != keys.end()) selected_ = static_cast<size_t>(kept - keys.begin());
+    // The same list rebuilt keeps the focus on its game. On a home shelf too: buildShelves makes the rows
+    // afresh (their remembered place back at the first tile), and a download's start or end rebuilds them
+    // while the player stays on a game; jumping away and back made its logo and summary fade in again.
+    if (same_list && !old_focus.empty())
+        if (const auto kept = std::find(keys.begin(), keys.end(), old_focus); kept != keys.end()) {
+            selected_ = static_cast<size_t>(kept - keys.begin());
+            if (screen_ == ScreenMode::shelves) categories_[category_].selected = selected_;
+        }
     if (same_list) renderer_.remapCovers(from, preserve_background);
     else renderer_.resetCovers(cards_.size(), preserve_background);
     shelf_cards_category_ = shelf_id;

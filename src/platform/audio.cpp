@@ -30,9 +30,9 @@ void Audio::recover() {
     if (!music_clip_.samples.empty()) { auto clip = music_clip_; startMusic(std::move(clip)); } // The theme plays on.
 }
 
-void Audio::navigate() {
-    if (desktop_) return; // The desktop window moves silently, like other desktop applications.
-    if (!navigation_clip_.samples.empty()) playClip(navigation_clip_, navigation_volume_);
+void Audio::navigate(bool preview) {
+    if (!ui_.on || (!preview && (desktop_ || !ui_.moves))) return; // The desktop window moves silently, like other desktop applications.
+    if (!navigation_clip_.samples.empty()) playClip(navigation_clip_, navigation_volume_ * ui_.volume);
     else play(false);
 }
 void Audio::setDesktop(bool desktop) {
@@ -41,7 +41,7 @@ void Audio::setDesktop(bool desktop) {
     retargetMusic(); // Fades out (or back in) as a game's start would.
 }
 void Audio::toast() {
-    if (!toast_clip_.samples.empty()) playClip(toast_clip_, toast_volume_);
+    if (ui_.on && !toast_clip_.samples.empty()) playClip(toast_clip_, toast_volume_ * ui_.volume);
 }
 void Audio::achievement() {
     if (!achievement_clip_.samples.empty()) playClip(achievement_clip_, 0.5f);
@@ -51,22 +51,23 @@ void Audio::boot() {
     boot_pending_ = false; // Missing/disabled/failed boot must not leave music waiting forever.
 }
 void Audio::launch() {
-    if (!start_clip_.samples.empty()) playClip(start_clip_, 0.5f);
+    if (!ui_.on || !ui_.launch) return;
+    if (!start_clip_.samples.empty()) playClip(start_clip_, 0.5f * ui_.volume);
     else play(true);
 }
 void Audio::context() {
-    if (desktop_) return;
-    if (!open_clip_.samples.empty()) playClip(open_clip_, 0.5f);
-    else navigate();
+    if (desktop_ || !ui_.on || !ui_.menus) return;
+    if (!open_clip_.samples.empty()) playClip(open_clip_, 0.5f * ui_.volume);
+    else navigate(true); // The move's sound, though moves themselves are switched off.
 }
 void Audio::drawer() { context(); }
 void Audio::quick() { context(); }
 void Audio::back() {
-    if (desktop_ || back_clip_.samples.empty()) return;
+    if (desktop_ || !ui_.on || !ui_.menus || back_clip_.samples.empty()) return;
     const auto now = GetTickCount64();
     if (now - last_back_ < 90) return;
     last_back_ = now;
-    playClip(back_clip_, 0.45f);
+    playClip(back_clip_, 0.45f * ui_.volume);
 }
 
 void Audio::setCue(SoundCue cue, AudioClip clip) {
@@ -84,7 +85,10 @@ void Audio::setCue(SoundCue cue, AudioClip clip) {
         slot = clip.samples.empty() || clip.format.size() < sizeof(WAVEFORMATEX) ? AudioClip{} : std::move(clip);
         return;
     }
-    if (clip.samples.empty() || clip.format.size() < sizeof(WAVEFORMATEX)) return;
+    if (clip.samples.empty() || clip.format.size() < sizeof(WAVEFORMATEX)) { // None chosen: the synthesized tone, or silence.
+        (cue == SoundCue::toast ? toast_clip_ : navigation_clip_) = {};
+        return;
+    }
     const auto* format = reinterpret_cast<const WAVEFORMATEX*>(clip.format.data());
     if (!format->nBlockAlign || !format->nAvgBytesPerSec) return;
     // A UI cue made for it (UI SFX: under half a second) plays whole, near the synthesized tone's level.
@@ -252,6 +256,7 @@ void Audio::play(bool confirm) {
     }
     const WAVEFORMATEX format{WAVE_FORMAT_PCM, 1, rate, rate * 2, 2, 16, 0};
     sound->voice = engine_->voice(format);
+    if (sound->voice) sound->voice->setVolume(ui_.volume);
     if (!sound->voice || !sound->voice->submit(sound->samples.data(), sound->samples.size(), false, true) ||
         !sound->voice->start()) return;
     playing_.push_back(std::move(sound));

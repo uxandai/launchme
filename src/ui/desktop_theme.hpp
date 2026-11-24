@@ -32,6 +32,8 @@ inline Surfaces make(int theme) {
     // Grafit's steps: sidebar +0.014, panels +0.029, menus +0.04, cards and dialogs +0.044, popups +0.052.
     return {layer(0), layer(0.0135f), layer(0.0285f), layer(0.0395f), layer(0.0435f), layer(0.0515f)};
 }
+// The window's dialogs dim what is behind them by this much (Kolekcje, Zidentyfikuj grę, Edytuj metadane...).
+inline constexpr float dialog_dim = 0.62f;
 // The theme in use (the renderer sets it from the settings); every desktop surface reads it.
 inline Surfaces& current() { static Surfaces value = make(0); return value; }
 }

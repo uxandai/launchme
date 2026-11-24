@@ -179,6 +179,7 @@ void Launcher::settingsChanged(bool shelves) {
     renderer_.setWallpaperPlaces(settings_.wallpaper_snitch, settings_.wallpaper_menus, settings_.wallpaper_artwork, settings_.wallpaper_tiles);
     configureGameOverlay();
     audio_.setMusicLevel(settings_.music_volume);
+    applyUiSounds();
     if (shelves) buildShelves(); else buildSettingsRows();
 }
 
@@ -223,6 +224,14 @@ void Launcher::settingsSetLevel(float level) {
     case Id::glass: settings_.glass = std::round(level * 20) / 20.0f; settingsChanged(); return; // Visual only.
     case Id::psfive_dim: settings_.psfive_dim = std::round(level * 20) / 20.0f; settingsChanged(); return;
     case Id::music: settings_.music_volume = std::round(level * 40) / 100.0f; break;
+    case Id::ui_volume: { // Głośność interfejsu, in fives: each new level is heard.
+        const int volume = static_cast<int>(std::round(level * 20)) * 5;
+        if (volume == settings_.ui_volume) return;
+        settings_.ui_volume = volume;
+        settingsChanged();
+        audio_.navigate(true);
+        return;
+    }
     case Id::opacity: settings_.drawer.opacity = std::round(level * 98) / 100.0f; break;
     case Id::fade: settings_.drawer.fade_fraction = (6 + std::round(level * 69)) / 100.0f; break;
     case Id::xmb_size: settings_.xmb_size = static_cast<AppSettings::XmbSize>(static_cast<int>(std::round(level * 2))); break;
@@ -291,7 +300,7 @@ void Launcher::settingsAdjust(int amount) {
         }
         if (row.picker()) { settingsMove(amount); return; }
         const int steps = sizeSteps(row.id);
-        const float range = steps ? steps - 1.0f : row.id == Id::music ? 40.0f : row.id == Id::opacity ? 98.0f :
+        const float range = steps ? steps - 1.0f : row.id == Id::music ? 40.0f : row.id == Id::opacity ? 98.0f : row.id == Id::ui_volume ? 20.0f :
                             row.id == Id::system_volume ? 50.0f :
                             row.id == Id::glow_level || row.id == Id::background_grid || row.id == Id::glass || row.id == Id::psfive_dim ? 20.0f : 69.0f;
         settingsSetLevel(row.level + amount / range);
@@ -586,6 +595,24 @@ void Launcher::settingsActivate() {
 }
 
 // The choice picked from a row's list, applied at once.
+// Motyw muzyczny → Własny plik…: an .mp3, .wav or .flac anywhere; it plays at once and the row names it.
+void Launcher::pickMusicFile() {
+    settings_state_.editing = false;
+    const auto apply = [this](const std::filesystem::path& picked) {
+        if (!settingsOpen() || picked.empty()) { InvalidateRect(hwnd_, nullptr, FALSE); return; }
+        settings_.music_path = picked;
+        settings_.music_file.clear();
+        requestMusic();
+        settingsChanged();
+        audio_.context();
+    };
+    file_browser::Request request;
+    request.title = tr(L"Wybierz plik muzyki");
+    request.extensions = {L".mp3", L".wav", L".flac"};
+    if (!settings_.music_path.empty()) request.initial = settings_.music_path.parent_path();
+    openFileBrowser(std::move(request), apply);
+}
+
 void Launcher::settingsChoose(const Row& row) {
     // Interfejs → Widoki biblioteki, its choices in the view drawer's order (outside the chain below: C1061).
     if (row.id == Id::default_view_console || row.id == Id::default_view_collection || row.id == Id::default_view_studio) {
@@ -642,20 +669,20 @@ void Launcher::settingsChoose(const Row& row) {
         relabel = applyLanguage();
     }
     else if (row.id == Id::music_theme) {
-        // Built-in themes first, then the sound folder's files.
+        // Built-in themes first, then the sound folder's files, then Własny plik… (a file picked anywhere).
         const int builtin = static_cast<int>(music_themes.size());
+        if (static_cast<size_t>(settings_state_.choice - builtin) == sound_files_.size()) { pickMusicFile(); return; }
         if (settings_state_.choice < builtin) { settings_.music_theme = settings_state_.choice; settings_.music_file.clear(); }
         else if (static_cast<size_t>(settings_state_.choice - builtin) < sound_files_.size())
             settings_.music_file = sound_files_[static_cast<size_t>(settings_state_.choice - builtin)];
+        settings_.music_path.clear();
         requestMusic();
     }
-    else if (row.id == Id::ui_sound) {
+    else if (row.id == Id::ui_sound) { // Zestaw dźwięków: heard once it is read (Brak: silence).
         settings_.ui_sound = std::clamp(settings_state_.choice, 0, static_cast<int>(ui_sounds.size()) - 1);
+        applyUiSounds();
         requestSound(SoundCue::navigation, settings_.ui_sound, true);
-    }
-    else if (row.id == Id::toast_sound) {
-        settings_.toast_sound = std::clamp(settings_state_.choice, 0, static_cast<int>(toast_sounds.size()) - 1);
-        requestSound(SoundCue::toast, settings_.toast_sound, true);
+        requestSound(SoundCue::toast, settings_.toast_sound, false);
     }
     else if (row.id == Id::boot_sound) {
         const int builtin = static_cast<int>(boot_sounds.size());
@@ -821,6 +848,21 @@ void Launcher::settingsToggle(const Row& row) {
     }
     else if (row.id == Id::flix_category_all) settings_.flix_category_all = !settings_.flix_category_all; // Rebuild: the rows change.
     else if (row.id == Id::shelves_category_all) settings_.shelves_category_all = !settings_.shelves_category_all; // Rebuild: the shelves change.
+    else if (row.id == Id::toast_sound) { // Powiadomienia: heard once switched on.
+        settings_.toast_sound = settings_.toast_sound ? 0 : 1;
+        requestSound(SoundCue::toast, settings_.toast_sound, true);
+        settingsChanged(); return;
+    }
+    else if (row.id == Id::ui_muted || row.id == Id::ui_sound_moves || row.id == Id::ui_sound_menus || row.id == Id::ui_sound_launch) {
+        auto& flag = row.id == Id::ui_muted ? settings_.ui_muted : row.id == Id::ui_sound_moves ? settings_.ui_sound_moves :
+                     row.id == Id::ui_sound_menus ? settings_.ui_sound_menus : settings_.ui_sound_launch;
+        flag = !flag;
+        settingsChanged(); // applyUiSounds: switched on, its sound is heard at once.
+        if (row.id == Id::ui_sound_moves) audio_.navigate();
+        else if (row.id == Id::ui_sound_launch) audio_.launch();
+        else audio_.context();
+        return;
+    }
     else if (row.id == Id::panel_borders) {
         settings_.panel_borders = !settings_.panel_borders;
         settingsChanged(); audio_.context(); return; // Visual only: no shelf rebuild.

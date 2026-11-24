@@ -203,6 +203,7 @@ public:
     void setPoster(size_t index, ImageBytes pixels, uint32_t short_edge = 0, CropFocus focus = {});
     bool hasPoster(size_t index) const { return index < posters_.size() && posters_[index].loaded(); }
     CropFocus posterFocus(size_t index) const { return index < posters_.size() ? posters_[index].focus : CropFocus{}; }
+    CropFocus desktopRecentFocus(size_t slot) const { return slot < desktop_recent_.size() ? desktop_recent_[slot].focus : CropFocus{}; }
     void releasePoster(size_t index) { if (index < posters_.size()) posters_[index] = {}; }
     void setDisc(size_t index, ImageBytes pixels);
     // The case in the hand (game_case_held_renderer.cpp): the back of its box, by game; the manual's
@@ -276,7 +277,7 @@ public:
     // Profil's pictures (src/ui/profile_renderer.cpp): the player's, game covers, achievement icons.
     void resetProfileImages(size_t count) { profile_images_.clear(); profile_images_.resize(count); }
     // Desktop mode's recent games (Launcher::desktopBindRecentArt): 0-2 square covers, 3-5 landscape pictures.
-    void setDesktopRecent(size_t slot, ImageBytes pixels);
+    void setDesktopRecent(size_t slot, ImageBytes pixels, CropFocus focus = {}); // A square cover: its crop, as the grid's.
     void clearDesktopRecent(size_t slot) { if (slot < desktop_recent_.size()) desktop_recent_[slot] = {}; }
     void setProfileImage(size_t index, ImageBytes pixels);
     bool profileImage(size_t index) const { return index < profile_images_.size() && profile_images_[index].loaded(); }
@@ -1590,6 +1591,7 @@ private:
     // Desktop mode: compact type for the mouse and the icon font (Segoe Fluent Icons / MDL2 Assets).
     Microsoft::WRL::ComPtr<IDWriteTextFormat> desktop_font_, desktop_strong_font_, desktop_small_font_, desktop_label_font_;
     Microsoft::WRL::ComPtr<IDWriteTextFormat> desktop_title_font_, desktop_heading_font_, desktop_button_font_, desktop_icon_font_;
+    Microsoft::WRL::ComPtr<IDWriteTextFormat> desktop_body_font_; // 15 px: Kolekcje's rows.
     bool createDesktopFonts();
     bool desktop_viewport_ = false;
     bool handheld_ = false;

@@ -166,11 +166,12 @@ void Renderer::drawDesktopGrid(const Layout& layout, const View& view) {
 
 // ---- Kontynuuj grę -----------------------------------------------------------------------------
 
-void Renderer::setDesktopRecent(size_t slot, ImageBytes pixels) {
+void Renderer::setDesktopRecent(size_t slot, ImageBytes pixels, CropFocus focus) {
     if (slot >= desktop_recent_.size() || !pixels || pixels->empty()) return;
     auto& image = desktop_recent_[slot];
-    if (image.pixels == pixels) return;
+    if (image.pixels == pixels) { image.focus = focus; return; } // A crop saved meanwhile.
     image = {};
+    image.focus = focus;
     image.short_edge = slot < 3 ? 160 : 420; // Sidebar thumbnails; the tiles' pictures.
     image.pixels = std::move(pixels);
     createBitmap(image);

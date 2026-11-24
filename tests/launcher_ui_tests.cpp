@@ -13,6 +13,7 @@
 #include "../src/store/game_details.hpp"
 #include "image_fixture.hpp"
 #include "../src/ui/carousel.hpp"
+#include "../src/platform/sound_cues.hpp"
 #include "../src/platform/music_themes.hpp"
 #include "../src/ui/grid_layout.hpp"
 #include "../src/platform/frame_clock.hpp"
@@ -1239,7 +1240,8 @@ public:
         {
             const auto theme = std::find_if(app.settings_rows_.begin(), app.settings_rows_.end(),
                                             [](const auto& row) { return row.id == settings_ui::Id::music_theme; });
-            if (theme == app.settings_rows_.end() || theme->choices.size() != music_themes.size() || theme->choice != 1) return 68;
+            if (theme == app.settings_rows_.end() || theme->choices.size() != music_themes.size() + 1 || theme->choice != 1) return 68;
+            if (theme->choices.back().label != L"Własny plik…") return 15709; // The themes, then Własny plik….
         }
         app.settingsMove(1); app.settingsActivate(); app.saveSettings();
         if (loadAppSettings().music_theme != 2 || app.music_jobs_->pending != std::wstring(music_themes[2].file)) return 68;
@@ -1264,6 +1266,26 @@ public:
         app.onAudio(std::move(cancelled_music));
         app.audio_.resumeMusic();
         if (!app.music_status_.empty() || app.audio_.music_voice_) return 157;
+        // Własny plik…: the last choice opens the file browser; the picked file plays and the row names it,
+        // until a built-in theme is chosen again.
+        {
+            const auto own = std::filesystem::temp_directory_path() / L"launchme-ui-own-music.wav";
+            { std::ofstream(own, std::ios::binary) << "RIFF"; }
+            app.settingsActivate(); app.settingsMove(static_cast<int>(music_themes.size())); app.settingsActivate();
+            if (!app.fileBrowserOpen() || app.settings_state_.editing) return 15710;
+            auto done = std::move(app.file_browser_done_); app.closeFileBrowser(); done(own);
+            const auto theme = std::find_if(app.settings_rows_.begin(), app.settings_rows_.end(),
+                                            [](const auto& row) { return row.id == settings_ui::Id::music_theme; });
+            if (app.settings_.music_path != own || !app.music_jobs_->pending || *app.music_jobs_->pending != own.wstring() ||
+                theme == app.settings_rows_.end() || theme->choice != static_cast<int>(theme->choices.size()) - 1 ||
+                theme->value != L"launchme-ui-own-music.wav") return 15711;
+            app.saveSettings();
+            if (loadAppSettings().music_path != own) return 15712;
+            app.settingsActivate(); app.settingsMove(-static_cast<int>(music_themes.size())); app.settingsActivate();
+            if (!app.settings_.music_path.empty() || app.settings_.music_theme != 0) return 15713;
+            app.saveSettings();
+            std::error_code ignored; std::filesystem::remove(own, ignored);
+        }
         // Whole-library warmup is disk-only and cannot take priority away from
         // navigation, or enqueue a hidden game's art through the public view.
         Game background_game{700007, L"Background fixture"};
@@ -1304,6 +1326,14 @@ public:
         dispatched.clear();
         app.openContextMenu();
         if (!app.pluginContext(crop_game).empty() || context_menu::item(1, app.menuRows()) != context_menu::Item::details) return 128;
+        // Kolekcje third, after Graj and Szczegóły: the game's own collections, ticked, in their dialog.
+        if (context_menu::item(2, app.menuRows()) != context_menu::Item::collections) return 2943;
+        app.menu_selected_ = 2; app.menuAccept();
+        if (app.menu_open_ || !app.libraryDialogOpen() || app.library_dialog_.page != library_manager_ui::Page::membership ||
+            gameKey(app.library_dialog_.game) != gameKey(crop_game)) return 2944;
+        app.back();
+        if (app.libraryDialogOpen()) return 2944;
+        app.openContextMenu();
         app.menuMove(10);
         // Every option at once (no Więcej opcji), Odinstaluj among them for an installed Steam game.
         const auto own_rows = app.menuRows();
@@ -2016,7 +2046,7 @@ int LauncherUiTest::quickResume(HWND window) {
     const auto live = app.menuRows();
     // A running game: Wróć, Wstrzymaj, Zamknij grę, Szczegóły, then its other options (never Odinstaluj or Usuń z ostatnio granych).
     if (!live.suspend || context_menu::item(1, live) != context_menu::Item::suspend || context_menu::item(2, live) != context_menu::Item::close ||
-        context_menu::item(3, live) != context_menu::Item::details ||
+        context_menu::item(3, live) != context_menu::Item::details || context_menu::item(4, live) != context_menu::Item::collections ||
         context_menu::row(context_menu::Item::uninstall, live) != -1 || context_menu::row(context_menu::Item::forget_recent, live) != -1 ||
         context_menu::row(context_menu::Item::more, live) != -1) return 304;
     if (!capture(L"quick-resume-running.png")) return 305;

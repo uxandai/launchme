@@ -202,5 +202,34 @@ int LauncherUiTest::settingsDevices(HWND window) {
     app.inputHints(context);
     if (!context.hints.empty()) return 3234; // The bottom bar must not overlap a second set of prompts.
     app.closeQuick();
+
+    // Dźwięki interfejsu: one set (or Brak), its volume with a mute that keeps it, and a switch per moment.
+    app.openSettings();
+    app.settings_state_.selectCategory(static_cast<int>(Category::audio)); app.buildSettingsRows();
+    app.openSettingsPage(Page::sounds);
+    const int set_row = find(Id::ui_sound);
+    if (set_row < 0 || app.settings_rows_[static_cast<size_t>(set_row)].choices.size() != ui_sounds.size() ||
+        find(Id::ui_volume) < 0 || find(Id::ui_muted) < 0 || find(Id::ui_sound_moves) < 0 || find(Id::ui_sound_menus) < 0 ||
+        find(Id::ui_sound_launch) < 0 || find(Id::toast_sound) < 0 || find(Id::boot_sound) < 0 ||
+        app.settings_rows_[static_cast<size_t>(find(Id::toast_sound))].control != Control::toggle) return 3250;
+    if (!app.audio_.ui_.on || !app.audio_.ui_.moves || std::abs(app.audio_.ui_.volume - 1.0f) > 0.001f) return 3251;
+    select(find(Id::ui_muted)); app.settingsActivate();
+    if (!app.settings_.ui_muted || app.audio_.ui_.on || app.settings_rows_[static_cast<size_t>(find(Id::ui_volume))].value != L"100%") return 3252;
+    if (!capture(L"settings-sounds.png")) return 3253;
+    select(find(Id::ui_muted)); app.settingsActivate();
+    select(find(Id::ui_volume)); app.settingsSetLevel(0.5f);
+    if (app.settings_.ui_muted || !app.audio_.ui_.on || app.settings_.ui_volume != 50 || std::abs(app.audio_.ui_.volume - 0.5f) > 0.001f) return 3254;
+    select(find(Id::ui_sound_moves)); app.settingsActivate();
+    select(find(Id::ui_sound_launch)); app.settingsActivate();
+    if (app.settings_.ui_sound_moves || app.audio_.ui_.moves || app.settings_.ui_sound_launch || app.audio_.ui_.launch || !app.audio_.ui_.menus) return 3255;
+    const int toast_before = app.settings_.toast_sound;
+    select(find(Id::toast_sound)); app.settingsActivate();
+    if (app.settings_.toast_sound == toast_before) return 3256;
+    // Brak: silence, notifications included; the set's other rows go, the start sound stays.
+    select(set_row); app.settingsActivate(); app.settings_state_.choice = ui_sound_none; app.settingsActivate();
+    if (app.settings_.ui_sound != ui_sound_none || app.audio_.ui_.on || find(Id::ui_volume) >= 0 || find(Id::toast_sound) >= 0 ||
+        find(Id::boot_sound) < 0) return 3257;
+    select(find(Id::ui_sound)); app.settingsActivate(); app.settings_state_.choice = 0; app.settingsActivate();
+    if (app.settings_.ui_sound != 0 || !app.audio_.ui_.on || find(Id::ui_volume) < 0) return 3258;
     return 0;
 }

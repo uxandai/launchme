@@ -123,7 +123,7 @@ void Launcher::onCover(std::unique_ptr<CoverMessage> cover) {
     art_.resize(cover->key);
     if (cover->kind == CoverMessage::Kind::cover) {
         tarotArtArrived(cover->key, cover->kind, asset.cover); profileArtArrived(cover->key, cover->kind, asset.cover);
-        desktopRecentArtArrived(cover->key, cover->kind, asset.cover); // Ostatnio grane.
+        desktopRecentArtArrived(cover->key, cover->kind, asset.cover, asset.focus); // Ostatnio grane.
     }
     if (friends_open_ && plugin_drawer_active_ && cover->kind == CoverMessage::Kind::cover) requestPluginPageArt();
     // The desktop grid binds only around its view (thousands of cards; a card scrolled away is

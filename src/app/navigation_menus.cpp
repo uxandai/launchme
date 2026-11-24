@@ -312,6 +312,7 @@ void Launcher::menuAccept() {
     case Item::uninstall: uninstallGame(game); break;
     case Item::remove: askRemoveFromLibrary(game); break;
     case Item::forget_recent: dismissMenu(); forgetRecent(game); break;
+    case Item::collections: openCollectionManager(game); break; // Its collections, ticked (the menu closes).
     case Item::launch: dismissMenu(); openLaunchEditor(game); break;
     case Item::compat: dismissMenu(); openGameCompatSettings(game); break;
     case Item::shortcuts: dismissMenu(); openGameShortcuts(game); break;

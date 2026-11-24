@@ -87,6 +87,29 @@ int main() {
                 for (int c = 0; c < 3; ++c) capsule[(static_cast<size_t>(y) * h + x) * 4 + c] = ((x + y) % 2) ? 220 : 20;
         if (chooseDetailCrop(h, w, capsule).x <= 0.6f) return 21;
     }
+    { // A crop from the previous version, upgraded as it is read, is stored as the current one (both readers).
+      // The reader's own stream kept the file open, Windows refused the rewrite, and every load decoded
+      // the picture again.
+        const auto poster = temporary / L"upgrade.v2.img", sidecar = temporary / L"upgrade.v2.focus";
+        {
+            const auto bytes = pngFixture(90, 60, 90);
+            std::ofstream output(poster, std::ios::binary | std::ios::trunc);
+            output.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+        }
+        const auto previous = [&] {
+            if (!storeAutomaticTextCrop(poster, sidecar, L"Fixture", {0.5f, 0.5f})) return false;
+            std::string text;
+            { std::ifstream input(sidecar); std::getline(input, text); }
+            text.replace(0, text.find(' '), std::to_string(crop_cache_version - 1));
+            std::ofstream(sidecar, std::ios::trunc) << text << '\n';
+            return true;
+        };
+        const auto stored = [&] { int version = 0; std::ifstream(sidecar) >> version; return version == crop_cache_version; };
+        if (!previous() || stored() || !storedTextCrop(poster, sidecar, L"Fixture") || !stored()) return 22;
+        if (!previous()) return 22;
+        cachedTextCrop(poster, sidecar, L"Fixture");
+        if (!stored()) return 23;
+    }
     for (const auto& words : std::vector<std::vector<TextBox>>{
              {}, {{80, 400, 440, 100, 95}}, {{10, 10, 120, 40, 30}}}) {
         const auto center = chooseTextAwareCrop(600, 900, words);

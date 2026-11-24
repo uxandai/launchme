@@ -199,6 +199,7 @@ bool Launcher::initialize(HWND hwnd) {
     else placeOnTvMonitor();
     if (settings_.autostart) applyAutostart(true); // The EXE may have moved since it was switched on.
     audio_.setMusicLevel(settings_.music_volume);
+    applyUiSounds();
     prepareBootVideo();
     initializeMusic(); // Decode boot first, in parallel with renderer and library startup.
     if (!renderer_.initialize(hwnd)) {
@@ -409,7 +410,7 @@ void Launcher::onAudio(std::unique_ptr<AudioMessage> message) {
         boot_played_ = true;
     } else if (preview) {
         if (cue == SoundCue::toast) audio_.toast();
-        else audio_.navigate();
+        else audio_.navigate(true);
     }
 }
 

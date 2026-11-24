@@ -86,11 +86,18 @@ struct AppSettings {
     // still holds them; otherwise the built-in choice plays.
     std::filesystem::path sound_folder;
     std::wstring music_file, boot_file;
+    // Motyw muzyczny → Własny plik…: any audio file (.mp3, .wav, .flac) by its full path; while it exists it
+    // wins over music_file and music_theme.
+    std::filesystem::path music_path;
     // The launcher's file picker opens here when a request names no folder ("Ostatnio używany").
     std::filesystem::path file_browser_folder;
-    int ui_sound = 0;
-    int toast_sound = 0;
+    int ui_sound = 0;    // Zestaw dźwięków: ui_sounds (sound_cues.hpp), ui_sound_none = Brak.
+    int toast_sound = 0; // Powiadomienia: 0 off, 1 on (toast_sounds).
     int boot_sound = 0;
+    // Dźwięki interfejsu: which moments of the set play (moves, menus and Back, a game's start), its
+    // volume in percent and a mute that keeps that volume.
+    bool ui_sound_moves = true, ui_sound_menus = true, ui_sound_launch = true, ui_muted = false;
+    int ui_volume = 100;
     std::wstring font_family = L"SST";
     uint32_t cover_accent_rgb = 0;     // Selected cover border/glow; 0 = dominant poster color.
     uint32_t ui_accent_rgb = 0xEEEEEE; // Toggles, sliders, focus marks, toasts and progress (white).

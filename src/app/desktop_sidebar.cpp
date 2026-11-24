@@ -159,18 +159,18 @@ void Launcher::desktopBindRecentArt() {
     for (size_t i = 0; i < desktop_recent_games_.size() && i < 3; ++i) {
         const auto& game = desktop_recent_games_[i];
         const auto* art = art_.find(keys[i]);
-        if (art && art->cover) renderer_.setDesktopRecent(i, art->cover);
+        if (art && art->cover) renderer_.setDesktopRecent(i, art->cover, art->focus); // Cut as Tryb TV and the grid cut it.
         else requestArt(game, CoverMessage::Kind::cover);
         if (art && art->landscape) renderer_.setDesktopRecent(3 + i, art->landscape);
         else requestArt(game, CoverMessage::Kind::landscape);
     }
 }
 
-void Launcher::desktopRecentArtArrived(const std::string& key, CoverMessage::Kind kind, const ImageBytes& image) {
+void Launcher::desktopRecentArtArrived(const std::string& key, CoverMessage::Kind kind, const ImageBytes& image, CropFocus focus) {
     if (!desktop_mode_ || !image || (kind != CoverMessage::Kind::cover && kind != CoverMessage::Kind::landscape)) return;
     for (size_t i = 0; i < desktop_recent_keys_.size() && i < 3; ++i)
         if (desktop_recent_keys_[i] == key) {
-            renderer_.setDesktopRecent(kind == CoverMessage::Kind::cover ? i : 3 + i, image);
+            renderer_.setDesktopRecent(kind == CoverMessage::Kind::cover ? i : 3 + i, image, kind == CoverMessage::Kind::cover ? focus : CropFocus{});
             InvalidateRect(hwnd_, nullptr, FALSE);
         }
 }

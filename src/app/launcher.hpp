@@ -3226,6 +3226,8 @@ private:
     // Injectable so UI tests never show a modal Windows dialog.
     std::function<std::filesystem::path(HWND)> pick_games_folder_; // Tests only.
     std::function<std::filesystem::path(HWND, const std::filesystem::path&)> pick_sound_folder_; // Tests only.
+    void pickMusicFile(); // Motyw muzyczny → Własny plik… (settings.cpp).
+    void applyUiSounds(); // Dźwięki interfejsu's set, switches, volume and mute into audio_ (music.cpp).
     std::vector<std::wstring> sound_files_; // Audio files of settings_.sound_folder, as listed in Settings → Dźwięk.
     std::function<std::filesystem::path(HWND)> pick_image_; // Tests only ("Zmień grafikę → Z dysku…").
     std::vector<Game> shortcut_library_, nested_games_;
@@ -3785,7 +3787,7 @@ private:
     void desktopRestoreGroups(); // desktop_collapsed_ from settings_ (a start in the desktop window, a switch to it).
     size_t desktop_continue_count_ = 0; // Kontynuuj grę: how many of cards_ lead as its wide tiles (rebuildDesktop).
     void desktopBindRecentArt();
-    void desktopRecentArtArrived(const std::string& key, CoverMessage::Kind kind, const ImageBytes& image);
+    void desktopRecentArtArrived(const std::string& key, CoverMessage::Kind kind, const ImageBytes& image, CropFocus focus = {});
     std::vector<std::string> desktop_recent_keys_;    // The games of Renderer::desktop_recent_'s slots.
     std::vector<std::wstring> desktop_list_played_, desktop_list_playtime_; // The list view's columns (as cards_).
     void desktopListLabels();

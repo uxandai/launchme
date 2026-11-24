@@ -160,7 +160,9 @@ void Launcher::cropAccept() {
     const bool saved = crop_state_.automatic_selected ? clearManualTextCrop(crop_state_.image) : saveManualTextCrop(crop_state_.image, crop_state_.focus);
     if (!saved) { showNotification(NotificationKind::error, tr(L"Nie udało się zapisać kadru"), L""); return; }
     invalidateArtwork(crop_state_.game, CoverMessage::Kind::cover);
-    art_.at(key).focus = crop_state_.focus;
+    auto& art = art_.at(key);
+    art.focus = crop_state_.focus;
+    desktopRecentArtArrived(key, CoverMessage::Kind::cover, art.cover, art.focus); // Ostatnio grane's thumbnail too.
     closeCropEditor();
 }
 void Launcher::closeCropEditor() {

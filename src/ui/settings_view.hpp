@@ -170,7 +170,9 @@ enum class Id { font, home_layout, ui_accent, accent, uninstalled, emulation, mu
                    boot_video_pick, boot_video_clear, boot_video_random, boot_video_fill, boot_video_preview,
                    exit_animation, exit_color,
                    // Interfejs → Tło i szkło / Media i dane → Okładki: non-4K background upscaler and 4K background downloads.
-                   wallpaper_upscale, backgrounds_4k };
+                   wallpaper_upscale, backgrounds_4k,
+                   // Dźwięk → Dźwięki interfejsu: the set's volume, mute and the moments it plays at.
+                   ui_volume, ui_muted, ui_sound_moves, ui_sound_menus, ui_sound_launch };
 inline bool hasOptionsButton(Id id) { return id == Id::plugin_enabled || id == Id::pc_platform; }
 // layout: drawn preview tiles in the row (one per home layout); Row::choice is the active one.
 // count: Row::value as a large number with a chevron; activating opens a sub-list.

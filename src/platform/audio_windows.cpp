@@ -52,6 +52,9 @@ public:
         if (FAILED(XAudio2Create(engine_.GetAddressOf(), 0, XAUDIO2_DEFAULT_PROCESSOR))) { engine_.Reset(); return false; }
         // The default device through XAudio2's virtual client: a new default output is followed.
         if (FAILED(engine_->CreateMasteringVoice(&master_))) { master_ = nullptr; engine_.Reset(); return false; }
+#ifdef LAUNCHME_UI_TEST
+        master_->SetVolume(0); // UI tests play every sound as the app does, silently.
+#endif
         engine_->RegisterForCallbacks(&callback_);
         return true;
     }

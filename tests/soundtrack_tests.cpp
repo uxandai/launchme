@@ -4,6 +4,7 @@
 
 #include "../src/platform/wave_format.hpp"
 #ifdef _WIN32
+#include <span>
 #include <Windows.h>
 #include <mfapi.h>
 #endif
@@ -39,8 +40,8 @@ int main() {
         const auto clip = decodeFlac(file, 8 * 1024 * 1024);
         return !file.empty() && clip.format.size() >= sizeof(WAVEFORMATEX) && !clip.samples.empty();
     };
-    for (const auto* options : {&ui_sounds, &toast_sounds})
-        for (const auto& option : *options) {
+    for (const std::span<const SoundOption> options : {std::span<const SoundOption>(ui_sounds), std::span<const SoundOption>(toast_sounds)})
+        for (const auto& option : options) {
             if (!option.file) continue;
             const auto file = localSoundFile(option.file);
             if (!decodes(file)) { std::wcerr << L"Interface sound missing or failed to decode: " << option.file << L'\n'; return finish(7); }
