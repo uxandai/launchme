@@ -23,6 +23,7 @@ int LauncherUiTest::manualGames(HWND window) {
         return app.renderer_.initialize(window);
     };
     Launcher app;
+    app.identify_dialog_for_test_ = true; // The older Identyfikuj grę dialog (Edytuj metadane's list: metadata_find_ui_cases.hpp).
     if (!setup(app)) return 9500;
     dispatched.clear();
     const auto capture = [&](Launcher& target, const wchar_t* name) {
@@ -162,14 +163,14 @@ int LauncherUiTest::manualGames(HWND window) {
     // "Opcje uruchamiania" of a game added by hand is its whole editor.
     if (!app.launchEditable(game)) return 9535;
 
-    // Edytuj metadane (Tryb TV): Zidentyfikuj, in place of the dialog. A Steam game has none.
+    // Edytuj metadane (Tryb TV): Identyfikuj grę opens its list in the same dialog. A Steam game is not identified.
     app.openMetadata(game);
     if (!app.metadataOpen() || !app.desktop_meta_.identify) return 9536;
-    app.desktop_meta_.focus = static_cast<int>(desktop_ui::MetaItem::identify);
+    app.desktop_meta_.focus = static_cast<int>(desktop_ui::MetaItem::find);
     if (!capture(app, L"manual-game-metadata-identify.png")) return 9537;
     app.metadataKey(VK_RETURN, false);
-    if (app.metadataOpen() || !app.identifyOpen() || gameKey(app.identify_state_.game) != key) return 9538;
-    app.closeIdentify();
+    if (!app.metadataOpen() || !app.desktop_meta_.find.open || app.identifyOpen()) return 9538;
+    app.desktopMetaClose();
     app.openMetadata(steam);
     if (!app.metadataOpen() || app.desktop_meta_.identify) return 9539;
     app.desktopMetaClose();
@@ -212,6 +213,7 @@ int LauncherUiTest::manualGames(HWND window) {
         custom_games::Entry entry; entry.id = "95009500aaaabbbb"; entry.name = L"Desktop wishlist game";
         if (!custom_games::save({entry}, list_file)) return 9541;
         Launcher desk;
+        desk.identify_dialog_for_test_ = true;
         if (!setup(desk)) return 9542;
         desk.desktop_mode_ = true;
         desk.audio_.setDesktop(true);
@@ -272,9 +274,9 @@ int LauncherUiTest::manualGames(HWND window) {
         desk.desktopMetaOpen(wished);
         if (!desk.desktop_meta_.open || !desk.desktop_meta_.identify) return 9552;
         if (!capture(desk, L"manual-game-desktop-metadata.png")) return 9553;
-        desk.desktopMetaActivate(static_cast<int>(desktop_ui::MetaItem::identify));
-        if (desk.desktop_meta_.open || !desk.identifyOpen()) return 9554;
-        desk.closeIdentify();
+        desk.desktopMetaActivate(static_cast<int>(desktop_ui::MetaItem::find));
+        if (!desk.desktop_meta_.open || !desk.desktop_meta_.find.open) return 9554;
+        desk.desktopMetaClose();
     }
     std::filesystem::remove(list_file, ec);
     dispatched.clear();

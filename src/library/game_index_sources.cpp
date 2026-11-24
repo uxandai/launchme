@@ -74,6 +74,8 @@ const wchar_t* categoryLabel(uint32_t id) {
     case 1: return L"Multi-player";
     case 2: return L"Single-player";
     case 9: return L"Co-op";
+    case 18: return L"Partial Controller Support";
+    case 28: return L"Full controller support";
     case 20: return L"MMO";
     case 24: return L"Shared/Split Screen";
     case 27: return L"Cross-Platform Multiplayer";

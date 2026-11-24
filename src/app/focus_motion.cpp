@@ -211,6 +211,32 @@ void Launcher::animateFocus(float dt, float target_x, float target_y, float targ
         if (const auto r = layout.focusRect(custom_editor_)) glideBox(editor_glide_, true, 0, r->left, r->top, r->right, r->bottom);
         else editor_glide_.valid = false;
     } else editor_glide_.valid = false;
+    // Edytuj metadane (Tryb TV) as the launch options: the fields and the bottom row; its list on a key of its own.
+    if (desktop_meta_.open && desktop_meta_.pad) {
+        const auto& meta = desktop_meta_;
+        const auto frame = meta.find.open ? meta_find::Layout{view.width, view.height, true}.focusRect(meta.find)
+                                          : desktop_ui::MetaLayout{view.width, view.height, true}.focusRect(meta.focus);
+        if (frame) glideBox(meta_glide_, true, meta.find.open ? 1 : 0, frame->left, frame->top, frame->right, frame->bottom);
+        else meta_glide_.valid = false;
+    } else meta_glide_.valid = false;
+    // Zmień grafikę (Tryb TV): the focused picture's outline; another type (other shapes) snaps.
+    if (artworkOpen() && !desktop_mode_ && artwork_state_.gallery && !artwork_state_.results_mode && artwork_state_.selected < artwork_state_.assets.size()) {
+        const auto& state = artwork_state_;
+        const auto r = state.layout(view.width, view.height).cell(state.selected, state.scroll);
+        glideBox(artwork_cell_glide_, true, state.category, r.left, r.top, r.right, r.bottom);
+    } else artwork_cell_glide_.valid = false;
+    // Siatka's collection tiles: the focused tile, following the row as it slides.
+    if (libraryBandFocused()) {
+        const auto r = collection_band::tile(band_focus_, view.width, grid_scroll_, band_slide_, library_controls_.options);
+        glideBox(band_glide_, true, 0, r.left, r.top, r.right, r.bottom);
+    } else band_glide_.valid = false;
+    // Aurelia (Tryb TV): Back, a row, the field, the question's answers; another page snaps.
+    if (aurelia_ui_.open && !desktop_mode_) {
+        const aurelia_ui::Layout layout{view.width, view.height};
+        if (const auto r = layout.focusRect(aurelia_ui_))
+            glideBox(aurelia_glide_, true, aurelia_ui_.confirmation ? 100 : static_cast<int>(aurelia_ui_.page), r->left, r->top, r->right, r->bottom);
+        else aurelia_glide_.valid = false;
+    } else aurelia_glide_.valid = false;
     // Pobierania: Back or a row.
     if (downloadsOpen()) {
         const downloads_ui::Layout layout{view.width, view.height};
@@ -350,6 +376,10 @@ void Launcher::focusContext(ViewContext& context) const {
     if (downloads_glide_.valid && downloadsOpen()) context.downloads_glide = box(downloads_glide_.box);
     if (manager_glide_.valid && libraryDialogOpen()) context.manager_glide = box(manager_glide_.box);
     if (editor_glide_.valid && customEditorOpen()) context.editor_glide = box(editor_glide_.box);
+    if (meta_glide_.valid && desktop_meta_.open) context.meta_glide = box(meta_glide_.box);
+    if (artwork_cell_glide_.valid && artworkOpen()) context.artwork_cell_glide = box(artwork_cell_glide_.box);
+    if (band_glide_.valid && libraryBandFocused()) context.band_glide = box(band_glide_.box);
+    if (aurelia_glide_.valid && aurelia_ui_.open) context.aurelia_glide = box(aurelia_glide_.box);
     if (artwork_glide_.valid && artworkOpen()) context.artwork_glide = box(artwork_glide_.box);
     if (devicesOpen() && device_glide_.valid && device_glide_.key == static_cast<int>(device_state_.panel)) context.device_glide = box(device_glide_.box);
     if (drawer_glide_.valid && drawer_glide_.key == (friends_list_ ? 1 : 0)) context.drawer_glide = box(drawer_glide_.box);

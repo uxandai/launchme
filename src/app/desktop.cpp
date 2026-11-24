@@ -273,12 +273,14 @@ std::vector<Game> Launcher::desktopGames() const {
     library_view::Options options;
     options.order = library_view::orderFromPersisted(settings_.desktop_sort);
     options.installed_only = settings_.desktop_installed;
+    options.filters = settings_.desktop_filters;
     std::unordered_map<std::string, int> released;
     if (options.order == library_view::Order::release && game_index_)
         released = game_index_->read([](const game_index::Index& index) { return index.releases(); });
     const bool include_private = private_shelf_ || (entry && !gameEntry(entry->kind));
     auto games = library_view::arrange(desktopSource(), options, library_state_.first_seen, include_private, &released);
     std::erase_if(games, [](const Game& game) { return !isGame(game); });
+    applyLibraryFilters(games, options.filters);
     // Search: the title, a genre/tag the game index knows ("rpg", "roguelike") or its developer or publisher.
     const auto typed = trimmed(desktop_query_);
     const auto query = foldGameTitle(typed);
@@ -824,6 +826,7 @@ void Launcher::desktopView(desktop_ui::View& view) {
     view.count = cards_.size();
     view.sort_label = library_view::label(library_view::orderFromPersisted(settings_.desktop_sort));
     view.installed_only = settings_.desktop_installed;
+    view.filter_count = library_view::activeFilters(library_view::Options{.installed_only = settings_.desktop_installed, .filters = settings_.desktop_filters});
     view.scroll = desktop_scroll_;
     view.scrollbar = desktop_scrollbar_;
     view.card_hover = desktop_card_hover_;
@@ -839,7 +842,9 @@ void Launcher::desktopView(desktop_ui::View& view) {
         view.continue_tiles.push_back(std::move(tile));
     }
     view.quick = desktop_quick_;
-    view.meta = desktop_meta_;
+    // Edytuj metadane (or its last state while it fades away); over Dodaj / Edytuj grę it is drawn with the dialogs (paint.cpp).
+    if (!custom_editor_.open && !(editor_motion_ > 0.003f && editor_closing_.open))
+        view.meta = desktop_meta_.open ? desktop_meta_ : runtime_started_ && meta_motion_ > 0.003f ? meta_closing_ : desktop_ui::MetaView{};
     view.platform_badges = settings_.desktop_platform_badges;
     view.poster_glow = settings_.desktop_poster_glow;
     view.gray_uninstalled = settings_.desktop_gray_uninstalled;
@@ -889,6 +894,11 @@ void Launcher::desktopView(desktop_ui::View& view) {
             empty.body = tr(L"Sprawdź pisownię albo wpisz gatunek lub tag.");
             empty.primary = tr(L"Wyczyść wyszukiwanie");
             if (desktop_section_ != "all") empty.secondary = tr(L"Szukaj we wszystkich grach");
+        } else if (settings_.desktop_filters && !desktopSource().empty()) {
+            empty.icon = glyph::filter;
+            empty.title = tr(L"Żadna gra nie pasuje do filtrów");
+            empty.body = tr(L"Filtry trybów gry biorą się z tagów sklepów i RAWG; gry bez nich nie pasują do żadnego.");
+            empty.primary = tr(L"Wyczyść filtry");
         } else if (settings_.desktop_installed && !desktopSource().empty()) {
             empty.icon = glyph::download;
             empty.title = tr(L"Brak zainstalowanych gier");

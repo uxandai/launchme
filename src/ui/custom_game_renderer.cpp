@@ -65,17 +65,14 @@ void Renderer::drawCustomGameEditor() {
     };
     const auto card = [&](Rect r) { fill(r, gray(1, 0.04f), 16); };
 
-    brush(gray(0, 0.80f));
-    target_->FillRectangle(D2D1::RectF(0, 0, viewport_.width, viewport_.height), solid_.Get());
+    dialogScrim(gray(0, 0.80f));
     const auto panel = layout.panel();
-    fill(panel, gray(0.07f), 22);
-    if (panel_borders_) outline(panel, gray(1, 0.16f), 1.0f, 22);
+    const DialogMotion motion(*this, panel); // Its entrance and exit (ViewContext::editor_motion).
     // The heading as Settings' pages: the game (or "Dodaj grę"), under it what starts the game.
     const std::wstring heading = ui.launchOptions() ? ui.title : ui.editing() ? ui.art_name : std::wstring(tr(L"Dodaj grę"));
     std::wstring subtitle = ui.managed;
     if (subtitle.empty() && (ui.launchOptions() || ui.editing())) subtitle = tr(L"Opcje uruchamiania");
-    textGroup(heading, subtitle, panel.left + Layout::pad, panel.top + 40, panel.right - panel.left - 2 * Layout::pad, settings_heading_font_.Get(), gray(0.96f),
-              body, gray(0.58f), 1, true, heading_group_gap);
+    tvDialogFrame(panel, heading, subtitle);
 
     if (layout.tabs) {
         // "Uruchamianie" / "Skrypty" / "Mody" in one track, the shown one on a lighter pill.
@@ -263,7 +260,9 @@ void Renderer::drawCustomGameEditor() {
     if (const auto& glide = context_->editor_glide) ring = Rect{glide->left, glide->top, glide->right, glide->bottom};
     else ring = layout.focusRect(ui);
     if (ring) {
-        const float h = ring->bottom - ring->top, radius = h <= 56 ? h * 0.5f : 16.0f;
+        // Round to the item's shape: pills (the tabs, "Wskaż plik" / "Wskaż folder", the buttons) fully, cards less.
+        const bool pill = !ui.dropdown.open && (ui.focus == Item::pick_file || ui.focus == Item::pick_folder);
+        const float h = ring->bottom - ring->top, radius = h <= 56 || pill ? h * 0.5f : 16.0f;
         outline({ring->left - 4, ring->top - 4, ring->right + 4, ring->bottom + 4}, gray(0.96f), 2.5f, radius + 4);
     }
 }

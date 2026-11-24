@@ -328,6 +328,9 @@ bool Renderer::createTargetResources() {
     createBitmap(file_browser_preview_);
     createBitmap(notification_cover_);
     createBitmap(custom_poster_);
+    createBitmap(meta_poster_);
+    for (auto& image : find_thumbs_) createBitmap(image);
+    for (auto& image : band_covers_) createBitmap(image);
     createBitmap(snitch_avatar_);
     createBitmap(companion_photo_);
     createBitmap(companion_photo_large_);
@@ -370,6 +373,9 @@ void Renderer::discardTarget() {
     file_browser_preview_.bitmap.Reset(); file_browser_preview_.brush.Reset();
     notification_cover_.bitmap.Reset(); notification_cover_.brush.Reset();
     custom_poster_.bitmap.Reset(); custom_poster_.brush.Reset();
+    meta_poster_.bitmap.Reset(); meta_poster_.brush.Reset();
+    for (auto& image : find_thumbs_) { image.bitmap.Reset(); image.brush.Reset(); }
+    for (auto& image : band_covers_) { image.bitmap.Reset(); image.brush.Reset(); }
     snitch_avatar_.bitmap.Reset(); snitch_avatar_.brush.Reset();
     companion_photo_.bitmap.Reset(); companion_photo_.brush.Reset();
     companion_photo_large_.bitmap.Reset(); companion_photo_large_.brush.Reset();
@@ -555,6 +561,9 @@ void Renderer::uploadDecoded() {
     collect(file_browser_preview_);
     collect(notification_cover_);
     collect(custom_poster_);
+    collect(meta_poster_);
+    for (auto& image : find_thumbs_) collect(image);
+    for (auto& image : band_covers_) collect(image);
     collect(snitch_avatar_);
     collect(companion_photo_);
     collect(companion_photo_large_);

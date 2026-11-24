@@ -1,0 +1,10 @@
+UI SFX (https://github.com/romainsimon/uisfx), the Minimal pack: focus, open, back, start and
+notification (MP3). Launchme's Minimalny (UI SFX) interface sounds (src/platform/sound_cues.hpp).
+
+UI SFX audio assets are dedicated to the public domain under the Creative Commons CC0 1.0
+Universal Public Domain Dedication (the procedurally generated audio files in packages/uisfx/sounds).
+You may copy, modify, distribute, and use these files, including for commercial purposes, without
+asking permission. Attribution is appreciated but not required.
+
+Legal code: https://creativecommons.org/publicdomain/zero/1.0/legalcode
+SPDX identifier: CC0-1.0

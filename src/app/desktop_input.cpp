@@ -17,7 +17,7 @@ std::pair<bool, bool> Launcher::desktopEmptyButtons() const {
     if (!cards_.empty() || scanning_ || libraryLoading()) return {false, false}; // As drawn: the skeleton has no buttons.
     const auto* entry = desktopEntry();
     if (!trimmedQuery(desktop_query_).empty()) return {true, desktop_section_ != "all"};
-    if (settings_.desktop_installed && !desktopSource().empty()) return {true, false};
+    if (desktopFiltered() && !desktopSource().empty()) return {true, false};
     if (entry && entry->kind == EntryKind::collection) return {true, false};
     if (entry && entry->kind == EntryKind::favorites) return {false, false};
     if (public_library_.empty()) return {true, true};
@@ -107,7 +107,7 @@ desktop_ui::Hit Launcher::desktopHit(float x, float y) const {
     }
     if (L.sortButton().contains(x, y)) return {Target::sort, 0};
     if (L.viewButton().contains(x, y)) return {Target::view_mode, 0};
-    if (L.installedChip().contains(x, y)) return {Target::installed, 0};
+    if (L.installedChip().contains(x, y)) return {Target::filters, 0};
     if (L.sizeSlider().contains(x, y)) return {Target::size_slider, 0};
     if (cards_.empty()) {
         const auto [primary, secondary] = desktopEmptyButtons();
@@ -441,10 +441,10 @@ LPCWSTR Launcher::desktopCursor(float mouse_x, float mouse_y) const {
     if (desktop_meta_.open && desktopActive()) { // Edytuj metadane: its fields take text, its buttons a click.
         const auto view = renderer_.desktopViewport();
         if (desktop_meta_.find.open) {
-            const int found = meta_find::Layout{view.width, view.height}.hit(mouse_x / desktopScale(), mouse_y / desktopScale(), desktop_meta_.find);
+            const int found = meta_find::Layout{view.width, view.height, desktop_meta_.pad}.hit(mouse_x / desktopScale(), mouse_y / desktopScale(), desktop_meta_.find);
             return found < 0 ? IDC_ARROW : found == meta_find::item::query ? IDC_IBEAM : IDC_HAND;
         }
-        const int hit = desktop_ui::MetaLayout{view.width, view.height}.hit(mouse_x / desktopScale(), mouse_y / desktopScale(), desktop_meta_.identify);
+        const int hit = desktop_ui::MetaLayout{view.width, view.height, desktop_meta_.pad}.hit(mouse_x / desktopScale(), mouse_y / desktopScale());
         return hit < 0 ? IDC_ARROW : hit < desktop_ui::meta_fields ? IDC_IBEAM : IDC_HAND;
     }
     if (desktop_quick_.open && desktopActive()) {
@@ -528,7 +528,7 @@ std::wstring Launcher::desktopTooltip(const desktop_ui::Hit& hit) const {
     case Target::card_check: return tr(L"Zaznacz (Ctrl+klik)");
     case Target::sort: return tr(L"Sortowanie");
     case Target::view_mode: return tr(L"Widok: plakaty, kwadraty, poziome, lista");
-    case Target::installed: return tr(L"Tylko zainstalowane gry");
+    case Target::filters: return tr(L"Filtry: zainstalowane, tryby gry, nigdy nie grane");
     case Target::size_slider: return tr(L"Rozmiar plakatów (Ctrl+kółko)");
     case Target::pane_favorite:
         return !cards_.empty() && isFavorite(cards_[selected_].game) ? tr(L"Usuń z ulubionych") : tr(L"Dodaj do ulubionych");
@@ -582,7 +582,7 @@ desktop_ui::Rect Launcher::desktopTooltipAnchor(const desktop_ui::Hit& hit) cons
     }
     case Target::sort: return L.sortButton();
     case Target::view_mode: return L.viewButton();
-    case Target::installed: return L.installedChip();
+    case Target::filters: return L.installedChip();
     case Target::size_slider: return L.sizeSlider();
     case Target::pane_favorite: return L.paneFavorite(desktop_pane_scroll_);
     case Target::pane_more: return L.paneMore(desktop_pane_scroll_);

@@ -282,8 +282,9 @@ int LauncherUiTest::libraryViews(HWND window) {
     if (app.library_controls_.panel != library_ui::Panel::filters) return 922;
     const auto installed = bar.choice(library_view::order_count);
     app.click((installed.left + 20) * scale, (installed.top + 10) * scale, false);
-    if (!app.library_controls_.options.installed_only || app.library_controls_.open() ||
+    if (!app.library_controls_.options.installed_only || !app.library_controls_.open() || // A box: the menu stays open.
         std::any_of(app.cards_.begin(), app.cards_.end(), [](const GameCard& card) { return !card.game.installed; })) return 923;
+    app.closeLibraryPanel();
     for (const auto order : {library_view::Order::added, library_view::Order::alphabetical, library_view::Order::last_played}) {
         app.click((button.left + 20) * scale, (button.top + 10) * scale, false);
         const auto choice = bar.choice(static_cast<int>(order));
@@ -459,6 +460,15 @@ int LauncherUiTest::libraryViews(HWND window) {
         app.navigate(1); settle();
         capture(L"library-stage-actions.png");
         app.navigate(-1);
+        // Przyciemnij tło (Opcje widoku): one setting for every Scena, in steps of 10%.
+        const int dim = app.settings_.stage_dim;
+        app.openLibraryPanel(library_ui::Panel::views); app.library_controls_.view_row = 2;
+        app.adjustLibraryView(1); app.adjustLibraryView(1); app.adjustLibraryView(1);
+        if (app.settings_.stage_dim != std::min(80, dim + 30)) return 2759;
+        settle(); capture(L"library-stage-dim-options.png");
+        app.closeLibraryPanel(); app.library_controls_.focus = -1; app.focusCard(0); settle();
+        capture(L"library-stage-dim.png");
+        app.settings_.stage_dim = dim;
         chooseView(library_view::View::detailed);
         app.focusCard(0); settle();
     }
@@ -1313,6 +1323,10 @@ int LauncherUiTest::libraryViews(HWND window) {
         app.renderer_.setArtworkThumbnail(0, scan, false);
         if (!capture(L"artwork-disc-screenscraper.png")) return 2896;
         if (!cacheArtworkVariant(game, ArtworkKind::disc, 777, scan, coverCacheDirectory())) return 2897;
+        // The disc in use comes first (shown at once); the page's scan after it.
+        const auto scanned = std::find_if(app.artwork_state_.assets.begin(), app.artwork_state_.assets.end(), [](const GridAsset& asset) { return asset.id == 777; });
+        if (scanned == app.artwork_state_.assets.end()) return 2889;
+        app.artwork_state_.selected = static_cast<size_t>(scanned - app.artwork_state_.assets.begin());
         app.artwork_state_.gallery = true; app.artworkAccept();
         auto applied = std::make_unique<ArtworkBrowserMessage>(); applied->generation = app.artwork_jobs_->generation.load();
         applied->type = ArtworkBrowserMessage::Type::apply; applied->asset_id = 777; applied->kind = ArtworkKind::disc; applied->bytes = scan;
@@ -1693,7 +1707,8 @@ int LauncherUiTest::flix(HWND window) {
         posters->generation = app.artwork_jobs_->generation.load();
         posters->page = parseGridPage(R"({"data":[{"id":501,"width":600,"height":900,"url":"https://example.invalid/p.png"}]})");
         app.onArtworkBrowser(std::move(posters));
-        app.artworkAccept(); app.artworkAccept(); // Into the gallery, then apply.
+        app.artworkAccept(); // Into the gallery: the poster in use first, then the page's.
+        app.artwork_state_.selected = app.artwork_state_.assets.size() - 1; app.artworkAccept();
         const auto picked = pngFixture(220, 40, 60);
         if (!cacheArtworkVariant(chosen, ArtworkKind::poster, 501, picked, coverCacheDirectory())) return 971;
         auto applied = std::make_unique<ArtworkBrowserMessage>();

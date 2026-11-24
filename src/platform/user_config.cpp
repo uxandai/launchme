@@ -609,7 +609,17 @@ AppSettings parseAppSettings(std::string_view text) {
             const auto parsed = std::from_chars(value.data(), value.data() + value.size(), width);
             if (parsed.ec == std::errc{} && parsed.ptr == value.data() + value.size()) settings.desktop_poster = std::clamp(width, 112, 240);
         }
+        else if (key == "stage_dim") {
+            int percent = 0;
+            const auto parsed = std::from_chars(value.data(), value.data() + value.size(), percent);
+            if (parsed.ec == std::errc{} && parsed.ptr == value.data() + value.size()) settings.stage_dim = std::clamp(percent / 10 * 10, 0, 80);
+        }
         else if (key == "desktop_sort" && value.size() == 1 && value[0] >= '1' && value[0] <= '4') settings.desktop_sort = value[0] - '0';
+        else if (key == "desktop_filters" && !value.empty() && value.size() <= 3 && std::all_of(value.begin(), value.end(), [](char c) { return c >= '0' && c <= '9'; })) {
+            int bits = 0;
+            for (const char c : value) bits = bits * 10 + (c - '0');
+            if (bits < 256) settings.desktop_filters = static_cast<uint32_t>(bits);
+        }
         else if ((key == "desktop_section" || key == "desktop_game") && value.size() < 400 &&
                  value.find_first_of("\r\n") == std::string_view::npos) (key == "desktop_section" ? settings.desktop_section : settings.desktop_game) = std::string(value);
         else if (key == "desktop_collapsed" || key == "desktop_expanded") {
@@ -938,9 +948,11 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
          << "desktop_theme=" << std::clamp(settings.desktop_theme, 0, 9) << '\n'
            << "desktop_maximized=" << settings.desktop_maximized << '\n'
            << "desktop_poster=" << std::clamp(settings.desktop_poster, 112, 240) << '\n'
+           << "stage_dim=" << std::clamp(settings.stage_dim, 0, 80) << '\n'
            << "desktop_view=" << std::clamp(settings.desktop_view, 0, 3) << '\n'
            << "desktop_sort=" << std::clamp(settings.desktop_sort, 1, 4) << '\n'
            << "desktop_installed=" << settings.desktop_installed << '\n'
+           << "desktop_filters=" << (settings.desktop_filters & 0xFFu) << '\n'
            << "desktop_narrow=" << settings.desktop_narrow << '\n'
            << "desktop_pane=" << (settings.desktop_pane <= 0 ? 0 : std::clamp(settings.desktop_pane, 300, 4000)) << '\n'
            << "desktop_section=" << (settings.desktop_section.find_first_of("\r\n") == std::string::npos ? settings.desktop_section : std::string("all")) << '\n'

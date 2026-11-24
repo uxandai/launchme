@@ -32,6 +32,7 @@ struct Offer {
     std::wstring note;  // The edition's console or store, as the list shows it ("Nintendo Switch 2").
     GameDetails details; // description, developer, publisher, release_date ("2026-06-25"), genres ("A, B").
     int score = 0;       // How well the title matches the query: higher is better (an ID match counts most).
+    std::wstring image;  // A picture of the game (its store header, banner or box art) for the list; may be empty.
 };
 
 struct Query {
@@ -53,6 +54,8 @@ Found find(Source source, const Query& query, const ArtworkHttp& get = httpGet);
 
 // The first 16-hex Switch title ID in `text` (01… Switch, 04… Switch 2), its base game's ("…000").
 std::string titleId(std::wstring_view text);
+// How well `title` matches `query` (the sources' own ranking): 0 for no match, higher is better.
+int titleScore(std::wstring_view query, std::wstring_view title);
 
 // Parsers, exposed for tests.
 std::wstring plainText(std::string_view html);

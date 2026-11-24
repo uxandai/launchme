@@ -120,6 +120,7 @@ void Launcher::paint(bool overlay) {
     context.home_background_pending = (screen_ == ScreenMode::shelves || screen_ == ScreenMode::platform_games) && selectedHeroPending();
     context.library_options = libraryPresentation();
     context.library_search_progress = library_search_progress_;
+    libraryBandContext(context); // Siatka's collection tiles.
     if (library_view::metadata(context.library_options) && !cards_.empty()) {
         const auto& game = cards_[selected_].game;
         context.preview = preview_.find(game);
@@ -135,10 +136,12 @@ void Launcher::paint(bool overlay) {
             if (!steamArtwork(game) || stage) completeDetails(local_preview, game);
             context.preview = &local_preview;
         }
+        if (stage && library_controls_.options.stage_summary) context.library_summary = gameSummary(game); // Krótki opis.
         // A Steam game's store details are on their way (the worker always answers, empty on failure).
         context.preview_waiting = steamArtwork(game) && game.app_id && !preview_.find(game);
     }
     context.hint_white = settings_.hint_style == AppSettings::HintStyle::white;
+    context.stage_dim = settings_.stage_dim; // Scena's Przyciemnij tło (its background and its row in Opcje widoku).
     if (libraryTabsShown() || homeTabsShown()) {
         // The small LB/RB (PgUp/PgDn) caps beside the strip, as the bottom-right hints.
         context.strip_hints = settings_.input_hints;
@@ -675,10 +678,7 @@ void Launcher::paint(bool overlay) {
         context.psfive_clock_shown = settings_.psfive_clock;
         context.psfive_dim = settings_.psfive_dim;
         context.psfive_summary_shown = settings_.psfive_summary;
-        if (psfiveSummaryShown()) { // Szczegóły's description: the store's own short text, else the game index's.
-            bool loading = false;
-            context.psfive_summary = desktopDetails(cards_[selected_].game, loading).description;
-        }
+        if (psfiveSummaryShown()) context.psfive_summary = gameSummary(cards_[selected_].game);
         context.psfive_visible_tabs = psfiveVisibleTabs();
         if (settings_.psfive_clock) {
             const auto local = local_time_();
@@ -826,8 +826,21 @@ void Launcher::paint(bool overlay) {
     if (profile_.open || profile_.alpha > 0.003f) { context.profile = &profile_; context.hint_device = hintDevice(); }
     if (whats_new_.open) context.whats_new = &whats_new_;
     if (aurelia_ui_.open) context.aurelia = &aurelia_ui_;
-    if (customEditorOpen()) { context.custom_editor = &custom_editor_; context.custom_poster = custom_poster_; }
-    if (metadataOpen()) context.tv_meta = &desktop_meta_;
+    else if (runtime_started_ && !desktop_mode_ && aurelia_motion_ > 0.003f && aurelia_closing_.open) context.aurelia = &aurelia_closing_; // Fading away.
+    context.aurelia_motion = runtime_started_ ? aurelia_motion_ : 1.0f;
+    // Dodaj / Edytuj grę (also under Edytuj metadane opened from it), or its last state while it fades away.
+    if (custom_editor_.open) { context.custom_editor = &custom_editor_; context.custom_poster = custom_poster_; }
+    else if (runtime_started_ && editor_motion_ > 0.003f && editor_closing_.open) { context.custom_editor = &editor_closing_; context.custom_poster = editor_closing_poster_; }
+    context.editor_motion = runtime_started_ ? editor_motion_ : 1.0f; // UI tests draw no frames in between: shown at once.
+    // Edytuj metadane: Tryb TV's; the window's here only over Dodaj / Edytuj grę (else the window draws it, desktop.cpp).
+    const bool meta_layer = !desktop_mode_ || custom_editor_.open || (editor_motion_ > 0.003f && editor_closing_.open);
+    if (desktop_meta_.open && meta_layer) { context.tv_meta = &desktop_meta_; context.meta_poster = metaPoster(); }
+    else if (runtime_started_ && !desktop_meta_.open && meta_motion_ > 0.003f && meta_closing_.open && meta_layer) {
+        context.tv_meta = &meta_closing_; context.meta_poster = meta_closing_poster_;
+    }
+    if (desktop_mode_ && !meta_layer) context.meta_poster = desktop_meta_.open ? metaPoster() : meta_closing_poster_;
+    context.meta_motion = runtime_started_ ? meta_motion_ : 1.0f;
+    context.meta_shown = desktop_meta_.open || (meta_motion_ > 0.003f && meta_closing_.open);
     if (fileBrowserOpen()) context.file_browser = &file_browser_;
     if (color_editor_.open && settingsOpen()) context.color_editor = &color_editor_;
     screensaver::View screensaver;

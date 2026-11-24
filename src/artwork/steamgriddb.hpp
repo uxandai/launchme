@@ -10,6 +10,7 @@ struct GridAsset {
     int width = 0, height = 0;
     std::wstring preview; // A video wallpaper's or boot video's moving preview, played before it is chosen.
     bool animated = false; // SteamGridDB's animated grid or hero: `url` is an animated WebP (animated_image.hpp).
+    bool current = false;  // Zmień grafikę: the art in use shown first (no `url`: nothing to download or apply).
 };
 // "Zmień grafikę" galleries: SteamGridDB, or for emulated shortcuts the media ScreenScraper
 // lists for the identified ROM (artwork/screenscraper_art.hpp) and ES-DE's downloaded media; the

@@ -123,9 +123,7 @@ std::vector<MenuItem> Launcher::desktopGroupItems(const Game& game, int group) {
         items.push_back({Action::retry_art, tr(L"Pobierz grafiki ponownie"), {}, glyph::refresh});
         if (!gameKey(game).empty()) items.push_back({Action::metadata, tr(L"Edytuj metadane…"), {}, glyph::edit}); // Own title and details.
     } else if (group == 1) {
-        if (aurelia_active_ && aurelia::validGame(game)) items.push_back({Action::aurelia, tr(L"Zarządzaj · Aurelia"), {}, glyph::edit});
-        // The file, options and folder it starts with (Steam: its launch options).
-        if (steamAccountChoices(game).size() > 1) items.push_back({Action::steam_account, tr(L"Konto Steam: ") + steamAccountLabel(game), {}, glyph::people});
+        // Konto Steam and Aurelia are in Opcje uruchamiania (launch_choices.cpp), not here.
         if (gameEmulatorEditable(game)) items.push_back({Action::emulator, gameEmulatorLabel(game), {}, glyph::game}); // Emulator per gra: the next choice.
         if (launchEditable(game)) // A game added by hand: the file, name and options too.
             items.push_back({Action::launch_options, tr(L"Opcje uruchamiania…"), {}, glyph::settings});
@@ -262,6 +260,34 @@ void Launcher::desktopOpenSortMenu() {
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
+bool Launcher::desktopFiltered() const { return settings_.desktop_installed || settings_.desktop_filters; }
+
+// Filtry under its button: Zainstalowane, the game's modes, Nigdy nie grane, then Wyczyść filtry. A box
+// toggles with the menu still open.
+void Launcher::desktopOpenFiltersMenu() {
+    const auto r = desktopLayout().installedChip();
+    Menu menu;
+    menu.kind = Menu::Kind::filters;
+    menu.x = r.left; menu.y = r.bottom + 6;
+    MenuItem installed{Action::filter, tr(L"Tylko zainstalowane"), {}, 0};
+    installed.value = -1; installed.checked = settings_.desktop_installed;
+    menu.items.push_back(std::move(installed));
+    MenuItem gap; gap.separator = true;
+    menu.items.push_back(gap);
+    for (int bit = 0; bit < library_view::filter_count; ++bit) {
+        const auto filter = static_cast<library_view::Filter>(bit);
+        MenuItem item{Action::filter, library_view::label(filter), {}, 0};
+        item.value = bit; item.checked = (settings_.desktop_filters & library_view::filterBit(filter)) != 0;
+        menu.items.push_back(std::move(item));
+    }
+    menu.items.push_back(gap);
+    MenuItem clear{Action::filter, tr(L"Wyczyść filtry"), {}, glyph::close};
+    clear.value = desktop_ui::filter_clear; clear.enabled = desktopFiltered();
+    menu.items.push_back(std::move(clear));
+    desktop_menu_ = std::move(menu);
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+
 // The title bar's "…": the tools that do not have an icon of their own.
 void Launcher::desktopOpenToolsMenu() {
     const auto tools = desktopTools();
@@ -371,6 +397,19 @@ void Launcher::desktopCloseMenu() {
 
 void Launcher::desktopMenuPick(const desktop_ui::MenuItem& item, bool /*from_sub*/) {
     if (!desktop_menu_) return;
+    if (item.action == Action::filter) { // The list filtered beneath the menu, which stays open on the same row.
+        const int hover = desktop_menu_->hover;
+        const bool keyboard = desktop_menu_->keyboard;
+        if (item.value == desktop_ui::filter_clear) { settings_.desktop_installed = false; settings_.desktop_filters = 0; }
+        else if (item.value < 0) settings_.desktop_installed = !settings_.desktop_installed;
+        else settings_.desktop_filters ^= library_view::filterBit(static_cast<library_view::Filter>(item.value));
+        settings_dirty_ = true; settings_edited_ = std::chrono::steady_clock::now();
+        desktop_scroll_ = desktop_scroll_target_ = 0;
+        rebuildCards(true);
+        desktopOpenFiltersMenu();
+        if (desktop_menu_) { desktop_menu_->hover = hover; desktop_menu_->keyboard = keyboard; }
+        return;
+    }
     const auto games = desktopGamesOf(desktop_menu_->games);
     const auto entry = desktop_menu_->entry;
     desktopCloseMenu();

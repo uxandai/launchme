@@ -69,7 +69,7 @@ void Renderer::drawCard(const GameCard& card, size_t index) {
     if (card.opacity < 0.01f || card.x + card.size < -45 || card.x > view_width + 45 ||
         card.y + card.size < -45 || card.y > viewport_.height + 45) return;
     const bool selected = index == selected_ && context_->screen != ScreenMode::details && context_->screen != ScreenMode::crop &&
-        !context_->category_rail_focus &&
+        !context_->category_rail_focus && context_->band_focus < 0 &&
         (!context_->library_controls || context_->library_controls->focus < 0);
     const bool platform_tile = logoTile(card.game);
     const float focus_zoom = selected ? 1.0f + 0.13f * smoothFade(context_->launch_progress) : 1.0f;
@@ -114,7 +114,7 @@ void Renderer::drawCard(const GameCard& card, size_t index) {
     // eases with the focus: the new cover shrinks in while the previous one grows back to the edge
     // (as the rectangular tiles do) instead of both snapping in one frame.
     const bool may_inset = !context_->psfive && context_->screen != ScreenMode::details && context_->screen != ScreenMode::crop &&
-        !context_->category_rail_focus && (!context_->library_controls || context_->library_controls->focus < 0);
+        !context_->category_rail_focus && context_->band_focus < 0 && (!context_->library_controls || context_->library_controls->focus < 0);
     const float inner = may_inset ? focusInset(3.2f) * std::clamp(card.emphasis, 0.0f, 1.0f) * (1.0f - smoothFade(std::max(context_->quick_progress, context_->snitch_profile_progress))) : 0.0f;
     if (inner > 0.05f) {
         target_->SetTransform(D2D1::Matrix3x2F::Scale(size, size) * D2D1::Matrix3x2F::Translation(x, y) * base);

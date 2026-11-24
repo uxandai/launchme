@@ -1,5 +1,8 @@
 #pragma once
 #include "../model/game.hpp"
+#include <algorithm>
+#include <bit>
+#include <cstdint>
 #include <map>
 #include <unordered_map>
 #include <vector>
@@ -16,6 +19,14 @@ inline Order orderFromPersisted(int value) {
     return value == 1 ? Order::alphabetical : value == 3 ? Order::added : value == 4 ? Order::release : Order::last_played;
 }
 constexpr int persisted_order_count = 5;
+// Filtry (beside the orders in the same menu): how a game is played, read from its tags in the game index
+// (Steam's store tags and features, RAWG's tags), and whether it was ever played. A game must match
+// every one checked; one the index knows nothing about matches none.
+enum class Filter { single_player, multiplayer, coop, local, online, controller, vr, unplayed };
+constexpr int filter_count = 8;
+constexpr uint32_t filterBit(Filter filter) { return 1u << static_cast<int>(filter); }
+// Whether these tags say the game is played that way (Filter::unplayed: never; the caller knows).
+bool tagged(Filter filter, const std::vector<std::wstring>& tags);
 // The numbers are what library-state.ini keeps: new views are appended, removed ones leave their
 // number unused (4 was Plakat, 6 Dyskietka, 7 Kartridż Switch, 8 Kartridż NES; viewFromPersisted reads
 // them as their nearest view: Plakat as Lista+, the media carousels as Półka).
@@ -79,6 +90,9 @@ struct Options {
     bool bookshelf_gray = true;       // Półka: the cases beside the middle one lose their colour.
     bool bookshelf_platform = true;   // Półka: the platform's logo on a band of its colour atop the spine.
     bool stage_summary = true;        // Scena: the game's short summary under its logo (Krótki opis).
+    uint32_t filters = 0;             // Filtry: Filter bits, all of them required.
+    int grid_columns = 0;             // Siatka: its columns, 0 automatic (by the screen's width).
+    bool grid_collections = false;    // Siatka: the collections as tiles above the games (Kolekcje jako kafle).
     bool operator==(const Options&) const = default;
 };
 inline bool metadata(const Options& options) {
@@ -105,6 +119,29 @@ inline int gridArt(const Options& options) { return options.grid_landscape ? 2 :
 inline void setGridArt(Options& options, int art) {
     art = ((art % 3) + 3) % 3;
     options.grid_posters = art == 1; options.grid_landscape = art == 2;
+}
+// The filters in force, Tylko zainstalowane included (the number on the order's button).
+inline int activeFilters(const Options& options) { return (options.installed_only ? 1 : 0) + std::popcount(options.filters); }
+// Siatka's columns as its option steps through them: 0 automatic, then min..max for its artwork
+// (landscape tiles are wider). A number saved for the other artwork is clamped where it is used.
+inline int gridColumnsMin(const Options& options) { return options.grid_landscape ? 2 : 3; }
+inline int gridColumnsMax(const Options& options) { return options.grid_landscape ? 6 : 10; }
+inline int gridColumnChoices(const Options& options) { return gridColumnsMax(options) - gridColumnsMin(options) + 2; }
+inline int gridColumnsChoice(const Options& options) {
+    return options.grid_columns ? std::clamp(options.grid_columns, gridColumnsMin(options), gridColumnsMax(options)) - gridColumnsMin(options) + 1 : 0;
+}
+inline void setGridColumnsChoice(Options& options, int choice) { options.grid_columns = choice > 0 ? gridColumnsMin(options) + choice - 1 : 0; }
+inline const wchar_t* label(Filter filter) {
+    switch (filter) {
+    case Filter::single_player: return tr(L"Dla jednego gracza");
+    case Filter::multiplayer: return tr(L"Wieloosobowe");
+    case Filter::coop: return tr(L"Kooperacja");
+    case Filter::local: return tr(L"2+ graczy na jednym ekranie");
+    case Filter::online: return tr(L"Gra przez sieć");
+    case Filter::controller: return tr(L"Obsługa pada");
+    case Filter::vr: return L"VR";
+    default: return tr(L"Nigdy nie grane");
+    }
 }
 inline const wchar_t* label(Order order) {
     switch (order) {

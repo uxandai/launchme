@@ -393,12 +393,19 @@ void Launcher::drmSettingsRows() {
     add({Id::drm_games, Control::count, tr(L"Znalezione gry"), std::move(facts), std::to_wstring(games)});
 }
 
-// DRM-free → "Gry dodane ręcznie": each game with its editor (which also removes it); adding one
-// when there is none yet.
+// DRM-free → "Gry dodane ręcznie": first what DRM-free's page starts with (adding a game, their covers),
+// then each game with its editor (which also removes it).
 void Launcher::customGamesSettingsRows() {
-    if (custom_games_.empty())
-        settings_rows_.push_back({Id::custom_add, Control::action, tr(L"Dodaj grę"),
-            tr(L"Plik programu, skrótu, ROM-u lub folder: gra, folder ROM-ów albo katalog z wieloma grami."), tr(L"Dodaj")});
+    settings_rows_.push_back({Id::custom_add, Control::action, tr(L"Dodaj grę"),
+        tr(L"Plik programu, skrótu, ROM-u lub folder: gra, folder ROM-ów albo katalog z wieloma grami."), tr(L"Dodaj")});
+#ifndef _WIN32
+    settings_rows_.push_back({Id::compat_install_game, Control::action, tr(L"Dodaj grę z instalatora"),
+        tr(L"Instalator Windows (.exe, .msi) w nowym prefiksie; potem wskazujesz plik gry."), tr(L"Wybierz…")});
+#endif
+    if (!custom_games_.empty())
+        settings_rows_.push_back({Id::custom_covers, Control::action, tr(L"Okładki"),
+            tr(L"Wyszukaj i pobierz brakujące okładki gier dodanych ręcznie (SteamGridDB, sklep Steam)."), tr(L"Szukaj")});
+    bool first = true;
     for (const auto& entry : custom_games_) {
         std::wstring description = entry.path.empty() ? std::wstring(tr(L"Bez pliku gry")) : entry.path.filename().wstring();
         if (!entry.platform.empty()) description = entry.platform + L" · " + description;
@@ -407,6 +414,7 @@ void Launcher::customGamesSettingsRows() {
             description = tr(L"Brak pliku") + (L" · " + description);
         Row row{Id::custom_game, Control::action, entry.name, std::move(description), tr(L"Edytuj")};
         row.key = entry.id;
+        if (std::exchange(first, false)) row.section = tr(L"Gry");
         settings_rows_.push_back(std::move(row));
     }
 }

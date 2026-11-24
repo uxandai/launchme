@@ -547,7 +547,7 @@ void Renderer::drawDesktopArtwork() {
             const Rect r{x, cy, x + cell_w, cy + cell_h};
             if (r.bottom + 30 < list_top || r.top > list_bottom) continue;
             const SheetHit hit{Kind::tile, -1, static_cast<int>(i)};
-            const bool selected = state->gallery && state->selected == i, applied = asset.id && asset.id == state->applied_id;
+            const bool selected = state->gallery && state->selected == i, applied = (asset.id || asset.current) && asset.id == state->applied_id;
             desktopFill(r, 8, kind == ArtworkKind::logo ? rgb(0.16f, 0.17f, 0.2f) : rgb(0.11f, 0.12f, 0.14f));
             if (i < artwork_thumbnails_.size() && artwork_thumbnails_[i].bitmap) {
                 ComPtr<ID2D1RoundedRectangleGeometry> clip;
@@ -559,6 +559,7 @@ void Renderer::drawDesktopArtwork() {
             } else {
                 const float pulse = 0.03f + 0.02f * (0.5f + 0.5f * std::sin(elapsed_ * 2.6f - static_cast<float>(i) * 0.3f));
                 desktopFill(r, 8, gray(1, pulse));
+                skeleton_at_ = std::chrono::steady_clock::now(); // Keeps the frames coming (animating()).
             }
             const float hv = hover(hit);
             desktopStroke(r, 8, selected ? uiAccent() : gray(1, 0.08f + 0.14f * hv), selected ? 2.5f : 1.0f);
@@ -569,11 +570,21 @@ void Renderer::drawDesktopArtwork() {
                 desktopGlyph(desktop_ui::glyph::check, r.right - 16, r.top + 16, 10,
                              0.2126f * a.r + 0.7152f * a.g + 0.0722f * a.b > 0.6f ? gray(0.06f) : gray(0.98f));
             }
-            std::wstring caption = asset.author;
+            std::wstring caption = asset.current ? (applied ? std::wstring(tr(L"W użyciu")) : std::wstring{}) : asset.author;
             if (asset.width && asset.height) caption += (caption.empty() ? L"" : L"  ·  ") + std::to_wstring(asset.width) + L"×" + std::to_wstring(asset.height);
             textLine(caption, r.left + 2, r.bottom + 14, r.right - r.left - 4, desktop_small_font_.Get(), selected ? palette::text() : palette::muted());
             if (r.bottom > list_top && r.top < list_bottom && !state->applying) desktopHot(hit, {r.left, r.top, r.right, r.bottom + 24});
         }
+        // The page on its way: the cells it will fill pulse after the art in use (shown at once).
+        if (state->loading)
+            for (size_t i = state->assets.size(); i < state->assets.size() + static_cast<size_t>(columns) * 3; ++i) {
+                const float x = left + static_cast<float>(i % static_cast<size_t>(columns)) * (cell_w + gap);
+                const float cy = list_top + 8 + static_cast<float>(i / static_cast<size_t>(columns)) * step - s;
+                if (cy > list_bottom) break;
+                const float pulse = 0.03f + 0.02f * (0.5f + 0.5f * std::sin(elapsed_ * 2.6f - static_cast<float>(i) * 0.3f));
+                desktopFill({x, cy, x + cell_w, cy + cell_h}, 8, gray(1, pulse));
+                skeleton_at_ = std::chrono::steady_clock::now();
+            }
         const size_t rows = (state->assets.size() + static_cast<size_t>(columns) - 1) / static_cast<size_t>(columns);
         content = 16 + static_cast<float>(rows) * step;
         if (state->assets.empty() && !state->loading)

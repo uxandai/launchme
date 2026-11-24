@@ -131,7 +131,8 @@ enum class Action {
     view_mode,      // The grid's cells (value: 0 posters, 1 squares, 2 landscape, 3 list).
     start_step,     // "Jak zacząć": one of its steps (value: the step).
     start_hide,     // "Jak zacząć": hide the card.
-    forget_recent   // Usuń z ostatnio granych (Launcher::forgetRecent).
+    forget_recent,  // Usuń z ostatnio granych (Launcher::forgetRecent).
+    filter          // Filtry: value -1 Zainstalowane, 0.. a library_view::Filter, filter_clear Wyczyść filtry.
 };
 struct MenuItem {
     Action action = Action::none;
@@ -142,7 +143,7 @@ struct MenuItem {
     int value = 0;
 };
 struct Menu {
-    enum class Kind { game, section, sort, collections, store, companion, tools, view, start } kind = Kind::game;
+    enum class Kind { game, section, sort, collections, store, companion, tools, view, start, filters } kind = Kind::game;
     std::vector<MenuItem> items;
     float x = 0, y = 0;      // Top-left wanted (right edge with align_right).
     bool align_right = false;
@@ -155,6 +156,7 @@ struct Menu {
     std::vector<std::string> games; // Selection keys the game menu acts on.
     std::string entry;       // The sidebar entry of a section menu.
 };
+inline constexpr int filter_clear = 1000; // MenuItem::value of Filtry's Wyczyść filtry.
 inline constexpr float menu_row = 32, menu_separator = 9, menu_padding = 5, menu_width = 256, submenu_width = 248;
 inline float menuHeight(const std::vector<MenuItem>& items) {
     float h = 2 * menu_padding;
@@ -209,7 +211,7 @@ inline int stepItem(const std::vector<MenuItem>& items, int from, int direction)
 
 enum class Target {
     none, caption, minimize, maximize, close, search, search_clear, tool, sidebar_row, sidebar_add, companion_card, start_card,
-    companion_bubble, card, card_play, card_check, popover_clear, popover_action, scrollbar, sort, installed, size_slider, pane_primary, pane_favorite,
+    companion_bubble, card, card_play, card_check, popover_clear, popover_action, scrollbar, sort, filters, size_slider, pane_primary, pane_favorite,
     pane_more, pane_quick, pane_chip, pane_chip_add, pane_rating, pane_studio, bulk, menu_item, submenu_item, popover_row, popover_all,
     empty_primary, empty_secondary, grid, library_add, library_refresh, companion_more,
     sidebar_toggle, pane_resize, pane_close, view_mode, pane_achievements, pane_cloud,
@@ -308,13 +310,14 @@ struct QuickLayout {
 
 inline constexpr int meta_fields = 8; // Tytuł, Opis, Producent, Wydawca, Data premiery, Gatunki, Czas przejścia, Czas gry.
 inline constexpr size_t meta_limits[meta_fields] = {120, 4000, 160, 160, 40, 200, 16, 20}; // Characters each takes.
-// identify: Zidentyfikuj, the game's match in RAWG (and its artwork) over the dialog.
-// find: Znajdź, the stores' and databases' details to take over (src/app/metadata_find.cpp).
+// find: "Znajdź metadane" / "Identyfikuj grę", first in the bottom row, the databases' and stores' list (src/app/metadata_find.cpp).
+// identify and close are no items any more (Identyfikuj grę holds both; Anuluj and B close); kept for their numbers.
 enum class MetaItem { title, description, developer, publisher, release_date, genres, hours, playtime, save, restore, cancel, close, identify, find };
 struct MetaView {
     bool open = false;
     std::wstring game;                           // Its name when the dialog opened.
     std::wstring playtime_note;                  // Beside Czas gry: where the automatic value comes from.
+    std::wstring identity;                       // Under the poster: what the game is identified as ("RAWG · Hades"), or empty.
     std::array<std::wstring, meta_fields> fields;
     std::array<std::wstring, meta_fields> shown; // As they were shown: unchanged ones keep their state.
     int focus = 0;                               // A MetaItem.
@@ -322,52 +325,67 @@ struct MetaView {
     bool selected = false;                       // Ctrl+A: typing replaces the field.
     int hover = -1;
     bool overridden = false;                     // Przywróć automatyczne has something to undo.
-    bool identify = false;                       // Zidentyfikuj is offered (not for Steam's own games).
-    bool pad = false;                            // Tryb TV: the pad's hint under the heading.
-    meta_find::State find;                       // Znajdź: its pane, over the fields while open.
+    bool identify = false;                       // The databases identify it (not Steam's own games: their AppID does).
+    bool pad = false;                            // Tryb TV: its look and measures, the pad's hint under the heading.
+    meta_find::State find;                       // Identyfikuj grę: its pane, in place of the fields while open.
 };
+// The form: the fields on the left, the game's poster on the right with Identyfikuj grę under it (as the
+// launch options' poster column), Przywróć automatyczne bottom left, Anuluj and Zapisz bottom right.
 struct MetaLayout {
     float width = 0, height = 0;
-    static constexpr float label_h = 22, line_h = 38, text_h = 136, gap = 14, button_h = 38;
-    Rect panel() const {
-        const float w = std::min(700.0f, width - 48), h = std::min(660.0f, height - 48);
-        const float left = std::round((width - w) * 0.5f), top = std::round((height - h) * 0.5f);
-        return {left, top, left + w, top + h};
+    bool tv = false;
+    Rect panel() const { return meta_find::dialogPanel(width, height, tv); }
+    meta_find::Metrics m() const { return meta_find::metrics(tv); }
+    float posterWidth() const { return tv ? 210.0f : 170.0f; }
+    float fieldsRight() const { return panel().right - m().pad - posterWidth() - (tv ? 32.0f : 24.0f); }
+    float textHeight() const { return tv ? 150.0f : 136.0f; }
+    Rect close() const { const auto p = panel(); return {p.right - 48, p.top + 10, p.right - 12, p.top + 46}; } // The window's only (desktopDialogSheet).
+    Rect poster() const {
+        const auto p = panel(); const auto k = m(); const float top = p.top + k.head + k.label, right = p.right - k.pad;
+        return {right - posterWidth(), top, right, top + std::round(posterWidth() * 1.5f)};
     }
-    Rect close() const { const auto p = panel(); return {p.right - 46, p.top + 12, p.right - 14, p.top + 44}; }
     Rect field(int index) const {
-        const auto p = panel();
-        const float left = p.left + 24, right = p.right - 24, half = (right - left - 16) * 0.5f;
-        float y = p.top + 76 + label_h;               // Tytuł (under the heading and its hint).
-        if (index == 0) return {left, y, right, y + line_h};
-        y += line_h + gap + label_h;                  // Opis.
-        if (index == 1) return {left, y, right, y + text_h};
-        y += text_h + gap + label_h;                  // Producent | Wydawca.
-        if (index == 2) return {left, y, left + half, y + line_h};
-        if (index == 3) return {right - half, y, right, y + line_h};
-        y += line_h + gap + label_h;                  // Data premiery | Czas przejścia | Gatunki.
-        if (index == 4) return {left, y, left + 170, y + line_h};
-        if (index == 6) return {left + 186, y, left + 316, y + line_h};
-        if (index == 5) return {left + 332, y, right, y + line_h};
-        y += line_h + gap + label_h;                  // Czas gry (its note beside it).
-        return {left, y, left + 170, y + line_h};
+        const auto p = panel(); const auto k = m();
+        const float left = p.left + k.pad, right = fieldsRight(), half = (right - left - 16) * 0.5f;
+        const float date = tv ? 210.0f : 170.0f, hours = tv ? 160.0f : 130.0f;
+        float y = p.top + k.head + k.label;           // Tytuł.
+        if (index == 0) return {left, y, right, y + k.line};
+        y += k.line + k.gap + k.label;                // Opis.
+        if (index == 1) return {left, y, right, y + textHeight()};
+        y += textHeight() + k.gap + k.label;          // Producent | Wydawca.
+        if (index == 2) return {left, y, left + half, y + k.line};
+        if (index == 3) return {right - half, y, right, y + k.line};
+        y += k.line + k.gap + k.label;                // Data premiery | Czas przejścia | Gatunki.
+        if (index == 4) return {left, y, left + date, y + k.line};
+        if (index == 6) return {left + date + 16, y, left + date + 16 + hours, y + k.line};
+        if (index == 5) return {left + date + hours + 32, y, right, y + k.line};
+        y += k.line + k.gap + k.label;                // Czas gry (its note beside it).
+        return {left, y, left + date, y + k.line};
     }
+    // The bottom row: Znajdź metadane / Identyfikuj grę first (white), Przywróć automatyczne beside it; Anuluj and Zapisz at the right.
     Rect button(MetaItem item) const {
-        const auto p = panel();
-        const float y = p.bottom - 24 - button_h;
-        if (item == MetaItem::restore) return {p.left + 24, y, p.left + 24 + 230, y + button_h};
-        if (item == MetaItem::identify) return {p.left + 24 + 230 + 12, y, p.left + 24 + 230 + 12 + 132, y + button_h};
-        if (item == MetaItem::cancel) return {p.right - 24 - 116, y, p.right - 24, y + button_h};
-        return {p.right - 24 - 116 - 12 - 132, y, p.right - 24 - 116 - 12, y + button_h}; // Zapisz.
+        const auto p = panel(); const auto k = m();
+        const float y = p.bottom - k.bottom - k.button_h, find = tv ? 260.0f : 200.0f, restore = tv ? 290.0f : 230.0f;
+        if (item == MetaItem::find) return {p.left + k.pad, y, p.left + k.pad + find, y + k.button_h};
+        if (item == MetaItem::restore) return {p.left + k.pad + find + 10, y, p.left + k.pad + find + 10 + restore, y + k.button_h};
+        if (item == MetaItem::save) return {p.right - k.pad - k.button_w, y, p.right - k.pad, y + k.button_h};
+        if (item == MetaItem::cancel) return {p.right - k.pad - 2 * k.button_w - 10, y, p.right - k.pad - k.button_w - 10, y + k.button_h};
+        return {};
     }
-    Rect findButton() const { const auto c = close(); return {c.left - 12 - 112, c.top, c.left - 12, c.bottom}; } // In the heading.
-    int hit(float x, float y, bool identify = false) const {
-        if (close().contains(x, y)) return static_cast<int>(MetaItem::close);
-        if (findButton().contains(x, y)) return static_cast<int>(MetaItem::find);
+    int hit(float x, float y) const {
+        if (!tv && close().contains(x, y)) return static_cast<int>(MetaItem::close);
+        if (poster().contains(x, y)) return static_cast<int>(MetaItem::find);
         for (int i = 0; i < meta_fields; ++i) if (field(i).contains(x, y)) return i;
-        for (const auto item : {MetaItem::save, MetaItem::restore, MetaItem::cancel}) if (button(item).contains(x, y)) return static_cast<int>(item);
-        if (identify && button(MetaItem::identify).contains(x, y)) return static_cast<int>(MetaItem::identify);
+        for (const auto item : {MetaItem::find, MetaItem::save, MetaItem::restore, MetaItem::cancel}) if (button(item).contains(x, y)) return static_cast<int>(item);
         return -1;
+    }
+    // Tryb TV: where the focus ring stands (it springs between the fields and the buttons: ViewContext::meta_glide).
+    std::optional<Rect> focusRect(int focus) const {
+        if (focus >= 0 && focus < meta_fields) return field(focus);
+        switch (static_cast<MetaItem>(focus)) {
+        case MetaItem::find: case MetaItem::restore: case MetaItem::cancel: case MetaItem::save: return button(static_cast<MetaItem>(focus));
+        default: return std::nullopt;
+        }
     }
 };
 
@@ -396,6 +414,7 @@ struct View {
     bool search_focus = false, caret_on = false;
     std::wstring sort_label;
     bool installed_only = false;
+    int filter_count = 0; // Filtry in force (Zainstalowane included): its button's number.
     float poster = 156;
     float scroll = 0, scrollbar = 0; // Scrollbar visibility 0..1.
     Hit hover, pressed;

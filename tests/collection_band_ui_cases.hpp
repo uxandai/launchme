@@ -1,0 +1,110 @@
+// Included after LauncherUiTest: Siatka's "Kolekcje jako kafle" (src/app/library_collections.cpp). The
+// option from Opcje widoku, the rows under the tiles, the pad between the top bar, the tiles and the
+// games, a tile opening its collection and Back returning to it, the pointer. Covers are fixtures.
+
+int LauncherUiTest::collectionBand(HWND window) {
+    Launcher app;
+    app.settings_.launch_animation = false;
+    app.hwnd_ = window; app.execute_ = fakeExecute;
+    if (!app.renderer_.initialize(window)) return 13000;
+    const auto capture = [&](const wchar_t* name) {
+        wchar_t folder[4096]{};
+        const auto count = GetEnvironmentVariableW(L"LAUNCHME_UI_CAPTURE_DIR", folder, 4096);
+        if (!count || count >= 4096) return true;
+        app.notifications_.clear();
+        return app.renderer_.captureForTest(std::filesystem::path(folder) / name, [&] { app.paint(); Sleep(320); app.paint(); });
+    };
+    const auto settle = [&] { for (int i = 0; i < 40; ++i) { app.last_frame_ -= std::chrono::milliseconds(50); app.tick(); } };
+    const wchar_t* titles[] = {L"Alan Wake", L"Bastion", L"Celeste", L"Dead Cells", L"Elden Ring", L"Factorio", L"Gris", L"Hades",
+                               L"Inside", L"Journey", L"Katana Zero", L"Limbo", L"Minecraft", L"Noita", L"Outer Wilds", L"Portal 2",
+                               L"Quake", L"Rimworld", L"Stardew Valley", L"Tunic"};
+    auto library = std::make_unique<LibraryMessage>();
+    library->account = 1;
+    for (uint32_t i = 0; i < std::size(titles); ++i) {
+        Game game{3000 + i, titles[i]};
+        game.last_played = 100 + i;
+        game.installed = true;
+        library->games.push_back(std::move(game));
+    }
+    app.onLibrary(std::move(library));
+    // Four collections: more than fit beside each other on a narrow screen.
+    app.collections_source_ = {{L"Co-op z Olą", {3000, 3001, 3002, 3003}, "band-coop"}, {L"Roguelike", {3001, 3003, 3007}, "band-rogue"},
+                               {L"Na kanapę", {3004}, "band-sofa"}, {L"Kiedyś", {3010, 3011, 3012, 3013, 3014}, "band-later"}};
+    app.buildShelves();
+    app.openLibrary();
+    for (size_t i = 0; i < app.public_library_.size(); ++i) {
+        auto cover = std::make_unique<CoverMessage>();
+        cover->key = gameKey(app.public_library_[i]); cover->generation = app.jobs_->generation.load();
+        cover->bytes = pngFixture(static_cast<uint8_t>(30 + i * 9), 48, 48);
+        app.onCover(std::move(cover));
+    }
+    if (app.libraryView() != library_view::View::grid) {
+        app.library_controls_.options.view = library_view::View::grid; app.applyLibraryOptions();
+    }
+    if (app.libraryBandShown()) return 13001; // Off until chosen.
+    // Opcje widoku → Kolekcje jako kafle (Siatka's third option).
+    app.openLibraryPanel(library_ui::Panel::views);
+    app.library_controls_.view_row = 3; app.adjustLibraryView(1);
+    app.closeLibraryPanel(); app.library_controls_.focus = -1; app.focusCard(0);
+    if (!app.library_controls_.options.grid_collections || !app.libraryBandShown() || app.libraryBandTiles().size() != 4) return 13002;
+    settle();
+    const auto view = app.renderer_.viewport();
+    const auto options = app.libraryPresentation();
+    const float head = library_layout::gridHead(library_view::View::grid, view.width, options);
+    if (head < 200 || std::abs(app.cards_[0].y - (190 + head)) > 1) return 13003; // The rows start under the tiles.
+    if (!capture(L"collection-band.png")) return 13004;
+    // Up from the first row: the tiles; Right along them; Up to the top bar, Down back to the tiles.
+    app.changeCategory(-1);
+    if (!app.libraryBandFocused() || app.band_focus_ != 0) return 13005;
+    settle();
+    for (size_t i = 0; i < app.cards_.size(); ++i) if (app.cards_[i].emphasis > 0.05f) return 13006; // No card looks focused.
+    app.navigate(1); app.navigate(1); app.navigate(1); app.navigate(1);
+    if (app.band_focus_ != 3) return 13007;
+    settle();
+    if (app.band_slide_ <= 0) return 13008; // The last tile slid into view (four do not fit at this width).
+    if (!capture(L"collection-band-focus.png")) return 13009;
+    if (app.libraryTabsShown()) return 13022; // The tiles lead to the collections: no tabs above them.
+    app.changeCategory(-1);
+    if (app.libraryBandFocused() || app.library_controls_.focus != library_ui::filters_button) return 13010;
+    app.changeCategory(1);
+    if (!app.libraryBandFocused() || app.band_focus_ != 3) return 13011;
+    // A tile opens its collection; Back returns to it.
+    app.navigate(-1); app.navigate(-1);
+    if (app.band_focus_ != 1) return 13012;
+    app.accept();
+    if (app.library_category_ != "band-rogue") return 13013;
+    if (app.cards_.size() != 3) return 13020;
+    if (app.libraryBandShown() || !app.libraryTabsShown()) return 13021;
+    app.back();
+    if (app.screen_ != ScreenMode::library || !app.library_category_.empty() || !app.libraryBandFocused() || app.band_focus_ != 1) return 13014;
+    // Down: the games again.
+    app.changeCategory(1);
+    if (app.libraryBandFocused() || app.selected_ >= static_cast<size_t>(app.libraryColumns())) return 13015;
+    // The pointer: a tile under it lights up and a click opens it.
+    settle();
+    const auto tile = collection_band::tile(0, view.width, app.grid_scroll_, app.band_slide_, options);
+    const float x = (tile.left + tile.right) * 0.5f, y = (tile.top + tile.bottom) * 0.5f;
+    if (app.libraryBandHit(x, y) != 0) return 13016;
+    app.click(x * view.scale, y * view.scale, false);
+    if (app.library_category_ != "band-coop") return 13017;
+    app.back();
+    if (!app.library_category_.empty()) return 13018;
+    // Plakaty: the tiles' covers take the grid's shape; Kształt kafelków (square) their corners.
+    app.library_controls_.options.grid_posters = true; app.applyLibraryOptions();
+    app.renderer_.setTileShape(AppSettings::TileShape::square); app.focusCard(0); app.changeCategory(-1); settle();
+    {
+        const auto posters = app.libraryPresentation();
+        if (!app.libraryBandFocused() || collection_band::coverHeight(view.width, posters) < collection_band::coverWidth(view.width, posters) * 1.4f) return 13023;
+        ViewContext context; app.focusContext(context);
+        if (!context.band_glide) return 13024; // The ring springs.
+    }
+    if (!capture(L"collection-band-posters.png")) return 13025;
+    app.library_controls_.options.grid_posters = false; app.applyLibraryOptions();
+    app.renderer_.setTileShape(AppSettings::TileShape::squircle); app.focusCard(0); settle();
+    // Off again: the rows return to the top.
+    app.openLibraryPanel(library_ui::Panel::views);
+    app.library_controls_.view_row = 3; app.adjustLibraryView(-1);
+    app.closeLibraryPanel(); app.library_controls_.focus = -1; app.focusCard(0); settle();
+    if (app.libraryBandShown() || std::abs(app.cards_[0].y - 190) > 1) return 13019;
+    return 0;
+}

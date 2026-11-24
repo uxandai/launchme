@@ -18,7 +18,9 @@ struct CropFocus {
     float x = 0.5f;
     float y = 0.5f;
 };
-inline constexpr int crop_cache_version = 5;
+// 6: art without readable lettering keeps its most detailed square (chooseDetailCrop), not the
+// middle; a centred crop of version 5 on such art is upgraded without OCR.
+inline constexpr int crop_cache_version = 6;
 std::pair<int, int> cropImageSize(const std::filesystem::path& image);
 std::optional<CropFocus> manualTextCrop(const std::filesystem::path& image);
 bool saveManualTextCrop(const std::filesystem::path& image, CropFocus focus);
@@ -39,6 +41,12 @@ bool storeAutomaticTextCrop(const std::filesystem::path& image, const std::files
 // Matched title words take priority over publisher/footer text. Centers the
 // title's bounds with breathing room; without reliable words, centers the image.
 CropFocus chooseTextAwareCrop(int width, int height, const std::vector<TextBox>& words);
+
+// Without readable lettering: the square that keeps the most detail (the logo, the figures), not an
+// empty sky or floor. `bgra`: width * height packed BGRA pixels (best at ~96 px on the shorter side).
+CropFocus chooseDetailCrop(uint32_t width, uint32_t height, std::span<const uint8_t> bgra);
+// chooseDetailCrop of an image file (decoded small); centred when unreadable or square.
+CropFocus detailCrop(const std::filesystem::path& image);
 
 // Title matching can rescue stylized lettering at lower OCR confidence without
 // treating arbitrary low-confidence scenery as text.

@@ -253,7 +253,7 @@ void Launcher::customEditorIdentify() {
         return;
     }
     if (game.source_id.empty()) { ui.error = tr(L"Nie udało się utworzyć identyfikatora gry."); InvalidateRect(hwnd_, nullptr, FALSE); return; }
-    openIdentifyFor(game); // Over the panel; the panel waits beneath it.
+    openIdentifyFor(game); // Edytuj metadane over the panel; the panel waits beneath it.
 }
 
 void Launcher::customEditorIdentified(const std::string& key) {
@@ -333,6 +333,11 @@ std::wstring Launcher::launchArguments(const Game& game) const {
 
 void Launcher::closeCustomEditor() {
     const auto& ui = custom_editor_;
+    if (ui.open) { // Drawn while it fades away (editor_motion_).
+        editor_closing_ = ui;
+        editor_closing_.dropdown.open = false;
+        editor_closing_poster_ = custom_poster_;
+    }
     if (ui.identified_new && !ui.pending_id.empty()) {
         // A new game identified, then not saved: what the identification stored under its key goes.
         auto game = customEditorGame();

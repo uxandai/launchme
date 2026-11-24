@@ -219,11 +219,11 @@ int LauncherUiTest::aureliaIntegration(HWND window) {
         fake->qr_approve = false;
     }
     app.aurelia_active_ = app.aurelia_authenticated_ = true; app.aurelia_account_ = app.account_;
-    { // Aurelia's row lives in Details' "…".
+    { // Not in Details' "…" any more: Opcje uruchamiania holds the choice.
         app.openDetails(game);
-        const bool offered = app.screen_ == ScreenMode::details && app.menuRows().aurelia;
+        const bool offered = app.screen_ != ScreenMode::details || app.menuRows().aurelia;
         app.back();
-        if (!offered) return 10305;
+        if (offered) return 10305;
     }
     // A Steam game the client manages: the dialog offers only the choice; nothing goes through Aurelia.
     app.openAurelia(&game); if (!wait([&] { return !app.aurelia_ui_.busy; })) return 10306;

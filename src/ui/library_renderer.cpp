@@ -83,14 +83,18 @@ void Renderer::drawLibraryControls() {
         line(fx - 9, cy - 6, fx + 9, cy - 6, filter_ink, 2.0f);
         line(fx - 5.5f, cy, fx + 5.5f, cy, filter_ink, 2.0f);
         line(fx - 2, cy + 6, fx + 2, cy + 6, filter_ink, 2.0f);
-        // The order by name; "Tylko zainstalowane" as an accent dot on the funnel (its name beside the
-        // order no longer fit and was cut: "Ostatnio grane · Zainsta…").
-        if (state.options.installed_only) {
-            brush(bar_focus && state.focus == library_ui::filters_button ? filter_ink : uiAccent(alpha));
-            target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(fx + 10, cy - 9), 4.5f, 4.5f), solid_.Get());
-        }
-        text(library_view::label(state.options.order), fx + 14, r.top, r.right - inset - 24 - (fx + 14), r.bottom - r.top, action_font_.Get(), filter_ink);
+        // The order by name, and the number of filters in force on an accent badge before the chevron.
         const float chevron = r.right - inset - 6;
+        float text_right = r.right - inset - 24;
+        if (const int count = library_view::activeFilters(state.options)) {
+            const float bx = chevron - 22;
+            const bool focused = bar_focus && state.focus == library_ui::filters_button;
+            brush(focused ? filter_ink : uiAccent(alpha));
+            target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(bx, cy), 11, 11), solid_.Get());
+            textLine(std::to_wstring(count), bx - 11, cy, 22, friend_status_font_.Get(), focused ? gray(0.96f, alpha) : gray(0.05f, alpha), DWRITE_TEXT_ALIGNMENT_CENTER);
+            text_right = bx - 16;
+        }
+        text(library_view::label(state.options.order), fx + 14, r.top, text_right - (fx + 14), r.bottom - r.top, action_font_.Get(), filter_ink);
         line(chevron - 6, cy - 3, chevron, cy + 3, filter_ink, 1.5f);
         line(chevron, cy + 3, chevron + 6, cy - 3, filter_ink, 1.5f);
     }
@@ -98,7 +102,8 @@ void Renderer::drawLibraryControls() {
     drawViewDrawer();
 }
 
-// Sort orders and the installed filter, in the game context menu's style.
+// Sortuj and Filtry side by side, in the game context menu's style: the orders with a check on the
+// one in force, the filters as check boxes, Wyczyść filtry under them (dim with none checked).
 void Renderer::drawFilterMenu() {
     const float alpha = smoothFade(context_->library_menu_progress);
     if (alpha < 0.005f || context_->library_panel != library_ui::Panel::filters || !context_->library_controls) return;
@@ -112,24 +117,54 @@ void Renderer::drawFilterMenu() {
         brush(gray(0.9f, 0.63f * alpha));
         target_->DrawRoundedRectangle(D2D1::RoundedRect(panel, 23, 23), solid_.Get(), 1.4f);
     }
+    for (int column = 0; column < 2; ++column) {
+        const auto h = box(layout.heading(column), dy);
+        textLine(upper(tr(column ? L"Filtry" : L"Sortuj")), h.left + 20, (h.top + h.bottom) * 0.5f + 2, h.right - h.left - 40,
+                 friend_section_font_.Get(), palette::muted(alpha));
+    }
+    { // A hairline between the columns.
+        const auto first = box(layout.choice(library_ui::installed_row), dy);
+        const float x = first.left - library_ui::Layout::column_gap * 0.5f;
+        line(x, panel.top + 18, x, panel.bottom - 18, gray(1, 0.08f * alpha), 1);
+    }
+    const bool any = library_view::activeFilters(state.options) > 0;
     for (int i = 0; i < library_ui::filter_rows; ++i) {
         const auto r = box(layout.choice(i), dy);
         if (state.open() && state.choice == i) {
             brush(gray(0.86f, 0.14f * alpha));
             target_->FillRoundedRectangle(pill(r), solid_.Get());
         }
-        const bool order = i < library_view::order_count;
-        const bool active = order ? static_cast<int>(state.options.order) == i : state.options.installed_only;
-        const std::wstring label = order ? library_view::label(static_cast<library_view::Order>(i)) : tr(L"Tylko zainstalowane");
-        textLine(label, r.left + 20, (r.top + r.bottom) * 0.5f, r.right - r.left - 70, menu_font_.Get(), gray(0.96f, alpha));
         const float cx = r.right - 30, cy = (r.top + r.bottom) * 0.5f;
-        if (active) {
+        if (i == library_ui::clear_row) {
+            const auto ink = gray(any ? 0.96f : 0.5f, alpha);
+            textLine(tr(L"Wyczyść filtry"), r.left + 20, cy, r.right - r.left - 70, menu_font_.Get(), ink);
+            line(cx - 6, cy - 6, cx + 6, cy + 6, ink, 1.8f);
+            line(cx - 6, cy + 6, cx + 6, cy - 6, ink, 1.8f);
+            continue;
+        }
+        const bool order = i < library_view::order_count;
+        const auto filter = static_cast<library_view::Filter>(i - library_ui::first_filter_row);
+        const bool active = order ? static_cast<int>(state.options.order) == i :
+                            i == library_ui::installed_row ? state.options.installed_only : (state.options.filters & library_view::filterBit(filter)) != 0;
+        const std::wstring label = order ? library_view::label(static_cast<library_view::Order>(i)) :
+                                   i == library_ui::installed_row ? tr(L"Tylko zainstalowane") : library_view::label(filter);
+        textLine(label, r.left + 20, cy, r.right - r.left - 70, menu_font_.Get(), gray(0.96f, alpha));
+        if (order) {
+            if (!active) continue;
             const auto ink = uiAccent(alpha);
             line(cx - 7, cy, cx - 2, cy + 5, ink, 2.4f);
             line(cx - 2, cy + 5, cx + 8, cy - 6, ink, 2.4f);
-        } else if (!order) {
-            brush(gray(1, 0.35f * alpha));
-            target_->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy), 8, 8), solid_.Get(), 1.4f);
+            continue;
+        }
+        // A check box: an accent square with a dark check, or an empty outline.
+        const auto square = D2D1::RoundedRect(D2D1::RectF(cx - 10, cy - 10, cx + 10, cy + 10), 5, 5);
+        if (active) {
+            brush(uiAccent(alpha)); target_->FillRoundedRectangle(square, solid_.Get());
+            const auto ink = gray(0.05f, alpha);
+            line(cx - 5, cy, cx - 1.5f, cy + 4, ink, 2.2f);
+            line(cx - 1.5f, cy + 4, cx + 5.5f, cy - 4.5f, ink, 2.2f);
+        } else {
+            brush(gray(1, 0.4f * alpha)); target_->DrawRoundedRectangle(square, solid_.Get(), 1.5f);
         }
     }
 }
@@ -189,8 +224,14 @@ void Renderer::drawViewDrawer() {
             bool toggle = false, checked = false;
             switch (state.options.view) {
             case View::grid:
-                label = tr(L"Okładki");
-                value = state.options.grid_landscape ? tr(L"Poziome kafle") : state.options.grid_posters ? tr(L"Pionowe plakaty") : tr(L"Kwadratowe");
+                if (i == 0) {
+                    label = tr(L"Okładki");
+                    value = state.options.grid_landscape ? tr(L"Poziome kafle") : state.options.grid_posters ? tr(L"Pionowe plakaty") : tr(L"Kwadratowe");
+                } else if (i == 1) {
+                    label = tr(L"Liczba kolumn");
+                    const int choice = library_view::gridColumnsChoice(state.options);
+                    value = choice ? std::to_wstring(library_view::gridColumnsMin(state.options) + choice - 1) : std::wstring(tr(L"Automatycznie"));
+                } else { label = tr(L"Kolekcje jako kafle"); toggle = true; checked = state.options.grid_collections; }
                 break;
             case View::list:
                 label = i == 0 ? tr(L"Rok") : i == 1 ? tr(L"Czas gry") : tr(L"Ocena"); toggle = true;
@@ -217,7 +258,13 @@ void Renderer::drawViewDrawer() {
                 }
                 break;
             case View::list_plus: label = tr(L"Efekt steelbooka"); toggle = true; checked = state.options.list_plus_steelbook; break;
-            case View::stage: label = tr(L"Krótki opis"); toggle = true; checked = state.options.stage_summary; break;
+            case View::stage:
+                if (i == 0) { label = tr(L"Krótki opis"); toggle = true; checked = state.options.stage_summary; }
+                else {
+                    label = tr(L"Przyciemnij tło");
+                    value = context_->stage_dim ? std::to_wstring(context_->stage_dim) + L"%" : std::wstring(tr(L"Wyłączone"));
+                }
+                break;
             default: break;
             }
             if (toggle) {
@@ -841,6 +888,10 @@ void Renderer::drawLibraryStageShade() {
             target_->FillRectangle(D2D1::RectF(0, 0, width, height), shade.Get());
     };
     const auto dark = [](float a) { return D2D1::ColorF(0.008f, 0.01f, 0.014f, a); };
+    if (context_ && context_->stage_dim > 0) { // Przyciemnij tło: the whole picture, under the shades below.
+        brush(dark(std::clamp(context_->stage_dim / 100.0f, 0.0f, 0.8f)));
+        target_->FillRectangle(D2D1::RectF(0, 0, width, height), solid_.Get());
+    }
     const float list_end = std::clamp((stage_layout::listRight(width) + 40) / width, 0.05f, 0.9f);
     const float picture = std::clamp((layout.left() + (layout.right() - layout.left()) * 0.55f) / width, list_end + 0.05f, 0.98f);
     fill({0, 0}, {width, 0}, {{0, dark(0.9f)}, {list_end, dark(0.78f)}, {picture, dark(0.28f)}, {1, dark(0.05f)}});
@@ -864,9 +915,9 @@ void Renderer::drawLibraryStage() {
     if (info && !info->release_date.empty()) facts += (facts.empty() ? L"" : L"   ·   ") + gameReleaseYear(info->release_date);
     if (info && !info->genres.empty()) facts += (facts.empty() ? L"" : L"   ·   ") + info->genres;
     textLine(facts, left, layout.factsCenter(), width, settings_body_font_.Get(), gray(0.86f, fade));
-    if (layout.summary && info && !info->description.empty()) {
+    if (layout.summary && !context_->library_summary.empty()) {
         const float summary_width = layout.summaryWidth();
-        const auto summary = shortSummary(info->description, summary_width, psfive_summary_font_.Get(), 2);
+        const auto summary = shortSummary(context_->library_summary, summary_width, psfive_summary_font_.Get(), 2);
         const float top = layout.summaryTop() + (1.0f - fade) * 6.0f;
         paragraph(summary, left + 1, top + 1.5f, summary_width, psfive_summary_font_.Get(), D2D1::ColorF(0, 0, 0, 0.5f * fade), 2);
         paragraph(summary, left, top, summary_width, psfive_summary_font_.Get(), gray(0.96f, fade), 2);

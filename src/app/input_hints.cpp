@@ -70,6 +70,7 @@ void Launcher::inputHints(ViewContext& context) const {
     const auto play = [&] {
         if (searchBackFocused() || (libraryControls() && library_controls_.focus == library_ui::back_button)) { add(HintButton::accept, tr(L"Wstecz")); return; }
         if (recentSearchFocused()) { add(HintButton::accept, tr(L"Szukaj")); if (pad) add(HintButton::search, tr(L"Usuń")); return; }
+        if (libraryBandFocused()) { add(HintButton::accept, tr(L"Otwórz")); return; } // Siatka's collection tiles.
         if (!game) return;
         if (!isGame(*game)) { add(HintButton::accept, tr(L"Otwórz")); return; }
         // A focused button beside the games says what it does (Przegląd: "Szczegóły", the primary action).

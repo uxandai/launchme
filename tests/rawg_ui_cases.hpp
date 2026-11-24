@@ -1,5 +1,6 @@
 int LauncherUiTest::rawgFlow(HWND window) {
     Launcher app; app.hwnd_ = window; app.execute_ = fakeExecute; dispatched.clear();
+    app.identify_dialog_for_test_ = true; // The older Identyfikuj grę dialog (Edytuj metadane's list: metadata_find_ui_cases.hpp).
     app.boundary_feedback_ = [] {};
     if (!app.renderer_.initialize(window)) return 1500;
     Game game; game.name = L"My local game"; game.kind = GameKind::store; game.source = GameSource::custom; game.source_id = "rawg-fixture";

@@ -28,7 +28,7 @@ int main() {
         std::error_code error; std::filesystem::remove(file, error);
     }
     if (AppSettings{}.ui_sound || AppSettings{}.toast_sound || AppSettings{}.boot_sound ||
-        parseAppSettings("ui_sound=1\n").ui_sound || parseAppSettings("toast_sound=-1\n").toast_sound ||
+        parseAppSettings("ui_sound=2\n").ui_sound || parseAppSettings("toast_sound=-1\n").toast_sound ||
         parseAppSettings("boot_sound=2\n").boot_sound || parseAppSettings("boot_sound=1junk\n").boot_sound ||
         parseAppSettings(" boot_sound = 1 \r\n").boot_sound) return 29; // One built-in start sound ("Brak") is left.
     const auto style = parseDrawerStyle("# appearance\n drawer_opacity = 0.74\r\n"
@@ -547,7 +547,8 @@ int main() {
             if (key == "desktop_view" || key == "hud_layout" || key == "cpu_temp_source" || key == "fps_limit_mode" ||
                 key == "desktop_sort" || key == "desktop_theme" || key == "video_volume" || key == "crt_mask" || key == "music_theme" ||
                 key == "studio_min_games" || key == "video_delay" || key == "start_done" || key == "desktop_pane" ||
-                key == "screensaver_minutes" || key == "ui_sound" || key == "toast_sound" || key == "boot_sound" || key == "fps_limit") continue; // Numbers, not switches.
+                key == "screensaver_minutes" || key == "ui_sound" || key == "toast_sound" || key == "boot_sound" || key == "fps_limit" ||
+                key == "stage_dim") continue; // Numbers, not switches.
             const std::string flipped = key + '=' + (line.back() == '1' ? '0' : '1');
             const auto again = text(parseAppSettings(saved + flipped + '\n'));
             if (again.find('\n' + flipped + '\n') == std::string::npos && !again.starts_with(flipped + '\n')) {

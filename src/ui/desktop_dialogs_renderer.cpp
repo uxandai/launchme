@@ -31,15 +31,18 @@ bool Renderer::desktopDialogs() const {
 }
 
 // The dim, the panel centred in the window, its title and close button (and Back on inner pages).
-Rect Renderer::desktopDialogFrame(const Viewport& view, float width, float height, const std::wstring& title, bool back) {
+Rect Renderer::desktopDialogFrame(const Viewport& view, float width, float height, const std::wstring& title, bool back,
+                                  std::optional<DialogMotion>* motion) {
     desktop_modal_hotspots_.clear(); // Only the topmost dialog answers the pointer.
     // Dimmed as Windows dialogs are: the window behind stays recognisable but no longer competes.
-    brush(rgb(0.01f, 0.012f, 0.016f, 0.36f));
+    const float dim = motion ? std::clamp(dialog_motion_, 0.0f, 1.0f) : 1.0f; // With a motion the dim fades with it.
+    brush(rgb(0.01f, 0.012f, 0.016f, 0.36f * dim));
     target_->FillRectangle(D2D1::RectF(0, 0, view.width, view.height), solid_.Get());
     width = std::min(width, view.width - 48);
     height = std::min(height, view.height - 48);
     const float left = std::round((view.width - width) * 0.5f), top = std::round((view.height - height) * 0.5f);
     const Rect p{left, top, left + width, top + height};
+    if (motion) motion->emplace(*this, p); // Its entrance and exit, from the sheet on (the dim fades above).
     desktopShadow(p, 14, 1.4f);
     desktopFill(p, 14, dialog_bg);
     desktopStroke(p, 14, gray(1, 0.1f));
@@ -269,8 +272,9 @@ void Renderer::drawDesktopCustomEditor() {
     // A Windows game on Linux: its Wine/Proton options are long; scripts too (the sheet keeps its width across the tabs).
     float width = (ui.compat ? 760.0f : 620.0f) + (ui.posterShown() ? poster_column : 0.0f);
     if (ui.tabs()) width = std::max(width, 820.0f);
+    std::optional<DialogMotion> motion;
     const auto p = desktopDialogFrame(view, width, height,
-                                      ui.launchOptions() || ui.editing() ? tr(L"Opcje uruchamiania") : tr(L"Dodaj grę"), false);
+                                      ui.launchOptions() || ui.editing() ? tr(L"Opcje uruchamiania") : tr(L"Dodaj grę"), false, &motion);
     const float fields_right = p.right - 22 - (poster ? poster_column : 0.0f);
     const std::array<const wchar_t*, custom_game_ui::field_count> labels{trKey(L"Nazwa"), trKey(L"Plik"), trKey(L"Opcje uruchamiania"), trKey(L"Folder roboczy"),
                                                                          L"WINEDLLOVERRIDES", trKey(L"Opcje Protona i Wine (jak w Steamie)"), trKey(L"Platforma"),
@@ -489,6 +493,7 @@ void Renderer::drawDesktopCustomEditor() {
         }
     }
     desktop_modal_ = DialogKind::custom_editor;
+    motion.reset(); // Its layer closes under the window's own transform.
     target_->SetTransform(saved);
 }
 

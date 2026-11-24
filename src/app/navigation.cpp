@@ -168,7 +168,7 @@ void Launcher::openCategoryLibrary(const std::string& id) {
     if (!category || (!board && std::none_of(category->games.begin(), category->games.end(), [](const Game& game) { return isGame(game); })) ||
         category->games.empty()) return;
     rememberPlace(); library_controls_ = {};
-    pc_source_.reset(); library_console_.clear(); studio_board_return_.clear();
+    pc_source_.reset(); library_console_.clear(); studio_board_return_.clear(); band_return_.clear();
     library_category_ = id;
     category_library_title_ = category->title;
     category_library_.clear();
@@ -223,6 +223,7 @@ void Launcher::openSearch() {
 }
 
 void Launcher::back(bool escape) {
+    audio_.back(); // UI SFX's back cue (once for Back repeated to leave several levels).
     const auto dialog = topDialog();
     if (dialog == Modal::none && !friends_open_ && !quick_open_ && !menu_open_ && !achievementsOpen() && detailsMediaBack()) return; // The viewer, a strip.
     if (desktopActive() && dialog == Modal::none && !friends_open_ && !quick_open_ && !menu_open_) { desktopBack(); return; }
@@ -353,6 +354,7 @@ void Launcher::back(bool escape) {
         for (size_t i = 0; i < cards_.size(); ++i) if (cards_[i].game.platform == studio) { focusCard(i); break; }
         return;
     }
+    if (libraryBandReturn()) return; // A collection opened from Siatka's tiles: back to its tile.
     if (screen_ != ScreenMode::shelves) { showCategory(category_); return; }
     if (xmbActive() && xmb_row_ >= 0) { xmbFocus(xmb_column_, -1); audio_.navigate(); return; }
     if (flixActive() && flix_row_ > 0) { flixFocus(0, categories_.empty() ? 0 : categories_[0].selected); audio_.navigate(); return; }

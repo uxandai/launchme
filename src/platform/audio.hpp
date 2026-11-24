@@ -15,7 +15,9 @@
 // The platform half (audio_output.hpp): XAudio2 on Windows, SDL3 audio streams elsewhere.
 namespace audio_output { class Engine; class Voice; }
 
-enum class SoundCue { navigation, toast, boot, music, achievement };
+// open, back, start: UI SFX's cues beside its focus one (navigation), played whole; empty with the
+// synthesized sound.
+enum class SoundCue { navigation, toast, boot, music, achievement, open, back, start };
 
 inline int soundCueSlot(SoundCue cue) {
     switch (cue) {
@@ -40,10 +42,12 @@ public:
     // The desktop window: no menu music and no navigation cues (toasts and the launch keep theirs).
     void setDesktop(bool desktop);
     void launch();
-    // Opening a context menu, drawer or quick menu; all share the navigation cue.
+    // Opening a context menu, drawer or quick menu: the pack's open cue, else the navigation one.
     void context();
     void drawer();
     void quick();
+    // Back (Esc, B): the pack's back cue, at most one per 90 ms (Back repeated to leave several levels).
+    void back();
     void setCue(SoundCue cue, AudioClip clip);
     void setMusic(AudioClip clip);
     void clearMusic();
@@ -86,6 +90,9 @@ private:
     std::vector<std::unique_ptr<Playing>> playing_;
     AudioClip navigation_clip_;
     AudioClip toast_clip_;
+    AudioClip open_clip_, back_clip_, start_clip_; // UI SFX (Minimal).
+    float navigation_volume_ = 0.28f, toast_volume_ = 0.28f; // A whole short file plays louder than a shaped excerpt.
+    uint64_t last_back_ = 0;
     AudioClip boot_clip_;
     AudioClip achievement_clip_;
     AudioClip music_clip_;

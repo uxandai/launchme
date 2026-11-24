@@ -9,6 +9,7 @@ INT_PTR drmExecute(HWND, const GameAction& action) { drm_launches.push_back(acti
 int LauncherUiTest::drmFree(HWND window) {
     using namespace settings_ui;
     Launcher app; app.hwnd_ = window; app.execute_ = drmExecute; drm_launches.clear();
+    app.identify_dialog_for_test_ = true; // The older Identyfikuj grę dialog (Edytuj metadane's list: metadata_find_ui_cases.hpp).
     app.boundary_feedback_ = [] {};
     if (!app.renderer_.initialize(window)) return 2100;
     const auto root = userConfigDirectory() / L"drm-fixture" / L"Gry";

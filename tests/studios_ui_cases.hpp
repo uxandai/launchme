@@ -273,8 +273,8 @@ int LauncherUiTest::studioLibraries(HWND window) {
     app.keyboardDone();
     if (app.keyboard_.open || !app.metadataOpen()) return 9845;
     for (int i = 0; i < 4; ++i) app.metadataKey(VK_DOWN, false); // Down to the buttons.
-    if (app.desktop_meta_.focus != static_cast<int>(desktop_ui::MetaItem::restore)) return 9846;
-    app.metadataKey(VK_RIGHT, false);
+    if (app.desktop_meta_.focus != static_cast<int>(desktop_ui::MetaItem::find)) return 9846; // The row's first: Znajdź metadane.
+    for (int i = 0; i < 3; ++i) app.metadataKey(VK_RIGHT, false); // Przywróć automatyczne, Anuluj, Zapisz.
     if (app.desktop_meta_.focus != static_cast<int>(desktop_ui::MetaItem::save)) return 9847;
     app.metadataKey(VK_RETURN, false);
     const auto* own = app.metadataOverride(mist);

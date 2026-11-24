@@ -94,7 +94,7 @@ void Launcher::accept() {
         screen_ != ScreenMode::plugin_page && !identifyOpen() && !gogInstallOpen() && !customEditorOpen() && !cropOpen() &&
         !devicesOpen() && !artworkOpen() && !achievementsOpen() && !(categoryRailActive() && category_rail_focus_) &&
         (screen_ == ScreenMode::shelves || screen_ == ScreenMode::platform_games || screen_ == ScreenMode::library || screen_ == ScreenMode::search) &&
-        !(libraryControls() && (library_controls_.focus >= 0 || library_controls_.open() || library_controls_.action >= 0)) &&
+        !(libraryControls() && (library_controls_.focus >= 0 || library_controls_.open() || library_controls_.action >= 0)) && !libraryBandFocused() &&
         selected_ < cards_.size() && isGame(cards_[selected_].game) && cards_[selected_].game.kind != GameKind::catalog;
     // Półka and Cover Flow: the case is held up first (Graj, Otwórz and Szczegóły are beside it).
     if (gameCaseLibrary() && !launchAnimationActive() && !pending_launch_ && !friends_open_ && !category_menu_open_ && !quick_open_ && !menu_open_ &&

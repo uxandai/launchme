@@ -25,12 +25,23 @@ bool Launcher::unidentifiedGame(const Game& game) const {
 }
 void Launcher::openIdentifyFor(const Game& game) {
     if (!isGame(game) || steamArtwork(game) || gameKey(game).empty()) return;
+    closeFriends(); dismissMenu();
+    // Identyfikuj grę of Edytuj metadane: the databases' and stores' list, its best match first.
+    bool older = false;
+#ifdef LAUNCHME_UI_TEST
+    older = identify_dialog_for_test_;
+#endif
+    if (!older) {
+        metaIdentifyOpen(game);
+        if (desktop_meta_.open) return;
+    }
+    // Where that dialog cannot open (the desktop window's other pages): this dialog, as it always was.
     identify_state_ = {}; identify_state_.open = true; identify_state_.game = game; identify_state_.query = game.name;
     identify_state_.query_focus = false; // The lookup view has no field yet.
     identify_state_.opened_ms = GetTickCount64();
     identify_state_.emulated = game.kind == GameKind::nonsteam && game.platform != L"PC";
     // One click: every provider is asked in turn and the best match is taken; "Dopasuj ręcznie" is the way out.
-    closeFriends(); dismissMenu(); identifySearch();
+    identifySearch();
 }
 // "Dopasuj ręcznie": the title field, the provider choice and the list of matches.
 void Launcher::pollIdentifyAccept() {
@@ -204,16 +215,23 @@ void Launcher::identifyAccept() {
         identifyApplyText(*state.offers[static_cast<size_t>(state.selected)]); // A store's description: nothing to download (copied: the call closes the dialog).
         return;
     }
-    const auto candidate = state.games[state.selected]; const auto game = state.game;
+    const auto game = state.game;
+    const auto row = static_cast<size_t>(state.selected);
     state.busy = state.applying = true; state.status = tr(L"Pobieranie metadanych i brakujących grafik…");
+    if (state.resolved == identify_ui::State::Source::screenscraper && row >= state.found_offset && row - state.found_offset < state.found.size())
+        startIdentification(game, 0, state.found[row - state.found_offset]);
+    else startIdentification(game, state.games[row].id, std::nullopt);
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+// Saves `game`'s identification: a ScreenScraper game (`picked`), else RAWG's game `rawg_id` with its details and
+// artwork. Answered through onIdentify under identify_token_'s next generation (an older answer is dropped).
+void Launcher::startIdentification(const Game& game, uint32_t rawg_id, std::optional<screenscraper::GameInfo> picked) {
     const auto token = identify_token_; const auto generation = ++*token;
     const auto alive = alive_; const auto hwnd = hwnd_;
-    const auto row = static_cast<size_t>(state.selected);
-    if (state.resolved == identify_ui::State::Source::screenscraper && row >= state.found_offset && row - state.found_offset < state.found.size()) {
+    if (picked) {
         // ScreenScraper: the chosen game becomes this ROM's identification (it wins over ES-DE's match),
         // replacing a RAWG one; automatic artwork found by the old title goes.
-        const auto picked = state.found[row - state.found_offset];
-        if (runtime_started_) work_.start([token, generation, alive, hwnd, game, picked] {
+        if (runtime_started_) work_.start([token, generation, alive, hwnd, game, picked = *picked] {
             namespace ss = screenscraper;
             auto message = std::make_unique<IdentifyMessage>(); message->generation = generation; message->identified = true;
             const auto root = userConfigDirectory();
@@ -230,21 +248,20 @@ void Launcher::identifyAccept() {
             }
             if (alive->load() && token->load() == generation && PostMessageW(hwnd, identify_message, 0, reinterpret_cast<LPARAM>(message.get()))) message.release();
         });
-        InvalidateRect(hwnd_, nullptr, FALSE);
         return;
     }
-    if (runtime_started_) work_.start([token, generation, alive, hwnd, game, candidate] {
+    if (runtime_started_) work_.start([token, generation, alive, hwnd, game, rawg_id] {
         HttpBudget budget(25000);
         const auto active = [&] { return alive->load() && token->load() == generation; };
         auto message = std::make_unique<IdentifyMessage>(); message->generation = generation; message->identified = true;
         const auto key = userSecret(L"RAWG_API_KEY", L"rawg_api_key.txt");
-        auto details = rawg::fetch(candidate.id, key);
+        auto details = rawg::fetch(rawg_id, key);
         message->error = details.error;
         if (details.data && active()) {
             const auto root = userConfigDirectory();
             const auto previous = rawg::load(game, root / L"metadata");
-            if (previous && previous->id == candidate.id && previous->steam_app_id) details.data->steam_app_id = previous->steam_app_id;
-            else details.data->steam_app_id = rawg::stores(candidate.id, key).steam_app_id;
+            if (previous && previous->id == rawg_id && previous->steam_app_id) details.data->steam_app_id = previous->steam_app_id;
+            else details.data->steam_app_id = rawg::stores(rawg_id, key).steam_app_id;
             if (!active()) return;
             if (!rawg::save(game, details, root / L"metadata")) message->error = tr(L"Nie można zapisać metadanych RAWG.");
             else {
@@ -261,11 +278,13 @@ void Launcher::identifyAccept() {
         }
         if (alive->load() && token->load() == generation && PostMessageW(hwnd, identify_message, 0, reinterpret_cast<LPARAM>(message.get()))) message.release();
     });
-    InvalidateRect(hwnd_, nullptr, FALSE);
 }
 void Launcher::onIdentify(std::unique_ptr<IdentifyMessage> message) {
+    if (message->generation != identify_token_->load()) return;
+    // Identyfikuj grę of Edytuj metadane waits for this identification.
+    if (message->identified && desktop_meta_.open && desktop_meta_.find.applying) { metaFindIdentified(*message); return; }
     auto& state = identify_state_;
-    if (!state.open || message->generation != identify_token_->load()) return;
+    if (!state.open) return;
     state.busy = state.applying = false;
     if (!message->identified) {
         state.status = std::move(message->search.error); state.selected = 0;
@@ -298,14 +317,23 @@ void Launcher::onIdentify(std::unique_ptr<IdentifyMessage> message) {
         if (state.status.empty() && state.games.empty()) state.status = tr(L"Brak dopasowań. Zmień tytuł i wyszukaj ponownie.");
         state.query_focus = state.games.empty();
         if (state.games.empty()) { state.manual = true; state.select_all = true; } // Nothing found by itself: the player types.
-    } else if (message->picked) {
+    } else if (!message->metadata && !message->picked) { state.status = std::move(message->error); state.manual = true; state.query_focus = false; }
+    else {
+        identifyApplied(state.game, *message);
+        closeIdentify(); audio_.context();
+    }
+    InvalidateRect(hwnd_, nullptr, FALSE);
+}
+// An identification saved (startIdentification): the game's details, name and artwork take it, wherever it shows.
+void Launcher::identifyApplied(const Game& game, IdentifyMessage& message) {
+    const auto key = gameKey(game);
+    if (message.picked) {
         // ScreenScraper identification (emulated games): details, name and every artwork slot again.
-        const auto game = state.game; const auto key = gameKey(game);
         rawg_metadata_.erase(key);
-        emulation_metadata_[key] = message->picked->details;
-        emulation_names_[key] = message->picked->name;
+        emulation_metadata_[key] = message.picked->details;
+        emulation_names_[key] = message.picked->name;
         manual_names_.insert(key); // The player's pick: its name shows even with ROM titles off.
-        if (screen_ == ScreenMode::details && !detail_games_.empty() && gameKey(detail_games_[0]) == key) details_ = message->picked->details;
+        if (screen_ == ScreenMode::details && !detail_games_.empty() && gameKey(detail_games_[0]) == key) details_ = message.picked->details;
         const auto failures = coverCacheDirectory().parent_path() / L"artwork" / L"failures";
         // The worker removed every automatic kind: posters and wide tiles load again when a view asks.
         for (const auto kind : {CoverMessage::Kind::cover, CoverMessage::Kind::hero, CoverMessage::Kind::logo,
@@ -319,53 +347,49 @@ void Launcher::onIdentify(std::unique_ptr<IdentifyMessage> message) {
             invalidateArtwork(game, kind);
             if (kind == CoverMessage::Kind::cover || kind == CoverMessage::Kind::hero || kind == CoverMessage::Kind::logo) requestArt(game, kind);
         }
-        closeIdentify(); audio_.context();
         applyEmulationNames(); // The new name everywhere: tiles, the game's menu, details.
         requestVisibleArt();
-    } else if (!message->metadata) { state.status = std::move(message->error); state.manual = true; state.query_focus = false; }
-    else {
-        const auto game = state.game; const auto key = gameKey(game);
-        rawg_metadata_[key] = std::move(*message->metadata);
-        if (screen_ == ScreenMode::details && !detail_games_.empty() && gameKey(detail_games_[0]) == key) details_ = rawg_metadata_[key].details;
-        for (auto& image : message->artwork.images) {
-            const auto kind = image.kind == ArtworkKind::cover ? CoverMessage::Kind::cover :
-                image.kind == ArtworkKind::hero ? CoverMessage::Kind::hero : image.kind == ArtworkKind::logo ? CoverMessage::Kind::logo :
-                image.kind == ArtworkKind::poster ? CoverMessage::Kind::poster : CoverMessage::Kind::landscape;
-            invalidateArtwork(game, kind);
-            const auto request = artRequestKey(game, kind);
-            artwork_failure::retry(coverCacheDirectory().parent_path() / L"artwork" / L"failures", request, artwork_failure::now());
-            auto cover = std::make_unique<CoverMessage>();
-            cover->key = key; cover->kind = kind; cover->generation = jobs_->generation.load();
-            cover->revision = art_revisions_[request]; cover->bytes = std::move(image.bytes); cover->focus = image.focus;
-            onCover(std::move(cover)); // Same immediate binding for cover, hero, logo and both Flix shapes.
-        }
-        // The worker dropped artwork matched by the old title; slots it could not fill now
-        // load again from the confirmed source instead of showing the other game's images.
-        const auto filled = [&](ArtworkKind kind) {
-            return std::any_of(message->artwork.images.begin(), message->artwork.images.end(), [&](const auto& image) { return image.kind == kind; });
-        };
-        const std::pair<ArtworkKind, CoverMessage::Kind> slots[]{{ArtworkKind::cover, CoverMessage::Kind::cover},
-            {ArtworkKind::hero, CoverMessage::Kind::hero}, {ArtworkKind::logo, CoverMessage::Kind::logo},
-            {ArtworkKind::poster, CoverMessage::Kind::poster}, {ArtworkKind::landscape, CoverMessage::Kind::landscape}};
-        for (const auto& [artwork, kind] : slots) {
-            if (filled(artwork)) continue;
-            if (auto* cached = art_.find(key)) {
-                (kind == CoverMessage::Kind::cover ? cached->cover : kind == CoverMessage::Kind::hero ? cached->hero :
-                 kind == CoverMessage::Kind::logo ? cached->logo : kind == CoverMessage::Kind::poster ? cached->poster : cached->landscape) = {};
-                art_.resize(key);
-            }
-            invalidateArtwork(game, kind);
-            artwork_failure::retry(coverCacheDirectory().parent_path() / L"artwork" / L"failures", artRequestKey(game, kind), artwork_failure::now());
-            if (kind == CoverMessage::Kind::cover || kind == CoverMessage::Kind::hero || kind == CoverMessage::Kind::logo) requestArt(game, kind);
-        }
-        if (game.source == GameSource::drmfree) drmIdentified(game, rawg_metadata_[key]);
-        else if (game.kind == GameKind::nonsteam && !game.rom.empty()) applyEmulationNames(); // An emulated game takes the RAWG title.
-        closeIdentify(); audio_.context();
-        customEditorIdentified(key); // Opened from Dodaj / Edytuj grę: its poster is the identified game's now.
-        requestVisibleArt(); // Posters and wide tiles the views show (the desktop grid's) load again.
-        if (!message->artwork.error.empty()) showNotification(NotificationKind::launch, tr(L"Metadane zapisane"), message->artwork.error);
+        return;
     }
-    InvalidateRect(hwnd_, nullptr, FALSE);
+    if (!message.metadata) return;
+    rawg_metadata_[key] = std::move(*message.metadata);
+    if (screen_ == ScreenMode::details && !detail_games_.empty() && gameKey(detail_games_[0]) == key) details_ = rawg_metadata_[key].details;
+    for (auto& image : message.artwork.images) {
+        const auto kind = image.kind == ArtworkKind::cover ? CoverMessage::Kind::cover :
+            image.kind == ArtworkKind::hero ? CoverMessage::Kind::hero : image.kind == ArtworkKind::logo ? CoverMessage::Kind::logo :
+            image.kind == ArtworkKind::poster ? CoverMessage::Kind::poster : CoverMessage::Kind::landscape;
+        invalidateArtwork(game, kind);
+        const auto request = artRequestKey(game, kind);
+        artwork_failure::retry(coverCacheDirectory().parent_path() / L"artwork" / L"failures", request, artwork_failure::now());
+        auto cover = std::make_unique<CoverMessage>();
+        cover->key = key; cover->kind = kind; cover->generation = jobs_->generation.load();
+        cover->revision = art_revisions_[request]; cover->bytes = std::move(image.bytes); cover->focus = image.focus;
+        onCover(std::move(cover)); // Same immediate binding for cover, hero, logo and both Flix shapes.
+    }
+    // The worker dropped artwork matched by the old title; slots it could not fill now
+    // load again from the confirmed source instead of showing the other game's images.
+    const auto filled = [&](ArtworkKind kind) {
+        return std::any_of(message.artwork.images.begin(), message.artwork.images.end(), [&](const auto& image) { return image.kind == kind; });
+    };
+    const std::pair<ArtworkKind, CoverMessage::Kind> slots[]{{ArtworkKind::cover, CoverMessage::Kind::cover},
+        {ArtworkKind::hero, CoverMessage::Kind::hero}, {ArtworkKind::logo, CoverMessage::Kind::logo},
+        {ArtworkKind::poster, CoverMessage::Kind::poster}, {ArtworkKind::landscape, CoverMessage::Kind::landscape}};
+    for (const auto& [artwork, kind] : slots) {
+        if (filled(artwork)) continue;
+        if (auto* cached = art_.find(key)) {
+            (kind == CoverMessage::Kind::cover ? cached->cover : kind == CoverMessage::Kind::hero ? cached->hero :
+             kind == CoverMessage::Kind::logo ? cached->logo : kind == CoverMessage::Kind::poster ? cached->poster : cached->landscape) = {};
+            art_.resize(key);
+        }
+        invalidateArtwork(game, kind);
+        artwork_failure::retry(coverCacheDirectory().parent_path() / L"artwork" / L"failures", artRequestKey(game, kind), artwork_failure::now());
+        if (kind == CoverMessage::Kind::cover || kind == CoverMessage::Kind::hero || kind == CoverMessage::Kind::logo) requestArt(game, kind);
+    }
+    if (game.source == GameSource::drmfree) drmIdentified(game, rawg_metadata_[key]);
+    else if (game.kind == GameKind::nonsteam && !game.rom.empty()) applyEmulationNames(); // An emulated game takes the RAWG title.
+    customEditorIdentified(key); // Opened from Dodaj / Edytuj grę: its poster is the identified game's now.
+    requestVisibleArt(); // Posters and wide tiles the views show (the desktop grid's) load again.
+    if (!message.artwork.error.empty()) showNotification(NotificationKind::launch, tr(L"Metadane zapisane"), message.artwork.error);
 }
 // No database knew the game: the best store's description, developer, publisher, date and genres become its own
 // details (the same place as Edytuj metadane; what the player typed there stays).

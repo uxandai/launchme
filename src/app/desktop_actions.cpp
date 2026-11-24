@@ -66,12 +66,7 @@ void Launcher::desktopActivate(const desktop_ui::Hit& hit) {
     case Target::card_check: desktopToggleMark(static_cast<size_t>(hit.index)); return;
     case Target::sort: desktopOpenSortMenu(); return;
     case Target::view_mode: desktopOpenViewMenu(); return;
-    case Target::installed:
-        settings_.desktop_installed = !settings_.desktop_installed;
-        settings_dirty_ = true; settings_edited_ = std::chrono::steady_clock::now();
-        desktop_scroll_ = desktop_scroll_target_ = 0;
-        rebuildCards(true);
-        return;
+    case Target::filters: desktopOpenFiltersMenu(); return;
     case Target::pane_primary: desktopLaunchSelected(); return;
     case Target::pane_favorite: if (!cards_.empty()) toggleFavorite(cards_[selected_].game); return;
     case Target::pane_more: {
@@ -179,8 +174,8 @@ void Launcher::desktopActivate(const desktop_ui::Hit& hit) {
         if (!trimmedQuery(desktop_query_).empty()) {
             if (primary) { desktop_query_.clear(); desktop_caret_ = 0; desktopApplyQuery(); }
             else { const auto query = desktop_query_; desktopShowSection("all"); desktop_query_ = query; desktopApplyQuery(); }
-        } else if (settings_.desktop_installed && !desktopSource().empty()) {
-            settings_.desktop_installed = false; settings_dirty_ = true; settings_edited_ = std::chrono::steady_clock::now();
+        } else if (desktopFiltered() && !desktopSource().empty()) {
+            settings_.desktop_installed = false; settings_.desktop_filters = 0; settings_dirty_ = true; settings_edited_ = std::chrono::steady_clock::now();
             rebuildCards(true);
         } else if (entry && entry->kind == EntryKind::collection) desktopCollectionDialog(entry->collection, Page::games);
         else if (public_library_.empty()) {

@@ -12,19 +12,20 @@
 
 namespace grid_layout {
 inline bool hitBack(float x, float y) { return x >= 16 && x < 52 && y >= 35 && y < 71; }
-inline float top(size_t index, float width, float scroll, bool posters = false) {
-    return 190.0f + (index / columns(width)) * (cell(width) * (posters ? 1.5f : 1) + 64.0f) - scroll;
+// head: room above the rows (Siatka's collection tiles: collection_band).
+inline float top(size_t index, float width, float scroll, bool posters = false, int n = 0, float head = 0) {
+    return 190.0f + head + (index / columns(width, n)) * (cell(width, n) * (posters ? 1.5f : 1) + 64.0f) - scroll;
 }
-inline float maxScroll(size_t count, float width, float height, bool posters = false) {
+inline float maxScroll(size_t count, float width, float height, bool posters = false, int n = 0, float head = 0) {
     if (!count) return 0;
-    const size_t rows = (count + columns(width) - 1) / columns(width);
-    return std::max(0.0f, 190.0f + rows * (cell(width) * (posters ? 1.5f : 1) + 64.0f) - height + 56.0f); // Clear of the button hints.
+    const size_t rows = (count + columns(width, n) - 1) / columns(width, n);
+    return std::max(0.0f, 190.0f + head + rows * (cell(width, n) * (posters ? 1.5f : 1) + 64.0f) - height + 56.0f); // Clear of the button hints.
 }
-inline std::pair<size_t, size_t> visibleRange(size_t count, float width, float height, float scroll, bool posters = false) {
-    const auto cols = static_cast<size_t>(columns(width));
-    const float step = cell(width) * (posters ? 1.5f : 1) + 64.0f;
-    const size_t first_row = static_cast<size_t>(std::max(0.0f, (scroll - 190.0f) / step));
-    const size_t last_row = static_cast<size_t>(std::max(0.0f, (scroll + height - 190.0f) / step)) + 1;
+inline std::pair<size_t, size_t> visibleRange(size_t count, float width, float height, float scroll, bool posters = false, int n = 0, float head = 0) {
+    const auto cols = static_cast<size_t>(columns(width, n));
+    const float step = cell(width, n) * (posters ? 1.5f : 1) + 64.0f;
+    const size_t first_row = static_cast<size_t>(std::max(0.0f, (scroll - 190.0f - head) / step));
+    const size_t last_row = static_cast<size_t>(std::max(0.0f, (scroll + height - 190.0f - head) / step)) + 1;
     return {std::min(count, first_row * cols), std::min(count, last_row * cols)};
 }
 } // namespace grid_layout
@@ -126,28 +127,89 @@ inline settings_ui::Rect summary(float width, float height) { return {68, 132, x
 // Siatka with landscape tiles (the library's option, search results): 920:430 capsules with their titles.
 namespace landscape_grid {
 constexpr float list_top = 190, gap = 25, caption = 64, aspect = 920.0f / 430.0f;
-inline int columns(float width) { return std::clamp(static_cast<int>((width - 120) / 360), 2, 5); }
-inline float cellWidth(float width) { const int n = columns(width); return std::min(420.0f, (width - 112.0f - (n - 1) * gap) / n); }
-inline float cell(float width) { return cellWidth(width) / aspect; }
-inline float step(float width) { return cell(width) + caption; }
-inline float left(float width, size_t index) {
-    const int n = columns(width);
-    const float w = cellWidth(width), total = n * w + (n - 1) * gap;
+// requested: the library's Siatka option (2..6 filling the width); 0 by the width, at most 420 wide.
+inline int columns(float width, int requested = 0) {
+    return requested ? std::clamp(requested, 2, 6) : std::clamp(static_cast<int>((width - 120) / 360), 2, 5);
+}
+inline float cellWidth(float width, int requested = 0) {
+    const int n = columns(width, requested);
+    const float fit = (width - 112.0f - (n - 1) * gap) / n;
+    return requested ? fit : std::min(420.0f, fit);
+}
+inline float cell(float width, int requested = 0) { return cellWidth(width, requested) / aspect; }
+inline float step(float width, int requested = 0) { return cell(width, requested) + caption; }
+inline float left(float width, size_t index, int requested = 0) {
+    const int n = columns(width, requested);
+    const float w = cellWidth(width, requested), total = n * w + (n - 1) * gap;
     return (width - total) * 0.5f + (index % n) * (w + gap);
 }
-inline float top(size_t index, float width, float scroll) { return list_top + (index / columns(width)) * step(width) - scroll; }
-inline float maxScroll(size_t count, float width, float height) {
-    if (!count) return 0;
-    const size_t rows = (count + columns(width) - 1) / columns(width);
-    return std::max(0.0f, list_top + rows * step(width) - height + 56.0f); // Clear of the button hints.
+inline float top(size_t index, float width, float scroll, int requested = 0, float head = 0) {
+    return list_top + head + (index / columns(width, requested)) * step(width, requested) - scroll;
 }
-inline std::pair<size_t, size_t> visibleRange(size_t count, float width, float height, float scroll) {
-    const auto cols = static_cast<size_t>(columns(width));
-    const size_t first_row = static_cast<size_t>(std::max(0.0f, (scroll - list_top) / step(width)));
-    const size_t last_row = static_cast<size_t>(std::max(0.0f, (scroll + height - list_top) / step(width))) + 1;
+inline float maxScroll(size_t count, float width, float height, int requested = 0, float head = 0) {
+    if (!count) return 0;
+    const size_t rows = (count + columns(width, requested) - 1) / columns(width, requested);
+    return std::max(0.0f, list_top + head + rows * step(width, requested) - height + 56.0f); // Clear of the button hints.
+}
+inline std::pair<size_t, size_t> visibleRange(size_t count, float width, float height, float scroll, int requested = 0, float head = 0) {
+    const auto cols = static_cast<size_t>(columns(width, requested));
+    const size_t first_row = static_cast<size_t>(std::max(0.0f, (scroll - list_top - head) / step(width, requested)));
+    const size_t last_row = static_cast<size_t>(std::max(0.0f, (scroll + height - list_top - head) / step(width, requested))) + 1;
     return {std::min(count, first_row * cols), std::min(count, last_row * cols)};
 }
 }
+
+// Siatka's "Kolekcje jako kafle": above the games, the collections as wide tiles (three of their
+// covers, the name, how many games), as a console's game library shows its lists; under them the
+// shown games' count and order. It scrolls with the rows; the tiles slide sideways to the focused one.
+namespace collection_band {
+constexpr float caption = 44, gap = 25, pad = 12, cover_gap = 8, text = 62, under = 26, summary = 40;
+using Options = library_view::Options;
+// The grid's art: square covers, posters (2:3) or capsules (920:430); the tiles' covers take its shape.
+inline float coverAspect(const Options& o) { return o.grid_landscape ? 430.0f / 920.0f : o.grid_posters ? 1.5f : 1.0f; }
+// The grid's cell width (capsules are wider than the square cells).
+inline float cellWidth(float width, const Options& o) {
+    return o.grid_landscape ? landscape_grid::cellWidth(width, o.grid_columns) : grid_layout::cell(width, o.grid_columns);
+}
+// The band spans the grid's width: from its first column to its last.
+inline float left(float width, const Options& o) {
+    return o.grid_landscape ? landscape_grid::left(width, 0, o.grid_columns) : grid_layout::left(width, 0, o.grid_columns);
+}
+inline float right(float width, const Options& o) { return width - left(width, o); }
+// A tile: as wide as two of the grid's cells with their gap (at least 300).
+inline float tileWidth(float width, const Options& o) { return std::max(300.0f, 2 * cellWidth(width, o) + gap); }
+inline float coverWidth(float width, const Options& o) { return std::floor((tileWidth(width, o) - 2 * pad - 2 * cover_gap) / 3); }
+inline float coverHeight(float width, const Options& o) { return std::floor(coverWidth(width, o) * coverAspect(o)); }
+inline float tileHeight(float width, const Options& o) { return pad + coverHeight(width, o) + text; }
+// The room the band takes above the rows.
+inline float height(float width, const Options& o) { return caption + tileHeight(width, o) + under + summary; }
+inline float top(float scroll) { return 190.0f - scroll; }
+inline float tilesTop(float scroll) { return top(scroll) + caption; }
+inline float step(float width, const Options& o) { return tileWidth(width, o) + gap; }
+// Tile `index` with the row slid by `slide` (px).
+inline settings_ui::Rect tile(int index, float width, float scroll, float slide, const Options& o) {
+    const float x = left(width, o) + static_cast<float>(index) * step(width, o) - slide, y = tilesTop(scroll);
+    return {x, y, x + tileWidth(width, o), y + tileHeight(width, o)};
+}
+inline settings_ui::Rect cover(const settings_ui::Rect& tile, int slot, float width, const Options& o) {
+    const float w = coverWidth(width, o), x = tile.left + pad + static_cast<float>(slot) * (w + cover_gap);
+    return {x, tile.top + pad, x + w, tile.top + pad + coverHeight(width, o)};
+}
+// The line under the tiles: "Wszystkie gry: 513" on the left, the order on the right.
+inline float summaryMiddle(float width, float scroll, const Options& o) { return tilesTop(scroll) + tileHeight(width, o) + under + summary * 0.5f; }
+// The slide that keeps `focus` in view (whole tiles; the first stays at the left edge).
+inline float slideFor(int focus, int count, float width, const Options& o) {
+    const float span = right(width, o) - left(width, o), s = step(width, o);
+    const int fit = std::max(1, static_cast<int>((span + gap) / s));
+    const int first = std::clamp(focus - fit + 1, 0, std::max(0, count - fit));
+    return static_cast<float>(std::max(0, first)) * s;
+}
+inline int hit(float x, float y, int count, float width, float scroll, float slide, const Options& o) {
+    if (x < left(width, o) - 4 || x > right(width, o) + 4) return -1;
+    for (int i = 0; i < count; ++i) if (tile(i, width, scroll, slide, o).contains(x, y)) return i;
+    return -1;
+}
+} // namespace collection_band
 
 // Category tabs in the library's top bar, in place of its title (every view): the shown category
 // (in a store's or a console's library: the store or console) and its neighbours. The first tab
@@ -328,35 +390,42 @@ inline float rowThumbLeft(View view, float width, float height) {
 }
 inline bool cinematicColumn(View view, const library_view::Options& options) { return view == View::cinematic && options.cinematic_column; }
 inline bool gridLandscape(View view, const library_view::Options& options) { return view == View::grid && options.grid_landscape; }
+inline int gridColumns(View view, const library_view::Options& options) { return view == View::grid ? options.grid_columns : 0; }
+// Siatka's collection tiles above the rows (the Launcher clears the option where they are not shown).
+inline float gridHead(View view, float width, const library_view::Options& options) {
+    return view == View::grid && options.grid_collections ? collection_band::height(width, options) : 0.0f;
+}
 inline int columns(View view, float width, const library_view::Options& options = {}) {
     if (view == View::cinematic && (options.cinematic_horizontal || options.cinematic_column)) return 1;
     if (library_view::carousel(view)) return 1;
-    if (gridLandscape(view, options)) return landscape_grid::columns(width);
+    if (gridLandscape(view, options)) return landscape_grid::columns(width, options.grid_columns);
     return library_view::rows(view) ? 1 : view == View::cinematic ? cinematic_layout::columns(width) :
-        view == View::overview ? overview_layout::columns(width, options.overview_columns) : grid_layout::columns(width);
+        view == View::overview ? overview_layout::columns(width, options.overview_columns) : grid_layout::columns(width, gridColumns(view, options));
 }
 // Top of the item's box that must stay on screen and its height (a grid cell with its title).
 inline float top(View view, size_t index, float width, float scroll, const library_view::Options& options = {}) {
     if (cinematicColumn(view, options)) return cinematic_column::top(index, width, scroll);
-    if (gridLandscape(view, options)) return landscape_grid::top(index, width, scroll);
+    if (gridLandscape(view, options)) return landscape_grid::top(index, width, scroll, options.grid_columns, gridHead(view, width, options));
     return library_view::rows(view) ? list_layout::top(index, scroll) :
         view == View::cinematic ? cinematic_layout::top(index, width, scroll) :
-        view == View::overview ? overview_layout::top(index, width, scroll, options.overview_columns) : grid_layout::top(index, width, scroll, view == View::grid && options.grid_posters);
+        view == View::overview ? overview_layout::top(index, width, scroll, options.overview_columns) :
+        grid_layout::top(index, width, scroll, view == View::grid && options.grid_posters, gridColumns(view, options), gridHead(view, width, options));
 }
 inline float extent(View view, float width, const library_view::Options& options = {}) {
     if (view == View::overview) return overview_layout::cell(width, options.overview_columns);
     if (cinematicColumn(view, options)) return cinematic_column::cell(width);
-    if (gridLandscape(view, options)) return landscape_grid::cell(width) + 48;
-    return library_view::rows(view) ? list_layout::row_height : (view == View::cinematic ? cinematic_layout::cell(width) : grid_layout::cell(width) * (view == View::grid && options.grid_posters ? 1.5f : 1)) + 48;
+    if (gridLandscape(view, options)) return landscape_grid::cell(width, options.grid_columns) + 48;
+    return library_view::rows(view) ? list_layout::row_height : (view == View::cinematic ? cinematic_layout::cell(width) : grid_layout::cell(width, gridColumns(view, options)) * (view == View::grid && options.grid_posters ? 1.5f : 1)) + 48;
 }
 inline float maxScroll(View view, size_t count, float width, float height, const library_view::Options& options = {}) {
     if (view == View::cinematic && options.cinematic_horizontal) return cinematic_row::maxScroll(count, width);
     if (cinematicColumn(view, options)) return cinematic_column::maxScroll(count, width, height);
-    if (gridLandscape(view, options)) return landscape_grid::maxScroll(count, width, height);
+    if (gridLandscape(view, options)) return landscape_grid::maxScroll(count, width, height, options.grid_columns, gridHead(view, width, options));
     if (library_view::carousel(view)) return 0;
     return library_view::rows(view) ? list_layout::maxScroll(count, height) :
         view == View::cinematic ? cinematic_layout::maxScroll(count, width, height) :
-        view == View::overview ? overview_layout::maxScroll(count, width, height, options.overview_columns) : grid_layout::maxScroll(count, width, height, view == View::grid && options.grid_posters);
+        view == View::overview ? overview_layout::maxScroll(count, width, height, options.overview_columns) :
+        grid_layout::maxScroll(count, width, height, view == View::grid && options.grid_posters, gridColumns(view, options), gridHead(view, width, options));
 }
 // Kinowy's capsule targets for the three scrolling options (x, y and the height; 920:430).
 inline void cinematicTarget(size_t index, float width, float height, float scroll, const library_view::Options& options, float& x, float& y, float& size) {
@@ -370,7 +439,7 @@ inline void cinematicTarget(size_t index, float width, float height, float scrol
 }
 inline std::pair<size_t, size_t> visibleRange(View view, size_t count, float width, float height, float scroll, const library_view::Options& options = {}) {
     if (cinematicColumn(view, options)) return cinematic_column::visibleRange(count, width, height, scroll);
-    if (gridLandscape(view, options)) return landscape_grid::visibleRange(count, width, height, scroll);
+    if (gridLandscape(view, options)) return landscape_grid::visibleRange(count, width, height, scroll, options.grid_columns, gridHead(view, width, options));
     if (view == View::cinematic && options.cinematic_horizontal) {
         const auto first = static_cast<size_t>(std::max(0.0f, std::floor((scroll - cinematic_row::left) / cinematic_row::step(width))));
         const auto end = static_cast<size_t>(std::max(0.0f, (scroll + width) / cinematic_row::step(width))) + 1;
@@ -378,7 +447,8 @@ inline std::pair<size_t, size_t> visibleRange(View view, size_t count, float wid
     }
     return library_view::rows(view) ? list_layout::visibleRange(count, height, scroll) :
         view == View::cinematic ? cinematic_layout::visibleRange(count, width, height, scroll) :
-        view == View::overview ? overview_layout::visibleRange(count, width, height, scroll, options.overview_columns) : grid_layout::visibleRange(count, width, height, scroll, view == View::grid && options.grid_posters);
+        view == View::overview ? overview_layout::visibleRange(count, width, height, scroll, options.overview_columns) :
+        grid_layout::visibleRange(count, width, height, scroll, view == View::grid && options.grid_posters, gridColumns(view, options), gridHead(view, width, options));
 }
 // Scroll that keeps `index` visible below the header.
 inline float reveal(View view, size_t index, size_t count, float width, float height, float scroll, const library_view::Options& options = {}) {
@@ -407,6 +477,9 @@ inline float reveal(View view, size_t index, size_t count, float width, float he
     const float edge = view == View::cinematic ? cinematic_layout::list_top : view == View::overview ? overview_layout::list_top : 155;
     // Clear of the button hints along the bottom edge, as the lists.
     const float bottom = height - (view == View::overview ? overview_layout::bottom_margin : view == View::cinematic ? 30 : list_layout::bottom_margin);
+    // The first row under the collection tiles brings them back into view when it fits with them.
+    if (gridHead(view, width, options) > 0 && index < static_cast<size_t>(columns(view, width, options)) &&
+        top(view, index, width, 0, options) + size <= bottom) return 0;
     if (item < edge) scroll = std::max(0.0f, scroll + item - edge);
     else if (item + size > bottom) {
         scroll += item + size - bottom;

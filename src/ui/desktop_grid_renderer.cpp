@@ -64,13 +64,23 @@ void Renderer::drawDesktopHeader(const Layout& layout, const View& view) {
         }
         desktopGlyph(glyph::chevron_down, shape.right - 15, vy + 1, 9, gray(0.65f));
     }
+    // Filtry: accent while any is in force, with their number on a badge before its chevron.
     const auto chip = layout.installedChip();
-    const bool chip_hover = view.hover.target == Target::installed;
-    if (view.installed_only) { desktopFill(chip, 8, uiAccent(0.16f)); desktopStroke(chip, 8, uiAccent(0.75f)); }
+    const bool chip_hover = view.hover.target == Target::filters || (view.menu && view.menu->kind == Menu::Kind::filters);
+    if (view.filter_count) { desktopFill(chip, 8, uiAccent(0.16f)); desktopStroke(chip, 8, uiAccent(0.75f)); }
     else { desktopFill(chip, 8, gray(1, chip_hover ? 0.08f : 0.04f)); desktopStroke(chip, 8, gray(1, chip_hover ? 0.145f : 0.085f)); }
     const float cy = (chip.top + chip.bottom) * 0.5f;
-    desktopGlyph(view.installed_only ? glyph::check : glyph::download, chip.left + 16, cy, 12, view.installed_only ? uiAccent() : gray(0.72f));
-    textLine(tr(L"Zainstalowane"), chip.left + 30, cy, chip.right - chip.left - 38, desktop_font_.Get(), gray(0.9f));
+    desktopGlyph(glyph::filter, chip.left + 16, cy, 12, view.filter_count ? uiAccent() : gray(0.72f));
+    float label_right = chip.right - 24;
+    if (view.filter_count) {
+        const float bx = chip.right - 34;
+        brush(uiAccent());
+        target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(bx, cy), 9, 9), solid_.Get());
+        textLine(std::to_wstring(view.filter_count), bx - 9, cy, 18, desktop_font_.Get(), gray(0.05f), DWRITE_TEXT_ALIGNMENT_CENTER);
+        label_right = bx - 13;
+    }
+    textLine(tr(L"Filtry"), chip.left + 30, cy, label_right - chip.left - 30, desktop_font_.Get(), gray(0.9f));
+    desktopGlyph(glyph::chevron_down, chip.right - 15, cy + 1, 9, gray(0.65f));
     if (layout.list) return; // The list's rows have one height: no size slider.
     const auto slider = layout.sizeSlider();
     const float y = (slider.top + slider.bottom) * 0.5f, left = slider.left + 7, right = slider.right - 7;

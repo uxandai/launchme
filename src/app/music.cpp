@@ -47,6 +47,8 @@ void Launcher::requestSound(SoundCue cue, int index, bool preview) {
     const auto* option = soundOption(cue, index);
     // The start sound can be any file the sound folder holds (its full path).
     const std::wstring file = cue == SoundCue::boot ? soundFolderFile(settings_.sound_folder, settings_.boot_file).wstring() : std::wstring{};
+    if (cue == SoundCue::navigation) // UI SFX's other cues come with its focus one; another choice drops them.
+        for (const auto extra : {SoundCue::open, SoundCue::back, SoundCue::start}) audio_.setCue(extra, {});
     if (file.empty() && (!option || !option->file)) {
         audio_.setCue(cue, {});
         if (cue == SoundCue::boot) { audio_.boot(); boot_played_ = true; }
@@ -54,8 +56,18 @@ void Launcher::requestSound(SoundCue cue, int index, bool preview) {
     }
     MusicQueue::CueRequest request{cue, index, preview, generation, file};
     std::lock_guard lock(music_jobs_->mutex);
-    std::erase_if(music_jobs_->cues, [&](const MusicQueue::CueRequest& item) { return item.cue == cue; });
+    const bool pack = cue == SoundCue::navigation && uiSoundPack(option);
+    std::erase_if(music_jobs_->cues, [&](const MusicQueue::CueRequest& item) {
+        return item.cue == cue || (cue == SoundCue::navigation && (item.cue == SoundCue::open || item.cue == SoundCue::back || item.cue == SoundCue::start));
+    });
     music_jobs_->cues.push_back(request);
+    if (pack) {
+        // Beside the focus file: open.mp3, back.mp3, start.mp3 (the navigation cue's generation).
+        const auto folder = localSoundFile(option->file).parent_path();
+        if (!folder.empty())
+            for (const auto& [extra, name] : {std::pair{SoundCue::open, L"open.mp3"}, std::pair{SoundCue::back, L"back.mp3"}, std::pair{SoundCue::start, L"start.mp3"}})
+                music_jobs_->cues.push_back({extra, index, false, generation, (folder / name).wstring()});
+    }
     music_jobs_->wake.notify_one();
 }
 

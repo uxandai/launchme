@@ -48,6 +48,7 @@ struct AppSettings {
     // The desktop library: poster width (DIPs), order (library_view::persistedOrder), installed games
     // only, the section shown, its selected game (library_view::selectionKey) and collapsed groups.
     int desktop_poster = 156;
+    int stage_dim = 0; // Scena (every library in that view): the game's background darkened by this percent (0-80, steps of 10).
     int desktop_view = 0; // The grid's cells: 0 posters (2:3), 1 squares (covers), 2 landscape (capsules), 3 a list.
     // The desktop window's panes: the right one's width (dragged by its edge; 0 a quarter of the
     // window) and the left one narrow, its icons only (the toggle by the logo).
@@ -55,6 +56,7 @@ struct AppSettings {
     bool desktop_narrow = false;
     int desktop_sort = 1;
     bool desktop_installed = false;
+    uint32_t desktop_filters = 0; // Filtry: library_view::Filter bits, every one required.
     std::string desktop_section = "all";
     std::string desktop_game;
     std::unordered_set<std::string> desktop_collapsed;

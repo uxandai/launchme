@@ -34,7 +34,11 @@ library_view::View Launcher::libraryView() const { return screen_ == ScreenMode:
 // The library's own options; the search results' grid shows the artwork chosen in Interfejs →
 // Grafiki w wyszukiwarce; other grid screens the plain square grid.
 library_view::Options Launcher::libraryPresentation() const {
-    if (screen_ == ScreenMode::library) return library_controls_.options;
+    if (screen_ == ScreenMode::library) {
+        auto options = library_controls_.options;
+        if (options.grid_collections && !libraryBandShown()) options.grid_collections = false; // Its tiles only where they show.
+        return options;
+    }
     library_view::Options options;
     if (screen_ == ScreenMode::search && !desktopActive()) library_view::setGridArt(options, static_cast<int>(settings_.search_art));
     return options;
@@ -54,9 +58,10 @@ bool Launcher::libraryLandscape() const { return library_view::landscape(library
 bool Launcher::libraryListPlus() const { return libraryView() == library_view::View::list_plus; }
 // The tabs in the top bar, in every view: "Wszystkie gry" and the shelves' own libraries; in a
 // store's library the PC stores, in a console's the consoles (Platformy PC / Emulacja). Hidden
-// while the search field is open (its line takes the title back).
+// while the search field is open (its line takes the title back), and under Siatka's collection tiles
+// (they are the way to the collections there; the bar keeps the title).
 bool Launcher::libraryTabsShown() const {
-    return screen_ == ScreenMode::library && !library_controls_.search && !libraryTabs().empty();
+    return screen_ == ScreenMode::library && !library_controls_.search && !libraryBandShown() && !libraryTabs().empty();
 }
 std::vector<Launcher::LibraryTab> Launcher::libraryTabs() const {
     std::vector<LibraryTab> tabs;
@@ -119,6 +124,7 @@ int Launcher::libraryTabIndex(const std::vector<LibraryTab>& tabs) const {
 }
 void Launcher::switchLibraryTab(int amount) {
     if (!libraryTabsShown() || !amount || menu_open_ || pending_launch_ || library_controls_.open()) return;
+    band_return_.clear(); // Back leaves the library again.
     const auto tabs = libraryTabs();
     const int current = libraryTabIndex(tabs), next = std::clamp(current + amount, 0, static_cast<int>(tabs.size()) - 1);
     if (next == current) { navigationBoundary(); return; }
@@ -143,17 +149,20 @@ void Launcher::switchLibraryTab(int amount) {
         InvalidateRect(hwnd_, nullptr, FALSE);
         return;
     }
-    if (tab.id.empty()) {
+    showLibraryCategory(tab.id, view);
+}
+bool Launcher::showLibraryCategory(const std::string& id, library_view::View view) {
+    if (id.empty()) {
         versions_ = versions::Index(public_library_);
         grouped_library_ = versions_.collapse(public_library_, library_state_.preferred_versions, library_state_.first_seen);
         library_category_.clear(); category_library_.clear();
     } else {
-        const auto* category = findCategory(tab.id);
-        if (!category) return;
-        library_category_ = tab.id;
+        const auto* category = findCategory(id);
+        if (!category) return false;
+        library_category_ = id;
         category_library_title_ = category->title;
         category_library_.clear();
-        for (const auto& game : category->games) if (isGame(game) || studioCategory(tab.id)) category_library_.push_back(game);
+        for (const auto& game : category->games) if (isGame(game) || studioCategory(id)) category_library_.push_back(game);
     }
     auto options = libraryOptions();
     if (options.view != view) { options.view = view; library_state_.options[libraryScope()] = options; library_state_dirty_ = true; }
@@ -164,6 +173,7 @@ void Launcher::switchLibraryTab(int amount) {
     rememberPlace();
     audio_.navigate();
     InvalidateRect(hwnd_, nullptr, FALSE);
+    return true;
 }
 bool Launcher::libraryCoverflow() const { return libraryView() == library_view::View::coverflow; }
 bool Launcher::libraryCarousel() const { return library_view::carousel(libraryView()); }
@@ -260,6 +270,7 @@ void Launcher::closeLibraryPanel() {
 void Launcher::focusCard(size_t index, bool reveal) {
     if (cards_.empty()) return;
     snitch_profile_focus_ = false; // Snitch: a card takes the focus back from the profile picture.
+    band_focus_ = -1;              // Siatka: and from the collection tiles.
     if (xmbActive()) { xmbFocusCard(std::min(index, cards_.size() - 1)); return; }
     if (flixActive()) { flixFocusCard(std::min(index, cards_.size() - 1)); return; }
     if (metroActive()) { metroFocus(std::min(index, cards_.size() - 1)); return; }
@@ -566,7 +577,12 @@ bool Launcher::adjustLibraryView(int amount) {
     const auto step = [&](int current, int count) { return amount ? std::clamp(current + amount, 0, count - 1) : (current + 1) % count; };
     using library_view::View;
     switch (options.view) {
-    case View::grid: library_view::setGridArt(options, step(library_view::gridArt(options), 3)); break;
+    case View::grid:
+        if (library_controls_.view_row <= 1) library_view::setGridArt(options, step(library_view::gridArt(options), 3));
+        else if (library_controls_.view_row == 2)
+            library_view::setGridColumnsChoice(options, step(library_view::gridColumnsChoice(options), library_view::gridColumnChoices(options)));
+        else { toggle(options.grid_collections); band_focus_ = -1; grid_scroll_ = 0; }
+        break;
     case View::list:
         if (library_controls_.view_row == 1) toggle(options.list_year);
         else if (library_controls_.view_row == 2) toggle(options.list_playtime);
@@ -587,7 +603,14 @@ bool Launcher::adjustLibraryView(int amount) {
         else toggle(library_controls_.view_row == 2 ? options.bookshelf_gray : options.bookshelf_platform);
         break;
     case View::list_plus: toggle(options.list_plus_steelbook); break;
-    case View::stage: toggle(options.stage_summary); break;
+    case View::stage:
+        if (library_controls_.view_row <= 1) { toggle(options.stage_summary); break; }
+        { // Przyciemnij tło: every Scena's, in steps of 10% (A/Enter cycles back to none after 80%).
+            const int dim = std::clamp(settings_.stage_dim + (amount ? amount * 10 : settings_.stage_dim >= 80 ? -80 : 10), 0, 80);
+            if (dim != settings_.stage_dim) { settings_.stage_dim = dim; saveSettings(); audio_.navigate(); InvalidateRect(hwnd_, nullptr, FALSE); }
+            else if (amount) navigationBoundary();
+        }
+        return true;
     default: return true;
     }
     if (options != before) { applyLibraryOptions(); audio_.navigate(); }
@@ -598,13 +621,19 @@ bool Launcher::adjustLibraryView(int amount) {
 bool Launcher::libraryHorizontal(int amount, bool edge_menu) {
     if (!libraryControls() || menu_open_ || pending_launch_ || quick_open_) return false;
     using library_ui::Panel;
+    if (libraryBandFocused()) { libraryBandMove(amount); return true; }
     if (library_controls_.panel == Panel::views) {
         if (library_controls_.view_dropdown) return true;
         if (library_controls_.view_row > 0 && library_controls_.view_row < library_ui::views::closeRow(libraryView())) adjustLibraryView(amount);
         // Left opened this panel. Repeats remain here instead of closing and reopening it.
         return true;
     }
-    if (library_controls_.panel == Panel::filters) return true;
+    if (library_controls_.panel == Panel::filters) { // Across Sortuj and Filtry.
+        const int next = library_ui::filterMove(library_controls_.choice, amount > 0 ? 1 : -1, 0);
+        if (next == library_controls_.choice) navigationBoundary();
+        else { library_controls_.choice = next; audio_.navigate(); InvalidateRect(hwnd_, nullptr, FALSE); }
+        return true;
+    }
     if (edge_menu && libraryOverview() && library_controls_.focus < 0 && !cards_.empty() && std::abs(amount) == 1) {
         // Przegląd: Left from the first column goes to the panel's buttons (the primary action
         // beside the tiles, then "Szczegóły"), Left past them opens the view drawer; Right returns.
@@ -672,12 +701,20 @@ bool Launcher::libraryVertical(int amount) {
             if (amount < 0) { library_controls_.view_row = 0; library_controls_.choice = library_view::view_count - 1; audio_.navigate(); }
         } else { library_controls_.view_row = library_ui::views::closeRow(libraryView()); audio_.navigate(); }
     } else if (library_controls_.open()) {
-        const int rows = library_controls_.panel == Panel::filters ? library_ui::filter_rows : library_view::view_count;
-        const int next = std::clamp(library_controls_.choice + amount, 0, rows - 1);
+        const int next = library_controls_.panel == Panel::filters ? library_ui::filterMove(library_controls_.choice, 0, amount) :
+                         std::clamp(library_controls_.choice + amount, 0, library_view::view_count - 1);
         if (next == library_controls_.choice) navigationBoundary();
         if (next != library_controls_.choice) audio_.navigate();
         library_controls_.choice = next;
-    } else if (library_controls_.focus >= 0) { if (amount > 0 && !cards_.empty()) { library_controls_.focus = -1; focusCard(selected_); } }
+    } else if (libraryBandFocused()) { // The collection tiles: Up to the top bar, Down to the games.
+        band_focus_ = -1;
+        if (amount < 0) { library_controls_.focus = library_ui::filters_button; grid_scroll_ = 0; audio_.navigate(); }
+        else if (!cards_.empty()) { focusCard(selected_); audio_.navigate(); }
+    } else if (library_controls_.focus >= 0) {
+        if (amount > 0 && libraryBandShown() && !libraryBandTiles().empty()) libraryBandFocus(band_last_);
+        else if (amount > 0 && !cards_.empty()) { library_controls_.focus = -1; focusCard(selected_); }
+    }
+    else if (amount < 0 && libraryBandShown() && selected_ < static_cast<size_t>(libraryColumns()) && !libraryBandTiles().empty()) libraryBandFocus(band_last_);
     else if (amount < 0 && studioBoard() && selected_ < static_cast<size_t>(libraryColumns())) { navigationBoundary(); return true; } // The board has no order or filter.
     else if (amount < 0 && (screen_ == ScreenMode::platform_games || libraryCarousel() || libraryHorizontalCinematic() || selected_ < static_cast<size_t>(libraryColumns()))) {
         // With the search field open, Up returns to it.
@@ -691,6 +728,7 @@ bool Launcher::libraryVertical(int amount) {
 bool Launcher::libraryAccept() {
     if (!libraryControls() || menu_open_ || pending_launch_ || friends_open_ || quick_open_) return false;
     using library_ui::Panel;
+    if (libraryBandFocused()) { libraryBandOpen(band_focus_); return true; }
     auto& options = library_controls_.options;
     if (library_controls_.panel == Panel::views) {
         if (library_controls_.view_row == library_ui::views::closeRow(options.view)) {
@@ -712,10 +750,20 @@ bool Launcher::libraryAccept() {
         return true;
     }
     if (library_controls_.panel == Panel::filters) {
-        // Orders are exclusive, the last row toggles; every choice dismisses the menu.
-        if (library_controls_.choice < library_view::order_count) options.order = static_cast<library_view::Order>(library_controls_.choice);
-        else options.installed_only = !options.installed_only;
-        closeLibraryPanel(); audio_.context(); applyLibraryOptions();
+        // An order is chosen and the menu goes; the check boxes toggle with the menu still open, the
+        // games filtered beneath it at once.
+        const int choice = library_controls_.choice;
+        if (choice < library_view::order_count) {
+            options.order = static_cast<library_view::Order>(choice);
+            closeLibraryPanel(); audio_.context(); applyLibraryOptions();
+            return true;
+        }
+        if (choice == library_ui::installed_row) options.installed_only = !options.installed_only;
+        else if (choice == library_ui::clear_row) {
+            if (!library_view::activeFilters(options)) { navigationBoundary(); return true; }
+            options.installed_only = false; options.filters = 0;
+        } else options.filters ^= library_view::filterBit(static_cast<library_view::Filter>(choice - library_ui::first_filter_row));
+        audio_.context(); applyLibraryOptions();
     } else if (libraryOverview() && library_controls_.action >= 0 && !cards_.empty()) {
         if (library_controls_.action == 1) return !actionEnabled(cards_[selected_].game); // launch() handles the primary action.
         openDetails(cards_[selected_].game); // "Szczegóły" keeps the focus for the way back.
@@ -798,6 +846,7 @@ bool Launcher::libraryClick(float x, float y, bool double_click) {
             return true;
         }
     }
+    if (const int tile = libraryBandHit(x, y); tile >= 0) { if (!double_click) libraryBandOpen(tile); return true; } // Siatka's collection tiles.
     if (libraryOverview() && !cards_.empty()) {
         // The panel's buttons: "Szczegóły" and the primary action.
         const int button = overview_layout::Panel{view.width, view.height}.hitButton(x, y);
@@ -851,6 +900,44 @@ void Launcher::applyLibraryQuery() {
 bool Launcher::heroFactsShown() const {
     return settings_.shelves_hero_facts && screen_ == ScreenMode::shelves && settings_.home_layout == AppSettings::HomeLayout::shelves &&
            !desktopActive() && !cards_.empty() && selected_ < cards_.size() && isGame(cards_[selected_].game);
+}
+// Filtry (Tryb TV: the order's menu; the desktop window: its Filtry button): every one checked, from
+// the game index's tags (how the game is played) and the play history (Nigdy nie grane).
+void Launcher::applyLibraryFilters(std::vector<Game>& games, uint32_t filters) const {
+    if (!filters) return;
+    std::unordered_set<std::string> passing;
+    if (game_index_) passing = game_index_->read([&](const game_index::Index& index) {
+        std::unordered_set<std::string> keep;
+        for (const auto& game : games) {
+            if (!isGame(game)) continue;
+            auto key = gameKey(game);
+            const auto* record = index.get(key);
+            bool ok = true;
+            for (int bit = 0; bit < library_view::filter_count && ok; ++bit) {
+                const auto filter = static_cast<library_view::Filter>(bit);
+                if (!(filters & library_view::filterBit(filter))) continue;
+                ok = filter == library_view::Filter::unplayed ?
+                    !game.last_played && !game.store_playtime_minutes && !localPlaytime(game) && !(record && record->played()) :
+                    record && library_view::tagged(filter, record->tags);
+            }
+            if (ok) keep.insert(std::move(key));
+        }
+        return keep;
+    });
+    std::erase_if(games, [&](const Game& game) { return isGame(game) && !passing.contains(gameKey(game)); });
+}
+// Krótki opis (PSfive, Scena): the player's own description (Edytuj metadane); a Steam game's store text
+// in the interface's language once it is read: the game index's or RAWG's copy (often English) would
+// show first and then switch to it. Other games, or a store page without one: what Szczegóły shows.
+std::wstring Launcher::gameSummary(const Game& game) {
+    if (const auto* own = metadataOverride(game); own && !own->description.empty()) return own->description;
+    if (steamArtwork(game) && game.app_id) {
+        const auto* preview = preview_.find(game);
+        if (!preview) return {}; // Still being read: nothing yet (the space stays).
+        if (!preview->description.empty()) return preview->description;
+    }
+    bool loading = false;
+    return desktopDetails(game, loading).description;
 }
 bool Launcher::psfiveSummaryShown() const {
     return settings_.psfive_summary && psfiveActive() && !cards_.empty() && selected_ < cards_.size() && isGame(cards_[selected_].game);

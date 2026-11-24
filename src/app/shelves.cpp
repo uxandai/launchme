@@ -554,6 +554,7 @@ void Launcher::rebuildCards(bool preserve_background) {
             released = game_index_->read([](const game_index::Index& index) { return index.releases(); });
         // A board of logos keeps its own order (most games first, or the player's).
         arranged = studioBoard() ? source : library_view::arrange(source, library_controls_.options, library_state_.first_seen, private_shelf_, &released);
+        if (!studioBoard()) applyLibraryFilters(arranged, library_controls_.options.filters); // Filtry (the order's menu).
         // The library's search field keeps the games whose title contains the typed text, in order,
         // and the games of a typed genre or tag ("rpg", "przygodowe", "roguelike") or studio ("capcom").
         if (screen_ == ScreenMode::library && library_controls_.search) {

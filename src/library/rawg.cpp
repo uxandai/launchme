@@ -49,7 +49,7 @@ Search parseSearch(std::string_view body) {
     if (!results || results->type != json::Value::Type::array) return {{}, tr(L"Nieprawidłowa odpowiedź RAWG.")};
     Search search;
     for (const auto& item : results->elements) {
-        Candidate game{id(item), field(item, "name"), field(item, "released"), names(item, "platforms", true)};
+        Candidate game{id(item), field(item, "name"), field(item, "released"), names(item, "platforms", true), field(item, "background_image", 600)};
         if (game.id && !game.name.empty()) search.games.push_back(std::move(game));
         if (search.games.size() >= 10) break;
     }

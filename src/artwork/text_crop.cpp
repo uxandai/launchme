@@ -315,6 +315,66 @@ CropFocus chooseTextAwareCrop(int width, int height, const std::vector<TextBox>&
     return {(crop_x + side * 0.5f) / width, (crop_y + side * 0.5f) / height};
 }
 
+CropFocus chooseDetailCrop(uint32_t width, uint32_t height, std::span<const uint8_t> bgra) {
+    if (width < 3 || height < 3 || width == height || bgra.size() < static_cast<size_t>(width) * height * 4) return {};
+    std::vector<float> luma(static_cast<size_t>(width) * height);
+    for (size_t i = 0; i < luma.size(); ++i) luma[i] = 0.114f * bgra[i * 4] + 0.587f * bgra[i * 4 + 1] + 0.299f * bgra[i * 4 + 2];
+    // A Laplacian of the luminance (edges, lettering, faces), capped so one hard edge does not win,
+    // summed along the rows of a poster or the columns of a capsule.
+    const bool portrait = height > width;
+    const uint32_t length = portrait ? height : width, side = portrait ? width : height;
+    std::vector<float> line(length, 0.0f);
+    for (uint32_t y = 1; y + 1 < height; ++y)
+        for (uint32_t x = 1; x + 1 < width; ++x) {
+            const size_t at = static_cast<size_t>(y) * width + x;
+            const float edge = std::abs(4 * luma[at] - luma[at - 1] - luma[at + 1] - luma[at - width] - luma[at + width]);
+            line[portrait ? y : x] += std::min(edge, 96.0f) / 96.0f;
+        }
+    double total = 0;
+    for (float value : line) total += value;
+    if (total <= 0) return {};
+    // The window holding the most detail; the middle wins a tie (a small pull towards it).
+    const float middle = (length - side) * 0.5f;
+    const double pull = 0.002 * total / length;
+    double window = 0;
+    for (uint32_t i = 0; i < side; ++i) window += line[i];
+    float best = 0;
+    double score = window - pull * middle;
+    for (uint32_t start = 1; start + side <= length; ++start) {
+        window += line[start + side - 1] - line[start - 1];
+        const double value = window - pull * std::abs(static_cast<float>(start) - middle);
+        if (value > score) { score = value; best = static_cast<float>(start); }
+    }
+    const float center = (best + side * 0.5f) / length;
+    return portrait ? CropFocus{0.5f, center} : CropFocus{center, 0.5f};
+}
+
+CropFocus detailCrop(const std::filesystem::path& image) {
+    const auto decoded = image_codec::decodeFile(image, [](const image_codec::Info& info) -> std::optional<image_codec::Size> {
+        if (!info.width || !info.height || info.width > 8192 || info.height > 8192) return {};
+        const float scale = 96.0f / static_cast<float>(std::min(info.width, info.height));
+        if (scale >= 1) return image_codec::Size{info.width, info.height};
+        return image_codec::Size{std::max(1u, static_cast<uint32_t>(std::lround(info.width * scale))),
+                                 std::max(1u, static_cast<uint32_t>(std::lround(info.height * scale)))};
+    });
+    if (!decoded) return {};
+    return chooseDetailCrop(decoded->width, decoded->height, decoded->pixels);
+}
+
+namespace {
+bool centred(CropFocus focus) { return std::abs(focus.x - 0.5f) < 1e-4f && std::abs(focus.y - 0.5f) < 1e-4f; }
+// Version 5 kept the middle of art without readable lettering: its centred, non-square crops take
+// the most detailed square now (no OCR again); the rest stay as they were.
+std::optional<CropFocus> upgradedCrop(int version, CropFocus focus, const std::filesystem::path& image) {
+    if (version == crop_cache_version) return focus;
+    if (version != crop_cache_version - 1) return std::nullopt;
+    if (!centred(focus)) return focus;
+    const auto [width, height] = imageSize(image);
+    if (width <= 0 || width == height) return focus;
+    return detailCrop(image);
+}
+}
+
 CropFocus cachedAutomaticCrop(const std::filesystem::path& image, const std::filesystem::path& metadata, std::wstring_view title, bool force) {
     std::error_code ec;
     const auto bytes = std::filesystem::file_size(image, ec);
@@ -328,16 +388,21 @@ CropFocus cachedAutomaticCrop(const std::filesystem::path& image, const std::fil
         uint64_t cached_bytes = 0, cached_title = 0;
         int64_t cached_modified = 0;
         CropFocus cached;
-        if (input >> version >> cached_bytes >> cached_modified >> cached_title >> cached.x >> cached.y && version == crop_cache_version &&
+        input.imbue(std::locale::classic());
+        if (input >> version >> cached_bytes >> cached_modified >> cached_title >> cached.x >> cached.y &&
             cached_bytes == bytes && cached_modified == modified && cached_title == signature &&
-            cached.x >= 0 && cached.x <= 1 && cached.y >= 0 && cached.y <= 1) return cached;
+            cached.x >= 0 && cached.x <= 1 && cached.y >= 0 && cached.y <= 1)
+            if (const auto upgraded = upgradedCrop(version, cached, image)) {
+                if (version != crop_cache_version) storeAutomaticTextCrop(image, metadata, title, *upgraded);
+                return *upgraded;
+            }
     }
     const auto [width, height] = imageSize(image);
     if (!width || !height) return {};
     std::vector<TextBox> words;
     if (width != height) {
         const auto executable = tesseractExecutable();
-        if (executable.empty()) return chooseTextAwareCrop(width, height, {});
+        if (executable.empty()) return detailCrop(image); // Not kept: OCR may come later.
         words = parseCropWords(tesseractTsv(executable, image), title);
         const auto matched = [](const auto& items) { return std::any_of(items.begin(), items.end(), [](const auto& word) { return word.title_match; }); };
         if (!matched(words)) {
@@ -349,7 +414,9 @@ CropFocus cachedAutomaticCrop(const std::filesystem::path& image, const std::fil
             }
         }
     }
-    const auto focus = chooseTextAwareCrop(width, height, words);
+    // No lettering read: the most detailed square rather than the middle.
+    const bool lettering = std::any_of(words.begin(), words.end(), [](const TextBox& word) { return word.width > 0 && word.height > 0; });
+    const auto focus = width != height && !lettering ? detailCrop(image) : chooseTextAwareCrop(width, height, words);
     std::ostringstream output; output.imbue(std::locale::classic()); output.precision(9);
     output << crop_cache_version << ' ' << bytes << ' ' << modified << ' ' << signature << ' ' << focus.x << ' ' << focus.y << '\n';
     atomic_file::write(metadata, output.str());
@@ -414,8 +481,11 @@ std::optional<CropFocus> storedTextCrop(const std::filesystem::path& image, cons
     std::ifstream input(metadata); input.imbue(std::locale::classic());
     int version = 0; uint64_t cached_bytes = 0, title_hash = 0; int64_t cached_modified = 0; CropFocus focus;
     if (input >> version >> cached_bytes >> cached_modified >> title_hash >> focus.x >> focus.y &&
-        version == crop_cache_version && cached_bytes == bytes && cached_modified == modified &&
-        title_hash == titleSignature(title) && validFocus(focus)) return focus;
+        cached_bytes == bytes && cached_modified == modified && title_hash == titleSignature(title) && validFocus(focus))
+        if (const auto upgraded = upgradedCrop(version, focus, image)) {
+            if (version != crop_cache_version) storeAutomaticTextCrop(image, metadata, title, *upgraded);
+            return upgraded;
+        }
     // Square originals need neither OCR nor a crop sidecar.
     const auto [width, height] = imageSize(image);
     if (width > 0 && width == height) return CropFocus{};

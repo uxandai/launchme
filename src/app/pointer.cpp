@@ -322,8 +322,8 @@ bool Launcher::hoverButton(float mouse_x, float mouse_y) const {
         return hit && custom_game_ui::field(*hit) < 0;
     }
     case Modal::metadata:
-        if (desktop_meta_.find.open) return meta_find::Layout{view.width, view.height}.hit(x, y, desktop_meta_.find) >= 0;
-        return desktop_ui::MetaLayout{view.width, view.height}.hit(x, y, desktop_meta_.identify) >= desktop_ui::meta_fields;
+        if (desktop_meta_.find.open) return meta_find::Layout{view.width, view.height, true}.hit(x, y, desktop_meta_.find) >= 0;
+        return desktop_ui::MetaLayout{view.width, view.height, true}.hit(x, y) >= desktop_ui::meta_fields;
     case Modal::bulk_covers: return bulk_covers_ui::Layout{view.width, view.height, bulk_ui_.buttons()}.hit(x, y) >= 0;
     case Modal::identify: {
         const identify_ui::Layout layout{view.width, view.height};
@@ -448,6 +448,7 @@ bool Launcher::hoverButton(float mouse_x, float mouse_y) const {
         if (grid_scroll_ < 80 || screen_ == ScreenMode::platform_games || library_controls_.search || library_view::pinnedHeader(libraryView()))
             for (const int i : {library_ui::filters_button, library_ui::search_button, library_ui::views_button})
                 if ((i == library_ui::filters_button || screen_ == ScreenMode::library) && layout.button(i).contains(x, y)) return true;
+        if (libraryBandHit(x, y) >= 0) return true; // Siatka's collection tiles.
         if (!menu_open_ && libraryActions() && !cards_.empty()) {
             const int action = library_presentation::Layout{view.width, view.height, libraryView() == library_view::View::stage}.hitAction(x, y);
             if (action >= 0) return action != 0 || actionEnabled(cards_[selected_].game);
@@ -580,6 +581,9 @@ void Launcher::mouseMove(float mouse_x, float mouse_y) {
         // The empty home's buttons: the one under the pointer lights up.
         const int empty = emptyHomeActive() ? emptyHomeLayout().hit(mouse_x / glance_view.scale, mouse_y / glance_view.scale) : -1;
         if (empty_hover_ != empty) { empty_hover_ = empty; InvalidateRect(hwnd_, nullptr, FALSE); }
+        // Siatka's collection tiles: the one under the pointer lights up.
+        const int band = libraryBandHit(mouse_x / glance_view.scale, mouse_y / glance_view.scale);
+        if (band_hover_ != band) { band_hover_ = band; InvalidateRect(hwnd_, nullptr, FALSE); }
     }
     if (glanceOpen() && !friends_open_ && !power_menu_ && !exit_prompt_) {
         const int hover = glance_ui::Layout{glance_view.width,glance_view.height}.hit(mouse_x/glance_view.scale,mouse_y/glance_view.scale,glance_);

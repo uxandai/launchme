@@ -75,18 +75,21 @@ file(GLOB LAUNCHME_CASE_FRONTS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/re
 set(LAUNCHME_THEMES "${CMAKE_CURRENT_SOURCE_DIR}/res/HorizonsTheme.mp3" "${CMAKE_CURRENT_SOURCE_DIR}/res/ExploratorySilenceTheme.mp3"
     "${CMAKE_CURRENT_SOURCE_DIR}/res/QuietExplorationTheme.mp3"
     "${CMAKE_CURRENT_SOURCE_DIR}/res/achievement.mp3") # And the achievement card's sound.
+file(GLOB LAUNCHME_UISFX CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/res/uisfx/minimal/*.mp3") # Interface sounds (UI SFX, CC0).
 # The icon font standing in for Segoe Fluent Icons (tools/linux/make-icon-font.sh, Fluent UI System Icons, MIT).
 file(GLOB LAUNCHME_LEXEND CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/res/fonts/Lexend-*.ttf")
 set(LAUNCHME_FONTS "${CMAKE_CURRENT_SOURCE_DIR}/res/fonts/launchme-icons.ttf" "${CMAKE_CURRENT_SOURCE_DIR}/res/fonts/launchme-icons-LICENSE.txt"
     ${LAUNCHME_LEXEND} "${CMAKE_CURRENT_SOURCE_DIR}/res/fonts/Lexend-OFL.txt") # Lexend: Google Fonts, SIL OFL.
 add_custom_target(launchme_assets ALL
     COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/assets/studios" "${CMAKE_CURRENT_BINARY_DIR}/assets/platforms" "${CMAKE_CURRENT_BINARY_DIR}/assets/fonts"
-            "${CMAKE_CURRENT_BINARY_DIR}/assets/cases" "${CMAKE_CURRENT_BINARY_DIR}/assets/systems"
+            "${CMAKE_CURRENT_BINARY_DIR}/assets/cases" "${CMAKE_CURRENT_BINARY_DIR}/assets/systems" "${CMAKE_CURRENT_BINARY_DIR}/assets/uisfx/minimal"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${LAUNCHME_THEMES} "${CMAKE_CURRENT_BINARY_DIR}/assets/"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${LAUNCHME_UISFX} "${CMAKE_CURRENT_BINARY_DIR}/assets/uisfx/minimal/"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/res/uisfx/LICENSE.txt" "${CMAKE_CURRENT_BINARY_DIR}/assets/uisfx/"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${LAUNCHME_STUDIO_LOGOS} "${CMAKE_CURRENT_BINARY_DIR}/assets/studios/"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${LAUNCHME_PLATFORM_LOGOS} "${CMAKE_CURRENT_BINARY_DIR}/assets/platforms/"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${LAUNCHME_CASE_FRONTS} "${CMAKE_CURRENT_SOURCE_DIR}/res/cases/LICENSE.txt" "${CMAKE_CURRENT_BINARY_DIR}/assets/cases/"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${LAUNCHME_SYSTEM_LOGOS} "${CMAKE_CURRENT_SOURCE_DIR}/res/systems/README.txt" "${CMAKE_CURRENT_BINARY_DIR}/assets/systems/"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${LAUNCHME_FONTS} "${CMAKE_CURRENT_BINARY_DIR}/assets/fonts/"
-    DEPENDS ${LAUNCHME_THEMES} ${LAUNCHME_STUDIO_LOGOS} ${LAUNCHME_PLATFORM_LOGOS} ${LAUNCHME_CASE_FRONTS} ${LAUNCHME_SYSTEM_LOGOS} ${LAUNCHME_FONTS} VERBATIM)
+    DEPENDS ${LAUNCHME_THEMES} ${LAUNCHME_UISFX} "${CMAKE_CURRENT_SOURCE_DIR}/res/uisfx/LICENSE.txt" ${LAUNCHME_STUDIO_LOGOS} ${LAUNCHME_PLATFORM_LOGOS} ${LAUNCHME_CASE_FRONTS} ${LAUNCHME_SYSTEM_LOGOS} ${LAUNCHME_FONTS} VERBATIM)
 add_dependencies(launchme launchme_assets)

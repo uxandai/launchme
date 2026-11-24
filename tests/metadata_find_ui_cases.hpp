@@ -1,7 +1,7 @@
-// Included after LauncherUiTest: "Znajdź" in Edytuj metadane (src/app/metadata_find.cpp). The button in the
-// dialog's heading opens a pane that searches the stores and databases with the game's title and its Switch
-// title ID (from the file name), lists what they found, and "Wstaw" copies the ticked details into the dialog;
-// only Zapisz makes them the player's own. Tryb TV (the pad, the on-screen keyboard) and the desktop window
+// Included after LauncherUiTest: "Identyfikuj grę" in Edytuj metadane (src/app/metadata_find.cpp). The button under
+// the poster opens a pane that searches the databases and stores with the game's title and its Switch title ID
+// (from the file name), lists what they found, and "Wstaw" copies a store's ticked details into the dialog;
+// only Zapisz makes them the player's own (the databases are never asked in UI tests: no network). Tryb TV (the pad, the on-screen keyboard) and the desktop window
 // (keys, the mouse) share it. The sources are an injected fake: nothing reaches the network. Captures: meta-find-*.png.
 int LauncherUiTest::metadataFind(HWND window) {
     namespace mf = meta_find;
@@ -39,12 +39,14 @@ int LauncherUiTest::metadataFind(HWND window) {
     library->games.push_back(star);
     app.onLibrary(std::move(library)); app.showCategory(0);
 
-    // ---- Tryb TV: Znajdź is the first row; A opens it, the file name's title ID goes to the eShop.
+    // ---- Tryb TV: Znajdź metadane opens the bottom row (Down from the last field); A opens it, the file name's
+    // title ID goes to the eShop.
     app.pad_input_ = true;
     app.openMetadata(star);
     auto& meta = app.desktop_meta_;
+    const auto downToFind = [&] { for (int i = 0; i < 6; ++i) app.metadataKey(VK_DOWN, false); };
     if (!app.metadataOpen() || meta.find.open || meta.focus != 0) return 11001;
-    app.metadataKey(VK_UP, false);
+    downToFind();
     if (meta.focus != static_cast<int>(MetaItem::find)) return 11002;
     app.metadataKey(VK_RETURN, false);
     auto& find = meta.find;
@@ -55,10 +57,9 @@ int LauncherUiTest::metadataFind(HWND window) {
         find.results[0].values[4] != L"Shooter" || !find.results[0].values[1].empty()) return 11006; // No developer from the eShop.
     if (find.canTake(1) || !find.canTake(0) || !find.take[0] || find.take[1] || !find.take[2] || !find.take[3] || !find.take[4]) return 11007;
     if (!capture(app, L"meta-find-tv.png")) return 11008;
-    // The pad: Down to the result, to the details (the missing developer is skipped), A unticks Opis.
-    app.metadataKey(VK_DOWN, false);
+    // The pad starts on the results; Right to the details (the missing developer is skipped), A unticks Opis.
     if (find.focus != mf::item::result_first) return 11009;
-    app.metadataKey(VK_DOWN, false);
+    app.metadataKey(VK_RIGHT, false);
     if (find.focus != mf::item::take_first) return 11010;
     app.metadataKey(VK_RETURN, false);
     if (find.take[0]) return 11011;
@@ -74,7 +75,7 @@ int LauncherUiTest::metadataFind(HWND window) {
     if (meta.focus != 3 || app.metadataOverride(star)) return 11017; // Not saved yet.
     if (!capture(app, L"meta-find-tv-inserted.png")) return 11018;
     // B in the pane goes back to the fields, B again closes the dialog.
-    app.metadataKey(VK_UP, false); app.metadataKey(VK_UP, false); app.metadataKey(VK_UP, false); app.metadataKey(VK_UP, false);
+    downToFind(); // From Wydawca down to the bottom row's first button.
     if (meta.focus != static_cast<int>(MetaItem::find)) return 11019;
     app.metadataKey(VK_RETURN, false);
     if (!find.open) return 11020;
@@ -85,10 +86,11 @@ int LauncherUiTest::metadataFind(HWND window) {
 
     // The title typed with the on-screen keyboard: only that search runs, without the file's title ID.
     app.openMetadata(star);
-    app.metadataKey(VK_UP, false); app.metadataKey(VK_RETURN, false);
+    downToFind(); app.metadataKey(VK_RETURN, false);
     if (!meta.find.open) return 11023;
     asked.clear();
-    app.metadataKey(VK_RETURN, false); // A on the title: the keyboard.
+    app.metadataKey(VK_UP, false);     // From the results to the title,
+    app.metadataKey(VK_RETURN, false); // A on it: the keyboard.
     if (!app.keyboard_.open || app.keyboardPreview() != L"Star Fox") return 11024;
     for (int i = 0; i < 8; ++i) app.keyboardBackspace();
     for (const wchar_t c : std::wstring(L"Zelda")) app.onCharacter(c);
@@ -112,16 +114,16 @@ int LauncherUiTest::metadataFind(HWND window) {
     app.paint();
     const auto view = app.renderer_.desktopViewport();
     const float scale = view.scale;
-    const desktop_ui::MetaLayout dialog{view.width, view.height};
-    const mf::Layout layout{view.width, view.height};
+    const desktop_ui::MetaLayout dialog{view.width, view.height, false};
+    const mf::Layout layout{view.width, view.height, false};
     const auto click = [&](settings_ui::Rect r, bool press = true) {
         return app.desktopMetaPointer((r.left + r.right) * 0.5f * scale, (r.top + r.bottom) * 0.5f * scale, press);
     };
-    // The button in the heading.
-    click(dialog.findButton(), false);
+    // Znajdź metadane / Identyfikuj grę, first in the bottom row.
+    click(dialog.button(MetaItem::find), false);
     if (meta.hover != static_cast<int>(MetaItem::find)) return 11031;
     if (!capture(app, L"meta-find-desktop-dialog.png")) return 11032;
-    click(dialog.findButton());
+    click(dialog.button(MetaItem::find));
     if (!meta.find.open || meta.find.results.size() != 1 || meta.find.focus != mf::item::query) return 11033;
     if (!capture(app, L"meta-find-desktop.png")) return 11034;
     if (app.desktopCursor((layout.field().left + 40) * scale, (layout.field().top + 10) * scale) != IDC_IBEAM ||

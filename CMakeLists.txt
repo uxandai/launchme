@@ -164,6 +164,16 @@ add_custom_target(launchme_audio ALL
     DEPENDS "${LAUNCHME_RES_DIR}/HorizonsTheme.mp3" "${LAUNCHME_RES_DIR}/ExploratorySilenceTheme.mp3" "${LAUNCHME_RES_DIR}/QuietExplorationTheme.mp3" "${LAUNCHME_RES_DIR}/achievement.mp3" VERBATIM)
 add_dependencies(launchme launchme_audio)
 install(FILES res/HorizonsTheme.mp3 res/ExploratorySilenceTheme.mp3 res/QuietExplorationTheme.mp3 res/achievement.mp3 DESTINATION assets COMPONENT Runtime)
+# Interface sounds: UI SFX's Minimal pack (CC0, res/uisfx/LICENSE.txt; src/platform/sound_cues.hpp).
+file(GLOB LAUNCHME_UISFX CONFIGURE_DEPENDS "${LAUNCHME_RES_DIR}/uisfx/minimal/*.mp3")
+add_custom_target(launchme_uisfx ALL
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets/uisfx/minimal"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${LAUNCHME_UISFX} "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets/uisfx/minimal/"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${LAUNCHME_RES_DIR}/uisfx/LICENSE.txt" "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets/uisfx/"
+    DEPENDS ${LAUNCHME_UISFX} "${LAUNCHME_RES_DIR}/uisfx/LICENSE.txt" VERBATIM)
+add_dependencies(launchme launchme_uisfx)
+install(FILES ${LAUNCHME_UISFX} DESTINATION assets/uisfx/minimal COMPONENT Runtime)
+install(FILES res/uisfx/LICENSE.txt DESTINATION assets/uisfx COMPONENT Runtime)
 # Publisher and developer logos (src/library/studios.cpp; HVR88's Monochrome Gaming Logos, see README).
 file(GLOB LAUNCHME_STUDIO_LOGOS CONFIGURE_DEPENDS "${LAUNCHME_RES_DIR}/studios/*.png")
 add_custom_target(launchme_studios ALL
@@ -466,6 +476,7 @@ add_test(NAME games_added_by_hand_without_file COMMAND launcher_ui_tests --manua
 add_test(NAME launch_scripts_tabs_and_lifecycle COMMAND launcher_ui_tests --launch-scripts)
 add_test(NAME game_mods_tab_badges_and_installs COMMAND launcher_ui_tests --game-mods)
 add_test(NAME metadata_find_in_edit_metadata COMMAND launcher_ui_tests --metadata-find)
+add_test(NAME library_collection_tiles COMMAND launcher_ui_tests --collection-band)
 add_test(NAME desktop_076 COMMAND launcher_ui_tests --ux-076)
 add_test(NAME low_memory_mode COMMAND launcher_ui_tests --low-memory)
     add_test(NAME hltb_details_and_active_game_widget COMMAND launcher_ui_tests --hltb-details)

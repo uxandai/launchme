@@ -195,6 +195,7 @@ void Launcher::desktopMetaOpen(const Game& game) {
     meta.shown = meta.fields;
     meta.overridden = metadataOverride(game) != nullptr;
     meta.identify = !steamArtwork(game); // Steam's own games are identified by their AppID already.
+    meta.identity = identityLabel(game);
     meta.caret = meta.fields[0].size();
     meta.pad = !desktop_mode_;
     desktop_meta_key_ = gameKey(game);
@@ -204,8 +205,30 @@ void Launcher::desktopMetaOpen(const Game& game) {
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
+ImageBytes Launcher::metaPoster() const {
+    if (!desktop_meta_.open) return {};
+    const auto* art = art_.peek(gameKey(desktop_meta_game_));
+    if (!art) return {};
+    return art->poster ? art->poster : art->cover;
+}
+
+// Under Identyfikuj grę: what names the game now.
+std::wstring Launcher::identityLabel(const Game& game) const {
+    const auto key = gameKey(game);
+    if (steamArtwork(game)) return L"Steam \u00b7 AppID " + std::to_wstring(game.app_id);
+    if (const auto found = rawg_metadata_.find(key); found != rawg_metadata_.end() && !found->second.name.empty()) return L"RAWG \u00b7 " + found->second.name;
+    if (emulation_metadata_.contains(key)) {
+        const auto name = emulation_names_.find(key);
+        return name != emulation_names_.end() ? L"ScreenScraper \u00b7 " + name->second : std::wstring(L"ES-DE / ScreenScraper");
+    }
+    if (const auto* own = metadataOverride(game); own && !own->description.empty()) return tr(L"Własne metadane");
+    return tr(L"Gra nie jest zidentyfikowana");
+}
+
 void Launcher::desktopMetaClose() {
     if (!desktop_meta_.open) return;
+    meta_closing_ = desktop_meta_; // Drawn while it fades away.
+    meta_closing_poster_ = metaPoster();
     desktop_meta_ = {};
     desktop_meta_key_.clear();
     desktop_meta_game_ = {};
@@ -297,14 +320,6 @@ void Launcher::desktopMetaActivate(int item) {
     }
     case MetaItem::cancel: case MetaItem::close: desktopMetaClose(); return;
     case MetaItem::find: metaFindOpen(); return;
-    case MetaItem::identify: {
-        // The game's match in RAWG (its details and artwork), in place of this dialog: what was typed here is not kept.
-        if (!desktop_meta_.identify) return;
-        const auto game = desktop_meta_game_;
-        desktopMetaClose();
-        openIdentifyFor(game);
-        return;
-    }
     default: return;
     }
 }
@@ -346,11 +361,10 @@ bool Launcher::desktopMetaKey(WPARAM key) {
     if (text) meta.caret = std::min(meta.caret, text->size());
     switch (key) {
     case VK_ESCAPE: desktopMetaClose(); return true;
-    case VK_TAB: { // Znajdź, the fields, then Zapisz, Przywróć automatyczne, Anuluj and Zidentyfikuj.
-        std::vector<int> order{static_cast<int>(MetaItem::find)};
-        for (int i = 0; i < meta_fields; ++i) order.push_back(i);
-        for (const auto item : {MetaItem::save, MetaItem::restore, MetaItem::cancel}) order.push_back(static_cast<int>(item));
-        if (meta.identify) order.push_back(static_cast<int>(MetaItem::identify));
+    case VK_TAB: { // The fields, then the bottom row: Znajdź metadane / Identyfikuj grę, Przywróć automatyczne, Anuluj and Zapisz.
+        std::vector<int> order;
+        for (const int i : {0, 1, 2, 3, 4, 6, 5, 7}) order.push_back(i);
+        for (const auto item : {MetaItem::find, MetaItem::restore, MetaItem::cancel, MetaItem::save}) order.push_back(static_cast<int>(item));
         const auto at = std::find(order.begin(), order.end(), meta.focus);
         const int count = static_cast<int>(order.size()), position = at == order.end() ? 0 : static_cast<int>(at - order.begin());
         meta.focus = order[static_cast<size_t>((position + (shift ? count - 1 : 1)) % count)];
@@ -405,8 +419,8 @@ bool Launcher::desktopMetaPointer(float mouse_x, float mouse_y, bool press, bool
     const auto view = renderer_.desktopViewport();
     const float scale = desktopScale();
     if (meta.find.open) return metaFindPointer(mouse_x / scale, mouse_y / scale, press, double_click, scale);
-    const MetaLayout layout{view.width, view.height};
-    const int hit = layout.hit(mouse_x / scale, mouse_y / scale, meta.identify);
+    const MetaLayout layout{view.width, view.height, meta.pad};
+    const int hit = layout.hit(mouse_x / scale, mouse_y / scale);
     if (!press) {
         if (hit != meta.hover) { meta.hover = hit; InvalidateRect(hwnd_, nullptr, FALSE); }
         return true;
@@ -440,14 +454,11 @@ void Launcher::openMetadata(const Game& game) {
 }
 
 namespace {
-// Rows of the dialog as drawn: Znajdź (in the heading); Tytuł; Opis; Producent | Wydawca; Data premiery | Czas przejścia | Gatunki;
-// Czas gry; Przywróć | Zidentyfikuj | Zapisz | Anuluj.
-std::vector<std::vector<int>> metaRows(bool identify) {
-    std::vector<std::vector<int>> rows{{static_cast<int>(MetaItem::find)}, {0}, {1}, {2, 3}, {4, 6, 5}, {7}, {static_cast<int>(MetaItem::restore)}};
-    if (identify) rows.back().push_back(static_cast<int>(MetaItem::identify));
-    rows.back().push_back(static_cast<int>(MetaItem::save));
-    rows.back().push_back(static_cast<int>(MetaItem::cancel));
-    return rows;
+// Rows of the dialog as drawn: Tytuł; Opis; Producent | Wydawca; Data premiery | Czas przejścia | Gatunki; Czas gry;
+// Znajdź metadane / Identyfikuj grę | Przywróć automatyczne | Anuluj | Zapisz.
+std::vector<std::vector<int>> metaRows() {
+    return {{0}, {1}, {2, 3}, {4, 6, 5}, {7},
+            {static_cast<int>(MetaItem::find), static_cast<int>(MetaItem::restore), static_cast<int>(MetaItem::cancel), static_cast<int>(MetaItem::save)}};
 }
 }
 
@@ -456,7 +467,7 @@ void Launcher::metadataKey(WPARAM key, bool repeated) {
     if (!metadataOpen()) return;
     if (meta.find.open) { metaFindKey(key, repeated); return; }
     const bool field = meta.focus >= 0 && meta.focus < meta_fields;
-    const auto rows = metaRows(meta.identify);
+    const auto rows = metaRows();
     int row = 0, column = 0;
     for (int r = 0; r < static_cast<int>(rows.size()); ++r)
         for (int c = 0; c < static_cast<int>(rows[static_cast<size_t>(r)].size()); ++c)
@@ -500,7 +511,7 @@ void Launcher::metadataClick(float x, float y) {
     if (!metadataOpen()) return;
     if (desktop_meta_.find.open) { metaFindPointer(x, y, true); return; }
     const auto view = renderer_.viewport();
-    const int hit = MetaLayout{view.width, view.height}.hit(x, y, desktop_meta_.identify); // Logical coordinates.
+    const int hit = MetaLayout{view.width, view.height, true}.hit(x, y); // Logical coordinates.
     if (hit < 0) return; // Outside: it stays.
     if (hit < meta_fields) {
         desktop_meta_.focus = hit;
@@ -516,6 +527,6 @@ void Launcher::metadataPointer(float x, float y) {
     if (!metadataOpen()) return;
     if (desktop_meta_.find.open) { metaFindPointer(x, y, false); return; }
     const auto view = renderer_.viewport();
-    const int hit = MetaLayout{view.width, view.height}.hit(x, y, desktop_meta_.identify); // Logical coordinates.
+    const int hit = MetaLayout{view.width, view.height, true}.hit(x, y); // Logical coordinates.
     if (hit != desktop_meta_.hover) { desktop_meta_.hover = hit; InvalidateRect(hwnd_, nullptr, FALSE); }
 }

@@ -438,6 +438,7 @@ void Launcher::requestVisibleArt() {
     if (cards_.empty()) return;
     if (screen_ == ScreenMode::settings) return;
     if (desktopActive()) { desktopRequestArt(); return; }
+    requestBandArt(); // Siatka's collection tiles.
     {
         std::lock_guard lock(jobs_->mutex);
         jobs_->focus = gameKey(cards_[selected_].game);

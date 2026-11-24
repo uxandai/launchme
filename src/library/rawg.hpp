@@ -7,6 +7,7 @@ namespace rawg {
 struct Candidate {
     uint32_t id = 0;
     std::wstring name, released, platforms;
+    std::wstring image; // background_image: a screenshot of the game, for the list.
 };
 struct Search { std::vector<Candidate> games; std::wstring error; };
 struct Metadata {

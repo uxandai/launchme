@@ -12,7 +12,22 @@ namespace library_ui {
 enum class Panel { none, filters, views };
 // back_button: the glass circle at the top left.
 constexpr int search_button = 0, filters_button = 1, views_button = 2, back_button = 3;
-constexpr int filter_rows = library_view::order_count + 1; // Last row: installed only.
+// The order's menu, two columns: Sortuj (the orders) and Filtry: Tylko zainstalowane, the game's
+// modes (library_view::Filter) as check boxes, then Wyczyść filtry.
+constexpr int installed_row = library_view::order_count;
+constexpr int first_filter_row = installed_row + 1;
+constexpr int filter_rows = first_filter_row + library_view::filter_count + 1;
+constexpr int clear_row = filter_rows - 1;
+inline int filterColumn(int row) { return row < library_view::order_count ? 0 : 1; }
+// Up/Down within a column (no wrapping), Left/Right across to the row at the same height.
+inline int filterMove(int row, int dx, int dy) {
+    const int column = filterColumn(row);
+    if (dx) {
+        if ((dx > 0) == (column == 1)) return row;
+        return column == 0 ? installed_row + row : std::min(row - installed_row, library_view::order_count - 1);
+    }
+    return std::clamp(row + dy, column ? installed_row : 0, column ? filter_rows - 1 : library_view::order_count - 1);
+}
 struct State {
     library_view::Options options;
     int focus = -1;           // Top bar button; -1 = the games have focus.
@@ -35,7 +50,7 @@ struct State {
 // title (library_tabs, grid_layout.hpp), the filters, the magnifier, the view icon.
 struct Layout {
     float width;
-    static constexpr float row_step = 53, toggle_gap = 12, filters_width = 300;
+    static constexpr float row_step = 53, toggle_gap = 12, filters_width = 300, column_width = 300, column_gap = 12, heading_height = 42;
     settings_ui::Rect views() const { return {width - 64 - 46, 32, width - 64, 78}; }
     settings_ui::Rect search() const { const auto v = views(); return {v.left - 12 - 46, 32, v.left - 12, 78}; }
     settings_ui::Rect filters() const { const auto s = search(); return {s.left - 12 - library_tabs::filtersWidth(width), 32, s.left - 12, 78}; }
@@ -43,15 +58,23 @@ struct Layout {
     settings_ui::Rect button(int index) const { return index == back_button ? back() : index == search_button ? search() : index == views_button ? views() : filters(); }
     // The search field unfolds into the free line under the top bar.
     settings_ui::Rect field() const { return {60, 92, filters().left - 24, 172}; }
-    // Filter menu under its button, right-aligned with it.
+    // The menu under its button, right-aligned with it: Sortuj on the left, Filtry (the taller) on the right.
     settings_ui::Rect menu() const {
         const auto f = filters();
-        return {f.right - 330, 90, f.right, 90 + 16 + filter_rows * row_step + toggle_gap};
+        const float width = 2 * column_width + column_gap + 24;
+        return {f.right - width, 90, f.right, 90 + 16 + heading_height + (filter_rows - installed_row) * row_step + toggle_gap};
+    }
+    settings_ui::Rect heading(int column) const {
+        const auto m = menu();
+        const float left = m.left + 12 + column * (column_width + column_gap);
+        return {left, m.top + 8, left + column_width, m.top + 8 + heading_height};
     }
     settings_ui::Rect choice(int index) const {
         const auto m = menu();
-        const float top = m.top + 8 + index * row_step + (index >= library_view::order_count ? toggle_gap : 0);
-        return {m.left + 12, top, m.right - 12, top + 48};
+        const int column = filterColumn(index), at = column ? index - installed_row : index;
+        const float left = m.left + 12 + column * (column_width + column_gap);
+        const float top = m.top + 8 + heading_height + at * row_step + (index == clear_row ? toggle_gap : 0);
+        return {left, top, left + column_width, top + 48};
     }
     int hitChoice(float x, float y) const {
         for (int i = 0; i < filter_rows; ++i) if (choice(i).contains(x, y)) return i;
@@ -65,8 +88,10 @@ inline int optionCount(library_view::View view) {
     using library_view::View;
     // Kinowy: its scrolling, then the platform, last played and playtime beside the year. Coverflow:
     // its variant; on Półka also the grey side cases and the platform band.
-    return view == View::cinematic ? 4 : view == View::list ? 3 : view == View::bookshelf ? 3 : view == View::grid || view == View::overview || view == View::coverflow ||
-        view == View::list_plus || view == View::stage ? 1 : 0;
+    // Siatka: its artwork, its number of columns, the collections as tiles above the games. Scena: its
+    // short summary, then how dark its background is (one setting for every Scena).
+    return view == View::cinematic ? 4 : view == View::list ? 3 : view == View::bookshelf ? 3 : view == View::grid ? 3 : view == View::stage ? 2 :
+        view == View::overview || view == View::coverflow || view == View::list_plus ? 1 : 0;
 }
 inline int closeRow(library_view::View view) { return optionCount(view) + 1; }
 inline float eased(float progress) { const float t = std::clamp(progress, 0.0f, 1.0f); return t * t * (3 - 2 * t); }

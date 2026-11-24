@@ -138,10 +138,10 @@ void Launcher::desktopQuickRun(int index, bool play) {
             desktopShowSection("all");
             at = shown();
         }
-        if (!at && settings_.desktop_installed) {
-            // A game to install while the view shows installed ones only: the filter gives way,
-            // as its own "Pokaż wszystkie" would, instead of Enter doing nothing.
-            settings_.desktop_installed = false; settings_dirty_ = true; settings_edited_ = std::chrono::steady_clock::now();
+        if (!at && desktopFiltered()) {
+            // A game the filters hide (one to install while only installed ones show, one without the
+            // checked modes): they give way, as "Wyczyść filtry" would, instead of Enter doing nothing.
+            settings_.desktop_installed = false; settings_.desktop_filters = 0; settings_dirty_ = true; settings_edited_ = std::chrono::steady_clock::now();
             rebuildCards(true);
             at = shown();
         }

@@ -127,8 +127,6 @@ context_menu::Rows Launcher::menuRows() const {
         rows.compat = compatMenu(game);
         rows.shortcuts = shortcutAvailable(game, ShortcutPlace::desktop) || shortcutAvailable(game, ShortcutPlace::menu) ||
                          shortcutAvailable(game, ShortcutPlace::steam);
-        rows.aurelia = aurelia_active_ && aurelia::validGame(game);
-        rows.steam_account = steamAccountChoices(game).size() > 1;
         rows.emulator = gameEmulatorEditable(game);
         rows.metadata = isGame(game) && game.kind != GameKind::catalog && !gameKey(game).empty(); // Not a store's offer.
         // Zidentyfikuj grę… / ponownie… (an unidentified game also has Details' own button).
@@ -154,8 +152,6 @@ context_menu::Rows Launcher::menuRows() const {
         rows.compat = compatMenu(game);
         rows.shortcuts = shortcutAvailable(game, ShortcutPlace::desktop) || shortcutAvailable(game, ShortcutPlace::menu) ||
                          shortcutAvailable(game, ShortcutPlace::steam);
-        rows.aurelia = aurelia_active_ && aurelia::validGame(game);
-        rows.steam_account = steamAccountChoices(game).size() > 1;
         rows.emulator = gameEmulatorEditable(game);
         rows.metadata = !gameKey(game).empty();
         rows.identify = rows.metadata && !steamArtwork(game);

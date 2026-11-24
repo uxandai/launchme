@@ -195,12 +195,19 @@ void Renderer::drawArtworkBrowser() {
         }
         target_->PopAxisAlignedClip(); return;
     }
+    // A cell still on its way pulses (a skeleton), each a little after the one before.
+    const auto pulse = [&](settings_ui::Rect r, size_t i) {
+        fill(r, shade(1, 0.035f + 0.03f * (0.5f + 0.5f * std::sin(elapsed_ * 2.6f - static_cast<float>(i) * 0.35f))));
+        skeleton_at_ = std::chrono::steady_clock::now(); // Keeps the frames coming (animating()).
+    };
+    std::optional<settings_ui::Rect> focus_cell;
     for (size_t i = 0; i < state.assets.size(); ++i) {
         const auto r = layout.cell(i, state.scroll);
         if (r.bottom < layout.top || r.top >= layout.bottom()) continue;
         const auto& asset = state.assets[i];
         fill(r, shade(0.06f));
         const bool selected = state.gallery && state.selected == i;
+        if (selected) focus_cell = r;
         const bool live_video = state.boot_video && selected && context_->artwork_preview_id == asset.id && wallpaper_video_;
         if (live_video) {
             const auto size = wallpaper_video_->GetPixelSize();
@@ -227,8 +234,8 @@ void Renderer::drawArtworkBrowser() {
             const float x = (r.left + r.right - w) * 0.5f, y = (r.top + r.bottom - h) * 0.5f;
             target_->DrawBitmap(image.bitmap.Get(), D2D1::RectF(x, y, x + w, y + h), state.applying && !selected ? 0.55f : 1.0f,
                                  D2D1_BITMAP_INTERPOLATION_MODE_LINEAR, &source);
-        }
-        outline(r, selected ? shade(0.95f, 0.8f) : shade(1, 0.12f), selected ? 2.0f : 1.0f);
+        } else if (!asset.current) pulse(r, i);
+        outline(r, shade(1, 0.12f)); // The focused one's white outline springs on its own (below).
         float badge_left = r.left + 10;
         if (asset.animated) { // It moves already; the label says so where the motion is slow.
             const settings_ui::Rect badge{badge_left, r.top + 10, badge_left + 110, r.top + 38};
@@ -248,10 +255,24 @@ void Renderer::drawArtworkBrowser() {
             line(x - 5, y, x - 1, y + 4, shade(0.10f), 1.7f);
             line(x - 1, y + 4, x + 6, y - 4, shade(0.10f), 1.7f);
         }
-        // ScreenScraper / ES-DE media carry no dimensions: their source label alone.
+        // ScreenScraper / ES-DE media carry no dimensions: their source label alone; the art in use says so.
         const auto size = asset.width && asset.height ? std::to_wstring(asset.width) + L" × " + std::to_wstring(asset.height) : std::wstring{};
-        text(size.empty() ? asset.author : size + (asset.author.empty() ? L"" : L" · " + asset.author), r.left + 3, r.bottom + 8,
-             r.right - r.left - 6, 27, toast_sub_font_.Get(), shade(selected ? 0.72f : 0.44f));
+        const std::wstring about = asset.current ? (asset.id == state.applied_id ? std::wstring(tr(L"W użyciu")) : std::wstring{}) :
+                                   size.empty() ? asset.author : size + (asset.author.empty() ? L"" : L" · " + asset.author);
+        text(about, r.left + 3, r.bottom + 8, r.right - r.left - 6, 27, toast_sub_font_.Get(), shade(selected ? 0.72f : 0.44f));
+    }
+    // The page on its way: the cells it will fill pulse after the art in use.
+    if (state.loading && !state.results_mode)
+        for (size_t i = state.assets.size(); i < state.assets.size() + 40; ++i) {
+            const auto r = layout.cell(i, state.scroll);
+            if (r.top >= layout.bottom()) break;
+            if (r.bottom >= layout.top) pulse(r, i);
+        }
+    // The focused picture's outline, springing from one to the next (ViewContext::artwork_cell_glide).
+    if (focus_cell) {
+        auto r = *focus_cell;
+        if (const auto& glide = context_->artwork_cell_glide) r = {glide->left, glide->top, glide->right, glide->bottom};
+        outline(r, shade(0.95f, 0.85f), 2.5f);
     }
     target_->PopAxisAlignedClip();
     const float maximum = layout.maxScroll(state.assets.size());

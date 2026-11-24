@@ -286,6 +286,11 @@ public:
     void setFileBrowserPreview(std::vector<uint8_t> bytes);
     // Dodaj / Edytuj grę: its poster still decoding (the launcher paints until it shows).
     bool customPosterPending() const { return custom_poster_.loaded() && !custom_poster_.bitmap; }
+    bool dialogImagesPending() const {
+        if (meta_poster_.loaded() && !meta_poster_.bitmap) return true;
+        for (const auto& image : find_thumbs_) if (image.loaded() && !image.bitmap) return true;
+        return false;
+    }
     void setArtworkThumbnail(size_t index, std::vector<uint8_t> bytes, bool logo);
     // Zmień grafikę: an animated asset's tile plays its short loop in place of a still
     // (animated_art_renderer.cpp); artworkAnimationDue tells the launcher a tile's next frame is due.
@@ -667,6 +672,7 @@ private:
     void drawFlixRail();  // Flix (AppSettings::flix_rail): the icons at the left edge (src/ui/flix_rail_renderer.cpp).
     void drawEmptyLibrary(); // The TV home without games: why, and its three buttons (empty_library.hpp).
     void drawGrid();
+    void drawCollectionBand(); // Siatka's collection tiles above the games (src/ui/collection_band_renderer.cpp).
     void drawPluginPage(float left = 0, bool drawer = false);
     void drawStoreField(float left, float top, float right, float bottom, const std::wstring& query, const std::wstring& placeholder, bool typing, size_t caret);
     // A grid page's tile (the Stores' built-in tabs): its 16:9 picture (or mark on its colour) in `picture`, the
@@ -1075,7 +1081,9 @@ private:
     void desktopHot(desktop_ui::SheetHit hit, settings_ui::Rect rect) { desktop_hotspots_.push_back({hit, rect}); }
     // Desktop dialogs over desktop pages (src/ui/desktop_dialogs_renderer.cpp).
     bool desktopDialogs() const;
-    settings_ui::Rect desktopDialogFrame(const Viewport& view, float width, float height, const std::wstring& title, bool back);
+    class DialogMotion; // Below (the dialogs' entrance and exit).
+    settings_ui::Rect desktopDialogFrame(const Viewport& view, float width, float height, const std::wstring& title, bool back,
+                            std::optional<DialogMotion>* motion = nullptr); // motion: started over the dim (Dodaj / Edytuj grę).
     void desktopTextField(settings_ui::Rect field, const std::wstring& value, const std::wstring& placeholder, size_t caret, bool focused,
                           bool selected, float hover);
     void drawDesktopCollectionsDialog();
@@ -1099,13 +1107,38 @@ private:
     void fillBrandGeometry(const std::string& key, ID2D1Geometry* geometry, const D2D1_MATRIX_3X2_F& transform, D2D1_COLOR_F ink);
     void drawDesktopQuick(const desktop_ui::View& view);
     void drawDesktopMeta(const desktop_ui::MetaView& meta);
-    void drawMetaFind(const desktop_ui::MetaView& meta, bool tv); // Znajdź, the pane over its fields (src/ui/meta_find_renderer.cpp).
+    void drawMetaFind(const desktop_ui::MetaView& meta, bool tv); // Identyfikuj grę, the pane in place of its fields (src/ui/meta_find_renderer.cpp).
     void drawTvMeta(const desktop_ui::MetaView& meta); // Tryb TV's, from the game's menu (src/ui/tv_metadata_renderer.cpp).
+    // Tryb TV's dialogs (Dodaj / Edytuj grę and its Opcje uruchamiania, Edytuj metadane, Identyfikuj grę): one panel, its
+    // heading as Settings' pages (the game, under it what the dialog does), one white ring on the focused item.
+    void tvDialogFrame(settings_ui::Rect panel, const std::wstring& heading, const std::wstring& subtitle);
+    void tvFocusRing(settings_ui::Rect r, float radius, const std::optional<ViewContext::GlideBox>& glide = std::nullopt); // glide: where it is on its way to r.
+    // The window's dialogs drawn by hand in desktopDialogFrame's look (dim, shadow, sheet, title, close).
+    void desktopDialogSheet(settings_ui::Rect panel, const std::wstring& title, bool close_hover);
+    // An image of a dialog (Edytuj metadane's poster, Identyfikuj grę's pictures) bound from its bytes; null until decoded.
+    Cover* dialogImage(Cover& slot, const ImageBytes& bytes);
+    // A dialog's entrance and exit (ViewContext::meta_motion, editor_motion): 0 hidden, 1 shown, set around its
+    // drawing. Its scrim fades with it (dialogScrim); its panel fades in, rises and grows from 96 % (DialogMotion,
+    // from its constructor to the end of the drawing).
+    float dialog_motion_ = 1;
+    void dialogScrim(D2D1_COLOR_F color);
+    class DialogMotion {
+    public:
+        DialogMotion(Renderer& renderer, settings_ui::Rect panel);
+        ~DialogMotion();
+        DialogMotion(const DialogMotion&) = delete;
+        DialogMotion& operator=(const DialogMotion&) = delete;
+    private:
+        Renderer& renderer_;
+        bool active_ = false;
+        D2D1::Matrix3x2F transform_{};
+    };
     void desktopSelection(const std::wstring& value, float left, float cy, float width, IDWriteTextFormat* format); // Its highlight, if any.
     void desktopFill(settings_ui::Rect r, float radius, D2D1_COLOR_F ink);
     void desktopStroke(settings_ui::Rect r, float radius, D2D1_COLOR_F ink, float width = 1);
     void desktopShadow(settings_ui::Rect r, float radius, float strength);
     void desktopFocusRing(settings_ui::Rect r, float radius);
+    // style: 0 plain, 1 outlined, 2 primary (Kolor przycisku Graj), 3 white.
     void desktopButton(settings_ui::Rect r, int style, float hover, bool pressed, bool enabled, wchar_t glyph, const std::wstring& label);
     // The primary button as an installation: its share fills it (an unknown one sweeps), its state the label.
     void desktopInstallButton(settings_ui::Rect r, float fraction, const std::wstring& label); // fraction < 0: unknown.
@@ -1274,6 +1307,9 @@ private:
     Cover notification_cover_;
     Cover snitch_avatar_; // Snitch: the profile shortcut's picture (ViewContext::snitch_avatar).
     Cover custom_poster_; // Dodaj / Edytuj grę: the poster beside the fields (ViewContext::custom_poster).
+    Cover meta_poster_;   // Edytuj metadane: the game's poster beside the fields (ViewContext::meta_poster).
+    std::vector<Cover> find_thumbs_ = std::vector<Cover>(meta_find::visible); // Identyfikuj grę: each row's picture.
+    std::vector<Cover> band_covers_; // Siatka's collection tiles: three covers each (ViewContext::band_tiles).
     Cover companion_photo_; // The picture she sent in the chat.
     // The gliding focus frame of card rows: TV settings' companions, desktop settings', the picker,
     // the TV layouts in Settings, the controller tiles (Settings → Kontrolery and the Kontrolery screen).

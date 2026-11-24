@@ -84,6 +84,18 @@ bool parseRow(const std::string& line, LibraryState& result) {
                     if (!(row >> summary) || !bit(summary)) return {};
                     options.stage_summary = summary != 0;
                 }
+                // Filtry and Siatka's columns, appended after that (none; automatic).
+                if (!endOfRow(row)) {
+                    unsigned long long filters = 0; int grid_columns = 0;
+                    if (!(row >> filters >> grid_columns) || filters >= (1ull << library_view::filter_count) || (grid_columns != 0 && (grid_columns < 2 || grid_columns > 10))) return {};
+                    options.filters = static_cast<uint32_t>(filters); options.grid_columns = grid_columns;
+                }
+                // Siatka's collection tiles, appended after that (off when absent).
+                if (!endOfRow(row)) {
+                    int tiles = 0;
+                    if (!(row >> tiles) || !bit(tiles)) return {};
+                    options.grid_collections = tiles != 0;
+                }
             }
         } else if (kind == "collection-name") {
             std::string scope, name;
@@ -217,14 +229,15 @@ bool saveLibraryState(const LibraryState& state, const std::filesystem::path& fi
         if (!validField(scope) || static_cast<int>(options.order) < 0 || static_cast<int>(options.order) >= library_view::order_count ||
             static_cast<int>(options.view) < 0 || static_cast<int>(options.view) >= library_view::persisted_view_count ||
             library_view::viewFromPersisted(static_cast<int>(options.view)) != options.view ||
-            options.overview_columns < 2 || options.overview_columns > 5) return false;
+            options.overview_columns < 2 || options.overview_columns > 5 || options.filters >= (1u << library_view::filter_count) ||
+            (options.grid_columns != 0 && (options.grid_columns < 2 || options.grid_columns > 10))) return false;
         output << "option " << std::quoted(encoded(scope)) << ' ' << library_view::persistedOrder(options.order) << ' ' << options.installed_only
                << ' ' << static_cast<int>(options.view) << ' ' << options.grid_posters << ' ' << options.list_year << ' '
                << options.list_playtime << ' ' << options.list_rating << ' ' << options.cinematic_horizontal << ' '
                << options.overview_columns << ' ' << options.coverflow_cd << ' ' << options.list_plus_steelbook << ' '
                << options.grid_landscape << ' ' << options.cinematic_column << ' ' << options.cinematic_platform << ' '
                << options.cinematic_played << ' ' << options.cinematic_playtime << ' ' << options.bookshelf_gray << ' ' << options.bookshelf_platform << ' '
-               << options.stage_summary << '\n';
+               << options.stage_summary << ' ' << options.filters << ' ' << options.grid_columns << ' ' << options.grid_collections << '\n';
         if (!bounded()) return false;
     }
     for (const auto* history : {&state.first_seen, &state.last_played, &state.playtime_ms}) for (const auto& [key, time] : *history) {

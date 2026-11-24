@@ -116,14 +116,25 @@ int looseScore(std::wstring_view query, std::wstring_view title) {
 // The scored, trimmed list of one source: matching games best first; with no match at all the first
 // result (the list shows the title, so the player can tell).
 void rank(std::vector<Offer>& offers, const Query& query, bool keep_unmatched) {
-    for (auto& offer : offers) if (offer.score == 0) offer.score = std::max(std::max(0, gridTitleScore(query.title, offer.title)), looseScore(query.title, offer.title));
+    for (auto& offer : offers) if (offer.score == 0) offer.score = titleScore(query.title, offer.title);
     std::stable_sort(offers.begin(), offers.end(), [](const Offer& a, const Offer& b) { return a.score > b.score; });
     const bool any = !offers.empty() && offers.front().score > 0;
     if (any) offers.erase(std::remove_if(offers.begin(), offers.end(), [](const Offer& offer) { return offer.score <= 0; }), offers.end());
     else if (!keep_unmatched) offers.clear();
     if (offers.size() > per_source) offers.resize(per_source);
 }
+// Protocol-relative links ("//store-images…") get their scheme.
+std::wstring imageUrl(std::string_view text) {
+    if (text.empty()) return {};
+    auto url = wide(text);
+    if (url.starts_with(L"//")) url = L"https:" + url;
+    return url.starts_with(L"https://") || url.starts_with(L"http://") ? url : std::wstring{};
+}
 } // namespace
+
+int titleScore(std::wstring_view query, std::wstring_view title) {
+    return std::max(std::max(0, gridTitleScore(query, title)), looseScore(query, title));
+}
 
 const wchar_t* name(Source source) {
     switch (source) {
@@ -270,6 +281,8 @@ std::vector<Offer> parseNintendo(std::string_view body, const Query& query) {
             offer.details.release_date = isoDate(released->elements.front().text);
         if (offer.details.release_date.empty()) offer.details.release_date = isoDate(field(&doc, "pretty_date_s"));
         offer.note = joined(doc.get("system_names_txt"));
+        offer.image = imageUrl(field(&doc, "image_url_h2x1_s"));
+        if (offer.image.empty()) offer.image = imageUrl(field(&doc, "image_url"));
         if (!wanted.empty() && lowerAscii(offer.id) == wanted) offer.score = 1000;
         offers.push_back(std::move(offer));
     }
@@ -327,6 +340,7 @@ std::optional<Offer> parseSteamDetails(std::string_view body, uint32_t app) {
     offer.details.developer = joined(data->get("developers"));
     offer.details.publisher = joined(data->get("publishers"));
     offer.details.genres = joined(data->get("genres"), "description");
+    offer.image = imageUrl(field(data, "header_image"));
     if (const auto* released = data->get("release_date"); released && released->type == Type::object) {
         const auto* soon = released->get("coming_soon");
         if (!(soon && soon->type == Type::boolean && soon->flag)) offer.details.release_date = isoDate(field(released, "date"));
@@ -373,6 +387,7 @@ std::vector<Offer> parseGogCatalog(std::string_view body, const Query& query) {
         offer.details.publisher = joined(item.get("publishers"));
         offer.details.genres = joined(item.get("genres"), "name");
         offer.details.release_date = isoDate(field(&item, "releaseDate"));
+        offer.image = imageUrl(field(&item, "coverHorizontal"));
         if (!query.gog_id.empty() && offer.id == query.gog_id) offer.score = 1000;
         offers.push_back(std::move(offer));
     }
@@ -441,6 +456,14 @@ std::vector<Offer> parseXboxProducts(std::string_view body, const Query& query) 
         if (const auto* props = product.get("Properties")) offer.details.genres = wide(field(props, "Category"));
         if (const auto* market = list(&product, "MarketProperties"); market && !market->elements.empty())
             offer.details.release_date = isoDate(field(&market->elements.front(), "OriginalReleaseDate"));
+        if (const auto* images = list(&properties, "Images")) {
+            // The wide art first (it fills the list's frame), the box art else.
+            for (const char* purpose : {"SuperHeroArt", "TitledHeroArt", "BoxArt", "Poster"}) {
+                for (const auto& image : images->elements)
+                    if (field(&image, "ImagePurpose") == purpose) { offer.image = imageUrl(field(&image, "Uri")); break; }
+                if (!offer.image.empty()) break;
+            }
+        }
         if (!query.xbox_product.empty() && offer.id == query.xbox_product) offer.score = 1000;
         offers.push_back(std::move(offer));
     }
@@ -486,6 +509,8 @@ std::optional<Offer> parseTitleDb(std::string_view body) {
     offer.details.developer = wide(field(&*root, "developer"));
     offer.details.genres = joined(root->get("category"));
     offer.details.release_date = isoDate(field(&*root, "releaseDate"));
+    offer.image = imageUrl(field(&*root, "bannerUrl"));
+    if (offer.image.empty()) offer.image = imageUrl(field(&*root, "iconUrl"));
     offer.note = L"Nintendo Switch";
     return offer;
 }

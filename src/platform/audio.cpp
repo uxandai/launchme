@@ -32,7 +32,7 @@ void Audio::recover() {
 
 void Audio::navigate() {
     if (desktop_) return; // The desktop window moves silently, like other desktop applications.
-    if (!navigation_clip_.samples.empty()) playClip(navigation_clip_, 0.28f);
+    if (!navigation_clip_.samples.empty()) playClip(navigation_clip_, navigation_volume_);
     else play(false);
 }
 void Audio::setDesktop(bool desktop) {
@@ -41,7 +41,7 @@ void Audio::setDesktop(bool desktop) {
     retargetMusic(); // Fades out (or back in) as a game's start would.
 }
 void Audio::toast() {
-    if (!toast_clip_.samples.empty()) playClip(toast_clip_, 0.28f);
+    if (!toast_clip_.samples.empty()) playClip(toast_clip_, toast_volume_);
 }
 void Audio::achievement() {
     if (!achievement_clip_.samples.empty()) playClip(achievement_clip_, 0.5f);
@@ -50,15 +50,23 @@ void Audio::boot() {
     if (auto* sound = playClip(boot_clip_, 0.5f)) sound->startup_boot = boot_pending_;
     boot_pending_ = false; // Missing/disabled/failed boot must not leave music waiting forever.
 }
-void Audio::launch() { play(true); }
+void Audio::launch() {
+    if (!start_clip_.samples.empty()) playClip(start_clip_, 0.5f);
+    else play(true);
+}
 void Audio::context() {
-    navigate();
+    if (desktop_) return;
+    if (!open_clip_.samples.empty()) playClip(open_clip_, 0.5f);
+    else navigate();
 }
-void Audio::drawer() {
-    navigate();
-}
-void Audio::quick() {
-    navigate();
+void Audio::drawer() { context(); }
+void Audio::quick() { context(); }
+void Audio::back() {
+    if (desktop_ || back_clip_.samples.empty()) return;
+    const auto now = GetTickCount64();
+    if (now - last_back_ < 90) return;
+    last_back_ = now;
+    playClip(back_clip_, 0.45f);
 }
 
 void Audio::setCue(SoundCue cue, AudioClip clip) {
@@ -71,22 +79,31 @@ void Audio::setCue(SoundCue cue, AudioClip clip) {
         boot_clip_ = clip.samples.empty() || clip.format.size() < sizeof(WAVEFORMATEX) ? AudioClip{} : std::move(clip);
         return;
     }
+    if (cue == SoundCue::open || cue == SoundCue::back || cue == SoundCue::start) { // Played whole; empty clears.
+        auto& slot = cue == SoundCue::open ? open_clip_ : cue == SoundCue::back ? back_clip_ : start_clip_;
+        slot = clip.samples.empty() || clip.format.size() < sizeof(WAVEFORMATEX) ? AudioClip{} : std::move(clip);
+        return;
+    }
     if (clip.samples.empty() || clip.format.size() < sizeof(WAVEFORMATEX)) return;
     const auto* format = reinterpret_cast<const WAVEFORMATEX*>(clip.format.data());
     if (!format->nBlockAlign || !format->nAvgBytesPerSec) return;
-    const size_t limit = static_cast<size_t>(format->nAvgBytesPerSec * 0.34f);
-    const size_t size = std::min(clip.samples.size(), limit - limit % format->nBlockAlign);
-    if (!size) return;
-    clip.samples.resize(size);
-    // A short portion of the chord becomes a soft UI cue with no audible edge.
-    auto* pcm = reinterpret_cast<int16_t*>(clip.samples.data());
-    for (size_t i = 0; i < clip.samples.size() / 2; ++i) {
-        const float t = static_cast<float>(i * 2) / std::max<size_t>(1, clip.samples.size());
-        const float envelope = std::min(1.0f, t * 35.0f) * std::min(1.0f, (1.0f - t) * 8.0f);
-        pcm[i] = static_cast<int16_t>(pcm[i] * envelope);
+    // A UI cue made for it (UI SFX: under half a second) plays whole, near the synthesized tone's level.
+    const bool whole = clip.samples.size() <= static_cast<size_t>(format->nAvgBytesPerSec * 0.6f);
+    if (!whole) {
+        const size_t limit = static_cast<size_t>(format->nAvgBytesPerSec * 0.34f);
+        const size_t size = std::min(clip.samples.size(), limit - limit % format->nBlockAlign);
+        if (!size) return;
+        clip.samples.resize(size);
+        // A short portion of the chord becomes a soft UI cue with no audible edge.
+        auto* pcm = reinterpret_cast<int16_t*>(clip.samples.data());
+        for (size_t i = 0; i < clip.samples.size() / 2; ++i) {
+            const float t = static_cast<float>(i * 2) / std::max<size_t>(1, clip.samples.size());
+            const float envelope = std::min(1.0f, t * 35.0f) * std::min(1.0f, (1.0f - t) * 8.0f);
+            pcm[i] = static_cast<int16_t>(pcm[i] * envelope);
+        }
     }
-    if (cue == SoundCue::toast) toast_clip_ = std::move(clip);
-    else navigation_clip_ = std::move(clip);
+    if (cue == SoundCue::toast) { toast_clip_ = std::move(clip); toast_volume_ = whole ? 0.42f : 0.28f; }
+    else { navigation_clip_ = std::move(clip); navigation_volume_ = whole ? 0.42f : 0.28f; }
 }
 
 void Audio::setMusic(AudioClip clip) {

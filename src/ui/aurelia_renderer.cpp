@@ -1,6 +1,7 @@
 // Aurelia's pages (src/app/aurelia_ui.cpp, src/ui/aurelia_view.hpp) in Launchme's own look: Tryb TV
-// as its dialogs (a dark panel, Back and the title, settings-like rows, the accent only on focus
-// and switches), the desktop window as its desktop dialogs (desktop_dialogs_renderer.cpp).
+// as its other dialogs (Opcje uruchamiania: the panel, Back and the heading, cards for the rows, one white
+// ring that springs between the items, the accent only on switches), the desktop window as its desktop
+// dialogs (desktop_dialogs_renderer.cpp).
 #include "renderer.hpp"
 #include "renderer_internal.hpp"
 
@@ -23,17 +24,27 @@ void Renderer::drawAurelia() {
     const aurelia_ui::Layout layout{viewport_.width, viewport_.height};
     const auto p = layout.panel();
     const auto accent = uiAccent();
-    // The dim and the panel, as Tryb TV's other dialogs.
-    brush(D2D1::ColorF(0, 0.72f)); target_->FillRectangle(D2D1::RectF(0, 0, viewport_.width, viewport_.height), solid_.Get());
-    brush(D2D1::ColorF(0.055f, 0.065f, 0.075f)); target_->FillRoundedRectangle(D2D1::RoundedRect(box(p), 18, 18), solid_.Get());
-    if (panel_borders_) { brush(gray(1, 0.16f)); target_->DrawRoundedRectangle(D2D1::RoundedRect(box(p), 18, 18), solid_.Get(), 1.0f); }
-    // Back (a glass circle with a dot) and the title, its game beneath.
+    // As Tryb TV's other dialogs (Opcje uruchamiania, Edytuj metadane): the dim, the panel and their entrance
+    // and exit (ViewContext::aurelia_motion), cards for the rows, glass buttons and one white ring that springs
+    // to the focused item (ViewContext::aurelia_glide).
+    dialogScrim(gray(0, 0.80f));
+    const DialogMotion motion(*this, p);
+    const auto shape = D2D1::RoundedRect(box(p), 22, 22);
+    brush(gray(0.07f)); target_->FillRoundedRectangle(shape, solid_.Get());
+    if (panel_borders_) { brush(gray(1, 0.16f)); target_->DrawRoundedRectangle(shape, solid_.Get()); }
+    std::optional<Rect> ring;
+    float ring_radius = 0;
+    const auto focusOn = [&](Rect r, float radius) { ring = r; ring_radius = radius; };
+    const auto drawRing = [&] { if (ring) tvFocusRing(*ring, ring_radius, context_->aurelia_glide); };
+    // Back (a glass circle with a dot) and the heading, the game beneath.
     const auto back = layout.back();
-    brush(drawButton(box(back), s.hover == -1 || s.back_focus ? 1.0f : 0.0f, 1, false));
+    brush(drawButton(box(back), 0, 1, false, s.hover == -1));
     target_->FillEllipse(D2D1::Ellipse(D2D1::Point2F((back.left + back.right) * 0.5f, middle(back)), 3, 3), solid_.Get());
-    const float title_left = back.right + 18;
+    if (s.back_focus && !s.confirmation) focusOn(back, (back.bottom - back.top) * 0.5f);
+    const float title_left = back.right + 20;
     textGroup(s.confirmation ? s.confirmation->title : s.title, s.confirmation ? std::wstring{} : s.subtitle, title_left, middle(back),
-              p.right - layout.pad - title_left, category_font_.Get(), gray(0.97f), settings_body_font_.Get(), palette::muted(), 1);
+              p.right - layout.pad - title_left, settings_heading_font_.Get(), gray(0.96f), settings_body_font_.Get(), gray(0.58f), 1, false,
+              heading_group_gap);
     if (s.busy || s.progress >= 0) {
         // Working: a thin bar under the header, its share when known, else a gliding segment.
         const float left = p.left + layout.pad, right = p.right - layout.pad, y = p.top + layout.header - 18;
@@ -42,22 +53,27 @@ void Renderer::drawAurelia() {
         if (s.progress < 0) { const float segment = (right - left) * 0.18f; from = left + (right - left - segment) * (0.5f + 0.5f * std::sin(elapsed_ * 2.4f)); to = from + segment; }
         brush(accent); target_->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(from, y, to, y + 3), 1.5f, 1.5f), solid_.Get());
     }
+    const auto button = [&](Rect r, const std::wstring& label, bool hover, bool enabled) {
+        textLine(label, r.left + 12, middle(r), r.right - r.left - 24, settings_body_font_.Get(), drawButton(box(r), 0, 1, false, hover && enabled, enabled),
+                 DWRITE_TEXT_ALIGNMENT_CENTER);
+    };
     if (s.confirmation) {
         // The question's consequence, then Anuluj / Potwierdź (the safe answer first).
         if (!s.confirmation->description.empty())
             paragraph(s.confirmation->description, p.left + layout.pad, p.top + layout.header, p.right - p.left - 2 * layout.pad, settings_body_font_.Get(), gray(0.78f), 4);
         const auto cancel = layout.cancel(), yes = layout.confirm();
-        const float cancel_focus = s.hover == -4 || (!s.confirm_focus && s.hover != -5) ? 1.0f : 0.0f;
-        textLine(tr(L"Anuluj"), cancel.left, middle(cancel), cancel.right - cancel.left, menu_font_.Get(), drawButton(box(cancel), cancel_focus, 1, false), DWRITE_TEXT_ALIGNMENT_CENTER);
-        const float yes_focus = s.hover == -5 || (s.confirm_focus && s.hover != -4) ? 1.0f : 0.0f;
-        textLine(tr(L"Potwierdź"), yes.left, middle(yes), yes.right - yes.left, menu_font_.Get(), drawButton(box(yes), yes_focus, 1, false), DWRITE_TEXT_ALIGNMENT_CENTER);
+        button(cancel, tr(L"Anuluj"), s.hover == -4, true);
+        button(yes, tr(L"Potwierdź"), s.hover == -5, true);
+        const auto chosen = s.confirm_focus ? yes : cancel;
+        focusOn(chosen, (chosen.bottom - chosen.top) * 0.5f);
         s.visible = layout.visible(s);
+        drawRing();
         return;
     }
     // Setup: a plain note under the header, measured, so the rows start below its last line.
     if (s.page == aurelia_ui::Page::setup && s.login == aurelia_ui::State::Login::none) {
         const float width = p.right - p.left - 2 * layout.pad;
-        s.notice_height = paragraph(aurelia_ui::notice(), p.left + layout.pad, p.top + layout.header, width, settings_body_font_.Get(), palette::muted(), 8);
+        s.notice_height = paragraph(aurelia_ui::notice(), p.left + layout.pad, p.top + layout.header, width, settings_body_font_.Get(), gray(0.58f), 4);
     } else s.notice_height = 0;
     if (layout.showsQr(s)) {
         // The sign-in's QR code, then what to do with it.
@@ -83,14 +99,15 @@ void Renderer::drawAurelia() {
         const auto& row = s.rows[static_cast<size_t>(i)];
         const auto r = layout.row(s, i);
         const bool focused = !s.input_focus && !s.back_focus && s.focus == i, hover = s.hover == i;
-        // Rows as the settings' rows: a faint card, a lighter one with the focus, no outline.
-        brush(gray(1, focused ? 0.10f : hover ? 0.06f : 0.034f));
+        // Rows as the launch options' cards: a faint card, a little lighter under the pointer; the focus is the ring.
+        brush(gray(1, hover ? 0.065f : 0.04f));
         target_->FillRoundedRectangle(D2D1::RoundedRect(box(r), 16, 16), solid_.Get());
+        if (focused) focusOn(r, 16);
         const float y = middle(r), left = r.left + 24;
         float right = r.right - 24;
         if (row.toggle) { toggle(right, y, row.checked, row.locked); right -= 66 + 148 + 12; }
         else if (row.page) {
-            const auto ink = focused ? accent : gray(0.68f);
+            const auto ink = focused ? gray(0.95f) : gray(0.6f);
             line(right - 10, y - 6, right - 4, y, ink, 1.8f); line(right - 4, y, right - 10, y + 6, ink, 1.8f);
             right -= 28;
         }
@@ -100,36 +117,34 @@ void Renderer::drawAurelia() {
             right -= w + 20;
         }
         const auto ink = row.locked ? gray(0.45f) : row.danger ? palette::danger() : gray(0.95f);
-        textGroup(row.title, row.description, left, y, right - left, menu_font_.Get(), ink, settings_body_font_.Get(), palette::muted(), 1);
+        textGroup(row.title, row.description, left, y, right - left, menu_font_.Get(), ink, settings_body_font_.Get(), gray(0.58f), 1);
     }
     if (s.rows.empty() && !s.busy)
-        textLine(tr(L"Brak pozycji"), p.left + layout.pad + 4, layout.rowsTop(s) + 24, p.right - p.left - 2 * layout.pad, settings_body_font_.Get(), palette::muted());
+        textLine(tr(L"Brak pozycji"), p.left + layout.pad + 4, layout.rowsTop(s) + 24, p.right - p.left - 2 * layout.pad, settings_body_font_.Get(), gray(0.58f));
     if (static_cast<int>(s.rows.size()) > s.visible) {
         const float top = layout.rowsTop(s), track = s.visible * layout.row_step - (layout.row_step - layout.row_height);
         const float thumb = std::max(28.0f, track * s.visible / static_cast<float>(s.rows.size()));
         const float y = top + (track - thumb) * s.first / std::max(1, static_cast<int>(s.rows.size()) - s.visible);
         brush(gray(1, 0.25f)); target_->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(p.right - 18, y, p.right - 15, y + thumb), 1.5f, 1.5f), solid_.Get());
     }
-    if (!s.status.empty()) textLine(s.status, p.left + layout.pad + 4, layout.statusY(s), p.right - p.left - 2 * layout.pad, settings_body_font_.Get(), palette::muted());
+    if (!s.status.empty()) textLine(s.status, p.left + layout.pad + 4, layout.statusY(s), p.right - p.left - 2 * layout.pad, settings_body_font_.Get(), gray(0.58f));
     if (layout.field(s)) {
-        // The field as the other search fields (a pill, accent while typing) and its button.
+        // The field as the launch options' wells (the ring while it types) and its button.
         const auto f = layout.input();
         const bool typing = s.input_focus;
-        brush(gray(1, typing ? 0.13f : s.hover == -2 ? 0.08f : 0.06f)); target_->FillRoundedRectangle(pill(box(f)), solid_.Get());
-        if (typing) { brush(accent); target_->DrawRoundedRectangle(pill(box(f)), solid_.Get(), 1.5f); }
+        brush(gray(typing ? 0.045f : 0.025f + (s.hover == -2 ? 0.02f : 0.0f))); target_->FillRoundedRectangle(pill(box(f)), solid_.Get());
+        if (typing) focusOn(f, (f.bottom - f.top) * 0.5f);
         const float text_left = f.left + 26, room = f.right - f.left - 52;
         // The password shows as dots.
-        const auto value = s.input_secret ? std::wstring(s.input.size(), L'\u2022') : s.input;
+        const auto value = s.input_secret ? std::wstring(s.input.size(), L'•') : s.input;
         const auto shown = value.size() > 90 ? L"…" + value.substr(value.size() - 89) : value;
-        if (shown.empty()) textLine(s.input_hint, text_left, middle(f), room, menu_font_.Get(), gray(0.5f));
+        if (shown.empty()) textLine(s.input_hint, text_left, middle(f), room, menu_font_.Get(), gray(0.42f));
         else textLine(shown, text_left, middle(f), room, menu_font_.Get(), gray(0.95f));
         if (typing && std::sin(elapsed_ * 4.0f) >= 0)
             textLine(L"│", text_left + std::min(room - 6, shown.empty() ? 0.0f : textAdvance(shown, menu_font_.Get())) - 2, middle(f), 20, menu_font_.Get(), gray(0.95f));
-        const auto send = layout.send();
-        const bool ready = !s.input.empty() && !s.busy;
-        textLine(s.submit, send.left, middle(send), send.right - send.left, menu_font_.Get(),
-                 drawButton(box(send), s.hover == -3 && ready ? 1.0f : 0.0f, 1, false, false, ready), DWRITE_TEXT_ALIGNMENT_CENTER);
+        button(layout.send(), s.submit, s.hover == -3, !s.input.empty() && !s.busy);
     }
+    drawRing();
 }
 
 // The desktop window: a desktop dialog (its frame, ✕ and Back on inner pages), rows as the

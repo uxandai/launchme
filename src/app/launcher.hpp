@@ -174,7 +174,8 @@ public:
     bool launchAnimationActive() const { return launch_animation_started_.has_value(); }
     bool screensaverInput(UINT message, WPARAM wparam, LPARAM lparam);
     // User-added games: Settings → Library editor panel (src/app/my_games.cpp).
-    bool customEditorOpen() const { return custom_editor_.open; }
+    // Edytuj metadane opened over it (Identyfikuj grę under its poster) takes the input; the panel waits beneath.
+    bool customEditorOpen() const { return custom_editor_.open && !desktop_meta_.open; }
     // Tryb TV's Edytuj metadane (the game's menu): the desktop window's dialog as a layer.
     bool metadataOpen() const { return desktop_meta_.open && !desktop_mode_; }
     bool libraryDialogOpen() const { return library_dialog_.open; }
@@ -720,6 +721,20 @@ public:
     // Kinowy / Przegląd: the category tab strip over the library (LB/RB, PgUp/PgDn, click).
     bool libraryTabsShown() const;
     void switchLibraryTab(int amount);
+    // The library's tab of every game (empty id) or of a shelf, in `view` (its own order and filters stay).
+    bool showLibraryCategory(const std::string& id, library_view::View view);
+    // Siatka's "Kolekcje jako kafle" (src/app/library_collections.cpp).
+    struct BandTile { std::string id; std::wstring name; size_t count = 0; std::array<const Game*, 3> games{}; };
+    bool libraryBandShown() const;
+    bool libraryBandFocused() const;
+    std::vector<BandTile> libraryBandTiles() const;
+    int libraryBandHit(float x, float y) const;
+    void libraryBandFocus(int index);
+    void libraryBandMove(int amount);
+    void libraryBandOpen(int index);
+    bool libraryBandReturn();
+    void requestBandArt();
+    void libraryBandContext(ViewContext& context);
     // Stores: every "menu" plugin shares one dock entry / desktop tool. Its page carries a tab strip (as the
     // library's) that switches between the plugins; with none it is a page saying so.
     void openStores();
@@ -899,6 +914,9 @@ public:
     void clearScreenScraper(); // "Wyczyść dane ScreenScraper": identifications and pauses.
     void applyEmulationNames(); // emulation_names: ES-DE/ScreenScraper titles on emulated shortcuts.
     void onIdentify(std::unique_ptr<IdentifyMessage> message);
+    // Saves an identification (ScreenScraper's `picked`, else RAWG's `rawg_id`) on a worker; identifyApplied takes it in.
+    void startIdentification(const Game& game, uint32_t rawg_id, std::optional<screenscraper::GameInfo> picked);
+    void identifyApplied(const Game& game, IdentifyMessage& message);
     void focusLibraryControls();
     void setFrameRate(int target, int refresh) { target_hz_ = target; refresh_hz_ = refresh; }
     // The frame clock's bound for this launcher's ticks (FrameClock::limit): fewer wake-ups while
@@ -1077,6 +1095,9 @@ private:
     std::map<std::wstring, std::vector<uint8_t>> profile_icons_;
     uint32_t profile_generation_ = 0;
     aurelia_ui::State aurelia_ui_;
+    // Tryb TV: its entrance and exit (0 hidden … 1 shown) and its last state, drawn while it fades away.
+    float aurelia_motion_ = 0;
+    aurelia_ui::State aurelia_closing_;
     aurelia::Transport aurelia_transport_;
     aurelia::InstallationInfo aurelia_installation_;
     std::function<aurelia::Reply(const aurelia::Release&, const aurelia::Cancel&, const std::function<void(uint64_t, uint64_t)>&)> aurelia_installer_;
@@ -1615,6 +1636,10 @@ private:
     void requestPreview();
     bool heroFactsShown() const; // Default home: the focused game's facts under its logo.
     bool psfiveSummaryShown() const; // PSfive: the focused game's short summary over Graj / … (Krótki opis).
+    std::wstring gameSummary(const Game& game); // Krótki opis' text (PSfive, Scena): one language, never switching.
+    void applyLibraryFilters(std::vector<Game>& games, uint32_t filters) const; // Filtry (library_view::Filter bits).
+    bool desktopFiltered() const; // The desktop window's Zainstalowane or Filtry in force.
+    void desktopOpenFiltersMenu();
     // Szczegóły → Osiągnięcia (src/app/achievements.cpp).
     void initializeAchievements();
     bool achievementsOpen() const { return achievements_.open && screen_ == ScreenMode::details; }
@@ -2245,6 +2270,8 @@ private:
     // artwork browser, then the crop editor showing it close.
     void closeEditorsFor(const std::function<bool(const Game&)>& gone);
     void loadArtworkPage();
+    // Zmień grafikę: the art in use for the type in view (from memory, else the disk cache), shown first at once.
+    bool artworkInUse(GridAsset& asset, std::vector<uint8_t>& bytes);
     void requestArtworkThumbnails();
     void artworkClick(float x, float y, bool double_click);
     // "Z dysku…": the type panel, then an image file applied like a SteamGridDB pick.
@@ -3280,6 +3307,11 @@ private:
     uint64_t shelf_slots_ = ~uint64_t{0};
     ScreenMode screen_ = ScreenMode::shelves;
     float grid_scroll_ = 0;
+    // Siatka's collection tiles: the focused one (-1: the games have the focus), the last one, the pointer's,
+    // the row's sideways slide (eased towards its target) and the collection opened from them (Back returns).
+    int band_focus_ = -1, band_last_ = 0, band_hover_ = -1;
+    float band_slide_ = 0, band_slide_target_ = 0;
+    std::string band_return_;
     std::wstring search_query_;
     size_t search_after_ = 0; // Characters after the search field's insertion point.
     size_t searchCaret() const { return search_query_.size() - std::min(search_after_, search_query_.size()); }
@@ -3594,6 +3626,7 @@ private:
 #ifdef LAUNCHME_UI_TEST
     bool picker_motion_for_test_ = false; // Captures show pickers settled unless a test asks for the motion.
     bool screen_motion_for_test_ = false; // Captures show screens settled unless a test asks for the transition.
+    bool identify_dialog_for_test_ = false; // Tests of the older Identyfikuj grę dialog (where Edytuj metadane cannot open).
 #endif
     static constexpr float screen_transition_duration = 0.35f;
     void beginScreenTransition();
@@ -3609,6 +3642,7 @@ private:
     BoxGlide details_glide_, artwork_glide_; // Szczegóły: the focus between Back, the buttons and the cards; Zmień grafikę: its rail.
     BoxGlide library_bar_glide_, manager_glide_; // Library top bar; the Kolekcje / Wersje dialog.
     BoxGlide editor_glide_; // Dodaj grę / Opcje uruchamiania in Tryb TV.
+    BoxGlide meta_glide_, artwork_cell_glide_, aurelia_glide_, band_glide_; // Edytuj metadane, Zmień grafikę's pictures, Aurelia (Tryb TV), the collection tiles.
     BoxGlide downloads_glide_; // Pobierania: Back or a row.
     struct PsfiveMenuMotion { Spring row, scroll; bool valid = false; } psfive_menu_motion_;
     Spring psfive_top_opacity_{0.66f};
@@ -3845,7 +3879,15 @@ private:
     // Edytuj metadane (desktop_metadata.cpp): the player's own title and details over the found ones.
     desktop_ui::MetaView desktop_meta_;
     std::string desktop_meta_key_;
-    Game desktop_meta_game_; // The edited game, for its Zidentyfikuj.
+    Game desktop_meta_game_; // The edited game, for its Identyfikuj grę.
+    // Edytuj metadane's and Dodaj / Edytuj grę's entrance and exit (0 hidden, 1 shown; eased in tick). A closed
+    // one is drawn from its last state (meta_closing_, editor_closing_) until it has faded away.
+    float meta_motion_ = 0, editor_motion_ = 0;
+    desktop_ui::MetaView meta_closing_;
+    ImageBytes meta_closing_poster_;
+    custom_game_ui::State editor_closing_;
+    ImageBytes editor_closing_poster_;
+    ImageBytes metaPoster() const; // The edited game's poster, else its cover (art_).
     mutable metadata::Overrides metadata_overrides_; // Read on first use (metadata_overrides.json).
     mutable bool metadata_loaded_ = false;
     const metadata::Override* metadataOverride(const Game& game) const;
@@ -3868,14 +3910,20 @@ private:
     void desktopMetaInsert(std::wstring_view text);
     void desktopMetaChar(wchar_t character);
     bool desktopMetaKey(WPARAM key);
-    // Znajdź in Edytuj metadane (metadata_find.cpp): the stores' details to take over.
+    // Identyfikuj grę in Edytuj metadane (metadata_find.cpp): the databases' games and the stores' details.
     ArtworkHttp metadata_find_get_ = httpGet; // The sources' transport; UI tests answer it themselves.
     uint32_t metadata_find_generation_ = 0;
     bool metaTextFocused() const { return desktop_meta_.find.open ? desktop_meta_.find.focus == meta_find::item::query : desktop_meta_.focus < desktop_ui::meta_fields; }
-    void metaFindOpen();
+    void metaFindOpen(bool direct = false);
+    void metaIdentifyOpen(const Game& game); // Edytuj metadane opened on Identyfikuj grę (the game's menu, Szczegóły, Dodaj grę).
     void metaFindClose();
     void metaFindSearch();
-    void metaFindOffers(uint32_t generation, metadata_sources::Found found);
+    void metaFindResults(uint32_t generation, std::vector<std::pair<int, meta_find::Result>> rows, std::wstring error);
+    void metaFindThumbs();
+    void metaFindThumb(uint32_t generation, const std::wstring& url, ImageBytes bytes);
+    void metaFindApply();
+    void metaFindIdentified(IdentifyMessage& message);
+    std::wstring identityLabel(const Game& game) const; // Under Identyfikuj grę: "RAWG · Hades", or what is missing.
     void metaFindChoose(int index);
     void metaFindInsert();
     void metaFindActivate(int item);

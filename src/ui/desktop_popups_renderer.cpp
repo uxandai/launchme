@@ -328,31 +328,20 @@ void Renderer::drawDesktopQuick(const View& view) {
 
 void Renderer::drawDesktopMeta(const MetaView& meta) {
     if (!meta.open) return;
-    brush(rgb(0.01f, 0.012f, 0.016f, 0.36f)); // Dimmed as every dialog of the window (desktopDialogFrame).
-    target_->FillRectangle(D2D1::RectF(0, 0, viewport_.width, viewport_.height), solid_.Get());
-    const MetaLayout layout{viewport_.width, viewport_.height};
+    const MetaLayout layout{viewport_.width, viewport_.height, false};
     const auto p = layout.panel();
-    desktopShadow(p, 14, 1.6f);
-    desktopFill(p, 14, panel_bg);
-    desktopStroke(p, 14, gray(1, 0.12f));
     const bool finding = meta.find.open;
-    textLine(std::wstring(finding ? tr(L"Znajdź metadane") : tr(L"Edytuj metadane")) + L" \u00b7 " + meta.game, p.left + 24, p.top + 30,
-             p.right - p.left - (finding ? 90 : 220), desktop_title_font_.Get(), palette::text());
-    textLine(finding ? (meta.pad ? tr(L"Wybierz grę i pola. Wstaw kopiuje je do dialogu, zapisuje dopiero Zapisz. B wraca.")
-                                 : tr(L"Wybierz grę i pola. Wstaw kopiuje je do dialogu, zapisuje dopiero Zapisz. Esc wraca."))
+    const std::wstring action = finding ? (meta.identify ? tr(L"Identyfikuj grę") : tr(L"Znajdź metadane")) : tr(L"Edytuj metadane");
+    // desktopDialogFrame's look; it fades in and out with the motion of Tryb TV's dialogs.
+    dialogScrim(D2D1::ColorF(0.01f, 0.012f, 0.016f, 0.36f));
+    const DialogMotion motion(*this, p);
+    desktopDialogSheet(p, action + L" · " + meta.game,
+                       finding ? meta.find.hover == meta_find::item::close : meta.hover == static_cast<int>(MetaItem::close));
+    textLine(finding ? (meta.pad ? tr(L"Wybierz grę z listy. Gra z bazy (RAWG, ScreenScraper) zostanie zidentyfikowana; ze sklepu wstawia zaznaczone pola. B wraca.")
+                                 : tr(L"Wybierz grę z listy. Gra z bazy (RAWG, ScreenScraper) zostanie zidentyfikowana; ze sklepu wstawia zaznaczone pola. Esc wraca."))
                      : meta.pad ? tr(L"Puste pole: wartość automatyczna. A wpisuje w pole, B zamyka.") : tr(L"Puste pole: wartość automatyczna. Ctrl+Enter zapisuje, Esc anuluje."),
-             p.left + 24, p.top + 56, p.right - p.left - 48,
-             desktop_small_font_.Get(), palette::muted());
-    const auto close = layout.close();
-    if (meta.hover == static_cast<int>(MetaItem::close)) desktopFill(close, 8, gray(1, 0.08f));
-    desktopGlyph(glyph::close, (close.left + close.right) * 0.5f, (close.top + close.bottom) * 0.5f, 12, palette::muted());
+             p.left + 22, p.top + 56, p.right - p.left - 44, desktop_small_font_.Get(), palette::muted());
     if (finding) { drawMetaFind(meta, false); return; }
-    {
-        const auto find = layout.findButton(); // The stores' and databases' details, to pick from.
-        const int id = static_cast<int>(MetaItem::find);
-        desktopButton(find, 1, meta.hover == id ? 1.0f : 0.0f, false, true, 0, tr(L"Znajdź…"));
-        if (meta.focus == id) desktopFocusRing(find, 8);
-    }
     static const wchar_t* const labels[meta_fields] = {L"Tytuł", L"Opis", L"Producent", L"Wydawca", L"Data premiery", L"Gatunki", L"Czas przejścia (h)",
                                                         L"Czas gry"};
     static const wchar_t* const hints[meta_fields] = {L"Nazwa w bibliotece", L"Kilka zdań o grze", L"Studio", L"Firma wydająca",
@@ -360,9 +349,9 @@ void Renderer::drawDesktopMeta(const MetaView& meta) {
     {
         // Beside Czas gry: the automatic value and that later play is added to the typed one.
         const auto f = layout.field(static_cast<int>(MetaItem::playtime));
-        textLine(meta.playtime_note, f.right + 16, f.top + 11, p.right - 24 - f.right - 16, desktop_small_font_.Get(), palette::muted());
-        textLine(tr(L"Dalsza gra doliczy się do wpisanej wartości."), f.right + 16, f.top + 29, p.right - 24 - f.right - 16,
-                 desktop_small_font_.Get(), palette::muted(0.75f));
+        const float width = layout.fieldsRight() - f.right - 16;
+        textLine(meta.playtime_note, f.right + 16, f.top + 11, width, desktop_small_font_.Get(), palette::muted());
+        textLine(tr(L"Dalsza gra doliczy się do wpisanej wartości."), f.right + 16, f.top + 29, width, desktop_small_font_.Get(), palette::muted(0.75f));
     }
     for (int i = 0; i < meta_fields; ++i) {
         const auto f = layout.field(i);
@@ -383,7 +372,7 @@ void Renderer::drawDesktopMeta(const MetaView& meta) {
         size_t caret = std::min(meta.caret, text.size());
         if (focused && text.size() > 520 && caret > 420) { // Long: the part before the caret, so the caret shows.
             const size_t from = caret - 420;
-            text = L"\u2026 " + text.substr(from);
+            text = L"… " + text.substr(from);
             caret = caret - from + 2;
         }
         if (focused && !meta.selected) text.insert(caret, L"|");
@@ -393,14 +382,24 @@ void Renderer::drawDesktopMeta(const MetaView& meta) {
         else paragraph(text, f.left + 12, f.top + 9, f.right - f.left - 24, desktop_font_.Get(), palette::text(), 6);
         target_->PopAxisAlignedClip();
     }
-    const auto button = [&](MetaItem item, int style, const std::wstring& label, bool enabled) {
+    {
+        // The poster and, under it, what names the game.
+        const auto q = layout.poster();
+        desktopFill(q, 10, gray(1, 0.045f));
+        if (auto* poster = dialogImage(meta_poster_, context_->meta_poster)) fillPoster(*poster, D2D1::RectF(q.left, q.top, q.right, q.bottom), 10, 1.0f, false, nullptr);
+        else textLine(tr(L"Brak okładki"), q.left + 8, (q.top + q.bottom) * 0.5f, q.right - q.left - 16, desktop_small_font_.Get(), palette::muted(), DWRITE_TEXT_ALIGNMENT_CENTER);
+        desktopStroke(q, 10, gray(1, 0.08f));
+        if (!meta.identity.empty()) paragraph(meta.identity, q.left + 2, q.bottom + 10, q.right - q.left - 4, desktop_small_font_.Get(), palette::muted(), 2);
+    }
+    const auto button = [&](MetaItem item, int style, const std::wstring& label, bool enabled, wchar_t icon = 0) {
         const auto r = layout.button(item);
         const int id = static_cast<int>(item);
-        desktopButton(r, style, meta.hover == id && enabled ? 1.0f : 0.0f, false, enabled, 0, label);
+        desktopButton(r, style, meta.hover == id && enabled ? 1.0f : 0.0f, false, enabled, icon, label);
         if (meta.focus == id) desktopFocusRing(r, 8);
     };
+    // Znajdź metadane / Identyfikuj grę first, white: the dialog's way to the databases.
+    button(MetaItem::find, 3, meta.identify ? tr(L"Identyfikuj grę") : tr(L"Znajdź metadane"), true, glyph::search);
     button(MetaItem::restore, 0, tr(L"Przywróć automatyczne"), meta.overridden);
-    if (meta.identify) button(MetaItem::identify, 1, tr(L"Zidentyfikuj"), true); // The game's match in RAWG and its artwork.
-    button(MetaItem::save, 2, tr(L"Zapisz"), true);
     button(MetaItem::cancel, 1, tr(L"Anuluj"), true);
+    button(MetaItem::save, 2, tr(L"Zapisz"), true);
 }

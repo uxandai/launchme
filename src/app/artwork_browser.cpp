@@ -367,6 +367,32 @@ std::vector<ArtworkProvider> Launcher::artworkChoices(const artwork_ui::State& s
     return choices;
 }
 
+// The art in use for the type in view, as the screens show it (from memory, else the cache on disk): the
+// gallery's first picture at once, before the source answers. Not in the wallpaper pickers or on later pages.
+bool Launcher::artworkInUse(GridAsset& asset, std::vector<uint8_t>& bytes) {
+    const auto& state = artwork_state_;
+    if (state.picker() || state.page != 0 || state.results_mode) return false;
+    const auto kind = state.kind();
+    ImageBytes shown;
+    if (const auto* art = art_.find(gameKey(state.game))) {
+        switch (kind) {
+        case ArtworkKind::cover: shown = art->cover; break;
+        case ArtworkKind::poster: shown = art->poster; break;
+        case ArtworkKind::landscape: shown = art->landscape; break;
+        case ArtworkKind::logo: shown = art->logo; break;
+        case ArtworkKind::disc: shown = art->disc; break;
+        default: shown = art->hero; break;
+        }
+    }
+    const auto cache = coverCacheDirectory();
+    bytes = shown && !shown->empty() ? *shown : cachedArtwork(state.game, kind, cache, false);
+    if (bytes.empty()) return false;
+    asset = {};
+    asset.id = selectedArtworkId(state.game, kind, cache);
+    asset.current = true;
+    return true;
+}
+
 void Launcher::closeArtworkBrowser() {
     {
         std::lock_guard lock(artwork_jobs_->mutex);
@@ -461,6 +487,16 @@ void Launcher::loadArtworkPage() {
         artwork_jobs_->jobs.push_back(std::move(job));
     }
     artwork_jobs_->wake.notify_one();
+    // The art in use at once, first; the cells after it pulse until the page comes (Renderer::drawArtworkBrowser).
+    GridAsset current;
+    std::vector<uint8_t> bytes;
+    if (artworkInUse(current, bytes)) {
+        state.assets.push_back(std::move(current));
+        state.applied_id = state.assets.front().id;
+        state.requested.insert(state.assets.front().id);
+        renderer_.resetArtworkThumbnails(1);
+        renderer_.setArtworkThumbnail(0, std::move(bytes), state.kind() == ArtworkKind::logo);
+    }
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
@@ -514,7 +550,7 @@ void Launcher::requestArtworkThumbnails() {
         for (size_t i = 0; i < state.assets.size(); ++i) {
             const size_t index = i == 0 ? std::min(state.selected, state.assets.size() - 1) : (i <= state.selected ? i - 1 : i);
             const auto& asset = state.assets[index];
-            if (!state.requested.insert(asset.id).second) continue;
+            if (asset.current || !state.requested.insert(asset.id).second) continue;
             ArtworkBrowserJob job{ArtworkBrowserMessage::Type::thumbnail, artwork_jobs_->generation.load(), state.game,
                                   state.kind(), state.page, state.category, state.source, asset};
             job.provider = state.provider;
@@ -528,7 +564,7 @@ void Launcher::requestArtworkThumbnails() {
     std::lock_guard lock(artwork_jobs_->mutex);
     const auto request = [&](size_t index) {
         const auto& asset = state.assets[index];
-        if (!state.requested.insert(asset.id).second) return;
+        if (asset.current || !state.requested.insert(asset.id).second) return; // The art in use came with it.
         ArtworkBrowserJob job{ArtworkBrowserMessage::Type::thumbnail, artwork_jobs_->generation.load(), state.game,
                               state.kind(), state.page, state.category, state.source, asset};
         job.provider = state.provider;
@@ -634,6 +670,7 @@ void Launcher::onArtworkBrowser(std::unique_ptr<ArtworkBrowserMessage> message) 
     if (message->type == ArtworkBrowserMessage::Type::list) {
         state.loading = false;
         state.assets = std::move(message->page.assets);
+        state.requested.clear();
         state.provider = message->page.provider;
         if (message->page.provider == ArtworkProvider::steamgriddb) state.source = message->page.source;
         state.more = message->page.more;
@@ -645,21 +682,37 @@ void Launcher::onArtworkBrowser(std::unique_ptr<ArtworkBrowserMessage> message) 
         }
         state.applied_id = state.boot_video ? settings_.boot_video_id : state.wallpaper ? settings_.wallpaper_id : message->applied_id;
         state.status = message->page.error;
+        // The art in use stays first: the page's own picture moved there, else the one the screens show.
+        GridAsset current;
+        std::vector<uint8_t> current_bytes;
+        const bool in_use = artworkInUse(current, current_bytes);
+        if (in_use) {
+            const auto found = std::find_if(state.assets.begin(), state.assets.end(),
+                                            [&](const GridAsset& asset) { return asset.id && asset.id == state.applied_id; });
+            if (found != state.assets.end()) std::rotate(state.assets.begin(), found, found + 1);
+            else state.assets.insert(state.assets.begin(), std::move(current));
+        }
         if (state.status.empty() && state.assets.empty()) state.status = tr(L"Brak grafik.");
         // Kept for the rest of this visit; a failed answer (no connection, a rate limit) is asked again.
         // Under the key it was asked by and, the answer naming the SteamGridDB game, the key it has now.
         if (message->page.error.empty() && !artwork_page_key_.empty()) {
             ArtworkPageCache page{state.assets, state.provider, state.source, state.more, state.status, {}};
+            if (in_use) page.thumbnails[state.assets.front().id] = current_bytes;
             artwork_pages_[artwork_page_key_] = page;
             artwork_page_key_ = artworkPageKey();
             artwork_pages_[artwork_page_key_] = std::move(page);
         }
         renderer_.resetArtworkThumbnails(state.assets.size());
+        if (in_use) {
+            state.requested.insert(state.assets.front().id);
+            renderer_.setArtworkThumbnail(0, std::move(current_bytes), state.kind() == ArtworkKind::logo);
+        }
         requestArtworkThumbnails();
         // SteamGridDB has no game under this exact title: the games its search finds are listed at
         // once (as "Szukaj" would), instead of an empty gallery. Once per visit.
         const bool unmatched = !message->page.source.id && (message->page.error.empty() || message->page.error == tr(L"Nie znaleziono tej gry w SteamGridDB."));
-        if (unmatched && state.assets.empty() && !state.auto_searched && !state.picker() && state.page == 0 &&
+        const bool nothing = std::all_of(state.assets.begin(), state.assets.end(), [](const GridAsset& asset) { return asset.current; }); // The art in use aside.
+        if (unmatched && nothing && !state.auto_searched && !state.picker() && state.page == 0 &&
             state.provider == ArtworkProvider::steamgriddb && state.kind() != ArtworkKind::disc && !state.query.empty()) {
             state.auto_searched = true;
             searchArtwork();
@@ -1030,7 +1083,7 @@ void Launcher::artworkAccept() {
         InvalidateRect(hwnd_, nullptr, FALSE);
         return;
     }
-    if (state.assets.empty() || state.assets[state.selected].id == state.applied_id) return;
+    if (state.assets.empty() || state.assets[state.selected].id == state.applied_id || state.assets[state.selected].current) return;
     state.applying = true;
     state.status = state.boot_video ? tr(L"Pobieranie wideo startowego…") : state.wallpaper ? tr(L"Pobieranie tapety…") : tr(L"Pobieranie grafiki…");
     {

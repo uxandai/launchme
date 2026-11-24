@@ -140,6 +140,7 @@ public:
     static int launchScripts(HWND window); // launch_scripts_ui_cases.hpp
     static int gameMods(HWND window);      // game_mods_ui_cases.hpp
     static int metadataFind(HWND window); // metadata_find_ui_cases.hpp
+    static int collectionBand(HWND window); // collection_band_ui_cases.hpp
     static int ux076(HWND window); // ux_076_ui_cases.hpp
     static int fileBrowserAndColors(HWND window);
     static int dashboard(HWND window);
@@ -1396,7 +1397,7 @@ public:
         if (app.library_controls_.focus != -1 || app.library_controls_.open()) return 87;
         app.openPcLibrary(GameSource::gog);
         if (app.libraryOptions().order != library_view::Order::last_played) return 88;
-        app.focusLibraryControls(); app.libraryVertical(library_view::order_count); app.libraryAccept(); app.saveLibraryPreferences();
+        app.focusLibraryControls(); app.library_controls_.choice = library_ui::installed_row; app.libraryAccept(); app.saveLibraryPreferences(); // Filtry's first box.
         const auto preferences = loadLibraryState(userConfigDirectory() / L"library-state.ini");
         if (!preferences || !preferences->options.at("1:gog").installed_only || preferences->options.at("1:all").order != library_view::Order::alphabetical) return 89;
         app.closeLibraryPanel(); app.library_controls_.focus = -1;
@@ -2430,6 +2431,7 @@ int LauncherUiTest::language(HWND window) {
 #include "launch_scripts_ui_cases.hpp"
 #include "game_mods_ui_cases.hpp"
 #include "metadata_find_ui_cases.hpp"
+#include "collection_band_ui_cases.hpp"
 #include "ux_076_ui_cases.hpp"
 #include "hltb_ui_cases.hpp"
 #include "plugin_achievements_ui_cases.hpp"
@@ -2770,6 +2772,15 @@ int main(int argc, char** argv) {
         CoUninitialize();
         if (code) std::cerr << "Desktop 0.7.6 regression: " << code << '\n';
         else std::cout << "Desktop 0.7.6: game panel, cell view, tools menu, game menu groups, getting started, identify passed\n";
+        return code;
+    }
+    if (argc == 2 && std::string_view(argv[1]) == "--collection-band") {
+        std::filesystem::create_directories(root);
+        const auto code = window ? LauncherUiTest::collectionBand(window) : 99;
+        if (window) DestroyWindow(window);
+        CoUninitialize();
+        if (code) std::cerr << "Collection tiles regression: " << code << '\n';
+        else std::cout << "Siatka's collection tiles: option, rows, pad, open and Back, pointer passed\n";
         return code;
     }
     if (argc == 2 && std::string_view(argv[1]) == "--metadata-find") {

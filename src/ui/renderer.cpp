@@ -610,8 +610,17 @@ void Renderer::paint(const std::vector<GameCard>& cards, size_t selected, bool s
             drawFriends();
             drawGogInstall();
             drawBulkCovers();
+            dialog_motion_ = context.editor_motion;
             drawCustomGameEditor();
-            if (context.tv_meta) { if (desktopDialogs()) drawDesktopMeta(*context.tv_meta); else drawTvMeta(*context.tv_meta); } // Edytuj metadane from the game's menu.
+            dialog_motion_ = context.meta_motion;
+            // Edytuj metadane from the game's menu (the window's: over Dodaj / Edytuj grę, else drawn with the window).
+            if (context.tv_meta) { if (desktopDialogs()) drawDesktopMeta(*context.tv_meta); else drawTvMeta(*context.tv_meta); }
+            if (!context.meta_shown) { // Its pictures go with it.
+                if (meta_poster_.loaded()) meta_poster_ = {};
+                for (auto& image : find_thumbs_) if (image.loaded()) image = {};
+            }
+            if (!context.band && !band_covers_.empty()) band_covers_.clear(); // Siatka's collection tiles' covers go with them.
+            dialog_motion_ = 1;
             if (context.identify) drawIdentify(); // Over Dodaj / Edytuj grę, which opens it.
             drawLibraryManager();
             // Opened from the panels above; the power menu and exit prompt stay over it (over Aurelia, below).
@@ -621,7 +630,9 @@ void Renderer::paint(const std::vector<GameCard>& cards, size_t selected, bool s
             drawGameCase(); // Półka's open case: the library's own layer, below every dialog.
             drawProfile(); // Over any screen, from the drawer: the lowest dialog.
             drawTarot(); // Over the home it opens from; the walkthrough, prompts and toasts above it.
+            dialog_motion_ = context.aurelia_motion;
             drawAurelia();
+            dialog_motion_ = 1;
             if (context.aurelia) { drawFileBrowser(); drawKeyboard(); } // Inny folder… opens the picker over it.
             drawWhatsNew(); // After an update's restart: the top dialog; the walkthrough and prompts above it.
             drawTour(); // Over the panels it opens; notifications and the exit prompt stay above it.
@@ -856,9 +867,10 @@ Renderer::TextureStats Renderer::textureStats() const {
         }
     };
     for (const auto* list : {&covers_, &logos_, &heroes_, &posters_, &discs_, &plugin_thumbnails_, &glance_thumbnails_, &tarot_images_, &profile_images_,
-                             &psfive_shots_, &psfive_similar_, &desktop_recent_})
+                             &psfive_shots_, &psfive_similar_, &desktop_recent_, &find_thumbs_, &band_covers_})
         for (const auto& cover : *list) count(cover);
     count(wallpaper_);
+    count(meta_poster_);
     count(psfive_shot_full_);
     count(case_back_);
     count(case_side_);

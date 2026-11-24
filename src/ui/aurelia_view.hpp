@@ -11,7 +11,7 @@
 
 namespace aurelia_ui {
 inline const wchar_t* notice() {
-    return tr(L"Aurelia to osobny, opcjonalny program, który loguje się na Twoje konto Steam i pozwala Launchme zarządzać grami bez klienta Steam: instalować je i aktualizować, wybierać wersje i gałęzie, synchronizować zapisy w chmurze, obsługiwać DLC i Warsztat oraz czatować ze znajomymi.\n\nNajlepiej działa z grami single player / offline. Niektóre gry, zwłaszcza multiplayer i korzystające z DRM lub Steamworks, mogą nadal wymagać uruchomionego klienta Steam.");
+    return tr(L"Aurelia to opcjonalny program: loguje się na Twoje konto Steam, by instalować i aktualizować gry, synchronizować zapisy oraz obsługiwać DLC i Warsztat bez klienta Steam. Gry sieciowe i z DRM mogą go nadal wymagać.");
 }
 enum class Page { setup, game, cloud, dlc, versions, branches, workshop, libraries };
 enum class Action {
@@ -66,7 +66,7 @@ struct State {
 // -3 its button, -4 Anuluj, -5 Potwierdź, a row's index, -9 nothing.
 struct Layout {
     float width = 1600, height = 900;
-    static constexpr float pad = 32, row_height = 66, row_step = 76, header = 112, status_space = 40;
+    static constexpr float pad = 40, row_height = 66, row_step = 76, header = 124, status_space = 40;
     settings_ui::Rect panel() const {
         const float w = std::min(960.0f, width - 64), h = std::min(780.0f, height - 48);
         return {(width - w) / 2, (height - h) / 2, (width + w) / 2, (height + h) / 2};
@@ -114,6 +114,14 @@ struct Layout {
         for (int i = s.first; i < std::min(static_cast<int>(s.rows.size()), s.first + visible(s)); ++i)
             if (row(s, i).contains(x, y)) return i;
         return -9;
+    }
+    // Where the focus ring stands (it springs between them: ViewContext::aurelia_glide); none while hidden.
+    std::optional<settings_ui::Rect> focusRect(const State& s) const {
+        if (s.confirmation) return s.confirm_focus ? confirm() : cancel();
+        if (s.back_focus) return back();
+        if (s.input_focus) return field(s) ? std::optional<settings_ui::Rect>(input()) : std::nullopt;
+        if (s.focus >= s.first && s.focus < std::min(static_cast<int>(s.rows.size()), s.first + visible(s))) return row(s, s.focus);
+        return std::nullopt;
     }
 };
 }

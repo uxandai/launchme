@@ -300,6 +300,14 @@ struct ViewContext {
     struct LibraryTab { std::wstring title; size_t count = 0; std::wstring mark; bool uncounted = false; }; // mark: a studio's logo in place of the title.
     std::vector<LibraryTab> library_tabs;
     std::wstring library_note; // Under the tabs: what the screen is (the board of studio logos).
+    // Siatka's "Kolekcje jako kafle" (collection_band): the tiles (name, games, three covers), the focused and
+    // pointed ones, the row's sideways slide, the line under them ("Wszystkie gry: 513", the order).
+    struct BandTile { std::wstring name, count; std::array<ImageBytes, 3> covers; };
+    bool band = false;
+    std::vector<BandTile> band_tiles;
+    int band_focus = -1, band_hover = -1;
+    float band_slide = 0;
+    std::wstring band_summary, band_order;
     int library_tab = 0;
     std::optional<float> library_tab_glide;
     std::vector<LibraryTab> store_tabs; // The Stores page: one tab per store plugin, in place of the page title.
@@ -334,6 +342,10 @@ struct ViewContext {
     const desktop_ui::MetaView* tv_meta = nullptr; // Tryb TV: Edytuj metadane (the desktop dialog, on the TV canvas).
     const custom_game_ui::State* custom_editor = nullptr; // Settings → Library add/edit panel.
     ImageBytes custom_poster; // Its poster beside the fields (custom_game_ui::State::poster says why there is none).
+    ImageBytes meta_poster;   // Edytuj metadane: the game's poster (else its cover) beside the fields.
+    bool meta_shown = false;  // Edytuj metadane is drawn (open or fading away), in Tryb TV or the window.
+    float meta_motion = 1, editor_motion = 1; // Edytuj metadane's and Dodaj / Edytuj grę's entrance and exit, 0..1.
+    float aurelia_motion = 1;                 // Aurelia's pages (Tryb TV): the same.
     const file_browser::State* file_browser = nullptr;    // The launcher's file picker, over everything.
     const settings_ui::ColorEditor* color_editor = nullptr; // Settings: "Inny…" colour.
     const library_manager_ui::State* library_manager = nullptr;
@@ -508,6 +520,8 @@ struct ViewContext {
     bool psfive_clock_shown = true;
     bool psfive_summary_shown = false; // Krótki opis: the logo stands higher, the summary under it (empty: not known yet).
     std::wstring psfive_summary;
+    std::wstring library_summary; // Scena's Krótki opis (Launcher::gameSummary; empty: off or not read yet).
+    int stage_dim = 0;            // Scena's Przyciemnij tło (percent, one setting for every Scena).
     std::wstring psfive_clock;   // The time in the top bar (drawer_clock::time).
     std::wstring psfive_caption; // Beside a focused "Wszystkie gry" / "Wszystkie" tile: games (and category).
     // PSfive → Szczegóły pod rzędem (psfive_details_renderer.cpp): the sheet under the row.
@@ -599,6 +613,10 @@ struct ViewContext {
     std::optional<GlideBox> downloads_glide; // Pobierania: Back or a row.
     std::optional<GlideBox> manager_glide; // Kolekcje / Wersje dialog: the highlight gliding between Back, the field and the rows.
     std::optional<GlideBox> editor_glide;  // Dodaj grę / Opcje uruchamiania (Tryb TV): the focus between the tabs, fields, options and buttons.
+    std::optional<GlideBox> meta_glide;    // Edytuj metadane (Tryb TV) and its list: the focus between the fields, rows and buttons.
+    std::optional<GlideBox> artwork_cell_glide; // Zmień grafikę (Tryb TV): the focused picture's outline.
+    std::optional<GlideBox> band_glide; // Siatka's collection tiles: the focused tile's ring.
+    std::optional<GlideBox> aurelia_glide; // Aurelia's pages (Tryb TV): the focus between Back, the rows, the field and the answers.
     std::optional<GlideBox> artwork_glide; // Zmień grafikę: the white pill between the rail's entries and buttons.
     std::optional<float> friends_scroll_glide;
     bool friends_back = false;           // Friends list: Back has the keyboard/pad focus.

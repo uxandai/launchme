@@ -191,6 +191,9 @@ void Renderer::desktopButton(Rect r, int style, float hover, bool pressed, bool 
         desktopFill(r, radius, buttonFill(pressed ? 0.82f : 1.0f));
         if (hover > 0.01f) desktopFill(r, radius, luminance > 0.6f ? gray(0, 0.08f * hover) : gray(1, 0.10f * hover));
         ink = luminance > 0.6f ? gray(0.06f) : gray(0.98f);
+    } else if (style == 3 && enabled) { // White.
+        desktopFill(r, radius, gray(pressed ? 0.84f : 0.95f - 0.05f * hover));
+        ink = gray(0.06f);
     } else {
         if (style == 1 || !enabled) desktopFill(r, radius, gray(1, enabled ? 0.045f : 0.025f));
         if (enabled && hover > 0.01f) desktopFill(r, radius, gray(1, (pressed ? 0.11f : 0.065f) * hover));
@@ -273,7 +276,9 @@ void Renderer::drawDesktop() {
     if (view.dragging) drawDesktopDrag(layout, view);
     drawDesktopTooltip(layout, view);
     drawDesktopQuick(view); // Ctrl+K over everything.
+    dialog_motion_ = context_->meta_motion;
     drawDesktopMeta(view.meta);  // Edytuj metadane.
+    dialog_motion_ = 1;
     // A restored window: a hairline along its top edge, where its frame no longer draws one.
     if (!view.maximized) { brush(gray(1, 0.07f)); target_->FillRectangle(D2D1::RectF(0, 0, viewport_.width, 1.0f / viewport_.scale), solid_.Get()); }
 }

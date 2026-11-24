@@ -68,6 +68,25 @@ int main() {
     const auto invalid = chooseTextAwareCrop(600, 900, {{0, 0, 500, 900, std::numeric_limits<float>::quiet_NaN(), true},
         {-1, 20, 100, 20, 90, true}, {1, 1, std::numeric_limits<int>::max(), 40, 99, true}});
     if (invalid.y != 0.5f) return 6;
+    { // No lettering read: the most detailed square, not the middle (a logo at the top of a flat poster).
+        constexpr uint32_t w = 64, h = 96;
+        std::vector<uint8_t> poster(static_cast<size_t>(w) * h * 4, 40);
+        for (uint32_t y = 4; y < 22; ++y)
+            for (uint32_t x = 8; x < 56; ++x) {
+                const uint8_t ink = ((x / 3 + y / 3) % 2) ? 230 : 30;
+                for (int c = 0; c < 3; ++c) poster[(static_cast<size_t>(y) * w + x) * 4 + c] = ink;
+            }
+        const auto top = chooseDetailCrop(w, h, poster);
+        if (top.y * h - w * 0.5f > 4 || top.x != 0.5f) return 19; // The window holds the logo (rows 4-21).
+        // A flat picture keeps the middle; a capsule slides sideways.
+        std::vector<uint8_t> flat(static_cast<size_t>(w) * h * 4, 90);
+        if (std::abs(chooseDetailCrop(w, h, flat).y - 0.5f) > 0.001f) return 20;
+        std::vector<uint8_t> capsule(static_cast<size_t>(h) * w * 4, 40);
+        for (uint32_t y = 10; y < 50; ++y)
+            for (uint32_t x = 70; x < 92; ++x)
+                for (int c = 0; c < 3; ++c) capsule[(static_cast<size_t>(y) * h + x) * 4 + c] = ((x + y) % 2) ? 220 : 20;
+        if (chooseDetailCrop(h, w, capsule).x <= 0.6f) return 21;
+    }
     for (const auto& words : std::vector<std::vector<TextBox>>{
              {}, {{80, 400, 440, 100, 95}}, {{10, 10, 120, 40, 30}}}) {
         const auto center = chooseTextAwareCrop(600, 900, words);

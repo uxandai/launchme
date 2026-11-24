@@ -389,6 +389,11 @@ void Launcher::onAudio(std::unique_ptr<AudioMessage> message) {
         return;
     }
     if (message->cue == SoundCue::achievement) { audio_.setCue(message->cue, std::move(message->clip)); return; }
+    if (message->cue == SoundCue::open || message->cue == SoundCue::back || message->cue == SoundCue::start) {
+        // UI SFX's cues beside its focus one: dropped when another sound was chosen since.
+        if (message->generation == sound_generation_[static_cast<size_t>(soundCueSlot(SoundCue::navigation))]) audio_.setCue(message->cue, std::move(message->clip));
+        return;
+    }
     const int slot = soundCueSlot(message->cue);
     if (slot < 0 || message->generation != sound_generation_[slot]) return;
     const bool preview = message->preview;
@@ -438,7 +443,9 @@ void Launcher::snapCardsForTransition() {
     const bool psfive_buttons = psfive && (psfiveActions() || psfiveTopFocused() || psfiveDetailsShown());
     const float shelf_aspect = shelfPosters() ? 2.0f / 3.0f : 1.0f;
     const bool steam_row = shelfSteamRow(); // Wygląd Steam: the first row's own geometry (steamTarget).
-    const float compact_size = grid ? grid_layout::cell(view.width) :
+    const int grid_columns = libraryView() == library_view::View::grid ? libraryPresentation().grid_columns : 0; // Siatka's option (0: by the width).
+    const float grid_head = library_layout::gridHead(libraryView(), view.width, libraryPresentation()); // Siatka's collection tiles above the rows.
+    const float compact_size = grid ? grid_layout::cell(view.width, grid_columns) :
                                carousel::smallSize(cards_.size(), view.width - shelf_inset, fixed_row);
     for (size_t i = 0; i < cards_.size(); ++i) {
         auto& card = cards_[i];
@@ -465,21 +472,21 @@ void Launcher::snapCardsForTransition() {
             target_y = overview_layout::top(i, view.width, grid_scroll_, columns);
             aspect = overview_layout::aspect;
         } else if (libraryGridLandscape()) {
-            target_size = landscape_grid::cell(view.width);
-            target_x = landscape_grid::left(view.width, i);
-            target_y = landscape_grid::top(i, view.width, grid_scroll_);
+            target_size = landscape_grid::cell(view.width, grid_columns);
+            target_x = landscape_grid::left(view.width, i, grid_columns);
+            target_y = landscape_grid::top(i, view.width, grid_scroll_, grid_columns, grid_head);
             aspect = landscape_grid::aspect;
         } else if (libraryGridPosters()) {
-            target_size = grid_layout::cell(view.width) * 1.5f;
-            target_x = grid_layout::left(view.width, i);
-            target_y = grid_layout::top(i, view.width, grid_scroll_, true);
+            target_size = grid_layout::cell(view.width, grid_columns) * 1.5f;
+            target_x = grid_layout::left(view.width, i, grid_columns);
+            target_y = grid_layout::top(i, view.width, grid_scroll_, true, grid_columns, grid_head);
             aspect = 2.0f / 3.0f;
         } else {
             target_size = grid ? compact_size : (i == selected_ ? 2 * compact_size : compact_size) / shelf_aspect;
-            target_x = grid ? grid_layout::left(view.width, i) :
+            target_x = grid ? grid_layout::left(view.width, i, grid_columns) :
                        shelf_inset + carousel::left(i, selected_, cards_.size(), view.width - shelf_inset, fixed_row);
             if (!grid) aspect = shelf_aspect;
-            target_y = grid ? grid_layout::top(i, view.width, grid_scroll_) :
+            target_y = grid ? grid_layout::top(i, view.width, grid_scroll_, false, grid_columns, grid_head) :
                        carousel::bottom(view.height) - target_size - (quick_open_ ? 100.0f : 0.0f);
             if (steam_row && !grid) steamTarget(i, view, shelf_inset, target_x, target_y, target_size, aspect);
             if (rail) {
@@ -492,7 +499,7 @@ void Launcher::snapCardsForTransition() {
         card.size = target_size;
         card.aspect = aspect;
         card.opacity = 1.0f;
-        card.emphasis = i == selected_ && !quick_open_ && !snitchProfileFocused() && !flixRailFocused() && !(metro && metro_tabs_) && !psfive_buttons && !searchBackFocused() &&
+        card.emphasis = i == selected_ && !quick_open_ && !snitchProfileFocused() && !flixRailFocused() && !(metro && metro_tabs_) && !psfive_buttons && !searchBackFocused() && !libraryBandFocused() &&
             !(libraryControls() && (library_controls_.focus >= 0 || library_controls_.open() ||
                                     (libraryOverview() && library_controls_.action >= 0))) ? 1.0f : 0.0f;
         if (renderer_.hasCover(i) || renderer_.hasPoster(i)) card.cover_opacity = 1.0f;
@@ -573,6 +580,19 @@ void Launcher::tick() {
     pollFileBrowserPreview();
     pollCustomEditorPoster(); // Dodaj / Edytuj grę: the typed name's poster once typing rests.
     menu_progress_ += ((menu_open_ ? 1.0f : 0.0f) - menu_progress_) * ease(dt, 13.0f);
+    // Edytuj metadane and Dodaj / Edytuj grę: in and out; a faded one lets its last state go.
+    meta_motion_ += ((desktop_meta_.open ? 1.0f : 0.0f) - meta_motion_) * ease(dt, 15.0f);
+    if (!desktop_meta_.open && meta_motion_ < 0.003f) { meta_motion_ = 0; if (meta_closing_.open) { meta_closing_ = {}; meta_closing_poster_ = {}; } }
+    if (desktop_meta_.open && meta_motion_ > 0.997f) meta_motion_ = 1;
+    editor_motion_ += ((custom_editor_.open ? 1.0f : 0.0f) - editor_motion_) * ease(dt, 15.0f);
+    if (!custom_editor_.open && editor_motion_ < 0.003f) { editor_motion_ = 0; if (editor_closing_.open) { editor_closing_ = {}; editor_closing_poster_ = {}; } }
+    if (custom_editor_.open && editor_motion_ > 0.997f) editor_motion_ = 1;
+    aurelia_motion_ += ((aurelia_ui_.open ? 1.0f : 0.0f) - aurelia_motion_) * ease(dt, 15.0f);
+    if (!aurelia_ui_.open && aurelia_motion_ < 0.003f) { aurelia_motion_ = 0; if (aurelia_closing_.open) aurelia_closing_ = {}; }
+    if (aurelia_ui_.open && aurelia_motion_ > 0.997f) aurelia_motion_ = 1;
+    // Siatka's collection tiles slide sideways to the focused one.
+    band_slide_ += (band_slide_target_ - band_slide_) * ease(dt, 14.0f);
+    if (std::abs(band_slide_target_ - band_slide_) < 0.5f) band_slide_ = band_slide_target_;
     if (keyboard_.open && !textFieldActive()) closeKeyboard(); // Its field closed (Esc, a click, a screen change).
     keyboard_progress_ += ((keyboard_.open ? 1.0f : 0.0f) - keyboard_progress_) * ease(dt, 14.0f);
     if (keyboard_progress_ < 0.002f) keyboard_progress_ = 0;
@@ -639,6 +659,8 @@ void Launcher::tick() {
                        (library_dropdown_progress_ > 0 && library_dropdown_progress_ < 1) ||
                        (library_search_progress_ > 0.003f && library_search_progress_ < 0.997f) ||
                        (fast_scroll_alpha_ > 0.003f && fast_scroll_alpha_ < 0.997f);
+    needs_paint |= (meta_motion_ > 0 && meta_motion_ < 1) || (editor_motion_ > 0 && editor_motion_ < 1) || (aurelia_motion_ > 0 && aurelia_motion_ < 1) ||
+                   band_slide_ != band_slide_target_;
     const bool xmb = xmbActive(), flix = flixActive(), metro = metroActive(), psfive = psfiveActive(), list = libraryList();
     // Flix: a rest on a game of a poster row unfolds its tile (flixTarget follows flix_unfold_).
     if (flix) needs_paint |= tickFlixUnfold(now, dt);
@@ -649,7 +671,9 @@ void Launcher::tick() {
     const float shelf_aspect = shelfPosters() ? 2.0f / 3.0f : 1.0f;
     const bool steam_row = shelfSteamRow(); // Wygląd Steam: the first row's own geometry (steamTarget).
     // Per frame, not per card: a library grid can hold thousands of cards.
-    const float compact_size = grid ? grid_layout::cell(view.width) :
+    const int grid_columns = libraryView() == library_view::View::grid ? libraryPresentation().grid_columns : 0; // Siatka's option (0: by the width).
+    const float grid_head = library_layout::gridHead(libraryView(), view.width, libraryPresentation()); // Siatka's collection tiles above the rows.
+    const float compact_size = grid ? grid_layout::cell(view.width, grid_columns) :
                                carousel::smallSize(cards_.size(), view.width - shelf_inset, fixed_row);
     const float ease_x = ease(dt, 12.0f), ease_size = ease(dt, 10.5f), ease_opacity = ease(dt, 8.0f), ease_cover = ease(dt, 7.0f);
     const auto entrance = settings_.tile_entrance;
@@ -680,7 +704,8 @@ void Launcher::tick() {
     tickDownloadBars(dt, needs_paint);   // Pobierania: the bars glide to the stores' samples.
     needs_paint |= themeAnimate(dt);     // Dostosuj wygląd: its motion, and its return from the wallpaper picker.
     needs_paint |= tickDesktopDialog();  // Kolekcje, Dodaj grę, Zidentyfikuj grę: the caret.
-    needs_paint |= customEditorOpen() && renderer_.customPosterPending(); // Its poster shows once decoded.
+    needs_paint |= custom_editor_.open && renderer_.customPosterPending(); // Its poster shows once decoded.
+    needs_paint |= desktop_meta_.open && renderer_.dialogImagesPending(); // Edytuj metadane's poster, Identyfikuj grę's pictures.
     if (favorite_pulse_ > 0.0f) {
         favorite_pulse_ = std::max(0.0f, favorite_pulse_ - dt / 0.22f);
         needs_paint = true;
@@ -733,23 +758,23 @@ void Launcher::tick() {
             aspect = overview_layout::aspect;
             delay = std::min<size_t>(i, 12) * 0.025f;
         } else if (libraryGridLandscape()) {
-            target_size = landscape_grid::cell(view.width);
-            target_x = landscape_grid::left(view.width, i);
-            target_y = landscape_grid::top(i, view.width, grid_scroll_);
+            target_size = landscape_grid::cell(view.width, grid_columns);
+            target_x = landscape_grid::left(view.width, i, grid_columns);
+            target_y = landscape_grid::top(i, view.width, grid_scroll_, grid_columns, grid_head);
             aspect = landscape_grid::aspect;
             delay = std::min<size_t>(i, 10) * 0.035f;
         } else if (libraryGridPosters()) {
-            target_size = grid_layout::cell(view.width) * 1.5f;
-            target_x = grid_layout::left(view.width, i);
-            target_y = grid_layout::top(i, view.width, grid_scroll_, true);
+            target_size = grid_layout::cell(view.width, grid_columns) * 1.5f;
+            target_x = grid_layout::left(view.width, i, grid_columns);
+            target_y = grid_layout::top(i, view.width, grid_scroll_, true, grid_columns, grid_head);
             aspect = 2.0f / 3.0f;
             delay = std::min<size_t>(i, 10) * 0.035f;
         } else {
             target_size = grid ? compact_size : (i == selected_ ? 2 * compact_size : compact_size) / shelf_aspect;
-            target_x = grid ? grid_layout::left(view.width, i) :
+            target_x = grid ? grid_layout::left(view.width, i, grid_columns) :
                        shelf_inset + carousel::left(i, selected_, cards_.size(), view.width - shelf_inset, fixed_row);
             if (!grid) aspect = shelf_aspect;
-            target_y = grid ? grid_layout::top(i, view.width, grid_scroll_) :
+            target_y = grid ? grid_layout::top(i, view.width, grid_scroll_, false, grid_columns, grid_head) :
                        carousel::bottom(view.height) - target_size - (quick_open_ ? 100.0f : 0.0f);
             if (steam_row && !grid) steamTarget(i, view, shelf_inset, target_x, target_y, target_size, aspect);
             if (rail) {
@@ -765,7 +790,7 @@ void Launcher::tick() {
         }
         card.aspect = aspect;
         if (i == selected_) { focus_x = target_x; focus_y = target_y; focus_w = target_size * aspect; focus_h = target_size; }
-        const float emphasis = i == selected_ && !quick_open_ && !snitchProfileFocused() && !flixRailFocused() && !(metro && metro_tabs_) && !psfive_buttons && !searchBackFocused() &&
+        const float emphasis = i == selected_ && !quick_open_ && !snitchProfileFocused() && !flixRailFocused() && !(metro && metro_tabs_) && !psfive_buttons && !searchBackFocused() && !libraryBandFocused() &&
             !(libraryControls() && (library_controls_.focus >= 0 || library_controls_.open() ||
                                     (libraryOverview() && library_controls_.action >= 0))) ? 1.0f : 0.0f; // Przegląd: its panel's buttons.
         // PSfive at start-up: the row slides in from the right, small, tile after tile, then the first

@@ -95,6 +95,8 @@ void Launcher::closeAurelia() {
     const bool intro = aurelia_ui_.intro;
     aureliaCancelLogin(); // Closing the page ends a sign-in in progress.
     ++aurelia_page_generation_; closeKeyboard();
+    aurelia_closing_ = aurelia_ui_; // Tryb TV draws it while it fades away.
+    aurelia_closing_.input_focus = false;
     aurelia_ui_ = {};
     launchChoicesAureliaClosed(); // Opened from Opcje uruchamiania's "…": its switch follows.
     if (intro) { settings_.aurelia_intro_done = true; settings_dirty_ = true; saveSettings(); if (!desktop_mode_ && !settings_.tour_done) startTour(); }

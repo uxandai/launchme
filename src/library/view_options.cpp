@@ -4,6 +4,45 @@
 #include <Windows.h>
 #endif
 #include <algorithm>
+#include <string_view>
+
+namespace {
+// "Split Screen Co-op" -> "splitscreencoop": letters and digits, lower case.
+std::wstring foldedTag(const std::wstring& tag) {
+    std::wstring out;
+    for (const wchar_t c : tag) {
+        if (c >= L'A' && c <= L'Z') out += static_cast<wchar_t>(c - L'A' + L'a');
+        else if ((c >= L'a' && c <= L'z') || (c >= L'0' && c <= L'9')) out += c;
+    }
+    return out;
+}
+bool has(std::wstring_view text, std::wstring_view part) { return text.find(part) != std::wstring_view::npos; }
+}
+
+// Steam's store tags and features (Co-op, Online Co-op, Shared/Split Screen, Full controller support,
+// 4 Player Local…) and RAWG's (Singleplayer, Multiplayer, Local Co-Op, Controller support…).
+bool library_view::tagged(Filter filter, const std::vector<std::wstring>& tags) {
+    for (const auto& tag : tags) {
+        const auto t = foldedTag(tag);
+        switch (filter) {
+        case Filter::single_player: if (t == L"singleplayer") return true; break;
+        case Filter::multiplayer:
+            if (has(t, L"multiplayer") || has(t, L"coop") || has(t, L"pvp") || t == L"mmo" || has(t, L"splitscreen") || has(t, L"playerlocal")) return true;
+            break;
+        case Filter::coop: if (has(t, L"coop") || t == L"cooperative") return true; break;
+        case Filter::local:
+            if (has(t, L"splitscreen") || has(t, L"localcoop") || has(t, L"localmultiplayer") || has(t, L"playerlocal") || has(t, L"couchcoop")) return true;
+            break;
+        case Filter::online:
+            if (has(t, L"online") || t == L"mmo" || has(t, L"massivelymultiplayer") || has(t, L"crossplatformmultiplayer")) return true;
+            break;
+        case Filter::controller: if (has(t, L"controller")) return true; break;
+        case Filter::vr: if (t == L"vr" || t == L"vrsupported" || t == L"vronly" || t == L"vrsupport") return true; break;
+        case Filter::unplayed: return false;
+        }
+    }
+    return false;
+}
 
 std::vector<Game> library_view::arrange(const std::vector<Game>& games, Options options, const std::map<std::string, uint64_t>& first_seen,
                                         bool include_private, const std::unordered_map<std::string, int>* released) {

@@ -6,6 +6,7 @@
 int LauncherUiTest::ux076(HWND window) {
     using namespace desktop_ui;
     Launcher app;
+    app.identify_dialog_for_test_ = true; // The older Identyfikuj grę dialog (Edytuj metadane's list: metadata_find_ui_cases.hpp).
     app.hwnd_ = window; app.execute_ = fakeExecute;
     app.settings_.launch_animation = false; app.settings_.tour_done = true;
     app.settings_.glance = false; app.settings_.companion = true;
