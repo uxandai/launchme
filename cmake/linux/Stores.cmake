@@ -17,7 +17,7 @@ if(BUILD_TESTING)
         SOURCES tests/amazon_tests.cpp src/store/amazon.cpp src/platform/helper_process.cpp)
     # A fake launchme-xbox as a shell script (LAUNCHME_XBOX_HELPER).
     launchme_executable(xbox_account_tests TEST xbox_account_contracts
-        SOURCES tests/xbox_account_tests.cpp src/store/xbox_account.cpp src/platform/helper_process.cpp)
+        SOURCES tests/xbox_account_tests.cpp src/store/xbox_account.cpp src/store/xbox_activity.cpp src/platform/helper_process.cpp)
     # The Stores' built-in tabs: every outside effect of an installation is the test's own backend.
     launchme_executable(store_hub_tests TEST store_hub_launchers_promotions_and_grid
         SOURCES tests/store_hub_tests.cpp src/store/launcher_install.cpp src/platform/helper_process.cpp)

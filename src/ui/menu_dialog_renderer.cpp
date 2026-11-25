@@ -29,6 +29,7 @@ wchar_t icon(context_menu::Item item, bool hidden) {
     case context_menu::Item::hide: return hidden ? glyph::view : glyph::hide;
     case context_menu::Item::exclude: return glyph::remove;
     case context_menu::Item::uninstall: return glyph::remove;
+    case context_menu::Item::update: return glyph::sync;
     case context_menu::Item::launch: return glyph::settings;
     case context_menu::Item::metadata: return glyph::edit;
     case context_menu::Item::aurelia: return glyph::edit;
@@ -108,6 +109,7 @@ void Renderer::drawContextMenuDialog() {
         case context_menu::Item::hide: return context_->menu_hidden ? tr(L"Pokaż") : tr(L"Ukryj");
         case context_menu::Item::exclude: return tr(L"Wyklucz");
         case context_menu::Item::uninstall: return tr(L"Odinstaluj");
+        case context_menu::Item::update: return tr(L"Aktualizuj");
         case context_menu::Item::launch: return tr(L"Opcje uruchamiania");
         case context_menu::Item::remove: return tr(L"Usuń z biblioteki");
         case context_menu::Item::metadata: return tr(L"Edytuj metadane");

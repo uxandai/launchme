@@ -27,9 +27,10 @@ inline Order orderFromPersisted(int value) {
 constexpr int persisted_order_count = 7;
 // Filtry (beside the orders in the same menu): how a game is played, read from its tags in the game index
 // (Steam's store tags and features, RAWG's tags), and whether it was ever played. A game must match
-// every one checked; one the index knows nothing about matches none.
-enum class Filter { single_player, multiplayer, coop, local, online, controller, vr, unplayed };
-constexpr int filter_count = 8;
+// every one checked; one the index knows nothing about matches none. game_pass: played through the
+// Xbox Game Pass subscription only; owned (Kupione): every other game. Both are the game's own facts.
+enum class Filter { single_player, multiplayer, coop, local, online, controller, vr, unplayed, game_pass, owned };
+constexpr int filter_count = 10;
 constexpr uint32_t filterBit(Filter filter) { return 1u << static_cast<int>(filter); }
 // Whether these tags say the game is played that way (Filter::unplayed: never; the caller knows).
 bool tagged(Filter filter, const std::vector<std::wstring>& tags);
@@ -146,6 +147,8 @@ inline const wchar_t* label(Filter filter) {
     case Filter::online: return tr(L"Gra przez sieć");
     case Filter::controller: return tr(L"Obsługa pada");
     case Filter::vr: return L"VR";
+    case Filter::game_pass: return L"Game Pass";
+    case Filter::owned: return tr(L"Kupione");
     default: return tr(L"Nigdy nie grane");
     }
 }

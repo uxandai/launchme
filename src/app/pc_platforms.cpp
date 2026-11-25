@@ -333,7 +333,9 @@ void Launcher::onPcLibrary(std::unique_ptr<PcLibraryMessage> message) {
                 else if (!old->second.installation.active() && game.installation.active() && game.installation.phase != InstallPhase::unknown)
                     downloadQueued(game.name);
             }
-            changed |= old->second.installation != game.installation || old->second.store_playtime_minutes != game.store_playtime_minutes;
+            changed |= old->second.installation != game.installation || old->second.store_playtime_minutes != game.store_playtime_minutes ||
+                       old->second.last_played != game.last_played || old->second.xbox_game_pass != game.xbox_game_pass ||
+                       old->second.xbox_title_id != game.xbox_title_id;
             if (old->second.store_tall_art != game.store_tall_art || old->second.store_wide_art != game.store_wide_art || old->second.store_logo_art != game.store_logo_art) {
                 changed = true;
                 if ((old->second.store_tall_art.empty() && !game.store_tall_art.empty()) || (old->second.store_wide_art.empty() && !game.store_wide_art.empty()) ||
@@ -392,6 +394,8 @@ void Launcher::onPcLibrary(std::unique_ptr<PcLibraryMessage> message) {
             game.play_action = next.play_action; game.install_action = next.install_action;
             game.install_directory = next.install_directory; game.executable = next.executable;
             game.store_playtime_minutes = next.store_playtime_minutes;
+            game.last_played = std::max(game.last_played, next.last_played); // A store's play history (Xbox activity).
+            game.xbox_title_id = next.xbox_title_id; game.xbox_game_pass = next.xbox_game_pass;
             game.store_tall_art = next.store_tall_art; game.store_wide_art = next.store_wide_art; game.store_logo_art = next.store_logo_art;
         }
     };

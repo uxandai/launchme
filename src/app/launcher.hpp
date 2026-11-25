@@ -1405,6 +1405,10 @@ private:
     std::string plugin_achievements_focus_; // The pane's game last asked about (once per selection).
     void requestFocusedAchievements(const Game& game);
     bool receivePluginAchievements(const plugins::Result& message);
+    // A list (or its failure) arrived in plugin_achievements_[key]: the open card and screen take it.
+    void achievementsArrived(const std::string& key);
+    // Achievements from outside Steam and the game's saves: Xbox Live's or a plugin's.
+    bool externalAchievements(const Game& game) const { return xboxAchievements(game) || pluginAchievementsProvider(game).has_value(); }
     void showAchievementList(const SteamAchievements& list, bool final); // Fills achievements_ (the open screen).
     library_manager_ui::State library_dialog_;
     void openCollectionManager(std::optional<Game> game = {});
@@ -1476,6 +1480,8 @@ private:
     bool detail_version_selected_ = false;
     int versionsDetailAction() const;
     void openVersions(const Game& game, bool launch);
+    // versions_ from public_library_ (Ustawienia → Biblioteka → Łącz wersje tej samej gry; off: no groups).
+    void indexVersions();
     void chooseVersion();
     // via_steam: the Steam client even where Aurelia would launch it (its standalone path refused).
     void launchGame(const Game& game, bool via_steam = false);
@@ -1936,6 +1942,22 @@ private:
     bool xboxConnected() const { return !xbox_state_.account.empty(); }
     // Instalacja przez Launchme is on and the helper can install this account game itself.
     bool xboxOwnInstall(const Game& game) const;
+    // Xbox Live's achievements of an account game (helper `achievements`), kept in plugin_achievements_
+    // (plugin "xbox") so Details, the achievements screen and the pane show them like a plugin's.
+    bool xboxAchievements(const Game& game) const;
+    void requestXboxAchievements(const Game& game, bool force);
+    void receiveXboxAchievements(xbox_account::AchievementsAnswer answer);
+    std::map<uint32_t, std::string> xbox_achievement_keys_; // Title id → the game key asked about.
+    // A game Launchme installed whose package has a newer version: Aktualizuj installs into its folder.
+    bool xboxUpdateAvailable(const Game& game) const;
+    void openXboxUpdate(const Game& game);
+    // The stored offline lease's end for this game on this PC (0: none, or it ended).
+    uint64_t xboxOfflineUntil(const Game& game) const;
+    // Szczegóły' badges of an Xbox game: Game Pass, Offline do <data>, Aktualizacja.
+    std::vector<std::wstring> xboxBadges(const Game& game) const;
+    // Biblioteka → Xbox → Gra offline: asks Microsoft, or (pressed twice) changes the designation.
+    void xboxOfflineAction();
+    bool xbox_offline_asked_ = false; // Asked once per sign-in.
     void updateSteamInstallations(const LibraryMessage& library);
     void pollGog();
     void openGogInstall(const Game& game);
@@ -2195,6 +2217,11 @@ private:
     // that neither Steam nor Launchme has; empty when none is missing.
     std::string compatMissingRuntime(const Game& game) const;
     void compatProvisionRuntime(const Game& game, const std::string& name); // Downloads it, then starts the game.
+    // An Xbox game Launchme installed names Microsoft's Visual C++ runtime as a package dependency the
+    // Xbox app would add: winetricks puts vcrun2022 into its prefix once (winetricks checks its
+    // downloads' SHA-256), then the game starts. Without winetricks the game starts as it is.
+    bool compatNeedsVcRuntime(const Game& game) const;
+    void compatProvisionVcRuntime(const Game& game);
 #endif
     // A game added without the editor (from an installer): saved and in the library; its id, or
     // empty when the list cannot be saved.

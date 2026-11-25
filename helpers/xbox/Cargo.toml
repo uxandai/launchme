@@ -1,10 +1,10 @@
 [package]
 name = "launchme-xbox"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.98.0"
 license = "GPL-3.0-or-later"
-description = "Launchme's Xbox account helper built on Xodus (sign-in, library, MSIXVC install, licensed launch)"
+description = "Launchme's Xbox account helper built on Xodus (sign-in, library, MSIXVC install, licensed and offline launch, activity)"
 publish = false
 
 # Xodus (https://github.com/xodus-gaming/xodus, GPL-3.0) is pinned to one commit: its crates are
@@ -22,6 +22,9 @@ uuid = { version = "1.25.0", features = ["v4"] }
 url = "2.5.8"
 fs2 = "0.4.3"
 roxmltree = "0.20"
+base64 = "0.22.1"
+hmac = "0.12.1"
+sha2 = "0.10.9"
 
 # The sign-in window: WebView2 through wry/tao on Windows.
 [target.'cfg(windows)'.dependencies]

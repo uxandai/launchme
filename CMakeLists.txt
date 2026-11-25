@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(launchme VERSION 0.7.25 LANGUAGES C CXX)
+project(launchme VERSION 0.7.26 LANGUAGES C CXX)
 
 if(NOT WIN32)
     # Linux (highly experimental, docs/linux-port.md): the shared core, its tests and the launcher on SDL3 + Skia.
@@ -314,6 +314,8 @@ if(BUILD_TESTING)
     add_test(NAME profile_transfer_settings_flow COMMAND launcher_ui_tests --transfer)
     launchme_executable(xbox_account_tests TEST xbox_account_contracts SOURCES tests/xbox_account_tests.cpp)
     add_test(NAME xbox_account_flow COMMAND launcher_ui_tests --xbox)
+    add_test(NAME xbox_gamepass_flow COMMAND launcher_ui_tests --xbox-gamepass)
+    add_test(NAME version_merge_flow COMMAND launcher_ui_tests --version-merge)
     launchme_executable(companion_tests TEST companion_replies_prompts_and_rig SOURCES tests/companion_tests.cpp)
     launchme_executable(companion_social_tests TEST companion_social_rules_history_and_plans SOURCES tests/companion_social_tests.cpp)
     launchme_executable(companion_memory_tests TEST companion_weighted_memory_and_capacity SOURCES tests/companion_memory_tests.cpp)

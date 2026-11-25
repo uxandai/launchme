@@ -3062,18 +3062,21 @@ dependencies = [
 
 [[package]]
 name = "launchme-xbox"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
+ "base64 0.22.1",
  "chrono",
  "fs2",
  "futures-util",
  "gtk4",
+ "hmac 0.12.1",
  "libc",
  "msixvc",
  "reqwest 0.13.4",
  "roxmltree",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "soup3 0.9.0",
  "tao",
  "tokio",

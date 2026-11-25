@@ -24,8 +24,10 @@ namespace context_menu {
 // "more": Więcej opcji, the game's menu only: Details with its "…" open (every other row lives there).
 // "collections": Kolekcje, the game's menu after Szczegóły and a running game's rows (second on PSfive, third
 // elsewhere): the game's collections (tick, untick, a new one), as Szczegóły' own Kolekcje button.
+// "update": Aktualizuj, a newer package of a game Launchme installed from Xbox (Launcher::xboxUpdateAvailable),
+// right after the play rows in every menu.
 enum class Item { primary, suspend, plugin, details, artwork, retry, close, folder, hide, exclude, uninstall, launch, metadata, aurelia, steam_account, remove, compat, shortcuts, identify,
-                  studio_earlier, studio_later, studio_hide, emulator, forget_recent, more, collections };
+                  studio_earlier, studio_later, studio_hide, emulator, forget_recent, more, collections, update };
 struct Rows {
     bool suspend = false;
     int plugins = 0;
@@ -47,6 +49,7 @@ struct Rows {
     bool recent = false;         // The game stands in the recent rows (Launcher::inRecent): Usuń z ostatnio granych.
     bool full = false;           // The game's menu with every row (Details' "…" ones too) instead of Więcej opcji.
     bool collections = false;    // The game's menu: Kolekcje (a game with its own key).
+    bool update = false;         // Aktualizuj (Launcher::xboxUpdateAvailable; never while the game runs).
 };
 // The game's menu (a held A, Y, right click; PSfive's "…" without its own Graj): play, Szczegóły,
 // Usuń z ostatnio granych, Więcej opcji, Odinstaluj; a running game's Wstrzymaj / Zamknij grę too.
@@ -55,20 +58,20 @@ struct Rows {
 constexpr auto order(Rows options) {
     using enum Item;
     if (options.full) return options.secondary_only ?
-        std::array{studio_earlier, studio_later, studio_hide, details, primary, suspend, close, collections, forget_recent,
+        std::array{studio_earlier, studio_later, studio_hide, details, primary, suspend, close, update, collections, forget_recent,
                    launch, steam_account, emulator, compat, aurelia, artwork, metadata, identify, folder, shortcuts, plugin,
                    hide, exclude, uninstall, remove, retry, more} :
-        std::array{studio_earlier, studio_later, studio_hide, primary, suspend, close, details, collections, forget_recent,
+        std::array{studio_earlier, studio_later, studio_hide, primary, suspend, close, update, details, collections, forget_recent,
                    launch, steam_account, emulator, compat, aurelia, artwork, metadata, identify, folder, shortcuts, plugin,
                    hide, exclude, uninstall, remove, retry, more};
     return options.detail_options ?
-        std::array{studio_earlier, studio_later, studio_hide, primary, suspend, close, details,
+        std::array{studio_earlier, studio_later, studio_hide, primary, suspend, close, update, details,
                    launch, steam_account, emulator, compat, aurelia, artwork, metadata, identify, folder, shortcuts, plugin,
                    forget_recent, hide, exclude, uninstall, remove, retry, more, collections} :
            options.secondary_only ?
-        std::array{studio_earlier, studio_later, studio_hide, details, primary, suspend, close, forget_recent, more, uninstall,
+        std::array{studio_earlier, studio_later, studio_hide, details, primary, suspend, close, update, forget_recent, more, uninstall,
                    plugin, artwork, retry, folder, hide, exclude, launch, metadata, aurelia, steam_account, remove, compat, shortcuts, identify, emulator, collections} :
-        std::array{studio_earlier, studio_later, studio_hide, primary, suspend, close, details, forget_recent, more, uninstall,
+        std::array{studio_earlier, studio_later, studio_hide, primary, suspend, close, update, details, forget_recent, more, uninstall,
                    plugin, artwork, retry, folder, hide, exclude, launch, metadata, aurelia, steam_account, remove, compat, shortcuts, identify, emulator, collections};
 }
 constexpr bool visible(Item entry, Rows options) {
@@ -76,6 +79,7 @@ constexpr bool visible(Item entry, Rows options) {
     if (options.studio || studio_item) return options.studio && studio_item;
     if (entry == Item::forget_recent) return options.recent && !options.session; // A game in play keeps its place.
     if (entry == Item::collections) return options.full && options.collections; // Details has its own Kolekcje button.
+    if (entry == Item::update) return options.update && !options.session;
     if (options.full) switch (entry) {
         case Item::primary: return !options.secondary_only;
         case Item::suspend: return options.suspend;

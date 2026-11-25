@@ -52,13 +52,14 @@ void Launcher::desktopOpenGameMenu(float x, float y, bool keyboard, bool pane) {
         const auto session = sessionState(game);
         if (settings_.quick_resume && session == SessionState::running) items.push_back({Action::suspend, tr(L"Wstrzymaj"), {}, glyph::pause});
         if (session != SessionState::none) items.push_back({Action::close_game, tr(L"Zamknij grę"), {}, glyph::stop});
+        if (session == SessionState::none && xboxUpdateAvailable(game)) items.push_back({Action::xbox_update, tr(L"Aktualizuj"), {}, glyph::sync});
         separator();
         const bool favorite = isFavorite(game);
         if (favoritesShown()) items.push_back({Action::favorite, favorite ? tr(L"Usuń z ulubionych") : tr(L"Dodaj do ulubionych"), {}, favorite ? glyph::star_fill : glyph::star});
         MenuItem collections{Action::collections, tr(L"Kolekcje"), {}, glyph::folder};
         collections.submenu = true;
         items.push_back(std::move(collections));
-        if (const auto* group = versions_.find(game); group && group->size() > 1) items.push_back({Action::versions, tr(L"Wybierz wersję…"), {}, glyph::sync});
+        if (const auto* group = versions_.find(game); group && group->size() > 1) items.push_back({Action::versions, tr(L"Zmień wersję"), {}, glyph::swap});
         separator();
         // The rest in three groups, each a submenu: the game's data and art, how it starts, and the extras.
         const wchar_t* submenu_names[] = {trKey(L"Dane i grafika"), trKey(L"Opcje gry"), trKey(L"Więcej")};
@@ -491,6 +492,7 @@ void Launcher::desktopMenuPick(const desktop_ui::MenuItem& item, bool /*from_sub
     case Action::exclude: if (game) askExcludeGame(*game); return;
     case Action::forget_recent: if (game) forgetRecent(*game); return;
     case Action::uninstall: if (game) uninstallGame(*game); return;
+    case Action::xbox_update: if (game) openXboxUpdate(*game); return;
     case Action::remove_game: if (game) askRemoveFromLibrary(*game); return;
     case Action::sort:
         settings_.desktop_sort = std::clamp(item.value, 1, 4);

@@ -22,7 +22,7 @@ std::string_view viewKind(std::string_view scope) {
     if (scope.starts_with("category:")) {
         // Shelves the launcher builds itself (src/app/shelves.cpp) are not collections; publishers and
         // developers are boards of logos.
-        constexpr std::string_view built_in[] = {"recent", "pc-platforms", "emulation", "updated", "discovery", "private", "publishers", "developers"};
+        constexpr std::string_view built_in[] = {"recent", "pc-platforms", "emulation", "updated", "discovery", "gamepass-new", "private", "publishers", "developers"};
         scope.remove_prefix(9);
         return std::find(std::begin(built_in), std::end(built_in), scope) != std::end(built_in) ? std::string_view{} : std::string_view("collection");
     }
@@ -153,7 +153,7 @@ void Launcher::switchLibraryTab(int amount) {
 }
 bool Launcher::showLibraryCategory(const std::string& id, library_view::View view) {
     if (id.empty()) {
-        versions_ = versions::Index(public_library_);
+        indexVersions();
         grouped_library_ = versions_.collapse(public_library_, library_state_.preferred_versions, library_state_.first_seen);
         library_category_.clear(); category_library_.clear();
     } else {
@@ -285,7 +285,7 @@ uint64_t Launcher::installTime(const Game& game) const {
     if (!game.installed) return 0;
     for (const auto* path : {&game.install_directory, &game.manifest_path, &game.executable}) {
         if (path->empty()) continue;
-        if (const auto found = install_times_.find(path->native()); found != install_times_.end()) return found->second;
+        if (const auto found = install_times_.find(path->wstring()); found != install_times_.end()) return found->second;
         uint64_t created = 0;
 #ifdef _WIN32
         WIN32_FILE_ATTRIBUTE_DATA data{};
@@ -301,7 +301,7 @@ uint64_t Launcher::installTime(const Game& game) const {
         }
 #endif
         if (!created) continue;
-        install_times_.emplace(path->native(), created);
+        install_times_.emplace(path->wstring(), created);
         return created;
     }
     return game.last_updated;
@@ -949,25 +949,31 @@ bool Launcher::heroFactsShown() const {
 // the game index's tags (how the game is played) and the play history (Nigdy nie grane).
 void Launcher::applyLibraryFilters(std::vector<Game>& games, uint32_t filters) const {
     if (!filters) return;
+    // Game Pass and Kupione are the game's own facts; the others need the game index.
+    const auto passes = [&](const Game& game, const auto* record) {
+        for (int bit = 0; bit < library_view::filter_count; ++bit) {
+            const auto filter = static_cast<library_view::Filter>(bit);
+            if (!(filters & library_view::filterBit(filter))) continue;
+            const bool ok = filter == library_view::Filter::unplayed ?
+                !game.last_played && !game.store_playtime_minutes && !localPlaytime(game) && !(record && record->played()) :
+                filter == library_view::Filter::game_pass ? game.xbox_game_pass :
+                filter == library_view::Filter::owned ? !game.xbox_game_pass :
+                record && library_view::tagged(filter, record->tags);
+            if (!ok) return false;
+        }
+        return true;
+    };
     std::unordered_set<std::string> passing;
     if (game_index_) passing = game_index_->read([&](const game_index::Index& index) {
         std::unordered_set<std::string> keep;
         for (const auto& game : games) {
             if (!isGame(game)) continue;
             auto key = gameKey(game);
-            const auto* record = index.get(key);
-            bool ok = true;
-            for (int bit = 0; bit < library_view::filter_count && ok; ++bit) {
-                const auto filter = static_cast<library_view::Filter>(bit);
-                if (!(filters & library_view::filterBit(filter))) continue;
-                ok = filter == library_view::Filter::unplayed ?
-                    !game.last_played && !game.store_playtime_minutes && !localPlaytime(game) && !(record && record->played()) :
-                    record && library_view::tagged(filter, record->tags);
-            }
-            if (ok) keep.insert(std::move(key));
+            if (passes(game, index.get(key))) keep.insert(std::move(key));
         }
         return keep;
     });
+    else for (const auto& game : games) if (isGame(game) && passes(game, static_cast<const game_index::Record*>(nullptr))) passing.insert(gameKey(game));
     std::erase_if(games, [&](const Game& game) { return isGame(game) && !passing.contains(gameKey(game)); });
 }
 // Krótki opis (PSfive, Scena): the player's own description (Edytuj metadane); a Steam game's store text

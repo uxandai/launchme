@@ -8,7 +8,8 @@
 
 namespace gog {
 enum class InstallState { none, loading, ready, downloading, verifying, installing, completed, cancelled, error };
-enum class InstallError { none, account, unavailable, network, manifest, storage, checksum, installer, detection, cleanup };
+// device_limit: the Microsoft Store's limit of linked devices (Xbox).
+enum class InstallError { none, account, unavailable, network, manifest, storage, checksum, installer, detection, cleanup, device_limit };
 struct InstallerChoice {
     std::string id;
     std::wstring language, version;

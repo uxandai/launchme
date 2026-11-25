@@ -236,6 +236,7 @@ Layout Renderer::desktopLayoutOf(const View& view) const {
     layout.cell_aspect = view.cell_view == 1 ? 1.0f : view.cell_view == 2 ? 430.0f / 920.0f : 1.5f;
     layout.list = view.cell_view == 3;
     layout.continue_count = static_cast<int>(std::min<size_t>(3, view.continue_tiles.size()));
+    layout.favorite = view.pane_favorite; layout.versions = view.pane_versions; // The buttons beside Graj, as the app placed them.
     return layout;
 }
 

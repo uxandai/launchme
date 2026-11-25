@@ -30,7 +30,8 @@ inline constexpr wchar_t library = 0xE8F1, history = 0xE81C, star = 0xE734, star
     add = 0xE710, chevron_down = 0xE70D, chevron_right = 0xE76C, chevron_left = 0xE76B, play = 0xE768, pause = 0xE769, more = 0xE712,
     info = 0xE946, picture = 0xE8B9, refresh = 0xE72C, edit = 0xE70F, remove = 0xE74D, open = 0xE8A7, tag = 0xE8EC,
     minimize = 0xE921, maximize = 0xE922, restore = 0xE923, window_close = 0xE8BB, power = 0xE7E8, sync = 0xE895,
-    stop = 0xE71A, copy = 0xE8C8, filter = 0xE71C;
+    stop = 0xE71A, copy = 0xE8C8, filter = 0xE71C,
+    swap = 0xE8AB; // Zmień wersję: another copy of the game.
 }
 
 // ---- Sidebar ----------------------------------------------------------------------------------
@@ -132,6 +133,7 @@ enum class Action {
     start_step,     // "Jak zacząć": one of its steps (value: the step).
     start_hide,     // "Jak zacząć": hide the card.
     forget_recent,  // Usuń z ostatnio granych (Launcher::forgetRecent).
+    xbox_update,    // Aktualizuj: a newer package of a game Launchme installed from Xbox.
     filter          // Filtry: value -1 Zainstalowane, 0.. a library_view::Filter, filter_clear Wyczyść filtry.
 };
 struct MenuItem {
@@ -211,7 +213,7 @@ inline int stepItem(const std::vector<MenuItem>& items, int from, int direction)
 
 enum class Target {
     none, caption, minimize, maximize, close, search, search_clear, tool, sidebar_row, sidebar_add, companion_card, start_card,
-    companion_bubble, card, card_play, card_check, popover_clear, popover_action, scrollbar, sort, filters, size_slider, pane_primary, pane_favorite,
+    companion_bubble, card, card_play, card_check, popover_clear, popover_action, scrollbar, sort, filters, size_slider, pane_primary, pane_favorite, pane_versions,
     pane_more, pane_quick, pane_chip, pane_chip_add, pane_rating, pane_studio, bulk, menu_item, submenu_item, popover_row, popover_all,
     empty_primary, empty_secondary, grid, library_add, library_refresh, companion_more,
     sidebar_toggle, pane_resize, pane_close, view_mode, pane_achievements, pane_cloud,
@@ -431,6 +433,7 @@ struct View {
     bool keyboard = false;    // Keys moved the focus: rings show (focus-visible).
     int zone = 1;             // 0 sidebar, 1 grid, 2 pane, 3 search.
     int pane_focus = -1;
+    bool pane_favorite = true, pane_versions = false; // Layout::favorite and Layout::versions (the star, Zmień wersję).
     Pane pane;
     float pane_scroll = 0;
     bool maximized = false, active_window = true;
@@ -503,6 +506,8 @@ struct Layout {
     float narrow = 0;     // 0 wide … 1 narrow sidebar, animated between them.
     float pane_width = 0; // Dragged by its left edge; 0: a quarter of the window.
     bool favorite = true; // The pane's star beside Graj (none while Ulubione is switched off).
+    bool versions = false; // Zmień wersję beside Graj: the selected game has copies in other stores or consoles.
+    static constexpr int pane_versions_focus = 10; // desktop_pane_focus_ of Zmień wersję (0 Graj, 1 star, 2 "…", 3+ quick).
     float cell_aspect = 1.5f; // A cell's height over its width: 1.5 posters, 1 squares, 430/920 landscape (the capsules' own).
     bool pane_open = true; // No game selected (or its ✕ pressed): no pane, the grid takes its room.
     bool list = false;     // Widok → Lista: one game per row (a small cover, its name and columns).
@@ -729,10 +734,14 @@ struct Layout {
     // Graj at most 320 wide (a dragged-wide pane stretched it over 600), the star and "…" beside it.
     Rect panePrimary(float scroll) const {
         const float y = paneY(74, scroll), left = paneLeft() + 20;
-        return {left, y, left + std::min(320.0f, paneRight() - 20 - 2 * 48 - left), y + 42};
+        return {left, y, left + std::min(320.0f, paneRight() - 20 - (versions ? 3 : 2) * 48 - left), y + 42};
     }
-    Rect paneFavorite(float scroll) const { const auto p = panePrimary(scroll); return {p.right + 6, p.top, p.right + 48, p.bottom}; }
-    Rect paneMore(float scroll) const { const auto f = favorite ? paneFavorite(scroll) : panePrimary(scroll); return {f.right + 6, f.top, f.right + 48, f.bottom}; }
+    Rect paneVersions(float scroll) const { const auto p = panePrimary(scroll); return {p.right + 6, p.top, p.right + 48, p.bottom}; }
+    Rect paneFavorite(float scroll) const { const auto p = versions ? paneVersions(scroll) : panePrimary(scroll); return {p.right + 6, p.top, p.right + 48, p.bottom}; }
+    Rect paneMore(float scroll) const {
+        const auto f = favorite ? paneFavorite(scroll) : versions ? paneVersions(scroll) : panePrimary(scroll);
+        return {f.right + 6, f.top, f.right + 48, f.bottom};
+    }
     Rect paneStats(float scroll) const { const float y = paneY(132, scroll); return {paneLeft() + 20, y, paneRight() - 20, y + 66}; }
     static constexpr int quick_count = 4; // Szczegóły, Grafika, Folder, Ukryj.
     Rect paneQuick(int i, float scroll) const {

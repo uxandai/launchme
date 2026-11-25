@@ -39,8 +39,8 @@ json::Value pluginAchievementRounds(plugins::Manager& manager, const plugins::Jo
 }
 
 std::optional<plugins::Action> Launcher::pluginAchievementsProvider(const Game& game) const {
-    // Steam games keep the client's own achievements (achievements.cpp).
-    if (plugins_busy_ || !isGame(game) || steamArtwork(game) || game.kind == GameKind::catalog) return {};
+    // Steam games keep the client's own achievements (achievements.cpp); Xbox Live's come from its helper.
+    if (plugins_busy_ || !isGame(game) || steamArtwork(game) || game.kind == GameKind::catalog || xboxAchievements(game)) return {};
     if (localAchievements(game)) return {}; // Local achievements (local_achievements.cpp).
     const auto providers = plugins_.contributions("achievements", &game);
     return providers.empty() ? std::nullopt : std::optional<plugins::Action>(providers.front());
@@ -61,6 +61,7 @@ void Launcher::requestFocusedAchievements(const Game& game) {
 
 void Launcher::requestPluginAchievements(const Game& game, bool force, bool background) {
     if (!runtime_started_) return;
+    if (xboxAchievements(game)) { requestXboxAchievements(game, force); return; }
     const auto provider = pluginAchievementsProvider(game);
     if (!provider) return;
     const auto key = gameKey(game);
@@ -126,6 +127,14 @@ bool Launcher::receivePluginAchievements(const plugins::Result& message) {
             }
         }
     }
+    achievementsArrived(key);
+    return true;
+}
+
+void Launcher::achievementsArrived(const std::string& key) {
+    const auto found = plugin_achievements_.find(key);
+    if (found == plugin_achievements_.end()) return;
+    const auto& cache = found->second;
     const bool shown = screen_ == ScreenMode::details && !detail_games_.empty() && gameKey(detail_games_[0]) == key;
     if (shown && cache.answered) {
         details_.achievements_unlocked = cache.list.unlocked; details_.achievements_total = cache.list.total;
@@ -136,5 +145,5 @@ bool Launcher::receivePluginAchievements(const plugins::Result& message) {
         else { achievements_.loading = false; achievements_.message = cache.message.empty() ? std::wstring(tr(L"Ta gra nie ma osiągnięć.")) : cache.message; }
         achievements_.source = cache.source;
     }
-    return true;
+    InvalidateRect(hwnd_, nullptr, FALSE);
 }

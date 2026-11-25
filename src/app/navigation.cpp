@@ -121,7 +121,7 @@ void Launcher::navigate(int amount, bool edge_menu) {
 
 void Launcher::openLibrary() {
     rememberPlace(); library_controls_ = {};
-    versions_ = versions::Index(public_library_);
+    indexVersions();
     grouped_library_ = versions_.collapse(public_library_, library_state_.preferred_versions, library_state_.first_seen);
     pc_source_.reset(); library_console_.clear();
     library_category_.clear(); category_library_.clear();
@@ -470,7 +470,7 @@ void Launcher::eraseSearchCharacter(bool repeated) {
 
 void Launcher::updateSearch() {
     search_dirty_ = false;
-    versions_ = versions::Index(public_library_);
+    indexVersions();
     grouped_library_ = versions_.collapse(public_library_, library_state_.preferred_versions, library_state_.first_seen);
     search_results_ = searchPublicGames(grouped_library_, search_query_, private_shelf_);
     // A typed change starts from the top; a rebuild in the background (scans, resolved names, art)

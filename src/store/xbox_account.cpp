@@ -1,9 +1,11 @@
 #include "xbox_account.hpp"
+#include "xbox_account_internal.hpp"
 #include "../platform/file_io.hpp"
 #include "../net/http_download.hpp"
 #include "../net/json.hpp"
 #include "../platform/command_line.hpp"
 #include "../platform/text_encoding.hpp"
+#include "../platform/unix_time.hpp"
 #include "../platform/updater.hpp"
 
 #ifdef _WIN32
@@ -21,6 +23,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cctype>
+#include <cwctype>
 #include <cmath>
 #include <condition_variable>
 #include <cwctype>
@@ -33,20 +36,20 @@
 
 namespace xbox_account {
 namespace {
+using namespace internal;
 using text_encoding::utf8;
 using text_encoding::wide;
 using text_encoding::wideLenient;
 
 #ifdef _WIN32
 // The helper is published with Launchme's releases (tools/build-xbox-helper.ps1 prints both values).
-constexpr auto helper_digest = "2069fd6578280bfeaf018bb5c5c1805f248e5bcc22b095ebbd49729cc826fd4b";
-constexpr auto helper_url = L"https://github.com/uxandai/launchme/releases/download/xbox-helper-v0.1.0/launchme-xbox-0.1.0.exe";
+constexpr auto helper_digest = "9a71049983cba69da8e145532d4d0fc1d60c673ab7ffc5d7e4292e61a1e8b9ec";
+constexpr auto helper_url = L"https://github.com/uxandai/launchme/releases/download/xbox-helper-v0.2.0/launchme-xbox-0.2.0.exe";
+constexpr auto helper_release = L"https://github.com/uxandai/launchme/releases/download/xbox-helper-v0.2.0/";
 #endif
 constexpr std::wstring_view marker_name = L".launchme-xbox.json";
 constexpr std::wstring_view header_name = L".xodus-streaming.msixvc";
 
-std::string field(const json::Value& value, const char* key) { const auto* p = value.get(key); return p ? p->stringOr() : std::string{}; }
-std::string field(const json::Value* value, const char* key) { return value ? field(*value, key) : std::string{}; }
 std::string readText(const std::filesystem::path& path, size_t limit = 32 * 1024 * 1024) { return file_io::readTextWithoutBom(path, limit); }
 bool writeText(const std::filesystem::path& path, std::string_view text) {
     std::error_code ec; std::filesystem::create_directories(path.parent_path(), ec);
@@ -67,9 +70,6 @@ bool token(std::string_view text, size_t minimum, size_t maximum, std::string_vi
     return text.size() >= minimum && text.size() <= maximum && std::all_of(text.begin(), text.end(), [&](unsigned char c) {
         return (c < 128 && std::isalnum(c)) || extra.find(static_cast<char>(c)) != std::string_view::npos;
     });
-}
-bool httpsArt(const std::string& url) {
-    return url.starts_with("https://") && url.size() < 2048 && url.find_first_of(" \"\r\n\t") == std::string::npos;
 }
 // A path inside `root` named by a relative part of an untrusted file; a reparse point must not lead out.
 #ifdef _WIN32
@@ -166,7 +166,7 @@ std::filesystem::path prepareNative(const std::filesystem::path& config, bool do
     std::filesystem::create_directories(exe.parent_path(), ec); if (ec) return {};
     const std::filesystem::path part = exe.native() + L".part";
     const auto error = httpDownload(helper_url, part, helper_bytes, cancel, progress, [](std::wstring_view url) {
-        return url.starts_with(L"https://github.com/uxandai/launchme/releases/download/xbox-helper-v0.1.0/") ||
+        return url.starts_with(helper_release) ||
                url.starts_with(L"https://release-assets.githubusercontent.com/") || url.starts_with(L"https://objects.githubusercontent.com/");
     });
     if (error != DownloadError::none || cancel()) return {};
@@ -200,6 +200,9 @@ std::wstring markerTitle(const std::filesystem::path& directory) {
 
 std::filesystem::path profileDirectory(const std::filesystem::path& config) { return config / L"xbox"; }
 std::filesystem::path libraryPath(const std::filesystem::path& config) { return profileDirectory(config) / L"library.json"; }
+std::filesystem::path activityPath(const std::filesystem::path& config) { return profileDirectory(config) / L"activity.json"; }
+std::filesystem::path offlinePath(const std::filesystem::path& config) { return profileDirectory(config) / L"offline.json"; }
+std::filesystem::path updatesPath(const std::filesystem::path& config) { return profileDirectory(config) / L"updates.json"; }
 #ifdef _WIN32
 std::filesystem::path helperPath(const std::filesystem::path& config) { return config / L"tools" / (L"launchme-xbox-" + std::wstring(helper_version) + L".exe"); }
 bool helperInstalled(const std::filesystem::path& config) {
@@ -261,6 +264,34 @@ std::wstring language() {
     return region.empty() ? lang : lang + L'-' + region;
 }
 #endif
+
+// The helper's answer line (the last line that is a JSON object), for the commands whose answer
+// Launchme reads beyond parseResult's fields (`updates`, `achievements`).
+std::string_view answerLine(std::string_view output) {
+    while (!output.empty()) {
+        const auto end = output.find_last_not_of(" \r\n\t");
+        if (end == std::string_view::npos) return {};
+        output = output.substr(0, end + 1);
+        const auto start = output.rfind('\n');
+        const auto line = start == std::string_view::npos ? output : output.substr(start + 1);
+        if (line.starts_with('{')) return line;
+        output = start == std::string_view::npos ? std::string_view{} : output.substr(0, start);
+    }
+    return {};
+}
+
+std::string serializeUpdates(const std::set<std::string>& products) {
+    auto list = json::array();
+    for (const auto& product : products) {
+        auto entry = json::object();
+        entry.properties["product_id"] = json::string(product);
+        entry.properties["update"] = json::boolean(true);
+        list.elements.push_back(std::move(entry));
+    }
+    auto file = json::object();
+    file.properties["updates"] = std::move(list);
+    return json::serialize(file);
+}
 
 std::optional<Result> parseResult(std::string_view output) {
     // The answer is the last line that is a JSON object.
@@ -410,6 +441,19 @@ GameAction runAction(const std::filesystem::path& config, const std::filesystem:
 GameAction xboxAppInstall(const std::string&, bool) { return {}; }
 #endif
 
+bool unlistedTitle(std::wstring_view title) {
+    std::wstring lower(title);
+    std::transform(lower.begin(), lower.end(), lower.begin(), [](wchar_t ch) { return static_cast<wchar_t>(std::towlower(ch)); });
+    const auto word = [&](std::wstring_view needle) {
+        for (auto at = lower.find(needle); at != std::wstring::npos; at = lower.find(needle, at + 1)) {
+            const auto end = at + needle.size();
+            if ((at == 0 || !std::iswalnum(lower[at - 1])) && (end == lower.size() || !std::iswalnum(lower[end]))) return true;
+        }
+        return false;
+    };
+    return word(L"demo") || word(L"beta") || word(L"not supported");
+}
+
 std::vector<Game> parseLibrary(std::string_view library_json, const std::vector<OwnInstall>& installs, const std::string& account,
                                const std::filesystem::path& config) {
     std::vector<Game> games;
@@ -426,6 +470,9 @@ std::vector<Game> parseLibrary(std::string_view library_json, const std::vector<
             if (!validProductId(product) || title.empty() || title.size() > 512 || !seen.insert(id).second) continue;
             Game game; game.kind = GameKind::store; game.source = GameSource::xbox; game.source_id = id; game.name = title;
             game.installed = false; game.xbox_product = product; game.xbox_own_install = field(entry, "own_install") == "supported";
+            game.xbox_title_id = titleId(field(entry, "xbox_title_id"));
+            // Only through the subscription: neither bought nor claimed (nor in a bought bundle).
+            game.xbox_game_pass = field(entry, "acquisition") == "gamepass";
             const auto* images = entry.get("images");
             for (const auto* key : {"poster", "box"}) if (const auto art = field(images, key); game.store_tall_art.empty() && httpsArt(art)) game.store_tall_art = art;
             if (const auto art = field(images, "hero"); httpsArt(art)) game.store_wide_art = art;
@@ -459,6 +506,8 @@ std::vector<Game> parseLibrary(std::string_view library_json, const std::vector<
         game.play_action = runAction(config, install.directory, exe);
 #endif
     }
+    // Demos, betas and "Not Supported" leftovers: not in the library unless installed here.
+    std::erase_if(games, [](const Game& game) { return !game.installed && unlistedTitle(game.name); });
     return games;
 }
 
@@ -471,14 +520,26 @@ Profile readProfile(const std::filesystem::path& config) {
         if (const auto* synced = root->get("synced_at"); synced && synced->type == json::Value::Type::number && std::isfinite(synced->numeric) && synced->numeric > 0)
             profile.synced_at = static_cast<uint64_t>(synced->numeric);
         if (const auto pass = field(*root, "game_pass"); token(pass, 4, 32)) profile.game_pass = pass;
+        if (const auto* recent = root->get("gamepass_recent"); profile.account && recent && recent->type == json::Value::Type::array)
+            for (const auto& id : recent->elements) {
+                const auto product = id.stringOr();
+                if (validProductId(product) && std::find(profile.gamepass_recent.begin(), profile.gamepass_recent.end(), product) == profile.gamepass_recent.end())
+                    profile.gamepass_recent.push_back(product);
+                if (profile.gamepass_recent.size() >= 60) break;
+            }
+    }
+    if (profile.account) {
+        profile.addons = parseAddons(library);
+        profile.activity = parseActivity(readText(activityPath(config), 16 * 1024 * 1024));
+        applyActivity(profile.games, profile.activity);
     }
     return profile;
 }
 
 Operations nativeOperations() { return {prepareNative, invokeNative}; }
 
-namespace {
 gog::InstallError installError(const std::string& error) {
+    if (error == "device_limit") return gog::InstallError::device_limit;
     if (error == "not_entitled" || error == "signed_out") return gog::InstallError::account;
     if (error == "unsupported_package" || error == "not_found") return gog::InstallError::unavailable;
     if (error == "storage") return gog::InstallError::storage;
@@ -486,16 +547,20 @@ gog::InstallError installError(const std::string& error) {
     return gog::InstallError::installer;
 }
 
+namespace {
 class HelperService final : public Service {
     std::filesystem::path config_;
     Operations operations_;
-    struct Work { Command command; uint64_t generation; std::optional<Game> game; std::optional<gog::InstallRequest> request; };
+    struct Work { Command command; uint64_t generation; std::optional<Game> game; std::optional<gog::InstallRequest> request; uint32_t achievements = 0; };
     mutable std::mutex mutex_;
     std::condition_variable wake_;
     std::deque<Work> queue_;
     std::atomic_uint64_t generation_{0};
     std::atomic_bool stop_{false}, busy_{false}, operation_cancel_{false};
     std::optional<Snapshot> result_;
+    std::optional<AchievementsAnswer> achievements_;
+    bool offline_busy_ = false;
+    Failure offline_failure_ = Failure::none;
     gog::InstallSnapshot install_;
     bool install_dirty_ = false;
     std::thread worker_;
@@ -507,8 +572,17 @@ class HelperService final : public Service {
             s.state = State::connected; s.account = profile.account->puid; s.name = wideLenient(profile.account->username);
             s.games = static_cast<size_t>(std::count_if(profile.games.begin(), profile.games.end(), [](const Game& g) { return !g.account_id.empty(); }));
             s.synced_at = profile.synced_at; s.game_pass = !profile.game_pass.empty();
+            s.gamepass_recent = profile.gamepass_recent;
+            s.addons = profile.addons;
+            s.activity = profile.activity;
+            s.offline = parseOffline(readText(offlinePath(config_), 1024 * 1024));
+            s.updates = parseUpdates(readText(updatesPath(config_), 4 * 1024 * 1024));
         }
         if (failure != Failure::none && failure != Failure::cancelled && !profile.account) s.state = State::error;
+        {
+            std::lock_guard lock(mutex_);
+            s.offline_busy = offline_busy_; s.offline_failure = offline_failure_;
+        }
         return s;
     }
     void publish(uint64_t generation, Snapshot s) {
@@ -531,24 +605,66 @@ class HelperService final : public Service {
         if (!result) return {false, cancel() ? "cancelled" : "internal"};
         return *result;
     }
+    // The account's files go; the helper's `logout` removes its stored offline licenses (offline.json
+    // keeps only the designation, which Microsoft holds for the account, not for this session).
     void signOutLocally() {
         std::error_code ec;
-        std::filesystem::remove(accountPath(config_), ec);
-        std::filesystem::remove(libraryPath(config_), ec);
+        for (const auto& path : {accountPath(config_), libraryPath(config_), activityPath(config_), updatesPath(config_)}) std::filesystem::remove(path, ec);
     }
     Failure failureOf(const Result& result) {
         if (result.error == "helper") return Failure::helper;
+        if (result.error == "declined") return Failure::declined;
         if (result.error == "cancelled") return Failure::cancelled;
         if (result.error == "signed_out") return Failure::expired;
         if (result.error == "storage") return Failure::storage;
         return Failure::network;
     }
-    // `library`: the helper writes the file only after a complete sync.
+    // `library`: the helper writes the file only after a complete sync. Then, neither failing the
+    // sync: the played titles (`activity`) and, with games installed here, their updates.
     Failure sync(const std::filesystem::path& exe, const Cancel& cancel) {
         const auto result = call(exe, {L"library", L"--out", libraryPath(config_).wstring(), L"--market", market(), L"--language", language()}, cancel);
-        if (result.ok) return Failure::none;
-        if (result.error == "signed_out") signOutLocally(); // The session expired: sign in again.
-        return failureOf(result);
+        if (!result.ok) {
+            if (result.error == "signed_out") signOutLocally(); // The session expired: sign in again.
+            return failureOf(result);
+        }
+        if (cancel()) return Failure::none;
+        call(exe, {L"activity", L"--out", activityPath(config_).wstring()}, cancel);
+        if (cancel() || readInstalls(config_).empty()) return Failure::none;
+        // Its answer carries only product ids and version numbers.
+        const auto process = operations_.invoke(exe, config_, {L"updates"}, cancel, {});
+        if (const auto answer = parseResult(process.output); process.started && answer && answer->ok)
+            writeText(updatesPath(config_), serializeUpdates(parseUpdates(answerLine(process.output))));
+        return Failure::none;
+    }
+    // offline-pc: Microsoft's answer lands in offline.json (the helper writes it); the snapshot reads it.
+    void offlinePc(uint64_t generation, Command command, const Cancel& cancel) {
+        { std::lock_guard lock(mutex_); offline_busy_ = true; offline_failure_ = Failure::none; }
+        publish(generation, profileSnapshot());
+        Failure failure = Failure::none;
+        if (!readProfile(config_).account) failure = Failure::expired;
+        else if (const auto exe = helper(generation, false, cancel); exe.empty()) failure = Failure::helper;
+        else {
+            std::vector<std::wstring> arguments{L"offline-pc"};
+            if (command != Command::offline_status)
+                arguments.insert(arguments.end(), {L"--set", command == Command::offline_on ? L"true" : L"false", L"--confirm", L"yes"});
+            const auto result = call(exe, arguments, cancel);
+            if (!result.ok) failure = failureOf(result);
+        }
+        { std::lock_guard lock(mutex_); offline_busy_ = false; offline_failure_ = failure; }
+        publish(generation, profileSnapshot());
+    }
+    void readAchievements(const Work& work) {
+        const auto title = work.achievements;
+        AchievementsAnswer answer; answer.title_id = title; answer.failed = true;
+        const Cancel cancel = [&] { return stop_.load(); };
+        if (readProfile(config_).account)
+            if (const auto exe = helper(work.generation, false, cancel); !exe.empty()) {
+                const auto process = operations_.invoke(exe, config_, {L"achievements", L"--title", std::to_wstring(title)}, cancel, {});
+                if (process.started)
+                    if (auto list = parseAchievements(answerLine(process.output), title)) { answer.list = std::move(*list); answer.failed = false; }
+            }
+        std::lock_guard lock(mutex_);
+        if (!stop_) achievements_ = std::move(answer);
     }
     void progress(gog::InstallState state, uint64_t done = 0, uint64_t total = 0, gog::InstallError error = gog::InstallError::none) {
         std::lock_guard lock(mutex_);
@@ -585,12 +701,16 @@ class HelperService final : public Service {
         std::erase_if(installs, [&](const OwnInstall& i) { return i.product == install.product; });
         installs.push_back(std::move(install));
         if (!writeText(installsPath(config_), serializeInstalls(installs))) { progress(gog::InstallState::error, 0, 0, gog::InstallError::storage); return; }
+        // Installed again (an update downloads only what changed): no newer package for it now.
+        if (auto updates = parseUpdates(readText(updatesPath(config_), 4 * 1024 * 1024)); updates.erase(owned->xbox_product))
+            writeText(updatesPath(config_), serializeUpdates(updates));
         progress(gog::InstallState::completed);
     }
     void process(Work& work) {
         const auto generation = work.generation;
         const Cancel cancel = [&] { return stop_.load() || generation != generation_.load(); };
         if (work.game) { installGame(work); return; }
+        if (work.achievements) { readAchievements(work); return; }
         switch (work.command) {
         case Command::restore: publish(generation, profileSnapshot()); break;
         case Command::download: {
@@ -640,6 +760,9 @@ class HelperService final : public Service {
             break;
         }
         case Command::cancel: publish(generation, profileSnapshot()); break;
+        case Command::offline_status:
+        case Command::offline_on:
+        case Command::offline_off: offlinePc(generation, work.command, cancel); break;
         case Command::logout: {
             if (const auto exe = helper(generation, false, cancel); !exe.empty() && readProfile(config_).account)
                 call(exe, {L"logout"}, [&] { return stop_.load(); });
@@ -679,6 +802,11 @@ public:
             ++generation_;
             std::erase_if(queue_, [](const Work& w) { return !w.game; });
         }
+        // The offline PC: one question at a time (a change waits for nothing older).
+        if (command == Command::offline_status || command == Command::offline_on || command == Command::offline_off)
+            std::erase_if(queue_, [](const Work& w) {
+                return !w.game && !w.achievements && (w.command == Command::offline_status || w.command == Command::offline_on || w.command == Command::offline_off);
+            });
         queue_.push_back({command, generation_.load(), {}, {}});
         wake_.notify_one();
     }
@@ -700,6 +828,18 @@ public:
         install_dirty_ = false; return install_;
     }
     void cancelOperation() override { operation_cancel_ = true; }
+    void achievements(uint32_t title_id) override {
+        if (!title_id) return;
+        std::lock_guard lock(mutex_);
+        // The newest question only: the pane moved on.
+        std::erase_if(queue_, [](const Work& w) { return w.achievements != 0; });
+        Work work{Command::sync, generation_.load(), {}, {}, title_id};
+        queue_.push_back(std::move(work));
+        wake_.notify_one();
+    }
+    std::optional<AchievementsAnswer> takeAchievements() override {
+        std::lock_guard lock(mutex_); auto r = std::move(achievements_); achievements_.reset(); return r;
+    }
     bool busy() const override {
         std::lock_guard lock(mutex_);
         return busy_ || !queue_.empty() || install_.busy();

@@ -93,8 +93,13 @@ struct Game {
     // package is a GDK MSIXVC one the helper can install itself (Instalacja przez Launchme).
     std::string xbox_product;
     bool xbox_own_install = false;
+    // Xbox: the title's Xbox Live id (achievements, play history; 0 unknown), and whether the account
+    // plays it only through its Game Pass subscription (not bought: the "Game Pass" badge and filter).
+    uint32_t xbox_title_id = 0;
+    bool xbox_game_pass = false;
     std::string catalog_plugin; // Catalog owner; retained when resolving to a local Steam game.
     std::string version_group; // Display-only aggregate; raw library entries retain their store identity.
+    bool version_chosen = false; // The player's copy (Zmień wersję): the tile shows its platform.
     // Play time the store or launcher counted itself (MultiMC/Prism instances, a store account),
     // in minutes; 0 when unknown. Launchme's own count for the game is kept apart (library_state).
     uint32_t store_playtime_minutes = 0;
@@ -221,7 +226,7 @@ inline const wchar_t* primaryActionLabel(const Game& game) {
 }
 
 inline std::wstring activePlatformName(const Game& game) {
-    if (!game.version_group.empty()) return {};
+    if (!game.version_group.empty() && !game.version_chosen) return {}; // Several copies, none picked: no one store.
     if (uiTile(game) || launcherTile(game)) return {}; // A launcher is of no store.
     if (game.kind == GameKind::platform || game.kind == GameKind::nonsteam) return game.platform;
     return sourceName(platformSource(game.source));

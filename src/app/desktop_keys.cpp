@@ -211,13 +211,19 @@ void Launcher::desktopMove(int dx, int dy, bool extend) {
     if (desktop_zone_ == 2) {
         const bool bulk = desktopTargets().size() > 1;
         int focus = desktop_pane_focus_;
+        // The buttons' line: Graj, Zmień wersję, the star, "…" (the ones shown); the quick actions below.
+        std::vector<int> line{0};
+        if (L.versions) line.push_back(Layout::pane_versions_focus);
+        if (L.favorite) line.push_back(1);
+        line.push_back(2);
+        const auto at = std::find(line.begin(), line.end(), focus);
+        const bool top = at != line.end();
         if (bulk) focus = std::clamp(focus + dy + dx, 0, Layout::bulk_count - 1);
-        else if (dy) focus = dy > 0 ? (focus < 3 ? 3 + std::min(focus, 2) : focus) : (focus >= 3 ? std::min(focus - 3, 2) : focus);
+        else if (dy > 0) focus = top ? 3 + std::min(static_cast<int>(at - line.begin()), Layout::quick_count - 1) : focus;
+        else if (dy < 0) focus = top ? focus : line[std::min(static_cast<size_t>(focus - 3), line.size() - 1)];
         else if (dx < 0 && (focus == 0 || focus == 3)) { desktop_zone_ = 1; InvalidateRect(hwnd_, nullptr, FALSE); return; }
-        else {
-            focus = std::clamp(focus + dx, focus >= 3 ? 3 : 0, focus >= 3 ? 3 + Layout::quick_count - 1 : 2);
-            if (focus == 1 && !desktopLayout().favorite) focus = std::clamp(focus + dx, 0, 2); // No star: Graj and "…" side by side.
-        }
+        else if (top) focus = line[std::clamp(static_cast<int>(at - line.begin()) + dx, 0, static_cast<int>(line.size()) - 1)];
+        else focus = std::clamp(focus + dx, 3, 3 + Layout::quick_count - 1);
         if (focus == desktop_pane_focus_) navigationBoundary();
         desktop_pane_focus_ = focus;
         InvalidateRect(hwnd_, nullptr, FALSE);
@@ -288,6 +294,7 @@ void Launcher::desktopAccept() {
         if (focus == 0) desktopActivate({Target::pane_primary, 0});
         else if (focus == 1) desktopActivate({Target::pane_favorite, 0});
         else if (focus == 2) desktopActivate({Target::pane_more, 0});
+        else if (focus == Layout::pane_versions_focus) desktopActivate({Target::pane_versions, 0});
         else desktopActivate({Target::pane_quick, focus - 3});
         break;
     }

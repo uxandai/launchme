@@ -87,6 +87,41 @@ int LauncherUiTest::psfive(HWND window) {
         std::abs(layout::labelLeft() - (layout::anchorX() + layout::focus_tile + layout::focus_gap)) > 0.5f) return 4950;
     if (!capture(L"psfive-row.png")) return 4907;
     {
+        // Still loading (the start-up hold, scanning_): the background already carries PSfive's side,
+        // shade and Przyciemnienie tła, so it does not turn darker in one frame when the row appears.
+        Microsoft::WRL::ComPtr<IWICImagingFactory> wic;
+        if (FAILED(CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(wic.GetAddressOf())))) return 4882;
+        const auto brightness = [&](bool loading) -> double {
+            const auto file = std::filesystem::temp_directory_path() / (loading ? L"launchme-psfive-loading.png" : L"launchme-psfive-loaded.png");
+            app.scanning_ = loading;
+            const bool ok = app.renderer_.captureForTest(file, [&] { app.paint(); });
+            app.scanning_ = false;
+            if (!ok) return -1;
+            std::ifstream input(file, std::ios::binary);
+            const std::vector<uint8_t> bytes(std::istreambuf_iterator<char>{input}, {});
+            input.close();
+            std::error_code ec; std::filesystem::remove(file, ec);
+            const auto image = decodeImage(wic.Get(), bytes, {});
+            if (!image.valid()) return -1;
+            // The right half, between the row and the buttons: picture and shade only.
+            uint64_t sum = 0, count = 0;
+            for (uint32_t y = image.height * 35 / 100; y < image.height * 60 / 100; ++y)
+                for (uint32_t x = image.width * 60 / 100; x < image.width * 95 / 100; ++x) {
+                    const size_t i = (static_cast<size_t>(y) * image.width + x) * 4;
+                    sum += image.pixels[i] + image.pixels[i + 1] + image.pixels[i + 2]; ++count;
+                }
+            return count ? static_cast<double>(sum) / (count * 3.0) : -1;
+        };
+        app.settings_.psfive_dim = 0.5f;
+        const double loading = brightness(true), loaded = brightness(false);
+        app.settings_.psfive_dim = 0;
+        if (loading < 0 || loaded < 0) return 4883;
+        if (std::abs(loading - loaded) > 3.0) {
+            std::cerr << "PSfive background: loading " << loading << ", loaded " << loaded << '\n';
+            return 4884;
+        }
+    }
+    {
         // Started on PSfive (psfive_layout::intro): an empty screen, the row sliding in from the right,
         // small, tile after tile; then the first one grows to its focused size. About 1.7 s.
         app.psfive_intro_ = true; app.arrived_ = 0;

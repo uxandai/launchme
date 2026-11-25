@@ -91,6 +91,7 @@ desktop_ui::Hit Launcher::desktopHit(float x, float y) const {
         const float s = desktop_pane_scroll_;
         if (y < L.paneTop(s) + L.bannerHeight()) return {};
         if (L.panePrimary(s).contains(x, y)) return {Target::pane_primary, 0};
+        if (L.versions && L.paneVersions(s).contains(x, y)) return {Target::pane_versions, 0};
         if (L.favorite && L.paneFavorite(s).contains(x, y)) return {Target::pane_favorite, 0};
         if (L.paneMore(s).contains(x, y)) return {Target::pane_more, 0};
         for (int i = 0; i < Layout::quick_count; ++i) if (L.paneQuick(i, s).contains(x, y)) return {Target::pane_quick, i};
@@ -384,7 +385,7 @@ void Launcher::desktopContextClick(float mouse_x, float mouse_y) {
         }
         return;
     }
-    case Target::pane_primary: case Target::pane_favorite: case Target::pane_more: case Target::pane_quick: case Target::pane_chip:
+    case Target::pane_primary: case Target::pane_favorite: case Target::pane_versions: case Target::pane_more: case Target::pane_quick: case Target::pane_chip:
     case Target::pane_chip_add: case Target::pane_rating: case Target::pane_studio: case Target::pane_achievements: case Target::pane_cloud:
     case Target::pane_protondb: case Target::pane_hardware:
         desktopOpenGameMenu(x, y, false);
@@ -533,6 +534,7 @@ std::wstring Launcher::desktopTooltip(const desktop_ui::Hit& hit) const {
     case Target::pane_favorite:
         return !cards_.empty() && isFavorite(cards_[selected_].game) ? tr(L"Usuń z ulubionych") : tr(L"Dodaj do ulubionych");
     case Target::pane_more: return tr(L"Więcej opcji");
+    case Target::pane_versions: return tr(L"Zmień wersję");
     case Target::pane_quick:
         if (hit.index == 2 && !cards_.empty() && gameFolder(cards_[selected_].game).empty()) return tr(L"Gra nie jest zainstalowana");
         return {};
@@ -585,6 +587,7 @@ desktop_ui::Rect Launcher::desktopTooltipAnchor(const desktop_ui::Hit& hit) cons
     case Target::filters: return L.installedChip();
     case Target::size_slider: return L.sizeSlider();
     case Target::pane_favorite: return L.paneFavorite(desktop_pane_scroll_);
+    case Target::pane_versions: return L.paneVersions(desktop_pane_scroll_);
     case Target::pane_more: return L.paneMore(desktop_pane_scroll_);
     case Target::pane_quick: return L.paneQuick(hit.index, desktop_pane_scroll_);
     case Target::pane_chip_add: return renderer_.desktopChipAdd();

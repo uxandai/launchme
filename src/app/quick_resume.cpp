@@ -123,6 +123,7 @@ context_menu::Rows Launcher::menuRows() const {
     if (screen_ == ScreenMode::details) {
         context_menu::Rows rows{false, 0, false, true, !gameFolder(game).empty(), canExclude(game), !hideableCopies(game).empty()};
         rows.uninstall = canUninstall(game) && sessionState(game) == SessionState::none; // Never while it runs.
+        rows.update = xboxUpdateAvailable(game);
         rows.launch = launchEditable(game);
         rows.compat = compatMenu(game);
         rows.shortcuts = shortcutAvailable(game, ShortcutPlace::desktop) || shortcutAvailable(game, ShortcutPlace::menu) ||
@@ -141,6 +142,7 @@ context_menu::Rows Launcher::menuRows() const {
     context_menu::Rows rows{settings_.quick_resume && state == SessionState::running, static_cast<int>(pluginContext(game).size()), state != SessionState::none};
     rows.secondary_only = psfiveActive();
     rows.uninstall = canUninstall(game);
+    rows.update = xboxUpdateAvailable(game);
     rows.recent = inRecent(game) && state == SessionState::none; // A game in play keeps its place.
     // A game: every option at once (Details' "…" ones too), no Więcej opcji to go through.
     if (isGame(game) && game.kind != GameKind::catalog) {

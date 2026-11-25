@@ -3,6 +3,7 @@
 #include "../src/store/xbox_account.hpp"
 #include "../src/library/pc_platforms.hpp"
 #include "../src/platform/atomic_file.hpp"
+#include "../src/platform/file_io.hpp"
 #include "../src/platform/text_encoding.hpp"
 #include "../src/net/json.hpp"
 #include <Windows.h>
@@ -24,14 +25,26 @@ constexpr auto owned = "9NBLGGH4R315";
 constexpr auto pass = "9PGAMEPASS01";
 constexpr auto family = "Studio.Moonlit_8wekyb3d8bbwe";
 std::string library() {
-    return R"json({"version":1,"synced_at":1790000000,"username":"pat@example.com","game_pass":"CFQ7TTC0KGQ8","games":[
+    return R"json({"version":1,"synced_at":1790000000,"username":"pat@example.com","game_pass":"CFQ7TTC0KGQ8",
+      "gamepass_recent":["9PGAMEPASS01","<bad>","9PGAMEPASS01"],"games":[
       {"product_id":"9NBLGGH4R315","title":"Moonlit: Archive","pfn":"Studio.Moonlit_8wekyb3d8bbwe","own_install":"supported","acquisition":"purchased",
+       "xbox_title_id":"1717113201","bundle":"9PREMIUMED01",
+       "addons":[{"product_id":"9NEXPANSION1","title":"Moonlit: Deep Archive","content":true,"image":"https://store-images.s-microsoft.com/a.png"},
+                 {"product_id":"9NSOUNDTRAK1","title":"Soundtrack","content":false,"image":"javascript:x"},
+                 {"product_id":"9NEXPANSION1","title":"Duplicate"},{"product_id":"9NBLGGH4R315","title":"Itself"},{"product_id":"<x>","title":"Bad"}],
        "images":{"poster":"https://store-images.s-microsoft.com/poster.png","hero":"https://store-images.s-microsoft.com/hero.jpg","logo":"https://store-images.s-microsoft.com/logo.png"}},
       {"product_id":"9PGAMEPASS01","title":"Pass Quest","pfn":null,"own_install":"unsupported","acquisition":"gamepass","images":{"box":"https://store-images.s-microsoft.com/box.png","hero":"javascript:alert(1)"}},
       {"product_id":"<bad>","title":"Broken"},
       {"product_id":"9NBLGGH4R315","title":"Duplicate","pfn":"Studio.Moonlit_8wekyb3d8bbwe"}]})json";
 }
 bool write(const std::filesystem::path& file, std::string_view text) { return atomic_file::write(file, text); }
+// The helper's `activity` file: Moonlit played (minutes, counts), another title, and junk.
+constexpr auto activity_json = R"json({"version":1,"synced_at":1790000000,"titles":[
+  {"title_id":"1717113201","name":"Moonlit","last_played":1789990000,"minutes":754,
+   "achievements":{"unlocked":12,"total":40,"gamerscore":250,"total_gamerscore":1000}},
+  {"title_id":"99","name":"Other","last_played":1700000000,"minutes":null,"achievements":null},
+  {"title_id":"x1","last_played":5},{"title_id":"1717113201","minutes":1},
+  {"title_id":"55","achievements":{"unlocked":5,"total":2}}]})json";
 std::string marker(const std::string& product, const std::string& exe) {
     return "{\"product_id\":\"" + product + "\",\"executable\":" + json::quote(exe) + ",\"display_name\":\"Moonlit\"}";
 }
@@ -97,6 +110,63 @@ int main() {
               !parseAccount(R"({"username":"pat","puid":"<x>"})"));
     }
 
+    // Helper 0.2 answers: play history, the offline PC, updates and a title's achievements.
+    {
+        const auto activity = parseActivity(activity_json);
+        CHECK(activity.size() == 3 && activity.contains(1717113201) && activity.contains(99) && activity.contains(55));
+        const auto& moonlit = activity.at(1717113201);
+        CHECK(moonlit.last_played == 1789990000 && moonlit.minutes == 754u && moonlit.unlocked == 12 && moonlit.total == 40 &&
+              moonlit.gamerscore == 250 && moonlit.total_gamerscore == 1000);
+        CHECK(!activity.at(99).minutes && activity.at(99).total == 0 && activity.at(55).total == 0); // 5 of 2: not counts.
+        CHECK(parseActivity("").empty() && parseActivity("{\"titles\":{}}").empty());
+        std::vector<Game> games(3);
+        for (auto& g : games) g.source = GameSource::xbox;
+        games[0].xbox_title_id = 1717113201; games[0].store_playtime_minutes = 10; games[0].last_played = 1;
+        games[1].xbox_title_id = 1717113201; games[1].store_playtime_minutes = 9000; games[1].last_played = 1800000000;
+        games[2].source = GameSource::steam; games[2].xbox_title_id = 1717113201;
+        applyActivity(games, activity);
+        CHECK(games[0].store_playtime_minutes == 754 && games[0].last_played == 1789990000);
+        CHECK(games[1].store_playtime_minutes == 9000 && games[1].last_played == 1800000000); // Never lowered.
+        CHECK(games[2].store_playtime_minutes == 0 && games[2].last_played == 0);             // Xbox games only.
+
+        const auto offline = parseOffline(R"({"version":1,"enabled":true,"checked_at":1790000000,"remaining":2,"max":3,"period_days":365,
+            "next_change_at":1800000000,"games":{"9NBLGGH4R315":1792000000,"9PGAMEPASS01":0,"<x>":1792000000,"9P4D0K92BM7V":"soon"}})");
+        CHECK(offline.enabled == true && offline.checked_at == 1790000000 && offline.remaining == 2u && offline.max == 3u && offline.period_days == 365u &&
+              offline.next_change_at == 1800000000 && offline.games.size() == 1);
+        CHECK(offlineUntil(offline, owned, 1790000000) == 1792000000 && offlineUntil(offline, owned, 1792000000) == 0 && offlineUntil(offline, pass, 0) == 0);
+        CHECK(!parseOffline("").enabled && parseOffline(R"({"enabled":false})").enabled == false && !parseOffline(R"({"enabled":"yes"})").enabled);
+        CHECK(offlineDate(1792000000) == L"14.10.2026" && offlineDate(0) == L"01.01.1970");
+        Snapshot s; s.account = "0123ABCD";
+        CHECK(!offlineText(s, 1790000000).empty());
+        s.offline = offline; s.offline_failure = Failure::declined;
+        const auto text = offlineText(s, 1790000000);
+        CHECK(text.find(L"1") != std::wstring::npos && text.find(L"2/3") != std::wstring::npos && text.find(L"15.01.2027") != std::wstring::npos);
+
+        const auto updates = parseUpdates(R"({"ok":true,"updates":[{"product_id":"9NBLGGH4R315","installed":"1.0.0.0","available":"1.0.1.0","update":true},
+            {"product_id":"9PGAMEPASS01","update":false},{"product_id":"<x>","update":true},{"product_id":"9P4D0K92BM7V","update":"true"}]})");
+        CHECK(updates == std::set<std::string>{owned});
+        CHECK(parseUpdates(serializeUpdates({owned, pass})) == (std::set<std::string>{owned, pass}) && parseUpdates("[]").empty());
+        CHECK(answerLine("x\n{\"ok\":true}\r\nnot json\n") == "{\"ok\":true}" && answerLine("no answer").empty() && answerLine("").empty());
+
+        const auto list = parseAchievements(R"({"ok":true,"title_id":"1717113201","unlocked":1,"total":3,"partial":true,"items":[
+            {"id":"1","name":"First Light","description":"Begin.","unlocked":true,"secret":false,"gamerscore":10,"unlocked_at":1789000000,
+             "icon":"https://images-eds-ssl.xboxlive.com/i.png","rarity":42.5},
+            {"id":"2","name":"Hidden","description":"","unlocked":false,"secret":true,"icon":"http://plain.example/i.png","rarity":150},
+            {"id":"1","name":"Duplicate"},{"id":"","name":"No id"},
+            {"id":"3","name":"Third","unlocked":false,"unlocked_at":1789000000}]})", 1717113201);
+        CHECK(list && list->total == 3 && list->unlocked == 1 && !list->complete);
+        CHECK(list->items[0].id == "1" && list->items[0].name == L"First Light" && list->items[0].achieved && list->items[0].unlocked_at == 1789000000 &&
+              list->items[0].icon == L"https://images-eds-ssl.xboxlive.com/i.png" && list->items[0].global_percent > 42.0f);
+        CHECK(list->items[1].hidden && !list->items[1].achieved && list->items[1].icon.empty() && list->items[1].global_percent < 0.5f);
+        CHECK(list->items[2].unlocked_at == 0); // Locked: no unlock time.
+        CHECK(!parseAchievements(R"({"title_id":"1717113201","items":[]})", 99) && !parseAchievements("{}", 1717113201) && !parseAchievements("", 0));
+
+        gog::InstallSnapshot failed; failed.state = gog::InstallState::error;
+        failed.error = gog::InstallError::device_limit; CHECK(xbox_account::installStatusText(failed).find(L"account.microsoft.com/devices") != std::wstring::npos);
+        failed.error = gog::InstallError::account; CHECK(xbox_account::installStatusText(failed).find(L"GOG") == std::wstring::npos && !xbox_account::installStatusText(failed).empty());
+        CHECK(installError("device_limit") == gog::InstallError::device_limit && installError("not_entitled") == gog::InstallError::account);
+    }
+
     // Install records: the marker names an executable inside the folder; nothing outside it.
     const auto config = root / L"config";
     const auto game_dir = root / L"Games" / L"Xbox-Moonlit";
@@ -123,6 +193,18 @@ int main() {
               games[0].store_logo_art == "https://store-images.s-microsoft.com/logo.png");
         CHECK(games[1].source_id == pass && !games[1].xbox_own_install && games[1].store_tall_art == "https://store-images.s-microsoft.com/box.png" &&
               games[1].store_wide_art.empty());
+        // Demos, betas and "Not Supported" leftovers stay out; words only (Demonic, Alphabet keep theirs).
+        CHECK(unlistedTitle(L"Demo Forza Horizon 4") && unlistedTitle(L"Forza Motorsport 7 Demo") && unlistedTitle(L"Fable Legends Closed Beta") &&
+              unlistedTitle(L"Roblox - Not Supported") && unlistedTitle(L"GAME (BETA)"));
+        CHECK(!unlistedTitle(L"Demonic Souls") && !unlistedTitle(L"Betamax Racer") && !unlistedTitle(L"Gears of War 4") && !unlistedTitle(L"Quantum Break"));
+        // Add-ons under their game: content or licence, https art only, no duplicates or the game itself.
+        const auto addons = parseAddons(library());
+        CHECK(addons.size() == 1 && addons.contains(owned) && addons.at(owned).size() == 2);
+        CHECK(addons.at(owned)[0].product == "9NEXPANSION1" && addons.at(owned)[0].title == L"Moonlit: Deep Archive" && addons.at(owned)[0].content &&
+              addons.at(owned)[0].image == "https://store-images.s-microsoft.com/a.png");
+        CHECK(!addons.at(owned)[1].content && addons.at(owned)[1].image.empty() && parseAddons("{}").empty());
+        // Game Pass: only the subscription's games (a bundle's or a bought one is the account's own).
+        CHECK(!games[0].xbox_game_pass && games[1].xbox_game_pass && games[0].xbox_title_id == 1717113201 && games[1].xbox_title_id == 0);
 #ifdef _WIN32
         CHECK(games[0].install_action.target == L"ms-windows-store://pdp/?ProductId=9NBLGGH4R315");
         CHECK(xboxAppInstall(owned, true).target == L"msxbox://game/?productId=9NBLGGH4R315" && !xboxAppInstall("<x>", true));
@@ -204,6 +286,19 @@ int main() {
             write(target / L".launchme-xbox.json", marker(owned, "Bin\\Game.exe"));
             result.output = "{\"ok\":true,\"executable\":\"Bin\\\\Game.exe\"}";
         } else if (command == L"logout") result.output = "{\"ok\":true,\"signed_in\":false}";
+        else if (command == L"activity") { write(option(args, L"--out"), activity_json); result.output = "{\"ok\":true,\"titles\":2}"; }
+        else if (command == L"updates") result.output = "{\"ok\":true,\"updates\":[{\"product_id\":\"9NBLGGH4R315\",\"update\":true}]}";
+        else if (command == L"offline-pc") {
+            // The helper writes the designation it read (or set) into the profile's offline.json.
+            const bool set = option(args, L"--set") == L"true";
+            if (!option(args, L"--set").empty() && option(args, L"--confirm") != L"yes") { result.ok = false; result.output = "{\"ok\":false,\"error\":\"usage\"}"; return result; }
+            write(profileDirectory(config) / L"offline.json", std::string("{\"enabled\":") + (set ? "true" : "false") +
+                  ",\"checked_at\":1790000000,\"remaining\":2,\"max\":3,\"games\":{\"9NBLGGH4R315\":4000000000}}");
+            result.output = "{\"ok\":true}";
+        } else if (command == L"achievements") {
+            if (option(args, L"--title") != L"1717113201") { result.ok = false; result.output = "{\"ok\":false,\"error\":\"not_found\"}"; return result; }
+            result.output = "{\"ok\":true,\"title_id\":\"1717113201\",\"items\":[{\"id\":\"1\",\"name\":\"First Light\",\"unlocked\":true}]}";
+        }
         else { result.ok = false; result.output = "{\"ok\":false,\"error\":\"usage\"}"; }
         return result;
     };
@@ -217,6 +312,34 @@ int main() {
         CHECK(until([](const Snapshot& s) { return s.state == State::connected; }));
         CHECK(snapshot->account == "0123ABCD" && snapshot->name == L"pat@example.com" && snapshot->games == 2 && snapshot->game_pass &&
               snapshot->synced_at == 1790000000);
+        // The sync also read the play history; Game Pass's newest come with the library.
+        CHECK(snapshot->activity.size() == 3 && snapshot->gamepass_recent == std::vector<std::string>{pass} && snapshot->updates.empty());
+        {
+            const auto profile = readProfile(config);
+            CHECK(profile.games[0].store_playtime_minutes == 754 && profile.games[0].last_played == 1789990000);
+            std::lock_guard lock(calls_mutex); // No installs yet: no `updates` question.
+            CHECK(std::none_of(calls.begin(), calls.end(), [](const auto& a) { return !a.empty() && a[0] == L"updates"; }));
+        }
+        // The offline PC: asked, then turned on (the confirmation is the caller's: --confirm yes).
+        service->submit(Command::offline_status);
+        CHECK(until([](const Snapshot& s) { return s.offline.enabled == false && !s.offline_busy; }));
+        service->submit(Command::offline_on);
+        CHECK(until([](const Snapshot& s) { return s.offline.enabled == true && !s.offline_busy && s.offline_failure == Failure::none; }));
+        CHECK(offlineUntil(snapshot->offline, owned, 1790000000) == 4000000000ull && snapshot->offline.remaining == 2u);
+        {
+            std::lock_guard lock(calls_mutex);
+            const auto set = std::find_if(calls.begin(), calls.end(), [](const auto& a) { return !a.empty() && a[0] == L"offline-pc" && option(a, L"--set") == L"true"; });
+            CHECK(set != calls.end() && option(*set, L"--confirm") == L"yes");
+        }
+        // A title's achievements, answered once; an unknown title fails without a list.
+        service->achievements(1717113201);
+        std::optional<AchievementsAnswer> answer;
+        CHECK(wait([&] { if (auto a = service->takeAchievements()) answer = std::move(a); return answer.has_value(); }));
+        CHECK(answer->title_id == 1717113201 && !answer->failed && answer->list.total == 1 && answer->list.unlocked == 1);
+        answer.reset();
+        service->achievements(12345);
+        CHECK(wait([&] { if (auto a = service->takeAchievements()) answer = std::move(a); return answer.has_value(); }));
+        CHECK(answer->title_id == 12345 && answer->failed && answer->list.items.empty());
         {
             std::lock_guard lock(calls_mutex);
             const auto sync = std::find_if(calls.begin(), calls.end(), [](const auto& a) { return !a.empty() && a[0] == L"library"; });
@@ -251,6 +374,12 @@ int main() {
             Game copy = profile.games[0];
             CHECK(ownInstall(copy));
         }
+        // With a game installed here, a sync asks for updates; installing it again clears its mark.
+        service->submit(Command::sync);
+        CHECK(until([](const Snapshot& s) { return s.state == State::connected && s.updates.contains(owned); }));
+        CHECK(service->install(moonlit, request));
+        CHECK(wait([&] { while (auto s = service->takeInstall()) install = *s; return install.state == gog::InstallState::completed; }));
+        CHECK(parseUpdates(file_io::readText(updatesPath(config), 1 << 20)).empty());
         // The Game Pass title is MSIXVC2 here: the helper is never asked.
         CHECK(service->install(games[1], request));
         CHECK(wait([&] { while (auto s = service->takeInstall()) install = *s; return install.state == gog::InstallState::error; }));
@@ -276,7 +405,8 @@ int main() {
         CHECK(until([](const Snapshot& s) { return s.state == State::connected; }));
         service->submit(Command::logout);
         CHECK(until([&](const Snapshot& s) { return s.account.empty() && !service->busy(); }));
-        CHECK(!std::filesystem::exists(profileDirectory(config) / L"account.json") && !std::filesystem::exists(libraryPath(config)));
+        CHECK(!std::filesystem::exists(profileDirectory(config) / L"account.json") && !std::filesystem::exists(libraryPath(config)) &&
+              !std::filesystem::exists(activityPath(config)) && !std::filesystem::exists(updatesPath(config)));
         std::lock_guard lock(calls_mutex);
         CHECK(std::any_of(calls.begin(), calls.end(), [](const auto& a) { return a.size() == 1 && a[0] == L"logout"; }));
     }

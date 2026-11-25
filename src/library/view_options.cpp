@@ -38,7 +38,9 @@ bool library_view::tagged(Filter filter, const std::vector<std::wstring>& tags) 
             break;
         case Filter::controller: if (has(t, L"controller")) return true; break;
         case Filter::vr: if (t == L"vr" || t == L"vrsupported" || t == L"vronly" || t == L"vrsupport") return true; break;
-        case Filter::unplayed: return false;
+        case Filter::unplayed:
+        case Filter::game_pass:
+        case Filter::owned: return false;
         }
     }
     return false;

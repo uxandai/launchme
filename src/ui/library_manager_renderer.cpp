@@ -1,4 +1,5 @@
 #include "renderer.hpp"
+#include "../library/versions.hpp"
 
 void Renderer::drawLibraryManager() {
     if (!context_->library_manager) return;
@@ -44,14 +45,16 @@ void Renderer::drawLibraryManager() {
             // Its card; the focus is the gliding fill drawn above.
             brush(palette::gray(1, 0.035f));
             target_->FillRoundedRectangle(D2D1::RoundedRect(rect(r), 16, 16), solid_.Get());
-            const auto found = platform_badges_.find(sourceName(game.source));
-            if (found != platform_badges_.end() && found->second.bitmap) {
+            // The copy's store or, for a ROM, its console: the logo when there is one, else the name.
+            const auto platform = versions::emulatedCopy(game) ? game.platform : sourceName(game.source);
+            const auto found = hasPlatformMark(platform) ? platform_badges_.find(platform) : platform_badges_.end();
+            if (found != platform_badges_.end()) {
                 const auto& badge = found->second; const auto size = badge.bitmap->GetPixelSize();
                 const auto source = badge.has_ink_bounds ? badge.ink_bounds : D2D1::RectF(0, 0, static_cast<float>(size.width), static_cast<float>(size.height));
                 const float scale = std::min((r.right - r.left - 48) / (source.right - source.left), 44.0f / (source.bottom - source.top));
                 const float w = (source.right - source.left) * scale, h = (source.bottom - source.top) * scale, x = (r.left + r.right - w) / 2;
                 target_->DrawBitmap(badge.bitmap.Get(), D2D1::RectF(x, r.top + 20, x + w, r.top + 20 + h), 1, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR, &source);
-            } else textLine(sourceName(game.source), r.left + 24, r.top + 42, r.right - r.left - 48, category_font_.Get(), white, DWRITE_TEXT_ALIGNMENT_CENTER);
+            } else textLine(platform, r.left + 24, r.top + 42, r.right - r.left - 48, category_font_.Get(), white, DWRITE_TEXT_ALIGNMENT_CENTER);
             textLine(game.installed ? tr(L"Graj") : primaryActionLabel(game), r.left + 24, r.bottom - 28, r.right - r.left - 48,
                 settings_body_font_.Get(), muted, DWRITE_TEXT_ALIGNMENT_CENTER);
         }

@@ -197,7 +197,7 @@ void Launcher::initializeAchievements() {
 
 int Launcher::achievementsDetailAction() const {
     return screen_ == ScreenMode::details && !detail_games_.empty() &&
-           (steamArtwork(detail_games_[0]) || localAchievements(detail_games_[0]) || pluginAchievementsProvider(detail_games_[0])) &&
+           (steamArtwork(detail_games_[0]) || localAchievements(detail_games_[0]) || externalAchievements(detail_games_[0])) &&
            details_.achievements_total ? lastDetailAction() + 1 : -2;
 }
 
@@ -206,7 +206,7 @@ void Launcher::openAchievements() {
     const auto& game = detail_games_[0];
     const bool steam = steamArtwork(game);
     const auto* local = steam ? nullptr : localAchievements(game);
-    if (!steam && !local && !pluginAchievementsProvider(game)) return;
+    if (!steam && !local && !externalAchievements(game)) return;
     achievements_ = {};
     achievements_.open = true;
     achievements_.loading = true;

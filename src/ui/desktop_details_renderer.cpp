@@ -172,10 +172,10 @@ void Renderer::drawDesktopDetails() {
             desktopButton(r, 1, hover(hit), pressed(hit), true, icon, label);
             desktopHot(hit, r);
         };
+        outline(context_->detail_versions_action, desktop_ui::glyph::swap, tr(L"Zmień wersję")); // Beside Graj.
         // While the game runs: Zamknij grę right after Wróć (the same close as its menu's).
         outline(context_->detail_close_action, desktop_ui::glyph::stop, tr(L"Zamknij grę"));
         outline(context_->detail_collections_action, desktop_ui::glyph::folder, tr(L"Kolekcje"));
-        outline(context_->detail_versions_action, desktop_ui::glyph::sync, tr(L"Wersje"));
         outline(context_->detail_identify, desktop_ui::glyph::tag, tr(L"Zidentyfikuj"));
         const auto extra = [&](DetailsExtra which, wchar_t icon, const std::wstring& label, bool enabled) {
             const SheetHit hit{Kind::tile, -1, static_cast<int>(which)};

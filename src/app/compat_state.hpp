@@ -40,6 +40,7 @@ struct CompatSettings {
     struct Installer { std::filesystem::path prefix, installer; std::wstring name; std::string store; };
     std::optional<Installer> installer;      // Dodaj grę z instalatora: the one running (store: a store launcher's id).
     std::string launch_after;                // The game that starts once the download (compatProvision) ends.
+    std::set<std::string> vc_runtime_tried;  // Games whose Visual C++ install ran this session (no second try).
     std::string store_download;              // Sklepy i launchery: the launcher whose installer is downloading.
 };
 struct ProtonDbEntry { uint32_t app = 0; protondb::Summary summary; };

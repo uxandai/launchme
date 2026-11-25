@@ -34,7 +34,7 @@ void Renderer::drawGogInstall() {
     brush(D2D1::ColorF(0.055f, 0.065f, 0.075f)); target_->FillRoundedRectangle(D2D1::RoundedRect(rect(panel), 18, 18), solid_.Get());
     if (panel_borders_) { brush(D2D1::ColorF(1, 1, 1, 0.16f)); target_->DrawRoundedRectangle(D2D1::RoundedRect(rect(panel), 18, 18), solid_.Get(), 1.0f); }
     // Title with the status directly beneath; the capitals start at the 32 px padding line.
-    textGroup(ui.game.name, steam ? gog_install_ui::steamInstallStatus(ui) : epic && !amazon ? epic::installStatusText(state) : gog::installStatusText(state),
+    textGroup(ui.game.name, steam ? gog_install_ui::steamInstallStatus(ui) : ui.game.source == GameSource::xbox ? xbox_account::installStatusText(state) : epic && !amazon ? epic::installStatusText(state) : gog::installStatusText(state),
               panel.left + 32, panel.top + 32, 770, category_font_.Get(), D2D1::ColorF(0xffffff),
               settings_body_font_.Get(), D2D1::ColorF(0xcbd3d9), 2, true);
     if (state.busy() || (steam && ui.steam_busy)) drawInstallDisc(panel.right - 48, panel.top + 48, 18, 1, true);

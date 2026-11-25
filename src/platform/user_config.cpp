@@ -197,6 +197,7 @@ constexpr FlagSetting flag_settings[] = {
     {"pad_cursor", &AppSettings::pad_cursor},
     {"crt", &AppSettings::crt},
     {"show_uninstalled", &AppSettings::show_uninstalled},
+    {"merge_versions", &AppSettings::merge_versions},
     {"windowed", &AppSettings::windowed},
     {"launch_tv_mode", &AppSettings::launch_tv_mode},
     {"handheld_mode", &AppSettings::handheld_mode},
@@ -971,6 +972,7 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
            << "desktop_game=" << (settings.desktop_game.find_first_of("\r\n") == std::string::npos ? settings.desktop_game : std::string()) << '\n'
            << "drawer_fade_fraction=" << settings.drawer.fade_fraction << '\n'
            << "show_uninstalled=" << settings.show_uninstalled << '\n'
+           << "merge_versions=" << settings.merge_versions << '\n'
            << "recent_uninstalled=" << settings.recent_uninstalled << '\n'
            << "save_backup_after_game=" << settings.save_backup_after_game << '\n'
            << "default_view_console=" << std::clamp(settings.default_view_console, 0, 11) << '\n'

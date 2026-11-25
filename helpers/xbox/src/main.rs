@@ -1,13 +1,20 @@
 // launchme-xbox: Launchme's Xbox account helper, built on Xodus
 // (https://github.com/xodus-gaming/xodus, GPL-3.0). Copyright (C) the Launchme authors.
 // Licensed under the GNU General Public License v3.0 or later; parts of login.rs, install.rs and
-// license.rs follow xodus-cli's commands (GPL-3.0, the Xodus authors).
+// licensing.rs follow xodus-cli's commands (GPL-3.0, the Xodus authors); offline.rs and xboxlive.rs
+// follow the Nexus backend's (https://github.com/domsvoboda/nexus-backend, GPL-3.0).
 //
 // Contract with Launchme (src/store/xbox_account.*):
 //   launchme-xbox.exe --profile <dir> <command> [options]
 // * stdout: exactly one JSON object when the command ends: {"ok":true,...} or
 //   {"ok":false,"error":"<code>","message":"..."}. Codes: usage, signed_out, cancelled, network,
-//   not_entitled, unsupported_package, not_found, storage, internal.
+//   not_entitled, device_limit, declined, unsupported_package, not_found, storage, internal.
+//
+// Commands: version, status, login, logout, library --out <file> [--market --language],
+// install --product <id> --dest <dir>, launch-prepare/run/launch-cleanup --dir <dir>,
+// offline-pc [--set true|false --confirm yes] (the designated offline PC; <profile>/offline.json),
+// activity --out <file> (played titles: last play, achievement counts, minutes),
+// achievements --title <id>, updates (newer packages of the games `install` put down).
 // * stderr: progress as JSON lines {"progress":{"stage":"...","done":N,"total":M}}; anything else
 //   on stderr is a log line.
 // * The profile folder holds everything (DPAPI-protected tokens, the WebView2 data of the sign-in
@@ -25,16 +32,19 @@ mod config;
 mod install;
 mod launch;
 mod library;
-mod license;
+mod licensing;
 #[cfg(windows)]
 mod login;
 #[cfg(target_os = "linux")]
 #[path = "login_linux.rs"]
 mod login;
+mod offline;
 mod output;
 mod package;
 mod store;
 mod tokens;
+mod updates;
+mod xboxlive;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -124,10 +134,16 @@ async fn run(args: Arguments) -> Outcome {
     let tokens = Arc::new(store::token_manager(&args.profile));
     let client = client();
     match args.command.as_str() {
-        "version" => Ok(serde_json::json!({ "version": env!("CARGO_PKG_VERSION"), "xodus": "514dd56f" })),
+        "version" => Ok(serde_json::json!({ "version": env!("CARGO_PKG_VERSION"), "xodus": "514dd56f", "offline": true })),
         "status" => tokens::status(&tokens),
         "login" => login::run(&client, &tokens, &args.profile).await,
-        "logout" => tokens::logout(&tokens),
+        "logout" => {
+            // The stored offline licenses belong to this account: they go with its session.
+            if offline::revoke(&args.profile).is_err() {
+                output::log("offline: stored licenses could not be removed");
+            }
+            tokens::logout(&tokens)
+        }
         "library" => {
             library::run(
                 &client,
@@ -146,6 +162,7 @@ async fn run(args: Arguments) -> Outcome {
                 &PathBuf::from(args.required("dest")?),
                 args.option("market").unwrap_or("neutral"),
                 args.option("parallel").and_then(|p| p.parse().ok()).unwrap_or(4),
+                &args.profile,
             )
             .await
         }
@@ -155,6 +172,7 @@ async fn run(args: Arguments) -> Outcome {
                 &tokens,
                 &PathBuf::from(args.required("dir")?),
                 args.option("market").unwrap_or("neutral"),
+                &args.profile,
             )
             .await
         }
@@ -165,6 +183,7 @@ async fn run(args: Arguments) -> Outcome {
                 &tokens,
                 &PathBuf::from(args.required("dir")?),
                 args.option("market").unwrap_or("neutral"),
+                &args.profile,
             )
             .await
         }
@@ -182,6 +201,18 @@ async fn run(args: Arguments) -> Outcome {
             .await
         }
         "launch-cleanup" => launch::cleanup(&PathBuf::from(args.required("dir")?)).await,
+        "offline-pc" => {
+            let set = match args.option("set") {
+                None => None,
+                Some("true") => Some(true),
+                Some("false") => Some(false),
+                Some(_) => return Err(Failure::new("usage", "--set takes true or false")),
+            };
+            offline::offline_pc(&client, &tokens, &args.profile, set, args.option("confirm") == Some("yes")).await
+        }
+        "activity" => xboxlive::activity(&client, &tokens, &PathBuf::from(args.required("out")?)).await,
+        "achievements" => xboxlive::achievements(&client, &tokens, args.required("title")?).await,
+        "updates" => updates::run(&client, &tokens, &args.profile).await,
         other => Err(Failure::new("usage", format!("unknown command {other}"))),
     }
 }

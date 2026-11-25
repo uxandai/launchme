@@ -46,6 +46,7 @@ std::wstring Launcher::homeRowTitle(const std::string& id) const {
     if (id == "developers") return tr(L"Developerzy");
     if (id == "updated") return tr(L"Ostatnio zaktualizowane");
     if (id == "discovery") return tr(L"Jeszcze niegrane");
+    if (id == "gamepass-new") return tr(L"Nowe w Game Pass");
     if (const auto* c = homeRowCollection(id)) return c->name;
     return {};
 }
@@ -66,6 +67,7 @@ std::vector<Launcher::HomeRowEntry> Launcher::homeRowEntries() const {
     for (const auto& collection : settings_collections_)
         if (!(srmCollectionsHidden() && srmCollection(collection))) add(collection.id, &collection); // SRM's: in Emulacja.
     if (steam_rows_available_) { add("updated"); add("discovery"); }
+    if (findCategory("gamepass-new")) add("gamepass-new"); // The account's Game Pass games, newest first.
     if (settings_.home_row_order.empty() || entries.size() < 3) return entries;
     // The player's order after Ostatnio grane (buildShelves sorts the rows the same way).
     std::vector<std::string> natural;

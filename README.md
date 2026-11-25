@@ -24,11 +24,11 @@ no HTML UI. English, Polish, Brazilian Portuguese and Spanish.
 ## Features
 
 - **Two faces**: TV mode (shelves, XMB, Flix, Metro, PSfive, snitch; boot videos from Steam Deck Repo, a CRT filter, a pad cursor on L3 + R3 and a handheld mode) and a desktop window with a sidebar, a game pane and dark colour themes.
-- **Every store**: local installs, GOG and Epic accounts, Amazon ([guide](docs/AMAZON_GAMES.md)), Xbox and Game Pass ([guide](docs/XBOX.md)), EA, Battle.net, Ubisoft, Prism Launcher; a Launchers tab that installs the launchers themselves and a Deals tab with free and discounted games.
+- **Every store**: local installs, GOG and Epic accounts, Amazon ([guide](docs/AMAZON_GAMES.md)), Xbox and Game Pass with offline play ([guide](docs/XBOX.md)), EA, Battle.net, Ubisoft, Prism Launcher; a Launchers tab that installs the launchers themselves and a Deals tab with free and discounted games.
 - **Emulation**: EmuDeck / ES-DE ROM folders, about 30 systems with their logos, emulators found or chosen by hand.
 - **Your own games**: DRM-free folders and anything added by hand or dropped on the window.
 - **Artwork**: SteamGridDB (animated too) and a dozen other sources, 4K backgrounds with FSR 1 upscaling, a variant browser and crop editor; animated wallpapers, also from Wallpaper Engine.
-- **Library**: grid (with your collections as tiles), list, Stage, coverflow, game-case shelf and more; filters by play mode; collections synced with Steam; Recently played.
+- **Library**: grid (with your collections as tiles), list, Stage, coverflow, game-case shelf and more; filters by play mode; one tile per game across stores and emulators with a version picker; collections synced with Steam; Recently played.
 - **Playing**: Steam account switching, installs and downloads in one list, per-game logs, HDR switching and scripts before the launch, after the start and after the exit, one-click game mods (ReShade, RenoDX, OptiScaler, DLSS, DLSS 5, ANR frame generation), Proton per game on Linux (Steam games too), an in-game overlay (experimental), GOG achievements and GOG's overlay without Galaxy (Comet).
 - **Details**: metadata, playtime, achievements (also GOG, Epic, RetroAchievements and local saves of DRM-free games, with an unlock card over the game), ratings, system requirements, screenshots and similar games.
 - **Aurelia** (optional): Steam games without the Steam client, with cloud saves around play; Launchme installs the Aurelia release it was checked with ([guide](docs/AURELIA.md)).

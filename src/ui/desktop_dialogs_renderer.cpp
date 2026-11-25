@@ -3,6 +3,7 @@
 // (library_manager_view.hpp, custom_game_view.hpp, identify_view.hpp); drawn in desktop DIPs, every
 // control recording the area that answers for it (Renderer::desktopModalHotspots).
 #include "renderer.hpp"
+#include "../library/versions.hpp"
 #include "renderer_internal.hpp"
 #include "desktop_theme.hpp"
 #include "exit_prompt.hpp"
@@ -151,9 +152,14 @@ void Renderer::drawDesktopCollectionsDialog() {
             const bool focused = ui.focus == i, over = hover == SheetHit{Kind::row, i};
             desktopFill(r, 10, gray(1, focused ? 0.085f : over ? 0.06f : 0.035f));
             desktopStroke(r, 10, focused ? uiAccent(0.8f) : gray(1, 0.07f), focused ? 1.5f : 1.0f);
-            std::wstring name = sourceName(game.source);
-            if (!game.platform.empty() && game.platform != name) name += L"  ·  " + game.platform;
-            textLine(name, r.left + 16, r.top + 30, r.right - r.left - 32, desktop_strong_font_.Get(), palette::text());
+            const auto platform = versions::emulatedCopy(game) ? game.platform : sourceName(game.source); // A ROM: its console.
+            if (hasPlatformMark(platform)) { // Its logo, as Tryb TV's picker shows it.
+                drawPlatformMark(platform, r.left + 16, r.top + 28, 22, std::min(160.0f, r.right - r.left - 32), 1.0f, desktop_strong_font_.Get());
+            } else {
+                std::wstring name = platform;
+                if (!game.platform.empty() && game.platform != name) name += L"  ·  " + game.platform;
+                textLine(name, r.left + 16, r.top + 30, r.right - r.left - 32, desktop_strong_font_.Get(), palette::text());
+            }
             textLine(game.name, r.left + 16, r.top + 52, r.right - r.left - 32, desktop_small_font_.Get(), palette::muted());
             textLine(game.installed ? std::wstring(tr(L"Graj")) : primaryActionLabel(game), r.left + 16, r.bottom - 18, r.right - r.left - 32,
                      desktop_small_font_.Get(), uiAccent(0.9f));
@@ -692,7 +698,7 @@ void Renderer::drawDesktopGogInstall() {
     float y = p.top + sheet_header + 14;
     // Its state, with a turning disc while the store works.
     const bool busy = state.busy() || (steam && ui.steam_busy);
-    const auto status = steam ? gog_install_ui::steamInstallStatus(ui) : epic && !amazon ? epic::installStatusText(state) : gog::installStatusText(state);
+    const auto status = steam ? gog_install_ui::steamInstallStatus(ui) : ui.game.source == GameSource::xbox ? xbox_account::installStatusText(state) : epic && !amazon ? epic::installStatusText(state) : gog::installStatusText(state);
     if (busy) desktopArc(p.left + 30, y + 14, 8, elapsed_ * 5.0f, 4.2f, uiAccent(), 2);
     paragraph(status, p.left + (busy ? 48.0f : 22.0f), y + 2, p.right - p.left - 70, desktop_font_.Get(), palette::muted(), 2);
     y += 56;

@@ -68,6 +68,7 @@ pub async fn run(
     dest: &Path,
     market: &str,
     parallel: usize,
+    profile: &Path,
 ) -> Outcome {
     if !dest.is_absolute() {
         return Err(Failure::new("usage", "--dest must be absolute"));
@@ -114,7 +115,9 @@ pub async fn run(
     remote_files.extend(ntfs);
     let local = local_files(&header).await;
 
-    let key = crate::license::content_key(client, tokens, &xvd.content_id().to_string(), market).await?;
+    let key = crate::licensing::content_key(client, tokens, profile, &xvd.content_id().to_string(), market, Some(product))
+        .await?
+        .key;
 
     let jobs: Vec<(String, SegmentFile)> = remote_files
         .iter()

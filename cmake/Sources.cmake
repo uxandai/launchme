@@ -215,6 +215,7 @@ set(LAUNCHME_APP_SOURCES
     src/store/launchers.cpp
     src/store/launcher_install.cpp
     src/store/xbox_account.cpp
+    src/store/xbox_activity.cpp
     src/app/gog_install.cpp
     src/app/gog_comet.cpp
     src/app/my_games.cpp

@@ -980,6 +980,10 @@ private:
     // PSfive home (src/ui/psfive_renderer.cpp): a row of tiles over the full-screen background,
     // the focused game's badge and name, "Graj" and "…", its logo in the corner.
     void drawPsfive();
+    // PSfive's background as it always looks: the picture (closer and frosted as the details open),
+    // the darker left side, the shade and Przyciemnienie tła. Also while the home is still loading,
+    // so the start does not jump darker once the row appears.
+    void drawPsfiveBackdrop(float opened);
     void drawSnitch();
     void drawPsfiveTopBar();
     void drawPsfiveMoreMenu();

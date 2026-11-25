@@ -291,7 +291,8 @@ void Launcher::paint(bool overlay) {
         }
     }
     if (screen_ == ScreenMode::details && !cards_.empty()) {
-        context.mod_badges = modBadges(cards_[0].game); // Asks for its folder's scan the first time.
+        context.mod_badges = xboxBadges(cards_[0].game); // Game Pass, Offline do, Aktualizacja first.
+        for (auto& badge : modBadges(cards_[0].game)) context.mod_badges.push_back(std::move(badge)); // Asks for its folder's scan the first time.
         if (cards_[0].game.last_played) context.detail_last_played = desktopPlayedWhen(cards_[0].game.last_played);
         context.detail_text_view = details_text_view_;
     }

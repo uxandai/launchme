@@ -39,6 +39,8 @@ enum class Id { font, home_layout, ui_accent, accent, uninstalled, emulation, mu
                   companion_photos, companion_photo_folder, companion_guests, companion_gamification,
                   // Interfejs → Tryb TV: start in it instead of the desktop window.
                   launch_tv_mode, handheld_mode, details_media,
+                  // Biblioteka → Widoczność: copies of one game (stores, emulated) as one tile.
+                  merge_versions,
                   // Dostosuj wygląd → Inne: Tryb TV's CRT filter (src/ui/crt_view.hpp).
                   crt, crt_mask, crt_warp_x, crt_warp_y, crt_mask_level, crt_scanlines, crt_glow, crt_phosphor,
                   pad_cursor, // Interfejs → Tryb TV: L3 + R3 as a mouse.
@@ -96,7 +98,7 @@ enum class Id { font, home_layout, ui_accent, accent, uninstalled, emulation, mu
                    // Biblioteka → Amazon Games: Nile (the helper), the sign-in address, sync and sign-out.
                    amazon_helper, amazon_callback, amazon_refresh, amazon_logout,
                    // Biblioteka → Xbox: the Xodus-based helper, sync, sign-out and Instalacja przez Launchme.
-                   xbox_helper, xbox_refresh, xbox_logout, xbox_own_install,
+                   xbox_helper, xbox_refresh, xbox_logout, xbox_own_install, xbox_offline,
                    // Biblioteka → Gry dodane ręcznie: find and download their missing covers.
                    custom_covers,
                    // Linux: Biblioteka → Proton i Wine (src/app/compat_rows.cpp): the default tool, the

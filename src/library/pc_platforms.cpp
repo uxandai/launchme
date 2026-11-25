@@ -591,6 +591,11 @@ StoreLibrary mergeXboxLibrary(StoreLibrary native, const std::vector<Game>& game
             if (local.source != GameSource::xbox) continue;
             if (local.account_id.empty()) local.account_id = game.account_id;
             if (local.xbox_product.empty()) local.xbox_product = game.xbox_product;
+            if (!local.xbox_title_id) local.xbox_title_id = game.xbox_title_id;
+            local.xbox_game_pass = local.xbox_game_pass || game.xbox_game_pass;
+            // The account's play history (activity.json) for a game the Xbox app installed.
+            local.store_playtime_minutes = std::max(local.store_playtime_minutes, game.store_playtime_minutes);
+            local.last_played = std::max(local.last_played, game.last_played);
             for (auto [mine, theirs] : {std::pair{&local.store_tall_art, &game.store_tall_art}, std::pair{&local.store_wide_art, &game.store_wide_art},
                                         std::pair{&local.store_logo_art, &game.store_logo_art}})
                 if (mine->empty()) *mine = *theirs;

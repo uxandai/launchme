@@ -588,6 +588,9 @@ void Launcher::buildSettingsRows() {
                 tr(L"Także gry bez instalacji i dodane bez pliku, według daty dodania do biblioteki."), {}, settings_.recent_uninstalled});
             add({Id::show_private, Control::toggle, tr(L"Pokaż ukryte/prywatne gry"),
                 tr(L"Gry oznaczone w Steam jako ukryte lub prywatne pojawią się w kolekcjach i bibliotece."), {}, settings_.show_private});
+            add({Id::merge_versions, Control::toggle, tr(L"Łącz wersje tej samej gry"),
+                tr(L"Gra ze Steam, GOG, Epic, Xbox i jej kopie emulowane jako jeden kafelek. „Zmień wersję” wybiera, którą pokazać i uruchamiać."), {},
+                settings_.merge_versions});
             add({Id::excluded_games, Control::count, tr(L"Wykluczone gry"),
                  library_state_.excluded_games.empty() ? std::wstring(tr(L"Menu gry → Wyklucz grę: nie ma jej w bibliotece, kolekcjach ani wyszukiwaniu. Tu ją przywrócisz."))
                                                        : std::wstring(tr(L"Wykluczone z menu gry (prawy przycisk: Wyklucz grę). Nie ma ich w bibliotece, kolekcjach ani wyszukiwaniu; tu je przywrócisz.")),

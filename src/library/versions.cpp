@@ -7,8 +7,12 @@
 #include <set>
 
 namespace versions {
-std::string identity(const Game& game) {
-    if (!isGame(game) || game.kind == GameKind::nonsteam || game.kind == GameKind::catalog || placeholderGameName(game.name)) return {};
+bool emulatedCopy(const Game& game) {
+    return game.kind == GameKind::nonsteam && !game.platform.empty() && game.platform != L"PC";
+}
+std::string identity(const Game& game, bool emulated) {
+    if (!isGame(game) || game.kind == GameKind::catalog || placeholderGameName(game.name)) return {};
+    if (game.kind == GameKind::nonsteam && !(emulated && emulatedCopy(game))) return {};
     std::wstring name;
     bool space = false;
     for (const auto ch : foldGameTitle(game.name)) {
@@ -32,7 +36,7 @@ std::wstring executableIdentity(const Game& game) {
 }
 }
 
-Index::Index(const std::vector<Game>& games) {
+Index::Index(const std::vector<Game>& games, bool emulated) {
     std::vector<std::string> ids(games.size());
     std::map<std::string, std::string> parent; // Name groups joined by a shared executable.
     const auto root = [&](std::string id) {
@@ -41,7 +45,7 @@ Index::Index(const std::vector<Game>& games) {
     };
     std::map<std::wstring, std::string> executables;
     for (size_t i = 0; i < games.size(); ++i) {
-        ids[i] = identity(games[i]);
+        ids[i] = identity(games[i], emulated);
         if (ids[i].empty()) continue;
         const auto file = executableIdentity(games[i]);
         if (file.empty()) continue;
@@ -52,9 +56,9 @@ Index::Index(const std::vector<Game>& games) {
     }
     for (size_t i = 0; i < games.size(); ++i) if (!ids[i].empty()) groups[root(ids[i])].push_back(games[i]);
     std::erase_if(groups, [](const auto& entry) {
-        std::set<GameSource> sources;
-        for (const auto& game : entry.second) sources.insert(game.source);
-        return sources.size() < 2;
+        std::set<std::pair<GameSource, std::wstring>> kinds; // A store, or a console's emulated copy.
+        for (const auto& game : entry.second) kinds.insert({game.source, emulatedCopy(game) ? game.platform : std::wstring{}});
+        return kinds.size() < 2;
     });
     for (const auto& [id, list] : groups) for (const auto& game : list) by_game[gameKey(game)] = id;
 }
@@ -86,6 +90,9 @@ std::vector<Game> Index::collapse(const std::vector<Game>& games, const std::map
             existing.added_at = added;
         }
     }
+    for (auto& game : result) // The player's pick shows its store or console on the tile.
+        if (!game.version_group.empty())
+            if (const auto pref = preferred.find(game.version_group); pref != preferred.end()) game.version_chosen = pref->second == gameKey(game);
     return result;
 }
 }

@@ -62,8 +62,17 @@ async fn encrypted_files(header: &Path) -> Result<(XvdFile, HashMap<String, Segm
     Ok((xvd, files))
 }
 
+fn marker(dir: &Path) -> Option<Value> {
+    serde_json::from_slice(&std::fs::read(dir.join(MARKER)).ok()?).ok()
+}
+
+// The Store product the install marker names (offline.json keys the game by it).
+fn product(dir: &Path) -> Option<String> {
+    marker(dir)?["product_id"].as_str().filter(|p| crate::offline::valid_product(p)).map(str::to_owned)
+}
+
 fn executable(dir: &Path) -> Option<String> {
-    let marker: Value = serde_json::from_slice(&std::fs::read(dir.join(MARKER)).ok()?).ok()?;
+    let marker = marker(dir)?;
     marker["executable"]
         .as_str()
         .map(str::to_owned)
@@ -74,12 +83,13 @@ fn executable(dir: &Path) -> Option<String> {
         })
 }
 
-pub async fn prepare(client: &reqwest::Client, tokens: &TokenManager, dir: &Path, market: &str) -> Outcome {
+pub async fn prepare(client: &reqwest::Client, tokens: &TokenManager, dir: &Path, market: &str, profile: &Path) -> Outcome {
     if dir.join(SESSION).exists() {
         cleanup(dir).await?;
     }
     let (xvd, files) = encrypted_files(&dir.join(HEADER)).await?;
-    let key = crate::license::content_key(client, tokens, &xvd.content_id().to_string(), market).await?;
+    let licensed = crate::licensing::content_key(client, tokens, profile, &xvd.content_id().to_string(), market, product(dir).as_deref()).await?;
+    let key = licensed.key;
     let mut decrypted: Vec<String> = Vec::new();
     let total: u64 = files.values().map(|f| f.length).sum();
     let mut done = 0u64;
@@ -112,16 +122,21 @@ pub async fn prepare(client: &reqwest::Client, tokens: &TokenManager, dir: &Path
         done += entry.length;
         crate::output::progress("decrypt", done, total);
     }
-    Ok(json!({ "executable": executable(dir), "decrypted": decrypted }))
+    Ok(json!({
+        "executable": executable(dir),
+        "decrypted": decrypted,
+        "offline": licensed.from_cache,
+        "offline_until": licensed.offline_until,
+    }))
 }
 
 // Launchme's Graj for a game it installed: prepare, start the game from the package root, wait for
 // it (Launchme's job holds both processes, so its session and "Zamknij grę" see the game), then put
 // the encrypted files back. A failure is shown to the user: nothing else would tell them.
 #[cfg(windows)]
-pub async fn run(client: &reqwest::Client, tokens: &TokenManager, dir: &Path, market: &str) -> Outcome {
+pub async fn run(client: &reqwest::Client, tokens: &TokenManager, dir: &Path, market: &str, profile: &Path) -> Outcome {
     let result: Outcome = async {
-        let prepared = prepare(client, tokens, dir, market).await?;
+        let prepared = prepare(client, tokens, dir, market, profile).await?;
         let relative = prepared["executable"]
             .as_str()
             .and_then(relative)
@@ -190,10 +205,10 @@ pub async fn run(
     let result: Outcome = async {
         linux::remove_runtime(dir); // Left by a session that was killed.
         let (prepared, mapped) = if file_map {
-            let (prepared, mapped) = linux::prepare_mapped(client, tokens, dir, market).await?;
+            let (prepared, mapped) = linux::prepare_mapped(client, tokens, dir, market, profile).await?;
             (prepared, Some(mapped))
         } else {
-            (prepare(client, tokens, dir, market).await?, None)
+            (prepare(client, tokens, dir, market, profile).await?, None)
         };
         let relative = prepared["executable"]
             .as_str()
@@ -207,7 +222,12 @@ pub async fn run(
         let cleaned = if file_map { Ok(json!({})) } else { cleanup(dir).await };
         let status = status?;
         cleaned?;
-        Ok(json!({ "exit_code": status.code(), "xgameruntime": runtime.is_some(), "file_map": file_map }))
+        Ok(json!({
+            "exit_code": status.code(),
+            "xgameruntime": runtime.is_some(),
+            "file_map": file_map,
+            "offline": prepared["offline"],
+        }))
     }
     .await;
     if let Err(failure) = &result {
@@ -228,7 +248,7 @@ mod linux {
     use tokio::signal::unix::{SignalKind, signal};
     use xodus::tokens::TokenManager;
 
-    use super::{HEADER, SESSION, cleanup, encrypted_files, executable, relative, storage};
+    use super::{HEADER, SESSION, cleanup, encrypted_files, executable, product, relative, storage};
     use crate::output::Failure;
 
     const RUNTIME_RECORD: &str = ".launchme-xgameruntime.json";
@@ -248,12 +268,15 @@ mod linux {
         tokens: &TokenManager,
         dir: &Path,
         market: &str,
+        profile: &Path,
     ) -> Result<(Value, Mapped), Failure> {
         if dir.join(SESSION).exists() {
             cleanup(dir).await?; // A decrypted-in-place session must not be what gets mapped.
         }
         let (xvd, files) = encrypted_files(&dir.join(HEADER)).await?;
-        let key = crate::license::content_key(client, tokens, &xvd.content_id().to_string(), market).await?;
+        let licensed =
+            crate::licensing::content_key(client, tokens, profile, &xvd.content_id().to_string(), market, product(dir).as_deref()).await?;
+        let key = licensed.key;
         let executable = executable(dir);
         let wanted = executable.as_deref().and_then(relative);
         let canonical = std::fs::canonicalize(dir).map_err(|e| storage(dir, e))?;
@@ -294,7 +317,15 @@ mod linux {
             done += entry.length;
             crate::output::progress("decrypt", done, total);
         }
-        Ok((json!({ "executable": executable, "mapped": mapped._files.len() }), mapped))
+        Ok((
+            json!({
+                "executable": executable,
+                "mapped": mapped._files.len(),
+                "offline": licensed.from_cache,
+                "offline_until": licensed.offline_until,
+            }),
+            mapped,
+        ))
     }
 
     // xgameruntime.dll from the open xgameruntime project, when there is one: $LAUNCHME_XGAMERUNTIME,

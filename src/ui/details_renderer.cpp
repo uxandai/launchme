@@ -173,7 +173,7 @@ void Renderer::drawDetails() {
         case Kind::more: label = L"…"; break;
         case Kind::collections: label = tr(L"Kolekcje"); break;
         case Kind::favorite: label = context_->detail_favorite ? L"★" : L"☆"; break;
-        case Kind::versions: label = tr(L"Wybierz wersję…"); break;
+        case Kind::versions: label = tr(L"Zmień wersję"); break;
         case Kind::identify: label = tr(L"Zidentyfikuj grę"); break;
         default: break;
         }

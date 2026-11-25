@@ -562,7 +562,10 @@ void Renderer::paint(const std::vector<GameCard>& cards, size_t selected, bool s
                 squircle_corner_ = compact_corner;
                 corner_reference_ = 140;
             }
-            drawBackground();
+            // PSfive still loading (the start-up hold, an empty home): its own shade and dim already,
+            // so the picture does not turn darker in one frame when the row comes.
+            if (context.psfive) drawPsfiveBackdrop(0);
+            else drawBackground();
             beginScreenForeground();
             if (!context.xmb) drawHero(); // XMB labels sit next to the tiles instead.
             drawQuickShade();

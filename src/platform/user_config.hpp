@@ -63,6 +63,8 @@ struct AppSettings {
     // Sidebar groups folded by default (Wydawcy, Developerzy): the ones the player opened.
     std::unordered_set<std::string> desktop_expanded;
     bool show_uninstalled = true;
+    // One tile per game across stores (Steam, GOG, Epic, Xbox…) and its emulated copies; Zmień wersję picks it.
+    bool merge_versions = true;
     bool recent_uninstalled = false; // Ostatnio grane also lists games not installed, by the date they were added.
     bool save_backup_after_game = false; // Ludusavi backs up a game's saves when it closes (Kopie zapisów).
     bool show_emulation = true;

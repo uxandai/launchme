@@ -13,8 +13,8 @@ asked. Its source is in [`helpers/xbox`](../helpers/xbox).
 
 ## Setup
 
-1. Open **Settings → Library → Xbox (⚙)**. **Xbox helper → Download** fetches `launchme-xbox-0.1.0.exe` of the
-   pinned release, checks its size and SHA-256 and stores it as `%LOCALAPPDATA%\Launchme\tools\launchme-xbox-0.1.0.exe`.
+1. Open **Settings → Library → Xbox (⚙)**. **Xbox helper → Download** fetches `launchme-xbox-0.2.0.exe` of the
+   pinned release, checks its size and SHA-256 and stores it as `%LOCALAPPDATA%\Launchme\tools\launchme-xbox-0.2.0.exe`.
    **Remove** deletes it again.
 2. **Account → Connect** opens Microsoft's sign-in in a small window of the helper (WebView2). After signing
    in, the library is downloaded. Closing the window cancels.
@@ -37,6 +37,18 @@ Microsoft (as Windows itself does). **Account connection → Sign out** removes 
   Microsoft for a license (so an ended Game Pass stops it, like in the Xbox app), decrypts the package's
   encrypted files for the session and seals them again when the game exits. **Uninstall** asks first, then
   deletes the folder.
+- **Offline play on this PC** (Xbox page): *Test* asks Microsoft whether this PC is the account's offline PC;
+  *Turn on* / *Turn off* changes it after a second press (Microsoft allows a few changes a year, the page shows
+  how many are left). Each online start then stores the license lease, signed for this device, for up to 30
+  days; without internet the game starts from it. The details show *Offline until* its date. Turning it off,
+  a refused license or signing out deletes the stored leases.
+- **Game Pass**: a *Game Pass* badge, *Game Pass* / *Purchased* filters and a *New in Game Pass* home row.
+- **Xbox Live**: achievements, playtime and last played, also for games the Xbox app installed.
+- **Updates**: *Update available* when the store has a newer package of a game installed through Launchme;
+  *Update* downloads only the changed files into the same folder.
+- **Bundles and add-ons**: a bought bundle's games appear one by one; its add-ons are counted on their game
+  (*Add-ons: N*), not listed as games. Installing add-ons is not supported yet. Uninstalled demos, betas and
+  "Not Supported" entries are hidden.
 
 ## Limits
 
@@ -50,7 +62,7 @@ Microsoft (as Windows itself does). **Account connection → Sign out** removes 
 ## Implementation
 
 - `helpers/xbox` (Rust): `status`, `login`, `logout`, `library`, `install`, `launch-prepare`, `run`,
-  `launch-cleanup`; one JSON answer on stdout, JSON progress on stderr. `tools/build-xbox-helper.ps1` builds it
+  `launch-cleanup`, `offline-pc`, `activity`, `achievements`, `updates`; one JSON answer on stdout, JSON progress on stderr. `tools/build-xbox-helper.ps1` builds it
   and prints the size and SHA-256 pinned in `src/store/xbox_account.*` (the published asset must be that file).
 - `src/store/xbox_account.*`: the pinned download, the answers, the library and install records, the
   account/install worker, uninstall.
@@ -64,4 +76,5 @@ Microsoft (as Windows itself does). **Account connection → Sign out** removes 
 On the Linux build (highly experimental) the helper is not downloaded: `tools/build-xbox-helper.sh` builds
 `launchme-xbox` (Rust; its sign-in window is GTK 4 with WebKitGTK 6.0), the AppImage ships it next to the launcher, and
 `LAUNCHME_XBOX_HELPER` can name another build. Games install to `~/Games/Xbox/<title>` and run through Proton or
-Wine like other Windows games ([LINUX_WINE.md](LINUX_WINE.md)).
+Wine like other Windows games ([LINUX_WINE.md](LINUX_WINE.md)); before the first start Launchme installs Visual C++
+(`vcrun2022`, winetricks) into the game's prefix.

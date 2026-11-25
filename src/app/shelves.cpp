@@ -248,7 +248,7 @@ void Launcher::buildShelves() {
     applyMetadataTitles(public_library_); // Edytuj metadane: the player's own titles (before grouping and sorting).
     recent_games::apply(public_library_, library_state_.last_played, account_, gog_state_.account, epic_state_.account);
     recordLibraryGames(); // Record fallbacks before sorting and grouping this snapshot.
-    versions_ = versions::Index(public_library_);
+    indexVersions();
     grouped_library_ = versions_.collapse(public_library_, library_state_.preferred_versions, library_state_.first_seen);
     if (screen_ == ScreenMode::details && !detail_games_.empty() && !detail_games_[0].version_group.empty()) {
         const auto group = versions_.by_game.find(gameKey(detail_games_[0]));
@@ -410,6 +410,20 @@ void Launcher::buildShelves() {
         for (const auto& game : installed_library_)
             if (!locallyHidden(game) && !game.last_played && (game.installed || game.installation.active() || settings_.show_uninstalled) && discovery.games.size() < 8) discovery.games.push_back(game);
         if (!discovery.games.empty() && settings_.show_discovery_row) categories_.push_back(std::move(discovery));
+    }
+    // Nowe w Game Pass: the account's Game Pass games in the catalog's own "recently added" order
+    // (helper `library`), installed or not: the row is where they are found.
+    if (!xbox_state_.account.empty() && !xbox_state_.gamepass_recent.empty()) {
+        Category fresh{tr(L"NOWE W GAME PASS")};
+        fresh.id = "gamepass-new";
+        for (const auto& product : xbox_state_.gamepass_recent) {
+            const auto found = std::find_if(public_library_.begin(), public_library_.end(), [&](const Game& game) {
+                return game.source == GameSource::xbox && game.xbox_product == product && isGame(game) && !locallyHidden(game);
+            });
+            if (found != public_library_.end()) fresh.games.push_back(*found);
+            if (fresh.games.size() >= 12) break;
+        }
+        if (!fresh.games.empty()) categories_.push_back(std::move(fresh));
     }
     // Ctrl+H: the hidden and private games as the last category, in every home layout.
     if (private_shelf_) {

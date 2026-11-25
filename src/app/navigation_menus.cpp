@@ -310,6 +310,7 @@ void Launcher::menuAccept() {
     case Item::hide: dismissMenu(); toggleHidden(game); break;
     case Item::exclude: askExcludeGame(game); break;
     case Item::uninstall: uninstallGame(game); break;
+    case Item::update: dismissMenu(); openXboxUpdate(game); break;
     case Item::remove: askRemoveFromLibrary(game); break;
     case Item::forget_recent: dismissMenu(); forgetRecent(game); break;
     case Item::collections: openCollectionManager(game); break; // Its collections, ticked (the menu closes).

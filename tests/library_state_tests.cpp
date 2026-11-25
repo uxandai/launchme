@@ -65,6 +65,13 @@ int main() {
         const auto collapsed = index.collapse({steam, gog, remaster, rom}, {});
         if (collapsed.size() != 3 || collapsed[0].version_group.empty() || !activePlatformName(collapsed[0]).empty()) return 40;
         if (index.find(remaster) || index.find(rom) || !index.find(gog) || index.find(gog)->size() != 2) return 41;
+        // Emulated copies (a console's ROM) join only when asked; two consoles are two kinds; a PC shortcut never.
+        Game snes = rom; snes.source = GameSource::custom; snes.platform = L"SNES";
+        Game genesis = snes; genesis.platform = L"Genesis"; genesis.shortcut_id = 1001;
+        Game pc_shortcut = rom; pc_shortcut.platform = L"PC";
+        if (versions::Index({steam, snes}).find(snes) || !versions::Index({steam, snes}, true).find(snes) ||
+            versions::Index({steam, snes}, true).find(snes)->size() != 2) return 140;
+        if (!versions::Index({snes, genesis}, true).find(genesis) || versions::Index({steam, pc_shortcut}, true).find(pc_shortcut)) return 141;
         const auto preferred = index.collapse({steam, gog}, {{versions::identity(steam), gameKey(gog)}});
         if (preferred.size() != 1 || preferred[0].source != GameSource::gog) return 42;
         // Other titles, one .exe (a "Moje gry" entry for a GOG installation): one game, the newer play.

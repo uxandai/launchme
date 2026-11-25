@@ -1,5 +1,6 @@
 // PC settings: one store row on the overview; its account/library actions behind the cog.
 #include "launcher.hpp"
+#include "../platform/unix_time.hpp"
 #include <algorithm>
 
 using namespace settings_ui;
@@ -214,7 +215,7 @@ void Launcher::pcSettingsRows() {
         Row helper{Id::xbox_helper, Control::action, tr(L"Pomocnik Xbox"),
             state.downloading ? xbox_account::statusText(state) : state.helper ?
                 tr(L"Konto Xbox przez Xodus, wersja ") + std::wstring(xbox_account::helper_version) :
-                std::wstring(tr(L"Logowanie, biblioteka konta i Game Pass (open source, około 12 MB).")),
+                std::wstring(tr(L"Logowanie, biblioteka konta i Game Pass (open source, około 15 MB).")),
             state.helper ? std::wstring(tr(L"Usuń")) : std::wstring(tr(L"Pobierz"))};
         helper.locked = state.downloading || (state.helper && xbox_service_ && xbox_service_->busy()); add(std::move(helper));
         add({Id::pc_connect, Control::action, tr(L"Konto"), xbox_account::statusText(state), busy ? tr(L"Anuluj") : connected ? tr(L"Zmień konto") : tr(L"Połącz")});
@@ -224,6 +225,24 @@ void Launcher::pcSettingsRows() {
             tr(L"Gry GDK pobiera pomocnik Xodus do wybranego folderu, bez aplikacji Xbox. Gra może nie wystartować bez usług Gaming Services."),
             {}, settings_.xbox_own_install};
         own.locked = !connected; add(std::move(own));
+        if (connected) {
+            // The account's offline PC: Microsoft keeps one per account and limits changes, so a
+            // change needs a second press, with the changes left shown.
+            const bool armed = drm_confirm_ == "xbox-offline";
+            const auto& offline = state.offline;
+            auto description = xbox_account::offlineText(state, unix_time::now());
+            if (armed) {
+                description = tr(L"Naciśnij ponownie, aby potwierdzić. Microsoft pozwala zmienić komputer offline tylko kilka razy w roku");
+                if (offline.remaining && offline.max) description += std::wstring(L" (") + tr(L"zostało ") + std::to_wstring(*offline.remaining) + L"/" + std::to_wstring(*offline.max) + L")";
+                description += L".";
+            }
+            Row row{Id::xbox_offline, Control::action, tr(L"Gra offline na tym PC"), std::move(description),
+                state.offline_busy ? std::wstring(tr(L"Czekaj…")) : !offline.enabled ? std::wstring(tr(L"Sprawdź")) : armed ? std::wstring(tr(L"Potwierdź")) :
+                *offline.enabled ? std::wstring(tr(L"Wyłącz")) : std::wstring(tr(L"Włącz"))};
+            row.key = "xbox-offline";
+            row.locked = state.offline_busy || (offline.enabled && !*offline.enabled && offline.remaining && !*offline.remaining && !armed);
+            add(std::move(row));
+        }
         const auto prefix = std::string(sourceSlug(source)) + ':';
         const auto excluded = std::count_if(library_state_.excluded_games.begin(), library_state_.excluded_games.end(),
             [&](const auto& entry) { return entry.first.starts_with(prefix); });
@@ -381,6 +400,10 @@ bool Launcher::pcSettingsActivate(const Row& row) {
     }
     else if (row.id == Id::xbox_refresh) xboxCommand(xbox_account::Command::sync);
     else if (row.id == Id::xbox_logout) xboxCommand(xbox_account::Command::logout);
+    else if (row.id == Id::xbox_offline) {
+        if (row.locked) { navigationBoundary(); return true; }
+        xboxOfflineAction();
+    }
     else if (row.id == Id::xbox_own_install) {
         if (row.locked) { navigationBoundary(); return true; }
         // Read when Instaluj is chosen: the shelves only need their actions recomputed.

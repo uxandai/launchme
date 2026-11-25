@@ -226,6 +226,7 @@ void Renderer::drawContextMenu() {
         case context_menu::Item::hide: return context_->menu_hidden ? tr(L"Pokaż") : tr(L"Ukryj");
         case context_menu::Item::exclude: return tr(L"Wyklucz");
         case context_menu::Item::uninstall: return tr(L"Odinstaluj");
+        case context_menu::Item::update: return tr(L"Aktualizuj");
         case context_menu::Item::launch: return tr(L"Opcje uruchamiania");
         case context_menu::Item::remove: return tr(L"Usuń z biblioteki");
         case context_menu::Item::metadata: return tr(L"Edytuj metadane");

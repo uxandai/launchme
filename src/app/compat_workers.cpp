@@ -10,6 +10,7 @@
 #include "../library/steam_accounts.hpp"
 #include "../library/xdg_paths.hpp"
 #include "../model/launch_options_catalog.hpp"
+#include "../platform/atomic_file.hpp"
 #include "../platform/command_line.hpp"
 #include "../platform/process_spawn.hpp"
 #include "../platform/system.hpp"
@@ -331,6 +332,44 @@ void Launcher::compatProvisionRuntime(const Game& game, const std::string& name)
         };
         if (PostMessageW(hwnd, remote_message, 0, reinterpret_cast<LPARAM>(message.get()))) message.release();
     });
+}
+
+namespace {
+constexpr auto vc_runtime_marker = ".launchme-vcrun2022"; // In the prefix: winetricks finished vcrun2022.
+}
+
+bool Launcher::compatNeedsVcRuntime(const Game& game) const {
+    if (game.source != GameSource::xbox || !xbox_account::ownInstall(game) || compat_.vc_runtime_tried.contains(gameKey(game))) return false;
+    const auto launch = store::compatLaunch(game);
+    if (!launch || launch->prefix.empty()) return false;
+    std::error_code ec;
+    if (std::filesystem::exists(launch->prefix / vc_runtime_marker, ec)) return false;
+    return wine_runner::winetricksAvailable(*launch);
+}
+
+void Launcher::compatProvisionVcRuntime(const Game& game) {
+    const auto launch = store::compatLaunch(game);
+    const auto key = gameKey(game);
+    compat_.vc_runtime_tried.insert(key);
+    pid_t pid = 0;
+    if (!launch || wine_runner::winetricks(*launch, {"vcrun2022"}, pid)) { const auto copy = game; launchGame(copy); return; }
+    showNotification(NotificationKind::download, game.name, tr(L"Instalowanie Visual C++ w prefiksie gry; gra uruchomi się sama."));
+    const auto alive = alive_; const auto hwnd = hwnd_;
+    if (!work_.start([alive, hwnd, pid, prefix = launch->prefix, key, name = game.name] {
+        auto code = process_spawn::waitExit(pid, std::chrono::minutes(20));
+        if (!code) { process_spawn::killGroup(pid); process_spawn::reapLater(pid); }
+        const bool ok = code && *code == 0;
+        if (ok) atomic_file::write(prefix / vc_runtime_marker, std::string_view("vcrun2022\n"));
+        if (!alive->load()) return;
+        auto message = std::make_unique<RemoteMessage>();
+        message->run = [ok, key, name](Launcher& app) {
+            if (!ok) app.showNotification(NotificationKind::error, name, tr(L"Nie udało się zainstalować Visual C++; gra uruchomi się bez niego."));
+            for (const auto* games : {&app.public_library_, &app.private_category_.games})
+                for (const auto& game : *games)
+                    if (gameKey(game) == key) { const auto copy = game; app.launchGame(copy); return; }
+        };
+        if (PostMessageW(hwnd, remote_message, 0, reinterpret_cast<LPARAM>(message.get()))) message.release();
+    })) process_spawn::reapLater(pid);
 }
 
 void Launcher::compatMeasure(const std::filesystem::path& prefix) {

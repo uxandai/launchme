@@ -17,6 +17,37 @@ using render_detail::box;
 using render_detail::smoothFade;
 }
 
+void Renderer::drawPsfiveBackdrop(float opened) {
+    const float width = viewport_.width, height = viewport_.height;
+    depth_zoom_ = 1.0f + 0.03f * opened; // Deeper in the details: the picture a little closer…
+    drawBackground();
+    depth_zoom_ = 1;
+    if (opened > 0.01f) { // …and blurred, as the PS5's game hub does as it scrolls.
+        Microsoft::WRL::ComPtr<ID2D1RectangleGeometry> all;
+        if (SUCCEEDED(factory_->CreateRectangleGeometry(D2D1::RectF(0, 0, width, height), all.GetAddressOf())) && frostCapture(all.Get(), 18))
+            frostDraw(all.Get(), opened);
+    }
+    // The left side darker, under the logo and buttons: legible over any picture.
+    {
+        Microsoft::WRL::ComPtr<ID2D1GradientStopCollection> stops;
+        Microsoft::WRL::ComPtr<ID2D1LinearGradientBrush> side;
+        const D2D1_GRADIENT_STOP side_stops[] = {{0, D2D1::ColorF(0.01f, 0.012f, 0.016f, 0.55f)}, {0.45f, D2D1::ColorF(0.01f, 0.012f, 0.016f, 0.22f)},
+                                                 {1, D2D1::ColorF(0.01f, 0.012f, 0.016f, 0)}};
+        if (SUCCEEDED(target_->CreateGradientStopCollection(side_stops, 3, stops.GetAddressOf())) &&
+            SUCCEEDED(target_->CreateLinearGradientBrush(D2D1::LinearGradientBrushProperties(D2D1::Point2F(0, 0), D2D1::Point2F(width * 0.55f, 0)),
+                                                         stops.Get(), side.GetAddressOf())))
+            target_->FillRectangle(D2D1::RectF(0, 0, width * 0.55f, height), side.Get());
+    }
+    if (psfive_shade_) {
+        psfive_shade_->SetEndPoint(D2D1::Point2F(0, height));
+        target_->FillRectangle(D2D1::RectF(0, 0, width, height), psfive_shade_.Get());
+    }
+    if (context_->psfive_dim > 0.003f) { // Settings → PSfive → Przyciemnienie tła.
+        brush(D2D1::ColorF(0.008f, 0.012f, 0.016f, context_->psfive_dim * 0.8f));
+        target_->FillRectangle(D2D1::RectF(0, 0, width, height), solid_.Get());
+    }
+}
+
 void Renderer::drawPsfive() {
     const auto& cards = *cards_;
     const float width = viewport_.width, height = viewport_.height;
@@ -46,33 +77,7 @@ void Renderer::drawPsfive() {
         }
         return card;
     };
-    depth_zoom_ = 1.0f + 0.03f * opened; // Deeper in the details: the picture a little closer…
-    drawBackground();
-    depth_zoom_ = 1;
-    if (opened > 0.01f) { // …and blurred, as the PS5's game hub does as it scrolls.
-        Microsoft::WRL::ComPtr<ID2D1RectangleGeometry> all;
-        if (SUCCEEDED(factory_->CreateRectangleGeometry(D2D1::RectF(0, 0, width, height), all.GetAddressOf())) && frostCapture(all.Get(), 18))
-            frostDraw(all.Get(), opened);
-    }
-    // The left side darker, under the logo and buttons: legible over any picture.
-    {
-        Microsoft::WRL::ComPtr<ID2D1GradientStopCollection> stops;
-        Microsoft::WRL::ComPtr<ID2D1LinearGradientBrush> side;
-        const D2D1_GRADIENT_STOP side_stops[] = {{0, D2D1::ColorF(0.01f, 0.012f, 0.016f, 0.55f)}, {0.45f, D2D1::ColorF(0.01f, 0.012f, 0.016f, 0.22f)},
-                                                 {1, D2D1::ColorF(0.01f, 0.012f, 0.016f, 0)}};
-        if (SUCCEEDED(target_->CreateGradientStopCollection(side_stops, 3, stops.GetAddressOf())) &&
-            SUCCEEDED(target_->CreateLinearGradientBrush(D2D1::LinearGradientBrushProperties(D2D1::Point2F(0, 0), D2D1::Point2F(width * 0.55f, 0)),
-                                                         stops.Get(), side.GetAddressOf())))
-            target_->FillRectangle(D2D1::RectF(0, 0, width * 0.55f, height), side.Get());
-    }
-    if (psfive_shade_) {
-        psfive_shade_->SetEndPoint(D2D1::Point2F(0, height));
-        target_->FillRectangle(D2D1::RectF(0, 0, width, height), psfive_shade_.Get());
-    }
-    if (context_->psfive_dim > 0.003f) { // Settings → PSfive → Przyciemnienie tła.
-        brush(D2D1::ColorF(0.008f, 0.012f, 0.016f, context_->psfive_dim * 0.8f));
-        target_->FillRectangle(D2D1::RectF(0, 0, width, height), solid_.Get());
-    }
+    drawPsfiveBackdrop(opened);
     beginScreenForeground();
     drawPsfiveTopBar();
     drawPsfiveDetailsVeil(); // Under the logo and buttons: they stand over the sheet's veil.

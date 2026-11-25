@@ -124,6 +124,9 @@ void Renderer::drawDesktopPane(const Layout& layout, const View& view) {
         const wchar_t g = !pane.installed && !pane.running && !pane.frozen ? glyph::download : pane.frozen ? glyph::play : pane.running ? glyph::open : glyph::play;
         desktopButton(primary, 2, primary_hover, pressed, pane.primary_enabled, g, pane.primary);
     }
+    const auto versions = layout.paneVersions(s);
+    if (layout.versions) // Zmień wersję: the copies of this game (stores, consoles).
+        desktopButton(versions, 1, view.hover.target == Target::pane_versions ? 1.0f : 0.0f, view.pressed.target == Target::pane_versions, true, glyph::swap, {});
     const auto favorite = layout.paneFavorite(s);
     if (layout.favorite) { // Ulubione switched off: no star.
         desktopButton(favorite, 1, view.hover.target == Target::pane_favorite ? 1.0f : 0.0f, view.pressed.target == Target::pane_favorite, true, 0, {});
@@ -138,6 +141,7 @@ void Renderer::drawDesktopPane(const Layout& layout, const View& view) {
         if (view.pane_focus == 0) desktopFocusRing(primary, 8);
         else if (view.pane_focus == 1) desktopFocusRing(favorite, 8);
         else if (view.pane_focus == 2) desktopFocusRing(more, 8);
+        else if (view.pane_focus == Layout::pane_versions_focus && layout.versions) desktopFocusRing(versions, 8);
     }
     // Numbers.
     const auto stats = layout.paneStats(s);

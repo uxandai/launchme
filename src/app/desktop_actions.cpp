@@ -69,6 +69,7 @@ void Launcher::desktopActivate(const desktop_ui::Hit& hit) {
     case Target::filters: desktopOpenFiltersMenu(); return;
     case Target::pane_primary: desktopLaunchSelected(); return;
     case Target::pane_favorite: if (!cards_.empty()) toggleFavorite(cards_[selected_].game); return;
+    case Target::pane_versions: if (selected_ < cards_.size()) openVersions(cards_[selected_].game, false); return;
     case Target::pane_more: {
         const auto r = desktopLayout().paneMore(desktop_pane_scroll_);
         desktopOpenGameMenu(r.right, r.bottom + 6, false, true);

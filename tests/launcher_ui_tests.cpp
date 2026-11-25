@@ -169,6 +169,8 @@ public:
     static int amazonGames(HWND window);
     static int transferSettings(HWND window);
     static int xboxAccount(HWND window);
+    static int xboxGamePass(HWND window);
+    static int versionMerge(HWND window);
     static int studioLibraries(HWND window);
     static int homeOptions(HWND window); // home_options_ui_cases.hpp
     static int studioTiles(HWND window); // studio_tiles_ui_cases.hpp
@@ -1700,6 +1702,7 @@ public:
 #include "aurelia_ui_cases.hpp"
 #include "amazon_ui_cases.hpp"
 #include "xbox_ui_cases.hpp"
+#include "versions_ui_cases.hpp"
 #include "studios_ui_cases.hpp"
 #include "home_options_ui_cases.hpp"
 #include "studio_tiles_ui_cases.hpp"
@@ -2586,6 +2589,24 @@ int main(int argc, char** argv) {
         CoUninitialize();
         if (code) std::cerr << "Profile regression failed at checkpoint " << code << '\n';
         else std::cout << "Profile: drawer widget, week, achievements, history, platforms, keys, pad, mouse, desktop widgets, Czas gry and MultiMC passed\n";
+        return code;
+    }
+    if (argc == 2 && std::string_view(argv[1]) == "--version-merge") {
+        std::filesystem::create_directories(root);
+        const auto code = window ? LauncherUiTest::versionMerge(window) : 99;
+        if (window) DestroyWindow(window);
+        CoUninitialize();
+        if (code) std::cerr << "Version merge UI failed at checkpoint " << code << '\n';
+        else std::cout << "Versions: one tile across stores and consoles, Zmien wersje in the pane and Szczegoly passed\n";
+        return code;
+    }
+    if (argc == 2 && std::string_view(argv[1]) == "--xbox-gamepass") {
+        std::filesystem::create_directories(root);
+        const auto code = window ? LauncherUiTest::xboxGamePass(window) : 99;
+        if (window) DestroyWindow(window);
+        CoUninitialize();
+        if (code) std::cerr << "Xbox Game Pass UI failed at checkpoint " << code << '\n';
+        else std::cout << "Xbox: offline PC, Game Pass row and filters, achievements and Aktualizuj passed\n";
         return code;
     }
     if (argc == 2 && std::string_view(argv[1]) == "--xbox") {

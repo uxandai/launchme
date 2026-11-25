@@ -67,6 +67,7 @@ desktop_ui::Layout Launcher::desktopLayout() const {
     layout.narrow = desktop_narrow_anim_;
     layout.pane_width = static_cast<float>(settings_.desktop_pane);
     layout.favorite = favoritesShown();
+    layout.versions = selected_ < cards_.size() && versions_.find(cards_[selected_].game) != nullptr; // Zmień wersję beside Graj.
     layout.pane_open = desktopPaneShown();
     layout.pane_t = desktop_pane_anim_;
     layout.pane_leaving = !desktopPaneOpen();
@@ -323,7 +324,8 @@ void Launcher::rebuildDesktop(bool preserve_background) {
     for (auto& game : games) {
         auto key = library_view::selectionKey(game);
         const auto old = previous.find(key);
-        if (old != previous.end() && old->second < old_cards.size()) {
+        // Zmień wersję: the same tile, another copy, so its own picture.
+        if (old != previous.end() && old->second < old_cards.size() && gameKey(old_cards[old->second].game) == gameKey(game)) {
             cards_.push_back(old_cards[old->second]);
             cards_.back().game = std::move(game);
             desktop_card_hover_.push_back(old->second < old_hover.size() ? old_hover[old->second] : 0.0f);
@@ -858,6 +860,7 @@ void Launcher::desktopView(desktop_ui::View& view) {
             view.card_mark[i] = found->second;
     }
     view.pane_focus = desktop_pane_focus_;
+    { const auto layout = desktopLayout(); view.pane_favorite = layout.favorite; view.pane_versions = layout.versions; }
     view.drop_row = desktop_drag_.active ? desktop_drag_.drop_row : -1;
     if (desktop_drag_.active && desktop_drag_.kind == DesktopDrag::Kind::entry) { view.reorder_row = desktop_drag_.row; view.reorder_y = desktop_drag_.reorder_y; }
     view.pane_scroll = desktop_pane_scroll_;
@@ -955,6 +958,7 @@ void Launcher::desktopView(desktop_ui::View& view) {
     } else pane.status = pane.frozen ? tr(L"Wstrzymana") : pane.running ? tr(L"W grze") :
                          game.installed ? tr(L"Zainstalowana") : localFileGame(game.source) ? missingFileLabel(game) : tr(L"Niezainstalowana");
     if (game.family_shared) pane.status += std::wstring(L" · ") + tr(L"Udostępniona rodzinnie"); // Borrowed from the account's Steam Family.
+    for (const auto& badge : xboxBadges(game)) pane.status += L" · " + badge; // Game Pass, Offline do, Dostępna aktualizacja.
     pane.favorite = isFavorite(game);
     if (favorite_pulse_ > 0.0f && library_view::selectionKey(game) == favorite_pulse_key_) pane.favorite_pulse = favorite_pulse_;
     bool loading = false;
@@ -966,7 +970,7 @@ void Launcher::desktopView(desktop_ui::View& view) {
     if (pane.details.achievements_total) {
         pane.achievements = std::to_wstring(pane.details.achievements_unlocked) + L" / " + std::to_wstring(pane.details.achievements_total);
         pane.achievements_share = std::clamp(static_cast<float>(pane.details.achievements_unlocked) / pane.details.achievements_total, 0.0f, 1.0f);
-        pane.achievements_link = steamArtwork(game) || localAchievements(game) || pluginAchievementsProvider(game);
+        pane.achievements_link = steamArtwork(game) || localAchievements(game) || externalAchievements(game);
     }
     pane.rating = ratingLabel();
     pane.protondb = protonDbLabel(game); // Linux only.
