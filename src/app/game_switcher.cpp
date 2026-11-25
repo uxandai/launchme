@@ -90,9 +90,11 @@ void Launcher::gameSwitcherContext(ViewContext& context) {
         const auto key = gameKey(game);
         const auto session = game_sessions_.find(key);
         ViewContext::SwitcherRow row{game.name, {}, {}, overlay_target_ && key == overlay_target_->key};
-        row.status = row.current ? tr(L"Teraz grasz") : session != game_sessions_.end() && session->second.frozen() ? tr(L"Wstrzymana") : tr(L"Działa w tle");
+        row.frozen = !row.current && session != game_sessions_.end() && session->second.frozen();
+        row.status = row.current ? tr(L"Teraz grasz") : row.frozen ? tr(L"Wstrzymana") : tr(L"Działa w tle");
         if (const auto* art = art_.find(key)) row.cover = art->cover ? art->cover : art->poster ? art->poster : art->landscape;
         context.game_switcher.push_back(std::move(row));
     }
     context.game_switcher_selected = *game_switcher_;
+    if (switcher_glide_.valid) context.game_switcher_glide = switcher_glide_.value.value;
 }

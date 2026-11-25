@@ -54,6 +54,14 @@ void Launcher::animateMenuFocus(float dt, bool& needs_paint) {
         else power_glide_.value.step(value, dt, tuning.omega, tuning.zeta);
         if (!power_glide_.value.settled(value, 0.004f)) needs_paint = true;
     }
+    // Przełącz grę: its highlight springs between the rows, as the other lists' do.
+    if (!game_switcher_) switcher_glide_.valid = false;
+    else {
+        const float value = static_cast<float>(*game_switcher_);
+        if (!switcher_glide_.valid) { switcher_glide_.value.snap(value); switcher_glide_.valid = true; }
+        else switcher_glide_.value.step(value, dt, tuning.omega, tuning.zeta);
+        if (!switcher_glide_.value.settled(value, 0.004f)) needs_paint = true;
+    }
     const auto glideBox = [&](BoxGlide& glide, bool open, int key, float l, float t, float r, float b) {
         if (!open) { glide.valid = false; return; }
         if (!glide.valid || glide.key != key) { glide.box.snap(l, t, r, b); glide.key = key; glide.valid = true; }
@@ -177,6 +185,14 @@ void Launcher::animateFocus(float dt, float target_x, float target_y, float targ
     } else library_flow_.valid = false;
 
     // Focus frames that change size between items. key: a different screen/list snaps.
+    // Przełącz grę: its highlight springs between the rows, as the other lists' do.
+    if (!game_switcher_) switcher_glide_.valid = false;
+    else {
+        const float value = static_cast<float>(*game_switcher_);
+        if (!switcher_glide_.valid) { switcher_glide_.value.snap(value); switcher_glide_.valid = true; }
+        else switcher_glide_.value.step(value, dt, tuning.omega, tuning.zeta);
+        if (!switcher_glide_.value.settled(value, 0.004f)) needs_paint = true;
+    }
     const auto glideBox = [&](BoxGlide& glide, bool open, int key, float l, float t, float r, float b) {
         if (!open) { glide.valid = false; return; }
         if (!glide.valid || glide.key != key) { glide.box.snap(l, t, r, b); glide.key = key; glide.valid = true; }

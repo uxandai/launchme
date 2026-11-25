@@ -496,6 +496,16 @@ int LauncherUiTest::gameOverlay(HWND window) {
         Game other{5101, L"Second fixture"}; other.install_directory = LR"(C:\Fixture\Second)";
         app.game_sessions_.try_emplace(gameKey(other), 0).first->second.observe(GameActivity::running, 1);
         app.trackSession(gameKey(other), other, {});
+        Game paused{5102, L"Paused fixture"}; paused.install_directory = LR"(C:\Fixture\Paused)";
+        {
+            auto& session = app.game_sessions_.try_emplace(gameKey(paused), 0).first->second;
+            session.observe(GameActivity::running, 1);
+            app.trackSession(gameKey(paused), paused, {});
+            app.game_sessions_.at(gameKey(paused)).freeze({GameProcess{51020, 1}});
+            auto art = std::make_unique<CoverMessage>();
+            art->key = gameKey(paused); art->generation = app.jobs_->generation.load(); art->bytes = pngFixture(40, 140, 220);
+            app.onCover(std::move(art));
+        }
         auto cover = std::make_unique<CoverMessage>();
         cover->key = target.key; cover->generation = app.jobs_->generation.load();
         cover->bytes = pngFixture(150, 48, 48);
@@ -519,10 +529,21 @@ int LauncherUiTest::gameOverlay(HWND window) {
             std::lock_guard lock(app.jobs_->mutex);
             if (!app.jobs_->requested.contains(artRequestKey(other, CoverMessage::Kind::cover))) return 61129;
         }
+        { // A suspended game: grey, with a pause mark; the one in front has a play mark.
+            ViewContext context; app.gameSwitcherContext(context);
+            const auto row = std::find_if(context.game_switcher.begin(), context.game_switcher.end(), [](const auto& r) { return r.name == L"Paused fixture"; });
+            if (row == context.game_switcher.end() || !row->frozen || row->current || !context.game_switcher.front().current || context.game_switcher.front().frozen) return 61134;
+        }
         animate(); // The focus circle glides onto Przełącz grę.
         if (!capture(L"game-guide-switcher.png")) return 61123;
         app.overlayKey(VK_DOWN);
         if (!app.game_switcher_ || *app.game_switcher_ != 0) return 61124;
+        { // The highlight springs to the row instead of jumping.
+            bool moved = false; app.animateMenuFocus(0.016f, moved);
+            ViewContext context; app.gameSwitcherContext(context);
+            if (!context.game_switcher_glide || !(*context.game_switcher_glide > 0.05f && *context.game_switcher_glide < 0.95f)) return 61135;
+            for (int i = 0; i < 60; ++i) app.animateMenuFocus(0.016f, moved);
+        }
         app.overlayKey(VK_DOWN);
         if (app.game_switcher_ || !app.gameOverlayOpen()) return 61125;
         app.overlayKey(VK_RETURN);
@@ -560,7 +581,7 @@ int LauncherUiTest::gameOverlay(HWND window) {
         pad.buttons = 0; app.controller(pad);
         if (app.game_switcher_ || app.gameOverlayOpen() || game_switches != before_pad + 1) return 61133;
         app.notifications_.clear();
-        app.game_sessions_.erase(gameKey(other));
+        app.game_sessions_.erase(gameKey(other)); app.game_sessions_.erase(gameKey(paused));
     }
 
     // Options remains a local shortcut in Launchme's main window, short and held.

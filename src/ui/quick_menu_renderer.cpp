@@ -154,15 +154,22 @@ void Renderer::drawGameSwitcher() {
             if (SUCCEEDED(sink->Close())) target_->FillGeometry(path.Get(), solid_.Get());
         }
     }
+    // The highlight springs between the rows (rows stand one step apart, so a fractional row is a position).
+    if (context_->game_switcher_selected >= 0) {
+        const float at = std::clamp(context_->game_switcher_glide.value_or(static_cast<float>(context_->game_switcher_selected)), 0.0f, static_cast<float>(count - 1));
+        const auto base = sw::row(viewport_.width, viewport_.height, button_x, 0, context_->quick_progress);
+        const float shift = at * (sw::row_height + sw::gap);
+        brush(color(1, 1, 1, 0.13f * alpha));
+        target_->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(base.left, base.top - shift, base.right, base.bottom - shift), 12, 12), solid_.Get());
+    }
     for (int i = 0; i < count; ++i) {
         const auto& item = rows[static_cast<size_t>(i)];
         const auto r = sw::row(viewport_.width, viewport_.height, button_x, i, context_->quick_progress);
         const bool chosen = context_->game_switcher_selected == i;
-        if (chosen) { brush(color(1, 1, 1, 0.13f * alpha)); target_->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(r.left, r.top, r.right, r.bottom), 12, 12), solid_.Get()); }
         // The cover: a square tile at the left, its art cropped to fill it.
         const auto art = D2D1::RectF(r.left + 8, r.top + 8, r.left + 8 + (r.bottom - r.top - 16), r.bottom - 8);
         if (auto* shown = dialogImage(switcher_covers_[static_cast<size_t>(i)], item.cover)) {
-            fillImage(*shown, art, 8, reveal(*shown) * alpha);
+            fillImage(*shown, art, 8, reveal(*shown) * alpha, item.frozen); // A suspended game in grey, as its tile.
         } else {
             brush(color(1, 1, 1, 0.07f * alpha)); target_->FillRoundedRectangle(D2D1::RoundedRect(art, 8, 8), solid_.Get());
             const auto initial = item.name.empty() ? std::wstring(L"?") : item.name.substr(0, 1);
@@ -171,8 +178,27 @@ void Renderer::drawGameSwitcher() {
         if (chosen) { brush(color(0.96f, 0.96f, 0.96f, alpha)); target_->DrawRoundedRectangle(D2D1::RoundedRect(art, 8, 8), solid_.Get(), 2); }
         const float text_left = art.right + 16, text_width = r.right - text_left - 16, mid = (r.top + r.bottom) * 0.5f;
         textLine(item.name, text_left, mid - 12, text_width, menu_font_.Get(), color(0.96f, 0.96f, 0.96f, alpha));
-        textLine(item.status, text_left, mid + 15, text_width, toast_sub_font_.Get(),
-                 item.current ? uiAccent(alpha) : color(0.65f, 0.65f, 0.65f, alpha));
+        // Teraz grasz: a play mark; Wstrzymana: a pause mark; the status after it.
+        const auto ink = item.current ? uiAccent(alpha) : color(0.65f, 0.65f, 0.65f, alpha);
+        float status_left = text_left;
+        if (item.current || item.frozen) {
+            const float cy = mid + 15, x = text_left + 1;
+            brush(ink);
+            if (item.current) {
+                ComPtr<ID2D1PathGeometry> path; ComPtr<ID2D1GeometrySink> sink;
+                if (SUCCEEDED(factory_->CreatePathGeometry(path.GetAddressOf())) && SUCCEEDED(path->Open(sink.GetAddressOf()))) {
+                    sink->BeginFigure(D2D1::Point2F(x, cy - 6), D2D1_FIGURE_BEGIN_FILLED);
+                    sink->AddLine(D2D1::Point2F(x + 10, cy)); sink->AddLine(D2D1::Point2F(x, cy + 6));
+                    sink->EndFigure(D2D1_FIGURE_END_CLOSED);
+                    if (SUCCEEDED(sink->Close())) target_->FillGeometry(path.Get(), solid_.Get());
+                }
+            } else {
+                target_->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(x, cy - 6, x + 3.5f, cy + 6), 1, 1), solid_.Get());
+                target_->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(x + 6.5f, cy - 6, x + 10, cy + 6), 1, 1), solid_.Get());
+            }
+            status_left += 18;
+        }
+        textLine(item.status, status_left, mid + 15, text_width - (status_left - text_left), toast_sub_font_.Get(), ink);
     }
 }
 

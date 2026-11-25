@@ -1,6 +1,7 @@
 #include "launcher.hpp"
 #include "../ui/quick_menu.hpp"
 #include "../ui/friends_layout.hpp"
+#include "../platform/process_freeze.hpp"
 #include <windowsx.h>
 #include <algorithm>
 #include <cmath>
@@ -33,10 +34,15 @@ RECT monitorRect(HWND window) {
 GameOverlayBackend::GameOverlayBackend() {
     valid = windowMatches;
     foreground = GetForegroundWindow;
-    show = [](OverlayWindow& window, const RECT& rect) { return window.show(rect, true); };
+    // Guide opened with a pad: the pad is no input that lets Windows hand over the foreground, and a game
+    // left in front keeps the pad (Steam Input routes it to the window in front). Taken as the launcher's
+    // own return takes it (process_freeze::bringForward), and given back the same way.
+    show = [](OverlayWindow& window, const RECT& rect) {
+        return window.show(rect, true, [](HWND overlay) { return process_freeze::bringForward(overlay) ? TRUE : FALSE; });
+    };
     focus = [](HWND window) {
         if (IsIconic(window) || !IsWindowVisible(window)) ShowWindow(window, SW_RESTORE);
-        SetForegroundWindow(window);
+        process_freeze::bringForward(window);
     };
 }
 

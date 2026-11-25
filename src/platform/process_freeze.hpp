@@ -25,6 +25,8 @@ Result terminate(const std::vector<GameProcess>& processes);
 bool alive(const std::vector<GameProcess>& processes);
 // Restores and activates the largest visible top-level window of the processes.
 bool focus(const std::vector<GameProcess>& processes);
+// Brings a window to the foreground even when this process is not in front (Windows; false elsewhere).
+bool bringForward(void* window); // An HWND.
 
 // Missing file = empty list; unreadable/invalid file = nullopt, never an empty journal.
 std::optional<std::vector<FrozenGame>> load(const std::filesystem::path& file);

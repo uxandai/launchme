@@ -307,9 +307,10 @@ struct ViewContext {
     std::vector<BandTile> band_tiles;
     // Guide over a game, Przełącz grę: the running and suspended games rising from its button (the game in
     // front first, nearest the bar), and the chosen row; empty while it is shut.
-    struct SwitcherRow { std::wstring name, status; ImageBytes cover; bool current = false; };
+    struct SwitcherRow { std::wstring name, status; ImageBytes cover; bool current = false, frozen = false; };
     std::vector<SwitcherRow> game_switcher;
     int game_switcher_selected = -1;
+    std::optional<float> game_switcher_glide; // The highlight's row, fractional while it springs to the chosen one.
     int band_focus = -1, band_hover = -1;
     float band_slide = 0;
     std::wstring band_summary, band_order;

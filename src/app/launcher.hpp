@@ -3706,7 +3706,7 @@ private:
     } settings_motion_;
     // Menu highlights (focus_motion.cpp): rows by fractional index, frames by their edges.
     struct IndexGlide { Spring value; bool valid = false; };
-    IndexGlide menu_glide_, power_glide_, exit_glide_, library_choice_glide_;
+    IndexGlide menu_glide_, power_glide_, exit_glide_, library_choice_glide_, switcher_glide_;
     IndexGlide flix_rail_glide_; // Flix → Pasek boczny: the white disc between its icons.
     IndexGlide settings_choice_glide_; // Settings picker highlight.
     IndexGlide library_tab_glide_;     // The library's category tab strip.

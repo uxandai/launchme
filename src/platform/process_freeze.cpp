@@ -147,6 +147,36 @@ bool alive(const std::vector<GameProcess>& processes) {
     });
 }
 
+// Windows refuses the foreground to a process that is not in front (only the taskbar button flashes), and a
+// pad's buttons (XInput) do not count as the input that would allow it. Joining the input of the window in
+// front covers that; when its input lock still holds, an empty mouse event (no move, no button) makes this
+// process the last input's provider, as the launcher's own return does (game_sessions.cpp).
+bool bringForward(void* handle) {
+    const auto window = static_cast<HWND>(handle);
+    if (!window) return false;
+    const auto landed = [window] {
+        const auto foreground = GetForegroundWindow();
+        return foreground == window || (foreground && GetAncestor(foreground, GA_ROOTOWNER) == window);
+    };
+    const auto attempt = [&] {
+        const HWND front = GetForegroundWindow();
+        const DWORD self = GetCurrentThreadId();
+        const DWORD other = front ? GetWindowThreadProcessId(front, nullptr) : 0;
+        // Never joined to a window that does not answer (a suspended game's): its input would stall ours.
+        const bool attached = other && other != self && !IsHungAppWindow(front) &&
+            SendMessageTimeoutW(front, WM_NULL, 0, 0, SMTO_ABORTIFHUNG | SMTO_BLOCK, 100, nullptr) &&
+            AttachThreadInput(self, other, TRUE);
+        SetForegroundWindow(window);
+        BringWindowToTop(window);
+        if (attached) AttachThreadInput(self, other, FALSE);
+        return landed();
+    };
+    if (landed() || attempt()) return true;
+    INPUT input{};
+    input.type = INPUT_MOUSE;
+    return SendInput(1, &input, sizeof(input)) == 1 && attempt();
+}
+
 bool focus(const std::vector<GameProcess>& processes) {
     std::vector<GameProcess> live;
     for (const auto& process : processes) {
@@ -176,32 +206,7 @@ bool focus(const std::vector<GameProcess>& processes) {
     GetWindowThreadProcessId(search.best, &pid);
     AllowSetForegroundWindow(pid);
     if (IsIconic(search.best)) ShowWindowAsync(search.best, SW_RESTORE);
-    const HWND best = search.best;
-    const auto landed = [best] {
-        const auto foreground = GetForegroundWindow();
-        return foreground == best || (foreground && GetAncestor(foreground, GA_ROOTOWNER) == best);
-    };
-    // Windows refuses the foreground to a process that is not in front (only the taskbar button flashes).
-    // Joining the input of the window in front covers that; when its input lock still holds, an empty
-    // mouse event (no move, no button) makes this process the last input's provider, as the launcher's
-    // own return does (game_sessions.cpp).
-    const auto attempt = [&] {
-        const HWND front = GetForegroundWindow();
-        const DWORD self = GetCurrentThreadId();
-        const DWORD other = front ? GetWindowThreadProcessId(front, nullptr) : 0;
-        // Never joined to a window that does not answer (a suspended game's): its input would stall ours.
-        const bool attached = other && other != self && !IsHungAppWindow(front) &&
-            SendMessageTimeoutW(front, WM_NULL, 0, 0, SMTO_ABORTIFHUNG | SMTO_BLOCK, 100, nullptr) &&
-            AttachThreadInput(self, other, TRUE);
-        SetForegroundWindow(best);
-        BringWindowToTop(best);
-        if (attached) AttachThreadInput(self, other, FALSE);
-        return landed();
-    };
-    if (attempt()) return true;
-    INPUT input{};
-    input.type = INPUT_MOUSE;
-    return SendInput(1, &input, sizeof(input)) == 1 && attempt();
+    return bringForward(search.best);
 }
 #else
 // SIGSTOP stops every thread of a process; it cannot be caught or ignored.
@@ -233,6 +238,7 @@ bool alive(const std::vector<GameProcess>& processes) {
 
 // Raising another program's window needs the display server (X11, Wayland activation), which
 // is the UI's: false lets the caller bring the game forward its own way.
+bool bringForward(void*) { return false; }
 bool focus(const std::vector<GameProcess>&) { return false; }
 #endif
 
