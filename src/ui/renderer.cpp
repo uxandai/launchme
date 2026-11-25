@@ -870,7 +870,7 @@ Renderer::TextureStats Renderer::textureStats() const {
         }
     };
     for (const auto* list : {&covers_, &logos_, &heroes_, &posters_, &discs_, &plugin_thumbnails_, &glance_thumbnails_, &tarot_images_, &profile_images_,
-                             &psfive_shots_, &psfive_similar_, &desktop_recent_, &find_thumbs_, &band_covers_})
+                             &psfive_shots_, &psfive_similar_, &desktop_recent_, &find_thumbs_, &band_covers_, &switcher_covers_})
         for (const auto& cover : *list) count(cover);
     count(wallpaper_);
     count(meta_poster_);

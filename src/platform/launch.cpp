@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cwctype>
 #include <filesystem>
+#include <map>
 #include <optional>
 #include <string>
 #include <vector>
@@ -39,6 +40,42 @@ std::wstring systemPowerShell() {
     const UINT length = GetSystemDirectoryW(folder, MAX_PATH);
     if (!length || length >= MAX_PATH) return L"powershell.exe";
     return (std::filesystem::path(folder) / L"WindowsPowerShell" / L"v1.0" / L"powershell.exe").wstring();
+}
+
+// A program with variables of its own gets them in its own environment block: Launchme's process
+// environment, which other threads' programs inherit meanwhile, stays as it is. Empty when it could
+// not start this way (a program that asks for administrator rights): ShellExecuteEx then.
+std::optional<HANDLE> startWithEnvironment(const std::wstring& target, std::wstring arguments, const std::wstring& directory, const GameAction& action) {
+    const auto upper = [](std::wstring text) { for (auto& c : text) c = static_cast<wchar_t>(std::towupper(c)); return text; };
+    std::map<std::wstring, std::pair<std::wstring, std::wstring>> variables; // UPPER name → (name, value): sorted, as Windows expects.
+    if (auto* original = GetEnvironmentStringsW()) {
+        for (const wchar_t* p = original; *p; p += wcslen(p) + 1) {
+            const std::wstring entry(p);
+            const auto pos = entry.find(L'=', 1); // "=C:=C:\..." entries keep their leading '='.
+            if (pos != std::wstring::npos) variables[upper(entry.substr(0, pos))] = {entry.substr(0, pos), entry.substr(pos + 1)};
+        }
+        FreeEnvironmentStringsW(original);
+    }
+    for (const auto& [name, value] : action.environment)
+        if (!name.empty() && name.find(L'=') == std::wstring::npos) variables[upper(name)] = {name, value};
+    std::vector<wchar_t> block;
+    for (const auto& [key, entry] : variables) {
+        (void)key;
+        const auto line = entry.first + L'=' + entry.second;
+        block.insert(block.end(), line.begin(), line.end());
+        block.push_back(0);
+    }
+    block.push_back(0);
+    std::wstring line = L"\"" + target + L"\"" + (arguments.empty() ? L"" : L" " + arguments);
+    STARTUPINFOW start{};
+    start.cb = sizeof(start);
+    start.dwFlags = STARTF_USESHOWWINDOW;
+    start.wShowWindow = static_cast<WORD>(action.hidden ? SW_HIDE : SW_SHOWNORMAL);
+    PROCESS_INFORMATION process{};
+    if (!CreateProcessW(target.c_str(), line.data(), nullptr, nullptr, FALSE, CREATE_UNICODE_ENVIRONMENT, block.data(),
+                        directory.empty() ? nullptr : directory.c_str(), &start, &process)) return std::nullopt;
+    CloseHandle(process.hThread);
+    return process.hProcess;
 }
 #else
 thread_local HANDLE launched_process = 0;
@@ -194,14 +231,27 @@ INT_PTR executeGameAction(HWND window, const GameAction& action) {
     const auto directory = action.working_directory.wstring();
     info.lpDirectory = directory.empty() ? nullptr : directory.c_str();
     info.nShow = action.hidden ? SW_HIDE : SW_SHOWNORMAL;
-    // The action's own variables: set for the synchronous ShellExecuteEx (SEE_MASK_NOASYNC), the
-    // started process inherits them, then Launchme's environment is restored.
+    // A program (or a script's PowerShell) with variables: started with an environment of its own.
+    std::error_code ec;
+    if (!action.environment.empty() && lowerExtension(target) == L".exe" && std::filesystem::path(target).is_absolute() &&
+        std::filesystem::is_regular_file(target, ec)) {
+        if (const auto process = startWithEnvironment(target, arguments, directory, action)) {
+            launched_process = *process;
+            return 33;
+        }
+    }
+    // Otherwise (a link, a document, a program that wants administrator rights) the variables are
+    // set for the synchronous ShellExecuteEx (SEE_MASK_NOASYNC), the started process inherits them,
+    // then Launchme's environment is restored.
     std::vector<std::pair<std::wstring, std::optional<std::wstring>>> previous;
     for (const auto& [name, value] : action.environment) {
         if (name.empty() || name.find(L'=') != std::wstring::npos) continue;
         std::wstring old(32767, L'\0');
+        SetLastError(ERROR_SUCCESS);
         const DWORD length = GetEnvironmentVariableW(name.c_str(), old.data(), static_cast<DWORD>(old.size()));
-        previous.emplace_back(name, length && length < old.size() ? std::optional<std::wstring>(old.substr(0, length)) : std::nullopt);
+        // 0 is also a variable set to "": only ERROR_ENVVAR_NOT_FOUND means none, to be removed again.
+        const bool exists = length ? length < old.size() : GetLastError() != ERROR_ENVVAR_NOT_FOUND;
+        previous.emplace_back(name, exists ? std::optional<std::wstring>(old.substr(0, length)) : std::nullopt);
         SetEnvironmentVariableW(name.c_str(), value.c_str());
     }
     const BOOL started = ShellExecuteExW(&info);

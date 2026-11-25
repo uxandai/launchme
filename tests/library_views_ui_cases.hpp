@@ -294,6 +294,41 @@ int LauncherUiTest::libraryViews(HWND window) {
     app.click((button.left + 20) * scale, (button.top + 10) * scale, false);
     app.library_menu_progress_ = 1;
     if (!capture(L"library-filter-menu.png")) return 924;
+    {
+        // Zaawansowany filtr: its row opens the rule editor; "title does not contain <the first game>"
+        // takes that game out at once; Wyczyść filtr brings it back.
+        using library_manager_ui::Page;
+        const auto advanced = bar.choice(library_ui::advanced_row);
+        app.click((advanced.left + 20) * scale, (advanced.top + 10) * scale, false);
+        if (!app.library_dialog_.open || app.library_dialog_.page != Page::rules || app.library_controls_.open()) return 61100;
+        const auto row = [&](std::string_view key) {
+            for (size_t i = 0; i < app.library_dialog_.rows.size(); ++i) if (app.library_dialog_.rows[i].key == key) return static_cast<int>(i);
+            return -1;
+        };
+        const size_t before = app.cards_.size();
+        const auto hidden = app.cards_.front().game.name;
+        app.library_dialog_.focus = row("@add"); app.collectionDialogAccept();
+        if (app.library_dialog_.page != Page::rule || app.library_dialog_.focus != -2 || app.library_dialog_.draft.field != smart_filter::Field::title) return 61101;
+        app.library_dialog_.focus = row("@op"); app.collectionDialogAccept();
+        if (!app.library_dialog_.draft.exclude) return 61102;
+        app.library_dialog_.focus = -2;
+        for (const wchar_t c : hidden) app.collectionDialogEdit(c);
+        if (!capture(L"advanced-filter-rule.png")) return 61103;
+        app.collectionDialogAccept(); // Enter in the field: the rule is done.
+        if (app.library_dialog_.page != Page::rules || app.library_rules_.size() != 1 || app.library_controls_.advanced_rules != 1) return 61104;
+        if (app.cards_.size() >= before || std::any_of(app.cards_.begin(), app.cards_.end(), [&](const GameCard& card) { return card.game.name == hidden; })) return 61105;
+        if (app.library_dialog_.rows.empty() || app.library_dialog_.rows.front().title.find(hidden) == std::wstring::npos) return 61106;
+        if (!capture(L"advanced-filter-rules.png")) return 61107;
+        app.library_dialog_.focus = row("@clear"); app.collectionDialogAccept();
+        if (!app.library_rules_.empty() || app.cards_.size() != before) return 61108;
+        app.collectionDialogBack();
+        if (app.library_dialog_.open) return 61109;
+        app.focusCard(0); // The filter moved the focus off the hidden first game.
+        app.mouse_transition_until_ = 0;
+        app.click((button.left + 20) * scale, (button.top + 10) * scale, false);
+        app.library_menu_progress_ = 1;
+        if (app.library_controls_.panel != library_ui::Panel::filters) return 61110;
+    }
     app.click(40 * scale, 600 * scale, false);
     if (app.library_controls_.open()) return 925;
     // Szczegóły: the achievements row (with its bar) is the last action; it opens the list over the details.

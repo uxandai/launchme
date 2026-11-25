@@ -86,7 +86,7 @@ void Renderer::drawLibraryControls() {
         // The order by name, and the number of filters in force on an accent badge before the chevron.
         const float chevron = r.right - inset - 6;
         float text_right = r.right - inset - 24;
-        if (const int count = library_view::activeFilters(state.options)) {
+        if (const int count = library_view::activeFilters(state.options) + state.advanced_rules) {
             const float bx = chevron - 22;
             const bool focused = bar_focus && state.focus == library_ui::filters_button;
             brush(focused ? filter_ink : uiAccent(alpha));
@@ -127,14 +127,27 @@ void Renderer::drawFilterMenu() {
         const float x = first.left - library_ui::Layout::column_gap * 0.5f;
         line(x, panel.top + 18, x, panel.bottom - 18, gray(1, 0.08f * alpha), 1);
     }
-    const bool any = library_view::activeFilters(state.options) > 0;
-    for (int i = 0; i < library_ui::filter_rows; ++i) {
+    const bool any = library_view::activeFilters(state.options) + state.advanced_rules > 0;
+    for (int i = 0; i < library_ui::menu_rows; ++i) {
         const auto r = box(layout.choice(i), dy);
         if (state.open() && state.choice == i) {
             brush(gray(0.86f, 0.14f * alpha));
             target_->FillRoundedRectangle(pill(r), solid_.Get());
         }
         const float cx = r.right - 30, cy = (r.top + r.bottom) * 0.5f;
+        if (i == library_ui::advanced_row) {
+            // Zaawansowany filtr…: its rules in force in an accent badge, else a chevron (it opens the editor).
+            textLine(tr(L"Zaawansowany filtr…"), r.left + 20, cy, r.right - r.left - 80, menu_font_.Get(), gray(0.96f, alpha));
+            if (state.advanced_rules) {
+                const auto badge = D2D1::RoundedRect(D2D1::RectF(cx - 14, cy - 12, cx + 14, cy + 12), 12, 12);
+                brush(uiAccent(alpha)); target_->FillRoundedRectangle(badge, solid_.Get());
+                textLine(std::to_wstring(state.advanced_rules), cx - 14, cy, 28, menu_font_.Get(), gray(0.05f, alpha), DWRITE_TEXT_ALIGNMENT_CENTER);
+            } else {
+                const auto ink = gray(0.7f, alpha);
+                line(cx - 3, cy - 7, cx + 4, cy, ink, 2); line(cx + 4, cy, cx - 3, cy + 7, ink, 2);
+            }
+            continue;
+        }
         if (i == library_ui::clear_row) {
             const auto ink = gray(any ? 0.96f : 0.5f, alpha);
             textLine(tr(L"Wyczyść filtry"), r.left + 20, cy, r.right - r.left - 70, menu_font_.Get(), ink);

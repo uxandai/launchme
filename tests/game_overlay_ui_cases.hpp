@@ -315,7 +315,8 @@ int LauncherUiTest::gameOverlay(HWND window) {
     const bool saved_quick_resume = app.settings_.quick_resume;
     app.settings_.quick_resume = false;
     const auto closeMenu = [&] { return app.power_menu_ && app.hud_menu_ && app.hud_menu_kind_ == Launcher::MenuKind::game_close; };
-    app.overlayKey(VK_RIGHT); app.overlayKey(VK_RETURN);
+    while (quick_menu::action(app.overlay_selected_, plugins, true) != quick_menu::Action::close_game) app.overlayKey(VK_RIGHT); // Past Przełącz grę.
+    app.overlayKey(VK_RETURN);
     // A menu like Zasilanie: Zamknij grę (danger) and Anuluj, Anuluj chosen first. Without quick resume no Wstrzymaj.
     if (!closeMenu() || app.hud_menu_rows_.size() != 2 || *app.power_menu_ != 1 || !terminated.empty()) return 1841;
     if (!app.hud_menu_rows_[0].danger || app.hud_menu_rows_[0].action != Launcher::HudAction::close_game) return 1848;
@@ -350,7 +351,7 @@ int LauncherUiTest::gameOverlay(HWND window) {
     app.settings_.quick_resume = saved_quick_resume;
 
     // Controllers, Sound and Settings from Guide: leaving them returns to the game.
-    for (const int index : {5, 3, 2}) { // Settings, Sound, Controllers.
+    for (const int index : {6, 4, 3}) { // Settings, Sound, Controllers (after Start, Przełącz grę and Zamknij grę).
         app.game_sessions_.try_emplace(gameKey(game), 0).first->second.observe(GameActivity::running, 1);
         app.trackSession(gameKey(game), game, {target.process});
         app.overlayKey(VK_HOME); // Whatever was open before.
@@ -483,6 +484,53 @@ int LauncherUiTest::gameOverlay(HWND window) {
         app.settings_.game_fps = false; app.settings_.fps_graph = false;
         app.closeSettingsPage();
         app.screen_ = ScreenMode::shelves;
+    }
+
+    {
+        // Przełącz grę: the games running beside the one in front rise from its button with their covers; the
+        // first other game is chosen, Down walks back and out, B shuts the list, a row's click switches.
+        if (app.gameOverlayOpen()) app.closeGameOverlay(false);
+        foreground = target.window;
+        app.game_sessions_.try_emplace(gameKey(game), 0).first->second.observe(GameActivity::running, 1); // The game in front.
+        app.trackSession(gameKey(game), game, {target.process});
+        Game other{5101, L"Second fixture"}; other.install_directory = LR"(C:\Fixture\Second)";
+        app.game_sessions_.try_emplace(gameKey(other), 0).first->second.observe(GameActivity::running, 1);
+        app.trackSession(gameKey(other), other, {});
+        auto cover = std::make_unique<CoverMessage>();
+        cover->key = target.key; cover->generation = app.jobs_->generation.load();
+        cover->bytes = pngFixture(150, 48, 48);
+        app.onCover(std::move(cover));
+        if (!app.openGameOverlay(target)) return 61120;
+        animate();
+        app.overlay_snapshot_ = snapshot;
+        int switch_index = -1;
+        for (int i = 0; i < quick_menu::count(plugins, true); ++i)
+            if (quick_menu::action(i, plugins, true) == quick_menu::Action::switch_game) switch_index = i;
+        if (switch_index != 1) return 61121;
+        app.overlay_selected_ = switch_index;
+        app.overlayKey(VK_RETURN);
+        // The game in front at the bottom; the others above it (one left running by the checks above too).
+        const auto other_row = [&] {
+            for (size_t i = 0; i < app.switcher_games_.size(); ++i) if (gameKey(app.switcher_games_[i]) == gameKey(other)) return static_cast<int>(i);
+            return -1;
+        }();
+        if (!app.game_switcher_ || *app.game_switcher_ != 1 || app.switcher_games_.size() < 2 || gameKey(app.switcher_games_[0]) != target.key || other_row < 1) return 61122;
+        animate(); // The focus circle glides onto Przełącz grę.
+        if (!capture(L"game-guide-switcher.png")) return 61123;
+        app.overlayKey(VK_DOWN);
+        if (!app.game_switcher_ || *app.game_switcher_ != 0) return 61124;
+        app.overlayKey(VK_DOWN);
+        if (app.game_switcher_ || !app.gameOverlayOpen()) return 61125;
+        app.overlayKey(VK_RETURN);
+        app.overlayKey(VK_ESCAPE);
+        if (app.game_switcher_ || !app.gameOverlayOpen()) return 61126;
+        app.overlayKey(VK_RETURN);
+        const auto view = app.drawerViewport();
+        const auto row = quick_menu::switcher::row(view.width, view.height, quick_menu::center(view.width, 1, plugins, true), other_row, app.overlay_motion_.bar);
+        const int switches = game_switches;
+        app.overlayClick((row.left + 40) * view.scale, (row.top + 20) * view.scale);
+        if (app.gameOverlayOpen() || app.game_switcher_ || game_switches != switches + 1) return 61127;
+        app.game_sessions_.erase(gameKey(other));
     }
 
     // Options remains a local shortcut in Launchme's main window, short and held.

@@ -15,6 +15,7 @@ bool Renderer::paintOverlay(const ViewContext& context) {
         brush(D2D1::ColorF(0, 0, 0, 0.16f * context.guide_opacity));
         target_->FillRectangle(D2D1::RectF(0, 0, viewport_.width, viewport_.height), solid_.Get());
         drawQuickPanel();
+        drawGameSwitcher();
         drawFriends();
         drawExitPrompt();
         drawNotification();

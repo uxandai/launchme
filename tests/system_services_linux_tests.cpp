@@ -3,6 +3,7 @@
 // Then a smoke read of this machine (values may legitimately be absent). Nothing here sleeps,
 // shuts down or changes a setting: power actions are only listed, never performed.
 #include "../src/platform/discord.hpp"
+#include "../src/platform/hardware_profile.hpp"
 #include "../src/platform/memory_usage.hpp"
 #include "../src/platform/power.hpp"
 #include "../src/platform/sensors.hpp"
@@ -80,6 +81,37 @@ int main() {
         sensors::celsiusFromMilli(130499) != 130 || sensors::celsiusFromMilli(130500) || sensors::celsiusFromMilli(19000, sensors::cpu_plausible_min))
         return 4;
 
+    // RAM in use from /proc/meminfo; VRAM of the awake card with the most of it (a sleeping one is not read).
+    if (sensors::meminfoUsage("MemTotal:       16318288 kB\nMemFree:  100 kB\nMemAvailable:   8159144 kB\n") != std::pair{7967, 15935} ||
+        sensors::meminfoUsage("MemTotal: 100 kB\n") || sensors::meminfoUsage("MemTotal: 1 kB\nMemAvailable: 9 kB\n")) return 10;
+    const auto drm = root / "drm";
+    write(drm / "card0" / "device" / "mem_info_vram_total", "1073741824\n");
+    write(drm / "card0" / "device" / "mem_info_vram_used", "536870912\n");
+    write(drm / "card1" / "device" / "mem_info_vram_total", "17179869184\n");
+    write(drm / "card1" / "device" / "mem_info_vram_used", "2147483648\n");
+    write(drm / "card1" / "device" / "power" / "runtime_status", "active\n");
+    write(drm / "card1-DP-1" / "device" / "mem_info_vram_total", "99999999999\n"); // A connector, not a card.
+    if (sensors::drmVram(drm) != std::pair{2048, 16384}) return 10;
+    write(drm / "card1" / "device" / "power" / "runtime_status", "suspended\n");
+    if (sensors::drmVram(drm) != std::pair{512, 1024} || sensors::drmVram(root / "missing")) return 10;
+
+    // Will it run: the driver's GPU name without its note, an APU's memory, every disk file system.
+    if (hardware_profile::cleanGpuName("AMD Radeon RX 6800 XT (RADV NAVI21)") != L"AMD Radeon RX 6800 XT" ||
+        hardware_profile::cleanGpuName("Intel(R) Arc(tm) A770 Graphics (DG2)") != L"Intel(R) Arc(tm) A770 Graphics" ||
+        hardware_profile::cleanGpuName("NVIDIA GeForce RTX 3080") != L"NVIDIA GeForce RTX 3080") return 11;
+    constexpr uint64_t gib = 1024ull * 1024 * 1024;
+    if (hardware_profile::vramMb(8 * gib, 16 * gib) != 8192 || hardware_profile::vramMb(gib / 2, 8 * gib) != 4096 ||
+        hardware_profile::vramMb(gib / 2, 0) != 512) return 11;
+    const std::string mounts = "/dev/nvme0n1p2 / ext4 rw 0 0\nproc /proc proc rw 0 0\ntmpfs /tmp tmpfs rw 0 0\n"
+                               "/dev/loop3 /snap/core squashfs ro 0 0\n/dev/nvme0n1p1 /boot/efi vfat rw 0 0\n"
+                               "/dev/mmcblk0p1 /run/media/deck/SD\\040Card ext4 rw 0 0\nserver:/x /mnt/nfs nfs4 rw 0 0\n";
+    std::vector<std::string> asked;
+    const auto free_mb = hardware_profile::largestFreeMb(mounts, [&](const std::string& point) -> std::optional<uint64_t> {
+        asked.push_back(point);
+        return point == "/" ? 40 * gib : point == "/run/media/deck/SD Card" ? 400 * gib : 900 * gib;
+    });
+    if (free_mb != 400 * 1024 || asked != std::vector<std::string>{"/", "/run/media/deck/SD Card"}) return 11;
+
     // power_supply: mains and a mouse don't count; two batteries weighted by energy.
     const auto supply = root / "power_supply";
     write(supply / "AC" / "type", "Mains\n");
@@ -156,6 +188,8 @@ int main() {
     if (actions.empty()) return 9;
     const auto own = batteryStatus();
     if (own && (own->percent < 0 || own->percent > 100)) return 9;
+    const auto machine = readHardwareProfile();
+    std::cout << "gpu=" << std::string(machine.gpu.begin(), machine.gpu.end()) << " vram=" << machine.vram_mb << " MB free=" << machine.free_mb << " MB\n";
     std::cout << "memory private=" << memory.private_bytes / 1048576 << " MiB rss=" << memory.working_set / 1048576
               << " MiB gpu=" << memory.gpu_local / 1048576 << '/' << memory.gpu_shared / 1048576 << " MiB; power actions=" << actions.size()
               << "; battery=" << (own ? std::to_string(own->percent) + (own->charging ? "% charging" : "%") : "none")

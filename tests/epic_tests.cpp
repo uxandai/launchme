@@ -227,6 +227,16 @@ int main() {
     service->submit(Command::complete, L"BBBBBBBBBBBBBBBB");
     CHECK(wait([&] { auto s = service->take(); return s && s->state == State::connected && s->account == "account-B"; }));
     CHECK(vault->load(restored) && restored && restored->tokens.account == "account-B");
+    // A restore while an install runs cancels it (a new generation); busy ends with it, not
+    // after the install's own end, which no longer matches the generation.
+    while (service->takeInstall()) {}
+    worker.block = true; worker.entered = false; CHECK(service->install(game(), {}));
+    CHECK(wait([&] { return worker.entered.load(); }));
+    service->submit(Command::restore);
+    CHECK(!service->busy());
+    CHECK(wait([&] { auto s = service->takeInstall(); return s && s->state == gog::InstallState::cancelled; }));
+    worker.block = false;
+    CHECK(wait([&] { auto s = service->take(); return s && s->state == State::connected; }));
     CHECK(service->launch(game())); CHECK(wait([&] { auto s = service->takeLaunch(); return s && s->action.target == L"fixture.exe"; }));
     service->submit(Command::logout); service.reset(); CHECK(vault->load(restored) && !restored);
     // Shutdown before the first wait, with queued work and just after publishing

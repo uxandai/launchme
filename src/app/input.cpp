@@ -344,7 +344,7 @@ void Launcher::controllerInput(const PadReading& state) {
             controller_buttons_ = 0;
             pad_guide_.swallow(false); pad_start_.swallow(false);
             if (dashboard_press_source_ == 2) dashboardCancelPress();
-            if (pad_enter_hold_) cancelEnterHold();
+            if (pad_enter_hold_ || settings_hold_) cancelEnterHold();
         }
         return;
     }
@@ -355,7 +355,7 @@ void Launcher::controllerInput(const PadReading& state) {
     controller_left_trigger_ = state.left_trigger;
     const auto swallow = [&] {
         if (dashboard_press_source_ == 2) dashboardCancelPress();
-        if (pad_enter_hold_) cancelEnterHold();
+        if (pad_enter_hold_ || settings_hold_) cancelEnterHold();
         controllerNavigate(0);
         controller_input_.stopRumble();
         // An already-held button on reconnection/refocus must never act on its release.

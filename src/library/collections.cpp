@@ -127,7 +127,7 @@ std::vector<SteamCollection> readSteamCollections(const std::filesystem::path& s
     input.seekg(0);
     std::string bytes(length, '\0');
     if (!input.read(bytes.data(), static_cast<std::streamsize>(length))) return {};
-    const auto root = json::parse(bytes);
+    const auto root = json::parse(bytes, 32 * 1024 * 1024); // The same bound as the read: a big account's file is over the default 2 MiB.
     if (!root) return {};
     const auto local = localMembers(config);
     std::vector<SteamCollection> result;

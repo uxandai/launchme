@@ -86,8 +86,8 @@ PadReading Launcher::padCursor(const PadReading& state) {
         if (pad_cursor_.on) { padCursorOff(); audio_.navigate(); return rest; }
         pad_cursor_.on = true;
         pad_cursor_.x = width / 2; pad_cursor_.y = height / 2;
-#ifdef _WIN32
-        // Where the mouse already is, when it is over the launcher.
+#if defined(_WIN32) && !defined(LAUNCHME_UI_TEST)
+        // Where the mouse already is, when it is over the launcher (UI tests: never the real mouse).
         POINT point{};
         if (GetCursorPos(&point) && ScreenToClient(hwnd_, &point) && point.x >= 0 && point.y >= 0 && point.x < client.right && point.y < client.bottom) {
             pad_cursor_.x = static_cast<float>(point.x); pad_cursor_.y = static_cast<float>(point.y);

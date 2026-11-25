@@ -41,18 +41,18 @@ int main() {
     if (history.read(time).fps || history.read(time).low) return 8;
     for (int i = 0; i < 10; ++i) history.present(7, time + i / 60.0);
     if (history.read(time + 0.15).low) return 9;
-    // Over a game the bar is Start + Close (a group of their own), then Kontrolery, Dźwięk, Widgety, Ustawienia and
-    // Zasilanie: no search, library, store or downloads. The launcher's own bar keeps its order.
+    // Over a game the bar is Start, Przełącz grę and Close (a group of their own), then Kontrolery, Dźwięk, Widgety,
+    // Ustawienia and Zasilanie: no search, library, store or downloads. The launcher's own bar keeps its order.
     for (int plugins = 0; plugins < 5; ++plugins) {
         using A = quick_menu::Action;
-        const A expected[] = {A::dashboard, A::close_game, A::controllers, A::audio, A::widgets, A::settings, A::power};
-        if (quick_menu::count(plugins, true) != 7) return 10;
-        for (int i = 0; i < 7; ++i)
+        const A expected[] = {A::dashboard, A::switch_game, A::close_game, A::controllers, A::audio, A::widgets, A::settings, A::power};
+        if (quick_menu::count(plugins, true) != 8) return 10;
+        for (int i = 0; i < 8; ++i)
             if (quick_menu::action(i, plugins, true) != expected[i]) return 11;
-        const auto home = quick_menu::center(1600, 0, plugins, true), close = quick_menu::center(1600, 1, plugins, true), next = quick_menu::center(1600, 2, plugins, true);
-        if (!near(close - home, 116) || !near(next - close, 148) ||
+        const auto home = quick_menu::center(1600, 0, plugins, true), close = quick_menu::center(1600, 2, plugins, true), next = quick_menu::center(1600, 3, plugins, true);
+        if (!near(close - home, 232) || !near(next - close, 148) ||
             quick_menu::hit(1600, 900, (close + next) * 0.5f, 835, plugins, true) != -1 ||
-            quick_menu::hit(1600, 900, close, 835, plugins, true) != 1) return 12;
+            quick_menu::hit(1600, 900, close, 835, plugins, true) != 2) return 12;
     }
     GuideMotion motion;
     motion.open(400);

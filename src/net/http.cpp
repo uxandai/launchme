@@ -104,6 +104,10 @@ bool lanHost(std::wstring_view host) {
     if (count == 4) return parts[0] == 10 || parts[0] == 127 || (parts[0] == 172 && parts[1] >= 16 && parts[1] <= 31) ||
                            (parts[0] == 192 && parts[1] == 168) || (parts[0] == 169 && parts[1] == 254);
     if (count == -1 && host.find(L'.') != std::wstring_view::npos && host.find_first_not_of(L"0123456789.") == std::wstring_view::npos) return false;
+    // One number ("1572395042") or a hex one ("0x5db8d822") is an IPv4 address to the resolver, not a name.
+    if (host.find_first_not_of(L"0123456789") == std::wstring_view::npos) return false;
+    if (host.size() > 2 && host[0] == L'0' && (host[1] == L'x' || host[1] == L'X') &&
+        host.find_first_not_of(L"0123456789abcdefABCDEF", 2) == std::wstring_view::npos) return false;
     // A machine's name on the home network: one label ("nas") or .local / .lan / .home.arpa.
     std::wstring lower(host);
     for (auto& ch : lower) ch = static_cast<wchar_t>(std::towlower(ch));

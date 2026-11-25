@@ -8,6 +8,7 @@
 #include "proc_fs.hpp"
 #include <cerrno>
 #include <csignal>
+#include <unistd.h>
 #endif
 
 #include <algorithm>
@@ -70,11 +71,20 @@ std::vector<GameProcess> withDescendants(const std::vector<GameProcess>& process
     std::vector<proc_fs::Stat> all;
     for (const auto pid : proc_fs::processes())
         if (const auto stat = proc_fs::stat(pid); stat && !stat->ended() && stat->start) all.push_back(*stat);
-    for (size_t at = 0; at < tree.size() && tree.size() < 64; ++at)
+    const auto self = static_cast<uint32_t>(::getpid());
+    // Children only of the processes that still are the ones recorded (same start time): a game
+    // that ended may have its PID taken by another program, whose children are not the game's.
+    // Never Launchme itself, whatever the tree says.
+    const auto same = [&](const GameProcess& process) {
+        return process.pid != self && std::any_of(all.begin(), all.end(), [&](const proc_fs::Stat& stat) { return stat.pid == process.pid && stat.start == process.created; });
+    };
+    for (size_t at = 0; at < tree.size() && tree.size() < 64; ++at) {
+        if (!same(tree[at])) continue;
         for (const auto& stat : all)
-            if (stat.parent == tree[at].pid && tree.size() < 64 &&
+            if (stat.parent == tree[at].pid && stat.pid != self && tree.size() < 64 &&
                 std::none_of(tree.begin(), tree.end(), [&](const GameProcess& known) { return known.pid == stat.pid; }))
                 tree.push_back({stat.pid, stat.start});
+    }
     return tree;
 }
 }

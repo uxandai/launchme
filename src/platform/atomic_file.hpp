@@ -106,13 +106,17 @@ inline bool write(const std::filesystem::path& file, std::string_view text) {
 }
 // For the user's own state (settings, library state): the new contents reach the disk before
 // the rename, so a power cut leaves either the old file or the new one, never an empty file.
-inline bool writeDurable(const std::filesystem::path& file, std::string_view text) {
+// `mode`: the new file's permissions outside Windows (0600 for secrets), created so from the
+// start: no window in which another user could read it, and no process-wide umask change.
+inline bool writeDurable(const std::filesystem::path& file, std::span<const uint8_t> bytes, unsigned mode = 0644) {
+    const std::string_view text(reinterpret_cast<const char*>(bytes.data()), bytes.size());
     static std::atomic_uint64_t serial{0};
     std::error_code error;
     if (!file.parent_path().empty()) std::filesystem::create_directories(file.parent_path(), error);
     if (error) return false;
     const auto temporary = file.wstring() + L".tmp." + std::to_wstring(detail::processId()) + L".d" + std::to_wstring(serial.fetch_add(1, std::memory_order_relaxed));
 #ifdef _WIN32
+    (void)mode; // The profile folder's ACL already limits it to this user.
     const HANDLE handle = CreateFileW(temporary.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (handle == INVALID_HANDLE_VALUE) return false;
     bool complete = true;
@@ -127,7 +131,7 @@ inline bool writeDurable(const std::filesystem::path& file, std::string_view tex
     if (complete && detail::rename(temporary, file, true)) return true;
 #else
     const std::filesystem::path temporary_path(temporary);
-    const int handle = ::open(temporary_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
+    const int handle = ::open(temporary_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, static_cast<mode_t>(mode));
     if (handle < 0) return false;
     bool complete = true;
     for (size_t offset = 0; complete && offset < text.size();) {
@@ -150,6 +154,9 @@ inline bool writeDurable(const std::filesystem::path& file, std::string_view tex
 #endif
     std::filesystem::remove(temporary, error);
     return false;
+}
+inline bool writeDurable(const std::filesystem::path& file, std::string_view text, unsigned mode = 0644) {
+    return writeDurable(file, std::span(reinterpret_cast<const uint8_t*>(text.data()), text.size()), mode);
 }
 // Temporary files a crashed or killed process left next to `folder`'s files (*.tmp.<pid>.<n>).
 // Only files of processes no longer running are removed.

@@ -35,13 +35,9 @@ std::filesystem::path pickFolder(HWND owner, const wchar_t* title, const std::fi
 }
 void Launcher::openGogInstall(const Game& game) {
     if (!gog_service_ || gog_state_.account.empty()) return;
-    if (epic_service_ && epic_service_->busy()) {
-        // A GOG install waits for the Epic download: name both, so the title matches the flow.
-        showNotification(NotificationKind::error, tr(L"Instalacja GOG"), tr(L"Najpierw dokończ lub anuluj pobieranie w Epic Games.")); return;
-    }
-    if (gog_service_->installBusy() && gog_install_ui_.game.source_id != game.source_id) {
-        showNotification(NotificationKind::error, tr(L"Instalacja GOG"), tr(L"Najpierw dokończ lub anuluj bieżące pobieranie.")); return;
-    }
+    // Another game downloads (here or in Epic, Amazon, Xbox): this one waits its turn (install_queue.cpp).
+    const bool same = gog_install_ui_.game.source == game.source && gog_install_ui_.game.source_id == game.source_id;
+    if ((epic_service_ && epic_service_->busy()) || (storeInstallBusy() && !same)) { queueInstall(game); return; }
     dismissMenu(); closeQuick(); closeFriends(); closeCategoryMenu(); cancelEnterHold();
     if (gog_install_ui_.game.source != game.source || gog_install_ui_.game.source_id != game.source_id || gog_install_ui_.snapshot.state == gog::InstallState::none) {
         gog_install_ui_ = {};

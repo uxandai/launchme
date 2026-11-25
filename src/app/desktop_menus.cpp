@@ -251,7 +251,8 @@ void Launcher::desktopOpenSortMenu() {
     menu.kind = Menu::Kind::sort;
     menu.x = r.left; menu.y = r.bottom + 6;
     using library_view::Order;
-    for (const auto order : {Order::alphabetical, Order::last_played, Order::added, Order::installed, Order::playtime, Order::release}) {
+    for (const auto order : {Order::alphabetical, Order::last_played, Order::added, Order::installed, Order::playtime, Order::release,
+                             Order::rating, Order::shortest, Order::longest}) {
         MenuItem item{Action::sort, library_view::label(order), {}, 0};
         item.value = library_view::persistedOrder(order);
         item.checked = settings_.desktop_sort == item.value;
@@ -261,7 +262,7 @@ void Launcher::desktopOpenSortMenu() {
     InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
-bool Launcher::desktopFiltered() const { return settings_.desktop_installed || settings_.desktop_filters; }
+bool Launcher::desktopFiltered() const { return settings_.desktop_installed || settings_.desktop_filters || !desktop_rules_.empty(); }
 
 // Filtry under its button: Zainstalowane, the game's modes, Nigdy nie grane, then Wyczyść filtry. A box
 // toggles with the menu still open.
@@ -282,6 +283,11 @@ void Launcher::desktopOpenFiltersMenu() {
         menu.items.push_back(std::move(item));
     }
     menu.items.push_back(gap);
+    std::wstring advanced = tr(L"Zaawansowany filtr…");
+    if (!desktop_rules_.empty()) advanced += L"  (" + std::to_wstring(desktop_rules_.size()) + L")";
+    MenuItem rules{Action::filter, std::move(advanced), {}, 0};
+    rules.value = desktop_ui::filter_advanced; rules.checked = !desktop_rules_.empty();
+    menu.items.push_back(std::move(rules));
     MenuItem clear{Action::filter, tr(L"Wyczyść filtry"), {}, glyph::close};
     clear.value = desktop_ui::filter_clear; clear.enabled = desktopFiltered();
     menu.items.push_back(std::move(clear));
@@ -401,7 +407,8 @@ void Launcher::desktopMenuPick(const desktop_ui::MenuItem& item, bool /*from_sub
     if (item.action == Action::filter) { // The list filtered beneath the menu, which stays open on the same row.
         const int hover = desktop_menu_->hover;
         const bool keyboard = desktop_menu_->keyboard;
-        if (item.value == desktop_ui::filter_clear) { settings_.desktop_installed = false; settings_.desktop_filters = 0; }
+        if (item.value == desktop_ui::filter_advanced) { desktop_menu_.reset(); openRuleEditor(RuleTarget::desktop); return; }
+        if (item.value == desktop_ui::filter_clear) { settings_.desktop_installed = false; settings_.desktop_filters = 0; desktop_rules_.clear(); }
         else if (item.value < 0) settings_.desktop_installed = !settings_.desktop_installed;
         else settings_.desktop_filters ^= library_view::filterBit(static_cast<library_view::Filter>(item.value));
         settings_dirty_ = true; settings_edited_ = std::chrono::steady_clock::now();
@@ -495,7 +502,7 @@ void Launcher::desktopMenuPick(const desktop_ui::MenuItem& item, bool /*from_sub
     case Action::xbox_update: if (game) openXboxUpdate(*game); return;
     case Action::remove_game: if (game) askRemoveFromLibrary(*game); return;
     case Action::sort:
-        settings_.desktop_sort = std::clamp(item.value, 1, 4);
+        settings_.desktop_sort = std::clamp(item.value, 1, library_view::persisted_order_count - 1);
         settings_dirty_ = true; settings_edited_ = std::chrono::steady_clock::now();
         desktop_scroll_ = desktop_scroll_target_ = 0;
         rebuildCards(true);

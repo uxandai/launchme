@@ -100,7 +100,7 @@ void Launcher::openXboxInstall(const Game& game) {
     const bool other = gog_install_ui_.game.source != GameSource::xbox || gog_install_ui_.game.source_id != game.source_id;
     if ((gog_service_ && gog_service_->installBusy()) || (epic_service_ && epic_service_->busy() && gog_install_ui_.game.source == GameSource::epic) ||
         (amazon_service_ && amazon_service_->busy() && gog_install_ui_.game.source == GameSource::amazon) || (gog_install_ui_.snapshot.busy() && other)) {
-        showNotification(NotificationKind::error, L"Xbox", tr(L"Najpierw dokończ lub anuluj bieżące pobieranie.")); return;
+        queueInstall(game); return; // Its turn comes (install_queue.cpp).
     }
     dismissMenu(); closeQuick(); closeFriends(); closeCategoryMenu(); cancelEnterHold();
     if (other || gog_install_ui_.snapshot.state == gog::InstallState::none) {

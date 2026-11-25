@@ -159,6 +159,7 @@ struct Menu {
     std::string entry;       // The sidebar entry of a section menu.
 };
 inline constexpr int filter_clear = 1000; // MenuItem::value of Filtry's Wyczyść filtry.
+inline constexpr int filter_advanced = 1001; // Filtry's Zaawansowany filtr… (the rule editor).
 inline constexpr float menu_row = 32, menu_separator = 9, menu_padding = 5, menu_width = 256, submenu_width = 248;
 inline float menuHeight(const std::vector<MenuItem>& items) {
     float h = 2 * menu_padding;

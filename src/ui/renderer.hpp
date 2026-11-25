@@ -669,6 +669,7 @@ private:
     void drawCategoryRail();
     void drawQuickShade();
     void drawQuickPanel();
+    void drawGameSwitcher(); // Guide's Przełącz grę: the list rising from its button (quick_menu_renderer.cpp).
     void drawQuickGlyph(quick_menu::Action action, float x, float cy, D2D1_COLOR_F ink, int index, bool home);
     void drawFlixRail();  // Flix (AppSettings::flix_rail): the icons at the left edge (src/ui/flix_rail_renderer.cpp).
     void drawEmptyLibrary(); // The TV home without games: why, and its three buttons (empty_library.hpp).
@@ -1315,6 +1316,7 @@ private:
     Cover meta_poster_;   // Edytuj metadane: the game's poster beside the fields (ViewContext::meta_poster).
     std::vector<Cover> find_thumbs_ = std::vector<Cover>(meta_find::visible); // Identyfikuj grę: each row's picture.
     std::vector<Cover> band_covers_; // Siatka's collection tiles: three covers each (ViewContext::band_tiles).
+    std::vector<Cover> switcher_covers_; // Guide's Przełącz grę: each running game's cover (ViewContext::game_switcher).
     Cover companion_photo_; // The picture she sent in the chat.
     // The gliding focus frame of card rows: TV settings' companions, desktop settings', the picker,
     // the TV layouts in Settings, the controller tiles (Settings → Kontrolery and the Kontrolery screen).

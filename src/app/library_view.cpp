@@ -269,8 +269,30 @@ void Launcher::closeLibraryPanel() {
 }
 std::unordered_map<std::string, uint64_t> Launcher::orderValues(const std::vector<Game>& games, library_view::Order order) const {
     std::unordered_map<std::string, uint64_t> values;
-    if (order != library_view::Order::installed && order != library_view::Order::playtime) return values;
+    if (!library_view::valueOrder(order)) return values;
     values.reserve(games.size());
+    using library_view::Order;
+    if (order == Order::rating || order == Order::shortest || order == Order::longest) {
+        // From the game index: the rating (0–100, two decimals kept) or HowLongToBeat's main story in
+        // minutes; Najkrótsze turns the minutes over so that the shortest is the largest value.
+        if (!game_index_) return values;
+        game_index_->read([&](const game_index::Index& index) {
+            for (const auto& game : games) {
+                if (!isGame(game)) continue;
+                const auto key = gameKey(game);
+                const auto* record = index.get(key);
+                if (!record) continue;
+                uint64_t value = 0;
+                if (order == Order::rating) {
+                    if (const float score = game_index::ratingScore(*record); score >= 0) value = static_cast<uint64_t>(std::lround(score * 100)) + 1;
+                } else if (record->hltb_main && *record->hltb_main) {
+                    value = order == Order::longest ? *record->hltb_main : (1ull << 32) - *record->hltb_main;
+                }
+                if (value) values.emplace(key, value);
+            }
+        });
+        return values;
+    }
     for (const auto& game : games) {
         if (!isGame(game)) continue;
         const uint64_t value = order == library_view::Order::playtime ? gamePlaytime(game).value_or(0) : installTime(game);
@@ -802,10 +824,12 @@ bool Launcher::libraryAccept() {
             closeLibraryPanel(); audio_.context(); applyLibraryOptions();
             return true;
         }
+        if (choice == library_ui::advanced_row) { closeLibraryPanel(); openRuleEditor(RuleTarget::library); return true; }
         if (choice == library_ui::installed_row) options.installed_only = !options.installed_only;
         else if (choice == library_ui::clear_row) {
-            if (!library_view::activeFilters(options)) { navigationBoundary(); return true; }
+            if (!library_view::activeFilters(options) && library_rules_.empty()) { navigationBoundary(); return true; }
             options.installed_only = false; options.filters = 0;
+            library_rules_.clear(); library_controls_.advanced_rules = 0; // Wyczyść filtry: the advanced one too.
         } else options.filters ^= library_view::filterBit(static_cast<library_view::Filter>(choice - library_ui::first_filter_row));
         audio_.context(); applyLibraryOptions();
     } else if (libraryOverview() && library_controls_.action >= 0 && !cards_.empty()) {

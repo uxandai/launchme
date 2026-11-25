@@ -131,7 +131,7 @@ void Renderer::drawDesktopCollectionsDialog() {
     float y = p.top + sheet_header + 14;
     if (field) {
         const Rect f{p.left + 20, y, p.right - 20, y + 40};
-        desktopTextField(f, ui.input, ui.page == Page::name ? tr(L"Nazwa") : tr(L"Szukaj"), ui.input.size(), ui.focus == -2, ui.selected,
+        desktopTextField(f, ui.input, ui.placeholder(), ui.input.size(), ui.focus == -2, ui.selected,
                          hover.kind == Kind::field ? 1.0f : 0.0f);
         desktopModalHot({Kind::field, -2}, f);
         y += 52;

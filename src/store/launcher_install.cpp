@@ -2,6 +2,7 @@
 #include "../platform/helper_process.hpp"
 #include "../platform/text_encoding.hpp"
 
+#include <atomic>
 #include <chrono>
 #include <cstdlib>
 #include <thread>
@@ -31,14 +32,35 @@ std::optional<unsigned long> runTool(const std::filesystem::path& program, const
 bool downloadFile(const std::wstring& url, const std::filesystem::path& file, const std::function<bool()>& cancel) {
     std::error_code ec;
     std::filesystem::create_directories(file.parent_path(), ec);
-    std::filesystem::remove(file, ec); // Always the vendor's current build, never an old download.
-    // Each call streams for up to five minutes and resumes the partial file.
-    for (int attempt = 0; attempt < 6 && !(cancel && cancel()); ++attempt) {
-        const auto reply = httpDownloadFile(url, L"", file, max_installer_bytes, 5 * 60 * 1000, false);
-        if (reply.status == 200) return true;
-        if (reply.status >= 400 && reply.status < 500) return false;
+    // Always the vendor's current build, never an old download: nor the part of one, which the
+    // first call would otherwise continue with Range into a newer build.
+    auto part = file; part += L".part";
+    std::filesystem::remove(file, ec);
+    std::filesystem::remove(part, ec);
+    // The caller's cancel reaches the transfer itself (HttpCancellation stops the body reads), so
+    // a cancelled download ends within a moment, not after its five-minute call.
+    std::atomic_bool cancelled{false};
+    std::atomic_bool done{false};
+    std::thread watch;
+    if (cancel) watch = std::thread([&] {
+        while (!done.load()) {
+            if (cancel()) { cancelled = true; return; }
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        }
+    });
+    bool ok = false;
+    {
+        HttpCancellation scope(cancelled);
+        // Each call streams for up to five minutes and resumes the partial file.
+        for (int attempt = 0; attempt < 6 && !cancelled.load(); ++attempt) {
+            const auto reply = httpDownloadFile(url, L"", file, max_installer_bytes, 5 * 60 * 1000, false);
+            if (reply.status == 200) { ok = true; break; }
+            if (reply.status >= 400 && reply.status < 500) break;
+        }
     }
-    return false;
+    done = true;
+    if (watch.joinable()) watch.join();
+    return ok;
 }
 
 #ifdef _WIN32

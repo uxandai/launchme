@@ -213,6 +213,20 @@ int LauncherUiTest::launchAnimation(HWND window) {
         app.steamSwitchFinished(app.steam_switch_generation_, false, L"Second");
         app.tick();
         if (app.pending_launch_ || app.steam_switch_pending_ || !dispatched.empty() || app.notifications_.empty()) return 5115;
+        // A switcher that throws ends as a failed switch (runOnWorker): no launch stays held back.
+        app.game_sessions_.clear(); app.cancelGameFocus(); app.notifications_.clear();
+        app.steam_switcher_ = [](const Account&) -> bool { throw std::runtime_error("steam.exe vanished"); };
+        prepare(steam_id_offset + 2, true);
+        app.launch();
+        if (!app.steam_switch_pending_) return 5128;
+        for (const auto until = GetTickCount64() + 5000; app.steam_switch_pending_ && GetTickCount64() < until; Sleep(5)) {
+            MSG m{};
+            while (PeekMessageW(&m, window, remote_message, remote_message, PM_REMOVE))
+                app.onRemote(std::unique_ptr<RemoteMessage>(reinterpret_cast<RemoteMessage*>(m.lParam)));
+        }
+        app.tick();
+        if (app.steam_switch_pending_ || app.pending_launch_ || !dispatched.empty() || app.notifications_.empty()) return 5129;
+        app.steam_switcher_ = [](const Account& account) { switched.push_back(account.account_name); return true; };
         prepare(steam_id_offset + 3, true);
         app.launch();
         if (!app.pending_launch_ || app.steam_switch_pending_) return 5116;

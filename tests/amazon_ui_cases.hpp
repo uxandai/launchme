@@ -95,6 +95,31 @@ int LauncherUiTest::amazonGames(HWND window) {
     if (app.gog_install_ui_.snapshot.progress().percent() != 25 || !capture(L"amazon-download.png")) return 9616;
     app.gogInstallAccept(); // Przerwij.
     if (fake->cancelled != 1) return 9617;
+    {
+        // Kolejka instalacji: a second game asked for while one downloads waits (listed in Pobierania); once the
+        // slot is free it starts with the dialog's default folder. A queued game leaves the queue from Pobierania.
+        Game second = owned; second.source_id = "amzn1.adg.product.11111111-2222-3333-4444-555555555555"; second.name = L"Second Light";
+        fake->active = true; // Still downloading.
+        app.launchGame(second);
+        if (app.installQueuePosition(second) != 1 || app.gog_install_ui_.game.source_id != owned.source_id) return 61140;
+        std::vector<downloads_ui::Row> rows;
+        const auto listed = app.collectDownloads(rows);
+        if (std::none_of(listed.begin(), listed.end(), [&](const Game& g) { return g.source_id == second.source_id; })) return 61141;
+        app.pumpInstallQueue();
+        if (fake->installs != 1) return 61142; // Not while the first one downloads.
+        fake->active = false;
+        gog::InstallSnapshot stopped; stopped.product = owned.source_id; stopped.state = gog::InstallState::cancelled;
+        fake->download = stopped; app.pollAmazon();
+        app.pumpInstallQueue();
+        if (fake->installs != 2 || fake->last_request.product != second.source_id || app.installQueuePosition(second) ||
+            app.gog_install_ui_.request.install_directory.filename() != L"Amazon-Second Light") return 61143;
+        Game third = owned; third.source_id = "amzn1.adg.product.66666666-7777-8888-9999-000000000000"; third.name = L"Third Tide";
+        app.launchGame(third);
+        if (app.installQueuePosition(third) != 1) return 61144;
+        app.openDownloadSource(third, {});
+        if (app.installQueuePosition(third) || !app.install_queue_.empty()) return 61145;
+        fake->active = false; app.gog_install_ui_.snapshot.state = gog::InstallState::cancelled;
+    }
     app.gogInstallKey(VK_ESCAPE, false);
     // An installed game: uninstalled by Nile after the question, started from its own executable.
     auto local = owned; local.installed = true; local.install_directory = L"C:\\Games\\Amazon-Moonlit Archive";

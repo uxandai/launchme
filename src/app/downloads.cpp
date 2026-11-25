@@ -145,6 +145,15 @@ std::vector<Game> Launcher::collectDownloads(std::vector<downloads_ui::Row>& row
                 gog_install_ui_.request.install_directory : gog_install_ui_.request.download_root).wstring();
         }
     }
+    // Kolejka instalacji: the games waiting for that slot, in their order (a row takes one out).
+    for (size_t i = 0; i < install_queue_.size(); ++i) {
+        const auto& game = install_queue_[i];
+        if (std::any_of(found.begin(), found.end(), [&](const auto& item) { return gameKey(item.first) == gameKey(game); })) continue;
+        downloads_ui::Row row;
+        row.store = sourceName(game.source);
+        row.status = std::wstring(tr(L"W kolejce instalacji")) + L" · " + std::to_wstring(i + 1) + L"  ·  " + tr(L"wybierz, aby usunąć");
+        found.emplace_back(game, std::move(row));
+    }
     for (const auto& game : store_library_) if (game.source == GameSource::battlenet) add(game, game.installation);
     for (const auto& [id, downloads] : plugin_downloads_) {
         const auto* owner = plugins_.find(id);
@@ -380,6 +389,7 @@ void Launcher::openDownloadSource(const Game& game, const downloads_ui::Row& row
         return;
     }
     audio_.context();
+    if (unqueueInstall(game)) return; // A queued game leaves the queue.
     switch (game.source) {
     case GameSource::steam:
         if (aurelia_active_) { openAurelia(&game); break; }

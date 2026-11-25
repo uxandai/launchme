@@ -155,5 +155,5 @@ void Launcher::libraryBandContext(ViewContext& context) {
     const auto& tab = tabs.empty() ? std::wstring(tr(L"Wszystkie gry")) : tabs[static_cast<size_t>(libraryTabIndex(tabs))].title;
     context.band_summary = tab + L": " + std::to_wstring(cards_.size());
     context.band_order = std::wstring(tr(L"Sortuj")) + L": " + library_view::label(options.order);
-    if (const int filters = library_view::activeFilters(options)) context.band_order += L"  ·  " + std::wstring(tr(L"Filtry")) + L": " + std::to_wstring(filters);
+    if (const int filters = library_view::activeFilters(options) + static_cast<int>(library_rules_.size())) context.band_order += L"  ·  " + std::wstring(tr(L"Filtry")) + L": " + std::to_wstring(filters);
 }

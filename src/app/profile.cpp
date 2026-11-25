@@ -149,7 +149,12 @@ ProfileScanResult readProfile(const ProfileScanRequest& request, const std::func
 // ---- Journal and history -----------------------------------------------------------------------
 
 void Launcher::loadProfileData() {
-    if (!journal_loaded_) { journal_ = play_journal::load(journalFile()); journal_loaded_ = true; }
+    if (!journal_loaded_) {
+        const auto stored = play_journal::read(journalFile());
+        journal_ = stored.value_or(play_journal::Journal{});
+        journal_readable_ = stored.has_value(); // saveJournal tries again before it writes.
+        journal_loaded_ = true;
+    }
     if (!history_loaded_) { history_ = achievement_history::load(historyFile()); history_loaded_ = true; }
 }
 
@@ -167,6 +172,19 @@ void Launcher::journalLaunched(const std::string& key, const std::wstring& name)
 
 void Launcher::saveJournal() {
     if (!journal_dirty_) return;
+    if (!journal_readable_) {
+        // The file could not be read at the start (locked a moment, damaged, newer): read again and
+        // add this session's play to it; when it still cannot be read, it is kept beside the new one.
+        if (auto stored = play_journal::read(journalFile())) {
+            play_journal::merge(*stored, journal_);
+            journal_ = std::move(*stored);
+        } else {
+            std::error_code ec;
+            std::filesystem::copy_file(journalFile(), userConfigDirectory() / L"play-journal.unreadable.tsv", std::filesystem::copy_options::overwrite_existing, ec);
+            if (ec) return; // Neither read nor kept: not replaced. Tried again at the next save.
+        }
+        journal_readable_ = true;
+    }
     journal_dirty_ = false;
     play_journal::save(journal_, journalFile());
 }

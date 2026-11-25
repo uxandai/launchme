@@ -152,22 +152,20 @@ std::filesystem::path installedProgram(const std::filesystem::path& prefix, uint
 void Launcher::compatLoadTools() {
     if (compat_.tools_loading) return;
     compat_.tools_loading = true;
-    const auto alive = alive_; const auto hwnd = hwnd_;
-    if (!work_.start([alive, hwnd] {
+    const auto alive = alive_; const auto post = uiPost();
+    if (!work_.start([alive, post] {
         auto roots = compat_tools::systemRoots();
         auto tools = compat_tools::discover(roots);
         auto prefixes = store::prefixes();
         if (!alive->load()) return;
-        auto message = std::make_unique<RemoteMessage>();
-        message->run = [tools = std::move(tools), prefixes = std::move(prefixes), umu = roots.umu_run](Launcher& app) mutable {
+        post([tools = std::move(tools), prefixes = std::move(prefixes), umu = roots.umu_run](Launcher& app) mutable {
             app.compat_.tools = std::move(tools);
             app.compat_.prefixes = std::move(prefixes);
             app.compat_.umu_run = std::move(umu);
             app.compat_.tools_loading = false;
             app.compat_.tools_loaded = true;
             if (app.settingsOpen()) app.buildSettingsRows(); // Also the overview's summary of the default tool.
-        };
-        if (PostMessageW(hwnd, remote_message, 0, reinterpret_cast<LPARAM>(message.get()))) message.release();
+        });
     })) compat_.tools_loading = false;
 }
 
@@ -175,17 +173,15 @@ void Launcher::compatLoadReleases(const std::string& id, bool refresh) {
     const auto* source = compat_tools::findSource(id);
     if (!source || compat_.releases_loading.contains(id)) return;
     compat_.releases_loading.insert(id);
-    const auto alive = alive_; const auto hwnd = hwnd_;
-    if (!work_.start([alive, hwnd, source, id, refresh] {
+    const auto alive = alive_; const auto post = uiPost();
+    if (!work_.start([alive, post, source, id, refresh] {
         auto list = compat_tools::releases(*source, refresh);
         if (!alive->load()) return;
-        auto message = std::make_unique<RemoteMessage>();
-        message->run = [id, list = std::move(list)](Launcher& app) mutable {
+        post([id, list = std::move(list)](Launcher& app) mutable {
             app.compat_.releases[id] = std::move(list);
             app.compat_.releases_loading.erase(id);
             if (app.settingsOpen() && app.compatSettingsPage()) app.buildSettingsRows();
-        };
-        if (PostMessageW(hwnd, remote_message, 0, reinterpret_cast<LPARAM>(message.get()))) message.release();
+        });
     })) compat_.releases_loading.erase(id);
 }
 
@@ -197,13 +193,7 @@ void Launcher::compatInstall(const compat_tools::Release& release) {
     auto cancel = std::make_shared<std::atomic<bool>>(false);
     compat_.install = CompatSettings::Install{release.source, release.tag, {}, cancel};
     compat_.status.clear();
-    const auto alive = alive_; const auto hwnd = hwnd_;
-    const auto post = [alive, hwnd](std::function<void(Launcher&)> run) {
-        if (!alive->load()) return;
-        auto message = std::make_unique<RemoteMessage>();
-        message->run = std::move(run);
-        if (PostMessageW(hwnd, remote_message, 0, reinterpret_cast<LPARAM>(message.get()))) message.release();
-    };
+    const auto alive = alive_; const auto post = uiPost();
     if (!work_.start([release, target, cancel, post, alive] {
         uint64_t last = 0;
         const auto result = compat_tools::install(release, target, [cancel, alive] { return cancel->load() || !alive->load(); },
@@ -240,21 +230,19 @@ void Launcher::compatInstall(const compat_tools::Release& release) {
 
 void Launcher::compatAutoUpdate(bool now) {
     if (!settings_.compat_auto_update || compat_.install) return;
-    const auto alive = alive_; const auto hwnd = hwnd_;
-    work_.start([alive, hwnd, now] {
+    const auto alive = alive_; const auto post = uiPost();
+    work_.start([alive, post, now] {
         const auto roots = compat_tools::systemRoots();
         if (!now && !compat_tools::autoUpdateDue(roots.config, static_cast<int64_t>(std::time(nullptr)))) return;
         const auto* source = compat_tools::findSource("ge-proton");
         if (!source) return;
         auto release = compat_tools::autoUpdate(compat_tools::releases(*source), compat_tools::discover(roots));
         if (!release || !alive->load()) return;
-        auto message = std::make_unique<RemoteMessage>();
-        message->run = [release = std::move(*release)](Launcher& app) {
+        post([release = std::move(*release)](Launcher& app) {
             if (!app.settings_.compat_auto_update || app.compat_.install) return;
             app.showNotification(NotificationKind::download, release.name, tr(L"Nowy GE-Proton: pobieranie…"));
             app.compatInstall(release);
-        };
-        if (PostMessageW(hwnd, remote_message, 0, reinterpret_cast<LPARAM>(message.get()))) message.release();
+        });
     });
 }
 
@@ -280,12 +268,11 @@ void Launcher::compatProvision(const Game& game) {
     compat_.launch_after = key;
     showNotification(NotificationKind::download, tr(L"Pobieranie GE-Proton"),
                      game.name + L" · " + tr(L"To gra Windows: najpierw Proton, potem gra uruchomi się sama."));
-    const auto alive = alive_; const auto hwnd = hwnd_;
-    if (!work_.start([alive, hwnd, source] {
+    const auto alive = alive_; const auto post = uiPost();
+    if (!work_.start([alive, post, source] {
         auto list = compat_tools::releases(*source, false);
         if (!alive->load()) return;
-        auto message = std::make_unique<RemoteMessage>();
-        message->run = [list = std::move(list)](Launcher& app) mutable {
+        post([list = std::move(list)](Launcher& app) mutable {
             app.compat_.releases["ge-proton"] = list;
             if (list.releases.empty() || app.compat_.launch_after.empty()) {
                 if (!app.compat_.launch_after.empty())
@@ -295,8 +282,7 @@ void Launcher::compatProvision(const Game& game) {
                 return;
             }
             app.compatInstall(list.releases.front()); // The newest; its progress is in Ustawienia → Zgodność.
-        };
-        if (PostMessageW(hwnd, remote_message, 0, reinterpret_cast<LPARAM>(message.get()))) message.release();
+        });
     })) compat_.launch_after.clear();
 }
 
@@ -316,12 +302,11 @@ std::string Launcher::compatMissingRuntime(const Game& game) const {
 void Launcher::compatProvisionRuntime(const Game& game, const std::string& name) {
     const std::wstring title = name == compat_tools::eac_runtime ? L"Easy Anti-Cheat Runtime" : L"BattlEye Runtime";
     showNotification(NotificationKind::download, title, game.name + L" · " + tr(L"Pobieranie środowiska anti-cheat; gra uruchomi się sama."));
-    const auto alive = alive_; const auto hwnd = hwnd_;
-    work_.start([alive, hwnd, name, title, key = gameKey(game)] {
+    const auto alive = alive_; const auto post = uiPost();
+    work_.start([alive, post, name, title, key = gameKey(game)] {
         const auto error = compat_tools::installRuntime(name, [alive] { return !alive->load(); });
         if (!alive->load()) return;
-        auto message = std::make_unique<RemoteMessage>();
-        message->run = [error, title, key](Launcher& app) {
+        post([error, title, key](Launcher& app) {
             if (error != compat_tools::Error::none) {
                 app.showNotification(NotificationKind::error, tr(L"Nie udało się pobrać ") + title, label(compat_tools::errorText(error)));
                 return;
@@ -329,8 +314,7 @@ void Launcher::compatProvisionRuntime(const Game& game, const std::string& name)
             for (const auto* games : {&app.public_library_, &app.private_category_.games})
                 for (const auto& game : *games)
                     if (gameKey(game) == key) { const auto copy = game; app.launchGame(copy); return; }
-        };
-        if (PostMessageW(hwnd, remote_message, 0, reinterpret_cast<LPARAM>(message.get()))) message.release();
+        });
     });
 }
 
@@ -354,21 +338,19 @@ void Launcher::compatProvisionVcRuntime(const Game& game) {
     pid_t pid = 0;
     if (!launch || wine_runner::winetricks(*launch, {"vcrun2022"}, pid)) { const auto copy = game; launchGame(copy); return; }
     showNotification(NotificationKind::download, game.name, tr(L"Instalowanie Visual C++ w prefiksie gry; gra uruchomi się sama."));
-    const auto alive = alive_; const auto hwnd = hwnd_;
-    if (!work_.start([alive, hwnd, pid, prefix = launch->prefix, key, name = game.name] {
+    const auto alive = alive_; const auto post = uiPost();
+    if (!work_.start([alive, post, pid, prefix = launch->prefix, key, name = game.name] {
         auto code = process_spawn::waitExit(pid, std::chrono::minutes(20));
         if (!code) { process_spawn::killGroup(pid); process_spawn::reapLater(pid); }
         const bool ok = code && *code == 0;
         if (ok) atomic_file::write(prefix / vc_runtime_marker, std::string_view("vcrun2022\n"));
         if (!alive->load()) return;
-        auto message = std::make_unique<RemoteMessage>();
-        message->run = [ok, key, name](Launcher& app) {
+        post([ok, key, name](Launcher& app) {
             if (!ok) app.showNotification(NotificationKind::error, name, tr(L"Nie udało się zainstalować Visual C++; gra uruchomi się bez niego."));
             for (const auto* games : {&app.public_library_, &app.private_category_.games})
                 for (const auto& game : *games)
                     if (gameKey(game) == key) { const auto copy = game; app.launchGame(copy); return; }
-        };
-        if (PostMessageW(hwnd, remote_message, 0, reinterpret_cast<LPARAM>(message.get()))) message.release();
+        });
     })) process_spawn::reapLater(pid);
 }
 
@@ -376,17 +358,15 @@ void Launcher::compatMeasure(const std::filesystem::path& prefix) {
     const auto normal = prefix.lexically_normal();
     if (compat_.measuring.contains(normal)) return;
     compat_.measuring.insert(normal);
-    const auto alive = alive_; const auto hwnd = hwnd_;
-    if (!work_.start([alive, hwnd, normal] {
+    const auto alive = alive_; const auto post = uiPost();
+    if (!work_.start([alive, post, normal] {
         const uint64_t size = folderSize(normal, alive);
         if (!alive->load()) return;
-        auto message = std::make_unique<RemoteMessage>();
-        message->run = [normal, size](Launcher& app) {
+        post([normal, size](Launcher& app) {
             app.compat_.measuring.erase(normal);
             app.compat_.sizes[normal] = size;
             if (app.settingsOpen() && app.compatSettingsPage()) app.buildSettingsRows();
-        };
-        if (PostMessageW(hwnd, remote_message, 0, reinterpret_cast<LPARAM>(message.get()))) message.release();
+        });
     })) compat_.measuring.erase(normal);
 }
 
@@ -403,22 +383,20 @@ void Launcher::compatPrefixAction(const std::filesystem::path& prefix, const std
     else if (action == "winetricks") error = wine_runner::winetricks(launch, arguments, pid);
     else if (action == "run" && !arguments.empty()) error = wine_runner::runInPrefix(launch, pathOf(arguments.front()), {}, pid);
     else if (action == "kill" || action == "delete") {
-        const auto alive = alive_; const auto hwnd = hwnd_;
+        const auto alive = alive_; const auto post = uiPost();
         const bool remove = action == "delete";
-        if (!work_.start([alive, hwnd, launch, prefix, remove] {
+        if (!work_.start([alive, post, launch, prefix, remove] {
             bool done = wine_runner::killPrefix(launch);
             if (remove) done = wine_runner::deletePrefix(prefix) && store::forgetPrefix(prefix);
             if (!alive->load()) return;
-            auto message = std::make_unique<RemoteMessage>();
-            message->run = [done, remove, title = launch.title](Launcher& app) {
+            post([done, remove, title = launch.title](Launcher& app) {
                 if (remove && done) {
                     app.showNotification(NotificationKind::launch, title, tr(L"Prefiks usunięty"));
                     if (app.settingsOpen() && app.settings_state_.at(Page::prefix)) app.closeSettingsPage();
                 } else if (remove) app.showNotification(NotificationKind::error, tr(L"Nie udało się usunąć prefiksu"), title);
                 else app.showNotification(NotificationKind::launch, title, done ? tr(L"Procesy prefiksu zakończone") : tr(L"Nie wszystkie procesy się zakończyły"));
                 app.compatLoadTools();
-            };
-            if (PostMessageW(hwnd, remote_message, 0, reinterpret_cast<LPARAM>(message.get()))) message.release();
+            });
         })) failed(EAGAIN);
         return;
     } else error = wine_runner::runWineProgram(launch, action, pid);
@@ -470,11 +448,10 @@ void Launcher::compatInstallStore(const std::string& id) {
     const auto folder = compat_tools::toolsFolder(compat_tools::systemRoots().config) / "cache" / "installers";
     const auto file = folder / store_installer->file;
     const std::string url = text_encoding::utf8Lenient(store_installer->url);
-    const auto alive = alive_; const auto hwnd = hwnd_;
-    const auto finish = [alive, hwnd, id, file](bool ok) {
+    const auto alive = alive_; const auto post = uiPost();
+    const auto finish = [alive, post, id, file](bool ok) {
         if (!alive->load()) return;
-        auto message = std::make_unique<RemoteMessage>();
-        message->run = [id, file, ok](Launcher& app) {
+        post([id, file, ok](Launcher& app) {
             app.compat_.store_download.clear();
             const auto* found = findStore(id);
             if (!ok || !found) {
@@ -483,8 +460,7 @@ void Launcher::compatInstallStore(const std::string& id) {
                 return;
             }
             app.compatRunInstaller(file, id);
-        };
-        if (PostMessageW(hwnd, remote_message, 0, reinterpret_cast<LPARAM>(message.get()))) message.release();
+        });
     };
     if (!work_.start([folder, file, url, finish] {
         // A recent copy is reused (a week); otherwise curl fetches the current installer.
@@ -526,15 +502,13 @@ void Launcher::compatRunInstaller(const std::filesystem::path& installer, const 
     showNotification(NotificationKind::download, name, store_installer ? std::wstring(tr(L"Instalator działa w nowym prefiksie. Po instalacji sklep trafi do biblioteki.")) :
                                                                           std::wstring(tr(L"Instalator działa w nowym prefiksie. Po instalacji wskażesz plik gry.")));
     if (settingsOpen()) buildSettingsRows();
-    const auto alive = alive_; const auto hwnd = hwnd_;
+    const auto alive = alive_; const auto post = uiPost();
     // The runner lasts as long as the installer (and what it starts in the prefix).
-    if (!work_.start([alive, hwnd, pid, prefix, name, started, store_id] {
+    if (!work_.start([alive, post, pid, prefix, name, started, store_id] {
         int status = 0;
         while (::waitpid(pid, &status, 0) < 0 && errno == EINTR) {}
         if (!alive->load()) return;
-        auto message = std::make_unique<RemoteMessage>();
-        message->run = [prefix, name, started, store_id](Launcher& app) { app.compatInstallerFinished(prefix, name, started, store_id); };
-        if (PostMessageW(hwnd, remote_message, 0, reinterpret_cast<LPARAM>(message.get()))) message.release();
+        post([prefix, name, started, store_id](Launcher& app) { app.compatInstallerFinished(prefix, name, started, store_id); });
     })) process_spawn::reapLater(pid);
 }
 

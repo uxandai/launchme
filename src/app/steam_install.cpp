@@ -71,15 +71,9 @@ void Launcher::steamInstallAccept() {
     const auto game = ui.game;
     const auto library = ui.libraries[static_cast<size_t>(ui.library)].path;
     const auto owner = account_;
-    const auto alive = alive_;
-    const auto window = hwnd_;
-    work_.start([generation, game, library, owner, alive, window, installer = steam_installer_] {
-        const bool ok = installer(game, library, owner);
-        if (!alive->load()) return;
-        auto message = std::make_unique<RemoteMessage>();
-        message->run = [generation, ok](Launcher& app) { app.steamInstallFinished(generation, ok); };
-        if (PostMessageW(window, remote_message, 0, reinterpret_cast<LPARAM>(message.get()))) message.release();
-    });
+    // A throw or a failed start ends as a failure too: steam_busy never stays set.
+    runOnWorker([game, library, owner, installer = steam_installer_] { return installer(game, library, owner); },
+                [generation](Launcher& app, std::optional<bool> ok) { app.steamInstallFinished(generation, ok.value_or(false)); });
     audio_.context();
 }
 
@@ -170,16 +164,11 @@ bool Launcher::beginSteamAccountSwitch(const Game& game) {
     steam_switch_pending_ = true;
     const auto generation = ++steam_switch_generation_;
     const auto account = *target;
-    const auto alive = alive_;
-    const auto window = hwnd_;
     showNotification(NotificationKind::launch, tr(L"Przełączanie kont Steam"), account.persona.empty() ? text_encoding::wideLenient(account.account_name) : account.persona);
-    work_.start([generation, account, alive, window, switcher = steam_switcher_] {
-        const bool ok = switcher(account);
-        if (!alive->load()) return;
-        auto message = std::make_unique<RemoteMessage>();
-        message->run = [generation, ok, persona = account.persona](Launcher& app) { app.steamSwitchFinished(generation, ok, persona); };
-        if (PostMessageW(window, remote_message, 0, reinterpret_cast<LPARAM>(message.get()))) message.release();
-    });
+    // A throw or a failed start ends as a failed switch: steam_switch_pending_ (which holds every
+    // launch back) never stays set.
+    runOnWorker([account, switcher = steam_switcher_] { return switcher(account); },
+                [generation, persona = account.persona](Launcher& app, std::optional<bool> ok) { app.steamSwitchFinished(generation, ok.value_or(false), persona); });
     return true;
 }
 

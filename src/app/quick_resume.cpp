@@ -271,6 +271,8 @@ void Launcher::closeGame(const Game& game) {
         game_activity_jobs_->active.erase(key);
         game_activity_jobs_->generation.fetch_add(1); game_activity_jobs_->wake.notify_one();
     }
+    // The poll no longer sees it stop: its exit script and HDR end here, as after a natural exit.
+    launchFlagsEnd(key, L"Closed from Launchme");
     if (frozen) persistFrozenGames();
     if (!anyActiveSession() && !pending_launch_) audio_.resumeMusic();
     if (!categories_.empty()) refreshRecentGames(); // No longer pinned to the front of Recent.

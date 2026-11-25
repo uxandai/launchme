@@ -305,6 +305,11 @@ struct ViewContext {
     struct BandTile { std::wstring name, count; std::array<ImageBytes, 4> covers; size_t games = 0; };
     bool band = false;
     std::vector<BandTile> band_tiles;
+    // Guide over a game, Przełącz grę: the running and suspended games rising from its button (the game in
+    // front first, nearest the bar), and the chosen row; empty while it is shut.
+    struct SwitcherRow { std::wstring name, status; ImageBytes cover; bool current = false; };
+    std::vector<SwitcherRow> game_switcher;
+    int game_switcher_selected = -1;
     int band_focus = -1, band_hover = -1;
     float band_slide = 0;
     std::wstring band_summary, band_order;

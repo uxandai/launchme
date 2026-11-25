@@ -18,7 +18,7 @@ bool Launcher::isFavorite(const Game& game) const {
         return std::any_of(copies->begin(), copies->end(), [&](const Game& copy) { return isFavorite(copy); });
     const auto found = std::find_if(settings_collections_.begin(), settings_collections_.end(), favoriteCollection);
     const SteamCollection fallback{tr(L"Ulubione"), {}, "user-collections.favorite"};
-    return collectionContains(library_state_.collections, account_, found == settings_collections_.end() ? fallback : *found, game);
+    return collectionContains(library_state_.collections, account_, found == settings_collections_.end() ? fallback : *found, game, &smart_members_);
 }
 void Launcher::toggleFavorite(const Game& game) {
     if (!library_state_readable_) return;
@@ -167,6 +167,7 @@ void Launcher::deleteCollection(const SteamCollection& collection) {
     if (!localCollection(collection) || !library_state_readable_) return;
     const auto scope = collectionKey(account_, collection);
     library_state_.collections.members.erase(scope);
+    library_state_.collections.rules.erase(collection.id);
     if (!library_state_.collections.creates.contains(scope)) library_state_.collections.names.erase(scope);
     settings_.hidden_collections.erase(scope); std::erase(settings_.collection_order, scope);
     settings_.hidden_library_tabs.erase(collection.id);
@@ -210,27 +211,38 @@ void Launcher::rebuildCollectionDialog() {
     };
     const auto found = std::find_if(settings_collections_.begin(), settings_collections_.end(), [&](const auto& c) { return c.id == ui.collection; });
     if ((ui.page == Page::collection || ui.page == Page::games) && found == settings_collections_.end()) ui.page = Page::collections;
-    if (ui.page == Page::collections || ui.page == Page::membership) {
+    const bool rule_page = ui.page == Page::rules || ui.page == Page::rule || ui.page == Page::rule_field;
+    if (rule_page && ui.rule_target == RuleTarget::collection && found == settings_collections_.end()) ui.page = Page::collections;
+    if (ui.page == Page::rules || ui.page == Page::rule || ui.page == Page::rule_field) {
+        rebuildRulePages();
+    } else if (ui.page == Page::collections || ui.page == Page::membership) {
         ui.title = ui.page == Page::membership ? ui.game.name : tr(L"Zarządzaj kolekcjami");
         add(tr(L"Nowa kolekcja"), "@new");
         std::map<std::string, size_t> counts;
-        for (const auto& shelf : managedShelves(account_, settings_collections_, library_state_.collections, public_library_, private_shelf_)) counts[shelf.id] = shelf.games.size();
+        for (const auto& shelf : managedShelves(account_, settings_collections_, library_state_.collections, public_library_, private_shelf_, &smart_members_)) counts[shelf.id] = shelf.games.size();
         for (const auto& c : settings_collections_) {
             const auto count = counts[c.id];
-            auto origin = localCollection(c) ? std::wstring(tr(L"Własna kolekcja")) : favoriteCollection(c) ? std::wstring{} : std::wstring(tr(L"Kolekcja Steam"));
+            auto origin = smartCollection(library_state_.collections, c) ? std::wstring(tr(L"Kolekcja dynamiczna")) :
+                          localCollection(c) ? std::wstring(tr(L"Własna kolekcja")) : favoriteCollection(c) ? std::wstring{} : std::wstring(tr(L"Kolekcja Steam"));
             if (library_state_.collections.creates.contains(collectionKey(account_, c))) origin += L" · " + std::wstring(tr(L"Oczekuje na synchronizację"));
-            bool member = ui.page == Page::membership && collectionContains(library_state_.collections, account_, c, ui.game);
+            bool member = ui.page == Page::membership && collectionContains(library_state_.collections, account_, c, ui.game, &smart_members_);
             if (ui.page == Page::membership && !ui.game.version_group.empty()) if (const auto* copies = versions_.find(ui.game))
-                member = std::any_of(copies->begin(), copies->end(), [&](const Game& game) { return collectionContains(library_state_.collections, account_, c, game); });
+                member = std::any_of(copies->begin(), copies->end(), [&](const Game& game) { return collectionContains(library_state_.collections, account_, c, game, &smart_members_); });
             add(c.name, c.id, (origin.empty() ? L"" : origin + L" · ") + std::to_wstring(count), ui.page == Page::membership,
                 member);
         }
     } else if (ui.page == Page::collection) {
         const auto c = *found;
         ui.title = c.name;
-        add(tr(L"Zarządzaj grami"), "@games");
+        const bool smart = smartCollection(library_state_.collections, c);
+        if (smart) {
+            const auto rules = smart_filter::decode(library_state_.collections.rules.at(c.id)).value_or(smart_filter::Rules{});
+            add(tr(L"Reguły"), "@rules", rules.empty() ? std::wstring(tr(L"Brak reguł: dodaj pierwszą")) :
+                rules.size() == 1 ? smart_filter::describe(rules.front()) : smart_filter::describe(rules.front()) + L" (+" + std::to_wstring(rules.size() - 1) + L")");
+        }
+        add(smart ? tr(L"Dodaj lub usuń gry ręcznie") : tr(L"Zarządzaj grami"), "@games");
         if (!favoriteCollection(c)) add(tr(L"Zmień nazwę"), "@rename");
-        if (localCollection(c)) add(tr(L"Przenieś do Steam"), "@steam");
+        if (localCollection(c) && !smart) add(tr(L"Przenieś do Steam"), "@steam");
         add(tr(L"Pokaż na ekranie głównym"), "@visible", {}, true, !settings_.hidden_collections.contains(collectionKey(account_, c)));
         add(tr(L"Przenieś wyżej"), "@up");
         add(tr(L"Przenieś niżej"), "@down");
@@ -240,7 +252,7 @@ void Launcher::rebuildCollectionDialog() {
         ui.title = found->name;
         const auto query = foldGameTitle(ui.input);
         std::unordered_set<std::string> members;
-        for (const auto& shelf : managedShelves(account_, {*found}, library_state_.collections, public_library_, private_shelf_))
+        for (const auto& shelf : managedShelves(account_, {*found}, library_state_.collections, public_library_, private_shelf_, &smart_members_))
             for (const auto& game : shelf.games) members.insert(gameKey(game));
         std::vector<const Game*> games;
         for (const auto& game : public_library_)
@@ -259,11 +271,15 @@ void Launcher::rebuildCollectionDialog() {
         std::stable_sort(ui.rows.begin(), ui.rows.end(), [](const auto& a, const auto& b) { return compareTitles(a.title, b.title) < 0; });
     } else if (ui.page == Page::name) {
         ui.title = ui.collection.empty() ? tr(L"Nowa kolekcja") : tr(L"Zmień nazwę");
-        if (ui.collection.empty()) {
-            add(tr(L"Kolekcja Steam"), "@type-steam", tr(L"Działa offline; synchronizuje po połączeniu."), true, ui.steam_collection);
+        if (ui.collection.empty() && ui.name_return != Page::rules) {
+            add(tr(L"Kolekcja Steam"), "@type-steam", tr(L"Działa offline; synchronizuje po połączeniu."), true, ui.steam_collection && !ui.smart_collection);
             ui.rows.back().radio = true;
-            add(tr(L"Własna kolekcja"), "@type-local", tr(L"Tylko w Launchme"), true, !ui.steam_collection);
+            add(tr(L"Własna kolekcja"), "@type-local", tr(L"Tylko w Launchme"), true, !ui.steam_collection && !ui.smart_collection);
             ui.rows.back().radio = true;
+            if (ui.name_return != Page::membership && ui.more_games.empty()) {
+                add(tr(L"Kolekcja dynamiczna"), "@type-smart", tr(L"Gry dobierane regułami, np. tytuł zawiera „tekken”"), true, ui.smart_collection);
+                ui.rows.back().radio = true;
+            }
         }
         add(tr(L"Zapisz"), "@save");
     }
@@ -279,9 +295,14 @@ void Launcher::collectionDialogAccept() {
     if (!ui.open || ui.account != account_) { ui = {}; return; }
     if (ui.page == Page::versions) { chooseVersion(); return; }
     if (ui.focus == -1) { collectionDialogBack(); return; }
+    if (ui.focus == -2 && ui.ruleText()) { // Enter in a rule's field: the rule is done.
+        const auto done = std::find_if(ui.rows.begin(), ui.rows.end(), [](const auto& row) { return row.key == "@done"; });
+        if (done != ui.rows.end()) { ruleDialogAccept(*done); return; }
+    }
     if (ui.focus == -2) { ui.focus = 0; rebuildCollectionDialog(); return; }
     if (ui.focus < 0 || ui.focus >= static_cast<int>(ui.rows.size())) return;
     const auto row = ui.rows[ui.focus];
+    if (ui.page == Page::rules || ui.page == Page::rule || ui.page == Page::rule_field) { ruleDialogAccept(row); return; }
     if (ui.page == Page::excluded) {
         if (!library_state_readable_ || !row.key.starts_with(std::string(sourceSlug(ui.game.source)) + ':')) return;
         library_state_.excluded_games.erase(row.key);
@@ -297,8 +318,9 @@ void Launcher::collectionDialogAccept() {
     if (row.key == "@new") {
         ui.steam_collection = account_ != 0 && (ui.page != Page::membership || ui.game.source == GameSource::steam);
         ui.name_return = ui.page; ui.page = Page::name; ui.collection.clear(); ui.input.clear(); ui.focus = -2;
-    } else if (ui.page == Page::name && ui.collection.empty() && (row.key == "@type-steam" || row.key == "@type-local")) {
+    } else if (ui.page == Page::name && ui.collection.empty() && (row.key == "@type-steam" || row.key == "@type-local" || row.key == "@type-smart")) {
         ui.steam_collection = row.key == "@type-steam";
+        ui.smart_collection = row.key == "@type-smart";
         ui.error.clear();
     } else if (ui.page == Page::collections) {
         ui.collection = row.key; ui.page = Page::collection; ui.focus = 0;
@@ -306,6 +328,8 @@ void Launcher::collectionDialogAccept() {
         const auto name = custom_games::trim(ui.input);
         if (name.empty() || name.size() > 200) { ui.error = tr(L"Wpisz nazwę kolekcji"); rebuildCollectionDialog(); return; }
         std::string id = ui.collection;
+        const bool created_smart = id.empty() && ui.smart_collection;
+        if (created_smart) ui.steam_collection = false; // Rules live in Launchme only.
         if (id.empty()) {
             if (ui.steam_collection && !account_) { ui.error = tr(L"Brak zapamiętanego konta Steam"); rebuildCollectionDialog(); return; }
             const auto random = custom_games::newId({});
@@ -317,6 +341,21 @@ void Launcher::collectionDialogAccept() {
         }
         SteamCollection c{name, {}, id};
         library_state_.collections.names[collectionKey(account_, c)] = name;
+        if (created_smart) {
+            // Its rules (from Zaawansowany filtr, or none yet): the rules page follows, the filter they came from goes.
+            library_state_.collections.rules[id] = smart_filter::encode(ui.rules);
+            if (ui.name_return == Page::rules) {
+                if (ui.rule_target == RuleTarget::library) { library_rules_.clear(); library_controls_.advanced_rules = 0; }
+                else if (ui.rule_target == RuleTarget::desktop) desktop_rules_.clear();
+                showNotification(NotificationKind::launch, tr(L"Utworzono kolekcję"), name);
+            }
+            ui.page = Page::rules; ui.rule_target = RuleTarget::collection; ui.collection = id; ui.input.clear(); ui.error.clear();
+            ui.rules.clear(); ui.smart_collection = false; ui.focus = 0; ui.scroll = 0;
+            collectionChanged();
+            if (libraryControls()) applyLibraryOptions();
+            if (desktop_mode_) rebuildDesktop(true);
+            return;
+        }
         if (ui.name_return == Page::membership) assign(c, true);
         for (const auto& game : ui.more_games) { // Desktop mode: the other games dropped or marked with it.
             if (!game.version_group.empty() && versions_.find(game)) {
@@ -354,6 +393,7 @@ void Launcher::collectionDialogAccept() {
             collectionChanged(); return;
         }
         if (row.key == "@games") { ui.page = Page::games; ui.input.clear(); ui.focus = -2; }
+        else if (row.key == "@rules") { ui.page = Page::rules; ui.rule_target = RuleTarget::collection; ui.focus = 0; ui.scroll = 0; }
         else if (row.key == "@steam" && localCollection(c)) {
             const auto random = custom_games::newId({});
             const auto steam_id = "user-collections.uc-launchme-" + random;
@@ -394,6 +434,7 @@ void Launcher::collectionDialogAccept() {
 }
 void Launcher::collectionDialogBack() {
     auto& ui = library_dialog_;
+    if (ruleDialogBack()) return;
     // Opened from a collection's page in Settings (its games, its name): Back returns there.
     const bool close = (ui.settings_return && (ui.page == Page::name || ui.page == Page::games)) ||
                        (ui.page != Page::name && ui.page != Page::games && ui.page != Page::collection);

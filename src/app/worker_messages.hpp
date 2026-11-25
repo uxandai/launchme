@@ -343,6 +343,21 @@ class Launcher;
 struct RemoteMessage {
     std::function<void(Launcher&)> run;
 };
+// The way back from a worker, for every feature: post(run) runs `run` on the UI thread (onRemote)
+// unless the launcher is already gone; a message the window no longer takes is freed here, never
+// leaked. Made by Launcher::uiPost() and copied into a worker's lambda instead of `this`.
+struct UiPost {
+    HWND window = nullptr;
+    std::shared_ptr<std::atomic_bool> alive;
+    bool operator()(std::function<void(Launcher&)> run) const {
+        if (!alive || !alive->load()) return false;
+        auto message = std::make_unique<RemoteMessage>();
+        message->run = std::move(run);
+        if (!PostMessageW(window, remote_message, 0, reinterpret_cast<LPARAM>(message.get()))) return false;
+        message.release();
+        return true;
+    }
+};
 struct LibraryMessage {
     bool installation_update = false;
     bool refresh = false; // Full snapshot of the unchanged account, asked for by the UI (steam_rescan_).

@@ -65,7 +65,8 @@ void Launcher::enterUp() {
     } else accept();
 }
 
-void Launcher::cancelEnterHold() { enter_held_ = pad_enter_hold_ = false; dashboardCancelPress(); }
+// Settings' own hold too: with focus or the pad gone, its release never comes and the row would lift unseen.
+void Launcher::cancelEnterHold() { enter_held_ = pad_enter_hold_ = settings_hold_ = false; dashboardCancelPress(); }
 
 // A press on a game card that may become a hold for its menu (Enter, A on the pad): the
 // cases accept() itself would hand to a dialog, panel or non-game tile act at once instead.

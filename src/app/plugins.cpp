@@ -270,6 +270,30 @@ void Launcher::onPluginLaunch(const PluginsMessage& message) {
 }
 void Launcher::onPlugins(std::unique_ptr<PluginsMessage> message) {
     const auto& job = message->job;
+    // The worker's list of plugins: after a management job, or after a failed call (the manager may
+    // have disabled the plugin that broke its protocol).
+    const auto apply_snapshot = [&] {
+        plugins_ = std::move(message->snapshot);
+        if (job.management()) plugins_busy_ = false;
+        refreshPluginContributions();
+        if (plugin_drawer_active_) {
+            const auto* owner = plugins_.find(plugin_page_.plugin);
+            if (!owner || !owner->enabled) { plugin_drawer_active_ = false; renderer_.resetPluginThumbnails(0); }
+        }
+        if (screen_ == ScreenMode::plugin_page && !storeHubPage()) {
+            const auto* owner = plugins_.find(plugin_page_.plugin);
+            if (!owner || !owner->enabled) showCategory(category_);
+        }
+        if (!storeEnabled()) {
+            store_results_.clear();
+            if (screen_ == ScreenMode::store || (screen_ == ScreenMode::details && detail_catalog_)) showCategory(category_);
+            if (detail_return_ == ScreenMode::store) detail_return_ = ScreenMode::shelves;
+        }
+        if (settingsOpen()) buildSettingsRows();
+    };
+    // A failure is applied before any early return below (a launch, a superseded command): a
+    // quarantined plugin must not stay shown as enabled until the next management job.
+    if (!job.management() && !message->error.empty() && job.epoch == plugin_epoch_) apply_snapshot();
     if (job.kind == plugins::Job::Kind::launch) { onPluginLaunch(*message); return; }
     if (job.kind == plugins::Job::Kind::downloads) {
         const auto pending = plugin_download_pending_.find(job.plugin);
@@ -302,25 +326,7 @@ void Launcher::onPlugins(std::unique_ptr<PluginsMessage> message) {
     if (job.kind == plugins::Job::Kind::playtime) {
         receivePluginGameView(*message); invalidateGameOverlay(); InvalidateRect(hwnd_, nullptr, FALSE); return;
     }
-    if (job.management() || !message->error.empty()) {
-        plugins_ = std::move(message->snapshot);
-        if (job.management()) plugins_busy_ = false;
-        refreshPluginContributions();
-        if (plugin_drawer_active_) {
-            const auto* owner = plugins_.find(plugin_page_.plugin);
-            if (!owner || !owner->enabled) { plugin_drawer_active_ = false; renderer_.resetPluginThumbnails(0); }
-        }
-        if (screen_ == ScreenMode::plugin_page && !storeHubPage()) {
-            const auto* owner = plugins_.find(plugin_page_.plugin);
-            if (!owner || !owner->enabled) showCategory(category_);
-        }
-        if (!storeEnabled()) {
-            store_results_.clear();
-            if (screen_ == ScreenMode::store || (screen_ == ScreenMode::details && detail_catalog_)) showCategory(category_);
-            if (detail_return_ == ScreenMode::store) detail_return_ = ScreenMode::shelves;
-        }
-        if (settingsOpen()) buildSettingsRows();
-    }
+    if (job.management()) apply_snapshot();
     // Achievements answer quietly: a failure shows on their screen, not as a notification.
     if (job.kind == plugins::Job::Kind::achievements) { if (receivePluginAchievements(*message)) InvalidateRect(hwnd_, nullptr, FALSE); return; }
     if (message->error.empty() && receivePluginGameView(*message)) { invalidateGameOverlay(); InvalidateRect(hwnd_, nullptr, FALSE); return; }

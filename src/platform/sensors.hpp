@@ -6,6 +6,8 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <string_view>
+#include <utility>
 
 // CPU and GPU temperatures for the drawer dashboard, read without admin rights or
 // drivers: ACPI thermal zones through PDH ("\Thermal Zone Information(*)\Temperature",
@@ -18,7 +20,8 @@ namespace sensors {
 struct Reading {
     bool sampled = false;        // False until the first poll finished (nothing to show yet).
     std::optional<int> cpu, gpu; // Whole °C; empty = no usable sensor.
-    // Memory in use and installed, MB: the system's RAM and the graphics card's own (Windows; empty elsewhere).
+    // Memory in use and installed, MB: the system's RAM and the graphics card's own (Linux: /proc/meminfo,
+    // amdgpu's mem_info_vram_* or NVML).
     std::optional<int> ram_used, ram_total, vram_used, vram_total;
     bool operator==(const Reading&) const = default;
 };
@@ -54,6 +57,11 @@ std::wstring formatMemory(std::optional<int> used_mb, std::optional<int> total_m
 // /sys/class/hwmon folder (a fixture in tests).
 std::optional<int> hwmonCpu(const std::filesystem::path& hwmon);
 std::optional<int> hwmonGpu(const std::filesystem::path& hwmon);
+// Linux: RAM in use (MemTotal − MemAvailable) and installed, MB, from /proc/meminfo's text.
+std::optional<std::pair<int, int>> meminfoUsage(std::string_view text);
+// Linux: VRAM in use and installed, MB, of the awake card with the most of it under a /sys/class/drm
+// folder (mem_info_vram_used / mem_info_vram_total: amdgpu; a sleeping card is not woken).
+std::optional<std::pair<int, int>> drmVram(const std::filesystem::path& drm);
 
 // Keeps the PDH query and the gdi32 entry points (Linux: NVML) between polls. Not thread-safe:
 // create and use one on the polling worker.

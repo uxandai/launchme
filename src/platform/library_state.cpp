@@ -1,6 +1,7 @@
 #include "library_state.hpp"
 #include "atomic_file.hpp"
 #include "text_encoding.hpp"
+#include "../library/smart_filter.hpp"
 #include <algorithm>
 #include <fstream>
 #include <iomanip>
@@ -107,6 +108,10 @@ bool parseRow(const std::string& line, LibraryState& result) {
             std::string scope, key; int member = 0;
             if (!field(row, scope) || !field(row, key) || !(row >> member) || scope.empty() || key.empty() || (member != 0 && member != 1)) return {};
             result.collections.members[scope][key] = member != 0;
+        } else if (kind == "collection-rules") {
+            std::string id, rules;
+            if (!field(row, id) || !field(row, rules) || !id.starts_with("local:") || !smart_filter::decode(rules)) return {};
+            result.collections.rules[std::move(id)] = std::move(rules);
         } else if (kind == "collection-create") {
             std::string scope;
             if (!field(row, scope) || scope.find(":user-collections.uc-launchme-") == scope.npos) return {};
@@ -254,6 +259,11 @@ bool saveLibraryState(const LibraryState& state, const std::filesystem::path& fi
     for (const auto& [scope, members] : state.collections.members) for (const auto& [key, value] : members) {
         if (scope.empty() || key.empty() || !validField(scope) || !validField(key)) return false;
         output << "collection-member " << std::quoted(encoded(scope)) << ' ' << std::quoted(encoded(key)) << ' ' << value << '\n';
+        if (!bounded()) return false;
+    }
+    for (const auto& [id, rules] : state.collections.rules) {
+        if (!id.starts_with("local:") || !validField(id) || !validField(rules) || !smart_filter::decode(rules)) return false;
+        output << "collection-rules " << std::quoted(encoded(id)) << ' ' << std::quoted(encoded(rules)) << '\n';
         if (!bounded()) return false;
     }
     for (const auto& scope : state.collections.creates) {

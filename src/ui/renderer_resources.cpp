@@ -331,6 +331,7 @@ bool Renderer::createTargetResources() {
     createBitmap(meta_poster_);
     for (auto& image : find_thumbs_) createBitmap(image);
     for (auto& image : band_covers_) createBitmap(image);
+    for (auto& image : switcher_covers_) createBitmap(image);
     createBitmap(snitch_avatar_);
     createBitmap(companion_photo_);
     createBitmap(companion_photo_large_);
@@ -343,6 +344,11 @@ void Renderer::discardTarget() {
     exit_frame_.Reset(); exit_line_.Reset(); exit_glow_.Reset();
     screen_frame_.Reset(); screen_bow_target_.Reset(); screen_ui_target_.Reset(); desktop_backdrop_.Reset();
     main_target_.Reset(); main_realizer_.Reset();
+    // Theme Studio's scene target matches the new one's size: kept, it would draw on the lost device
+    // and every frame would ask for the target again.
+    theme_scene_target_.Reset(); theme_scene_bitmap_.Reset(); theme_main_target_.Reset(); theme_main_realizer_.Reset();
+    // An achievement toast's bitmaps: a new target may reuse the old one's address, so the pointer check alone is not enough.
+    toast_icon_.Reset(); toast_icon_target_ = nullptr; toast_backdrop_.Reset(); toast_backdrop_source_ = nullptr;
     kept_hero_.bitmap.Reset(); kept_hero_.brush.Reset();
     art_frames_.clear(); // The slots lose their bitmaps below; the launcher hands frames in again.
     for (auto& animation : artwork_animations_) { animation.bitmap.Reset(); animation.brush.Reset(); }
@@ -358,7 +364,7 @@ void Renderer::discardTarget() {
     // gray_failed may come from the lost target: the new one tries again.
     for (auto& cover : covers_) { cover.bitmap.Reset(); cover.brush.Reset(); cover.gray_bitmap.Reset(); cover.gray_brush.Reset(); cover.gray_failed = false; cover.blurred.Reset(); cover.blurred_source.Reset(); cover.desaturated.Reset(); cover.desaturated_source.Reset(); }
     for (auto& logo : logos_) { logo.bitmap.Reset(); logo.brush.Reset(); }
-    for (auto& hero : heroes_) { hero.bitmap.Reset(); hero.brush.Reset(); }
+    for (auto& hero : heroes_) { hero.bitmap.Reset(); hero.brush.Reset(); hero.blurred.Reset(); hero.blurred_source.Reset(); hero.desaturated.Reset(); hero.desaturated_source.Reset(); }
     for (auto& poster : posters_) { poster.bitmap.Reset(); poster.brush.Reset(); poster.gray_bitmap.Reset(); poster.gray_brush.Reset(); poster.gray_failed = false; poster.blurred.Reset(); poster.blurred_source.Reset(); poster.desaturated.Reset(); poster.desaturated_source.Reset(); }
     for (auto& disc : discs_) { disc.bitmap.Reset(); disc.brush.Reset(); disc.gray_bitmap.Reset(); disc.gray_brush.Reset(); disc.gray_failed = false; }
     for (auto* image : {&case_back_, &case_side_}) { image->bitmap.Reset(); image->brush.Reset(); image->gray_bitmap.Reset(); image->gray_brush.Reset(); image->gray_failed = false; }
@@ -376,6 +382,7 @@ void Renderer::discardTarget() {
     meta_poster_.bitmap.Reset(); meta_poster_.brush.Reset();
     for (auto& image : find_thumbs_) { image.bitmap.Reset(); image.brush.Reset(); }
     for (auto& image : band_covers_) { image.bitmap.Reset(); image.brush.Reset(); }
+    for (auto& image : switcher_covers_) { image.bitmap.Reset(); image.brush.Reset(); }
     snitch_avatar_.bitmap.Reset(); snitch_avatar_.brush.Reset();
     companion_photo_.bitmap.Reset(); companion_photo_.brush.Reset();
     companion_photo_large_.bitmap.Reset(); companion_photo_large_.brush.Reset();
@@ -564,6 +571,7 @@ void Renderer::uploadDecoded() {
     collect(meta_poster_);
     for (auto& image : find_thumbs_) collect(image);
     for (auto& image : band_covers_) collect(image);
+    for (auto& image : switcher_covers_) collect(image);
     collect(snitch_avatar_);
     collect(companion_photo_);
     collect(companion_photo_large_);

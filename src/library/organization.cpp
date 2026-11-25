@@ -37,10 +37,11 @@ std::vector<SteamCollection> managedCollections(uint64_t account, const std::vec
     }
     return result;
 }
-bool collectionContains(const CollectionEdits& edits, uint64_t account, const SteamCollection& c, const Game& game) {
+bool collectionContains(const CollectionEdits& edits, uint64_t account, const SteamCollection& c, const Game& game, const SmartMembers* smart) {
     if (!isGame(game) || game.kind == GameKind::catalog) return false;
     if (const auto group = edits.members.find(scope(account, c, game)); group != edits.members.end())
         if (const auto it = group->second.find(memberKey(account, c, game)); it != group->second.end()) return it->second;
+    if (smart) if (const auto rules = smart->find(c.id); rules != smart->end()) return rules->second.contains(gameKey(game));
     return inherited(c, game);
 }
 void setCollectionMember(CollectionEdits& edits, uint64_t account, const SteamCollection& c, const Game& game, bool member) {
@@ -68,7 +69,7 @@ std::vector<uint32_t> localSteamMembers(const CollectionEdits& edits, uint64_t a
     return {ids.begin(), ids.end()};
 }
 std::vector<SteamShelf> managedShelves(uint64_t account, const std::vector<SteamCollection>& collections,
-    const CollectionEdits& edits, const std::vector<Game>& visible, bool include_private) {
+    const CollectionEdits& edits, const std::vector<Game>& visible, bool include_private, const SmartMembers* smart) {
     std::vector<SteamShelf> result;
     std::unordered_map<std::string, size_t> positions;
     std::unordered_map<uint32_t, size_t> steam;
@@ -83,6 +84,8 @@ std::vector<SteamShelf> managedShelves(uint64_t account, const std::vector<Steam
         SteamShelf shelf{c.name, {}, c.id};
         std::set<size_t> members;
         for (const auto id : c.app_ids) if (const auto it = steam.find(id); it != steam.end()) members.insert(it->second);
+        if (smart) if (const auto rules = smart->find(c.id); rules != smart->end())
+            for (const auto& key : rules->second) if (const auto it = positions.find(key); it != positions.end()) members.insert(it->second);
         const auto apply = [&](const std::string& overlay_scope) {
             const auto overrides = edits.members.find(overlay_scope);
             if (overrides == edits.members.end()) return;

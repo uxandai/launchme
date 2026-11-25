@@ -18,18 +18,27 @@ constexpr int installed_row = library_view::order_count;
 constexpr int first_filter_row = installed_row + 1;
 constexpr int filter_rows = first_filter_row + library_view::filter_count + 1;
 constexpr int clear_row = filter_rows - 1;
-inline int filterColumn(int row) { return row < library_view::order_count ? 0 : 1; }
+// Zaawansowany filtr…: under the orders in the first column (the rule editor, smart_filter.hpp).
+constexpr int advanced_row = filter_rows;
+constexpr int menu_rows = advanced_row + 1;
+inline int filterColumn(int row) { return row < library_view::order_count || row == advanced_row ? 0 : 1; }
+// A row's place in its column, from the top.
+inline int filterPlace(int row) { return row == advanced_row ? library_view::order_count : filterColumn(row) ? row - installed_row : row; }
 // Up/Down within a column (no wrapping), Left/Right across to the row at the same height.
 inline int filterMove(int row, int dx, int dy) {
-    const int column = filterColumn(row);
+    const int column = filterColumn(row), place = filterPlace(row);
     if (dx) {
         if ((dx > 0) == (column == 1)) return row;
-        return column == 0 ? installed_row + row : std::min(row - installed_row, library_view::order_count - 1);
+        if (column == 0) return installed_row + place;
+        return place >= library_view::order_count ? advanced_row : place;
     }
-    return std::clamp(row + dy, column ? installed_row : 0, column ? filter_rows - 1 : library_view::order_count - 1);
+    if (column) return std::clamp(row + dy, installed_row, filter_rows - 1);
+    const int next = std::clamp(place + dy, 0, library_view::order_count);
+    return next == library_view::order_count ? advanced_row : next;
 }
 struct State {
     library_view::Options options;
+    int advanced_rules = 0;   // Zaawansowany filtr: its rules in force (drawn beside its row, counted on the button).
     int focus = -1;           // Top bar button; -1 = the games have focus.
     int action = -1;          // Inline presentation buttons; -1 = focus is outside the preview.
     Panel panel = Panel::none;
@@ -71,13 +80,13 @@ struct Layout {
     }
     settings_ui::Rect choice(int index) const {
         const auto m = menu();
-        const int column = filterColumn(index), at = column ? index - installed_row : index;
+        const int column = filterColumn(index), at = filterPlace(index);
         const float left = m.left + 12 + column * (column_width + column_gap);
-        const float top = m.top + 8 + heading_height + at * row_step + (index == clear_row ? toggle_gap : 0);
+        const float top = m.top + 8 + heading_height + at * row_step + (index == clear_row || index == advanced_row ? toggle_gap : 0);
         return {left, top, left + column_width, top + 48};
     }
     int hitChoice(float x, float y) const {
-        for (int i = 0; i < filter_rows; ++i) if (choice(i).contains(x, y)) return i;
+        for (int i = 0; i < menu_rows; ++i) if (choice(i).contains(x, y)) return i;
         return -1;
     }
 };

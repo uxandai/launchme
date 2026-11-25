@@ -857,6 +857,7 @@ void Launcher::paint(bool overlay) {
         context.friends_progress = overlay_motion_.drawer;
         context.guide_opacity = overlay_motion_.opacity;
         context.quick_circle_x = overlay_motion_.circle.value;
+        gameSwitcherContext(context); // Przełącz grę's list, when open.
         game_overlay_->renderer().paintOverlay(context);
         return;
     }

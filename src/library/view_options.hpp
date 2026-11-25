@@ -11,20 +11,28 @@ namespace library_view {
 // Indexed like the filter menu rows. Recently played first: it is the default. release: newest
 // release first, by the game index's dates (undated games last).
 // installed: Ostatnio zainstalowane (when the game's folder was made); playtime: Najdłużej grane.
-enum class Order { last_played, alphabetical, added, release, installed, playtime };
-constexpr int order_count = 6;
+// rating: Najwyżej oceniane (game_index::ratingScore); shortest / longest: HowLongToBeat's main story.
+// Games the index has no value for come last, by title.
+enum class Order { last_played, alphabetical, added, release, installed, playtime, rating, shortest, longest };
+constexpr int order_count = 9;
 // library-state.ini keeps the numbers of the original four orders (0 was "Domyślnie", the
 // unsorted source order, now read as Recently played) so older files load unchanged; 4 is release,
-// 5 installed, 6 playtime.
+// 5 installed, 6 playtime, 7 rating, 8 shortest, 9 longest.
 inline int persistedOrder(Order order) {
     return order == Order::alphabetical ? 1 : order == Order::added ? 3 : order == Order::release ? 4 :
-           order == Order::installed ? 5 : order == Order::playtime ? 6 : 2;
+           order == Order::installed ? 5 : order == Order::playtime ? 6 : order == Order::rating ? 7 :
+           order == Order::shortest ? 8 : order == Order::longest ? 9 : 2;
 }
 inline Order orderFromPersisted(int value) {
     return value == 1 ? Order::alphabetical : value == 3 ? Order::added : value == 4 ? Order::release :
-           value == 5 ? Order::installed : value == 6 ? Order::playtime : Order::last_played;
+           value == 5 ? Order::installed : value == 6 ? Order::playtime : value == 7 ? Order::rating :
+           value == 8 ? Order::shortest : value == 9 ? Order::longest : Order::last_played;
 }
-constexpr int persisted_order_count = 7;
+constexpr int persisted_order_count = 10;
+// Orders sorted by a value the launcher computes per game (arrange's `values`), largest first.
+inline bool valueOrder(Order order) {
+    return order == Order::installed || order == Order::playtime || order == Order::rating || order == Order::shortest || order == Order::longest;
+}
 // Filtry (beside the orders in the same menu): how a game is played, read from its tags in the game index
 // (Steam's store tags and features, RAWG's tags), and whether it was ever played. A game must match
 // every one checked; one the index knows nothing about matches none. game_pass: played through the
@@ -159,6 +167,9 @@ inline const wchar_t* label(Order order) {
     case Order::release: return tr(L"Data wydania");
     case Order::installed: return tr(L"Ostatnio zainstalowane");
     case Order::playtime: return tr(L"Najdłużej grane");
+    case Order::rating: return tr(L"Najwyżej oceniane");
+    case Order::shortest: return tr(L"Najkrótsze do przejścia");
+    case Order::longest: return tr(L"Najdłuższe do przejścia");
     default: return tr(L"Ostatnio grane");
     }
 }
@@ -183,7 +194,8 @@ inline uint64_t addedTime(const Game& game, const std::map<std::string, uint64_t
 }
 // Hidden and private games are dropped unless `include_private` (Ctrl+H for this session).
 // `released`: yyyymmdd by gameKey for Order::release (game_index::Date::sortKey; missing = undated).
-// `values`: by gameKey for Order::installed (Unix seconds) and Order::playtime (minutes); missing = 0, last.
+// `values`: by gameKey for the valueOrder() orders (install time, minutes played, rating, length),
+// largest first; missing = 0, last.
 std::vector<Game> arrange(const std::vector<Game>& games, Options options, const std::map<std::string, uint64_t>& first_seen,
                           bool include_private = false, const std::unordered_map<std::string, int>* released = nullptr,
                           const std::unordered_map<std::string, uint64_t>* values = nullptr);

@@ -116,7 +116,7 @@ void Launcher::pollEpic() {
 void Launcher::openEpicInstall(const Game& game) {
     if (!epic_service_ || epic_state_.account.empty()) return;
     if ((gog_service_ && gog_service_->installBusy()) || (epic_service_->busy() && (gog_install_ui_.game.source != GameSource::epic || gog_install_ui_.game.source_id != game.source_id))) {
-        showNotification(NotificationKind::error, L"Epic Games", tr(L"Najpierw dokończ lub anuluj bieżące pobieranie.")); return;
+        queueInstall(game); return; // Its turn comes (install_queue.cpp).
     }
     dismissMenu(); closeQuick(); closeFriends(); closeCategoryMenu(); cancelEnterHold();
     if (gog_install_ui_.game.source != GameSource::epic || gog_install_ui_.game.source_id != game.source_id) {

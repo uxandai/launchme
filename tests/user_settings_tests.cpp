@@ -27,6 +27,24 @@ int main() {
         if (!saveAppSettings(saved, file) || loadAppSettings(file).music_theme != 2) return 7;
         std::error_code error; std::filesystem::remove(file, error);
     }
+    {
+        // A damaged settings.ini (part zeroed, or no key=value at all) is no fresh start: marked, so
+        // its first save keeps it as settings.unreadable.ini instead of replacing it unseen.
+        const auto folder = std::filesystem::temp_directory_path() / (L"launchme-settings-damaged-" + std::to_wstring(GetCurrentProcessId()));
+        std::error_code error; std::filesystem::create_directories(folder, error);
+        const auto file = folder / L"settings.ini";
+        const auto write = [&](std::string_view bytes) { std::ofstream(file, std::ios::binary | std::ios::trunc).write(bytes.data(), static_cast<std::streamsize>(bytes.size())); };
+        write(std::string_view("quick_resume=1\n\0\0\0\0", 19));
+        const auto zeroed = loadAppSettings(file);
+        if (!zeroed.load_failed || !zeroed.quick_resume) return 300; // What parsed is kept.
+        write("\x89PNG garbage without settings");
+        if (!loadAppSettings(file).load_failed) return 301;
+        write("quick_resume=1\n");
+        if (loadAppSettings(file).load_failed) return 302;
+        write(std::string_view("quick_resume=1\n\0\0", 17));
+        if (!saveAppSettings(loadAppSettings(file), file) || !std::filesystem::exists(folder / L"settings.unreadable.ini")) return 303;
+        std::filesystem::remove_all(folder, error);
+    }
     if (AppSettings{}.ui_sound || AppSettings{}.toast_sound || AppSettings{}.boot_sound ||
         parseAppSettings("ui_sound=3\n").ui_sound || parseAppSettings("toast_sound=-1\n").toast_sound ||
         parseAppSettings("boot_sound=2\n").boot_sound || parseAppSettings("boot_sound=1junk\n").boot_sound ||
@@ -436,6 +454,9 @@ int main() {
     if (!saveAppSettings(sounds, file) || loadAppSettings(file).boot_sound != 0 ||
         loadAppSettings(file).ui_sound != 0 || loadAppSettings(file).toast_sound != 0 ||
         loadAppSettings(file).music_theme != 0) return 30;
+    // The desktop's sort and filters: every order (1..9) and all ten Filter bits (Game Pass, Kupione).
+    auto desktop = config; desktop.desktop_sort = 9; desktop.desktop_filters = 0x300;
+    if (!saveAppSettings(desktop, file) || loadAppSettings(file).desktop_sort != 9 || loadAppSettings(file).desktop_filters != 0x300) return 304;
     // Aurelia and Steam: what Aurelia manages, its cloud, Steam switched off and a game's account.
     auto steam = config; steam.steam_enabled = false; steam.aurelia_default = true; steam.aurelia_cloud = false;
     steam.aurelia_steam = {"620"}; steam.steam_launch_accounts["400"] = 76561198000000002ULL;

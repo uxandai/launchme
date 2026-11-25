@@ -6,6 +6,7 @@
 #include "../src/library/play_journal.hpp"
 
 #include <Windows.h>
+#include <fstream>
 #include <iostream>
 
 #define CHECK(value) do { if (!(value)) { std::cerr << "Profile data check failed at line " << __LINE__ << ": " << #value << '\n'; return 1; } } while (false)
@@ -43,6 +44,17 @@ int main() {
     CHECK(save(journal, file) && load(file) == journal);
     CHECK(parse("launchme-journal\t1\nd\t20261027\tsteam:1\tnot-a-number\t0\nn\tsteam:1\tOk\n").days.empty());
     CHECK(parse("garbage").days.empty() && parse("").names.empty());
+    // A missing file is an empty journal; a damaged or newer one is not (it must not be saved over).
+    CHECK(read(root / L"no-journal.tsv") == Journal{});
+    const auto damaged = root / L"damaged-journal.tsv";
+    { std::ofstream(damaged, std::ios::binary) << "launchme-journal\t2\nd\t20261027\tsteam:1\t1\t1\n"; }
+    CHECK(!read(damaged) && load(damaged).days.empty());
+    { std::ofstream(damaged, std::ios::binary) << "\x89PNG"; }
+    CHECK(!read(damaged));
+    Journal session_play, stored = journal;
+    played(session_play, today, "steam:620", L"Portal 2", 5 * 60000);
+    merge(stored, session_play);
+    CHECK(stored.days.at(today).at("steam:620").ms == 95ull * 60000 && stored.days.at(today).at("steam:620").launches == 1);
     Journal long_one;
     for (int i = 0; i < 500; ++i) played(long_one, addDays(today, -i), "steam:1", L"Old", 60000);
     CHECK(long_one.days.size() == max_days && long_one.days.rbegin()->first == today);
@@ -92,6 +104,29 @@ int main() {
     metadata::Overrides loaded;
     CHECK(loaded.load(overrides_file) && loaded.find("steam:620") && loaded.find("steam:620")->playtime == 1200u &&
           loaded.find("steam:620")->playtime_base == 300u);
+#ifdef _WIN32
+    // Locked while loading: empty, but the next save reads the file again and keeps its entries.
+    {
+        const HANDLE lock = CreateFileW(overrides_file.c_str(), GENERIC_READ, 0, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+        CHECK(lock != INVALID_HANDLE_VALUE);
+        metadata::Overrides locked;
+        const bool read_while_locked = locked.load(overrides_file);
+        CloseHandle(lock);
+        CHECK(!read_while_locked && locked.items().empty());
+        metadata::Override other; other.title = L"Edited meanwhile";
+        locked.set("gog:1", other);
+        CHECK(locked.save(overrides_file) && locked.find("steam:620") && locked.find("gog:1"));
+        metadata::Overrides again;
+        CHECK(again.load(overrides_file) && again.items().size() == 2);
+    }
+#endif
+    // Damaged: kept as metadata_overrides.unreadable.json before the new file replaces it.
+    { std::ofstream(overrides_file, std::ios::binary | std::ios::trunc) << "{\"games\":[]}"; }
+    metadata::Overrides damaged_overrides;
+    CHECK(!damaged_overrides.load(overrides_file));
+    damaged_overrides.set("steam:1", own);
+    CHECK(damaged_overrides.save(overrides_file) && fs::exists(root / L"metadata_overrides.unreadable.json"));
+    CHECK(loaded.load(overrides_file) && loaded.items().size() == 1);
     std::cout << "Play journal, achievement history and own play time passed\n";
     return 0;
 }

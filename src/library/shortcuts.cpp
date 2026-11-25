@@ -1,6 +1,7 @@
 #include "shortcuts.hpp"
 #include "visibility.hpp"
 #include "emulation_platforms.hpp"
+#include "../platform/atomic_file.hpp"
 #include "../platform/unicode_text.hpp"
 #include "../platform/text_encoding.hpp"
 
@@ -369,7 +370,9 @@ uint32_t number(const KvNode* node) {
 // The file's tree; nullopt when it exists but is not shortcuts (never overwritten then).
 std::optional<std::vector<KvNode>> readShortcuts(const std::filesystem::path& file) {
     std::error_code ec;
-    if (!std::filesystem::exists(file, ec)) {
+    const bool exists = std::filesystem::exists(file, ec);
+    if (ec) return std::nullopt; // Unreadable is not missing: an empty tree would replace the user's shortcuts.
+    if (!exists) {
         KvNode root;
         root.type = 0; root.key = "shortcuts";
         return std::vector<KvNode>{root};
@@ -395,14 +398,8 @@ bool writeShortcuts(const std::filesystem::path& file, const std::vector<KvNode>
     auto backup = file;
     backup += L".launchme-backup";
     if (std::filesystem::exists(file, ec) && !std::filesystem::exists(backup, ec)) std::filesystem::copy_file(file, backup, ec);
-    const auto temporary = std::filesystem::path(file.wstring() + L".launchme-new");
-    {
-        std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
-        if (!output.write(bytes.data(), static_cast<std::streamsize>(bytes.size())) || !output.flush()) { std::filesystem::remove(temporary, ec); return false; }
-    }
-    std::filesystem::rename(temporary, file, ec);
-    if (ec) { std::filesystem::remove(temporary, ec); return false; }
-    return true;
+    // Flushed before the rename: a power cut leaves Steam's old file or the new one, never an empty one.
+    return atomic_file::writeDurable(file, bytes);
 }
 
 // The options themselves, or ending with them after a prefix such as "VAR=value %command%".

@@ -412,6 +412,7 @@ if(BUILD_TESTING)
     launchme_executable(launch_scripts_tests TEST launch_scripts_before_after_game
         SOURCES tests/launch_scripts_tests.cpp src/platform/launch_scripts.cpp)
     launchme_executable(game_mods_tests TEST game_mods_install_and_detection SOURCES tests/game_mods_tests.cpp)
+    launchme_executable(smart_filter_tests TEST smart_collections_and_advanced_filter SOURCES tests/smart_filter_tests.cpp)
     launchme_executable(library_state_tests TEST library_view_state_and_sorting
         SOURCES tests/library_state_tests.cpp src/platform/library_state.cpp src/library/view_options.cpp)
     launchme_executable(device_tests TEST device_input_and_audio_transactions

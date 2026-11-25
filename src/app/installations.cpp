@@ -75,7 +75,7 @@ void Launcher::updateSteamInstallations(const LibraryMessage& library) {
             if (current.contains(id) || old.visibility != GameVisibility::public_game) continue;
             bool member = false;
             for (const auto& collection : settings_collections_)
-                if (collectionContains(library_state_.collections, account_, collection, old)) member = true;
+                if (collectionContains(library_state_.collections, account_, collection, old)) member = true; // Kept by hand, not by a rule.
             if (member && !excluded_ids_.contains(id)) {
                 Game game = old; game.installed = false; game.installation = {}; uninstalled_library_.push_back(std::move(game));
             }

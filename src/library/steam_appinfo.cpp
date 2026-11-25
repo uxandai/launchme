@@ -110,11 +110,13 @@ std::optional<std::vector<App>> parse(std::span<const uint8_t> data, const std::
         if (data.size() < 16) return std::nullopt;
         uint64_t offset = 0;
         std::memcpy(&offset, data.data() + 8, 8);
-        if (offset < 20 || offset + 4 > data.size()) return std::nullopt;
+        // Subtracted, not added: an offset near UINT64_MAX would wrap `offset + 4` past the check.
+        if (offset < 20 || offset > data.size() || data.size() - offset < 4) return std::nullopt;
         end = static_cast<size_t>(offset);
         cursor = 16;
         const auto count = u32(end);
-        if (count > 1'000'000) return std::nullopt;
+        // Each name takes at least its NUL: a count the rest of the file cannot hold reserves nothing.
+        if (count > 1'000'000 || count > data.size() - end - 4) return std::nullopt;
         table.reserve(count);
         size_t at = end + 4;
         for (uint32_t i = 0; i < count; ++i) {

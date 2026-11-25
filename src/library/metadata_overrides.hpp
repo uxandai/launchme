@@ -36,8 +36,10 @@ std::wstring playtimeText(uint32_t minutes); // 750 → "12:30".
 
 class Overrides {
 public:
+    // false: the file is there but could not be read (locked, damaged). Its entries are then not
+    // here, and save() reads it again first (or keeps it as *.unreadable.json) before replacing it.
     bool load(const std::filesystem::path& file);
-    bool save(const std::filesystem::path& file) const;
+    bool save(const std::filesystem::path& file);
     const Override* find(const std::string& key) const;
     void set(const std::string& key, Override value); // An empty one is forgotten.
     bool erase(const std::string& key);
@@ -45,6 +47,7 @@ public:
 
 private:
     std::map<std::string, Override> items_;
+    bool readable_ = true;
 };
 
 // The set fields over the found details.

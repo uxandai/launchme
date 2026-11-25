@@ -136,6 +136,10 @@ int main(int argc, char** argv) {
               !aurelia::librarySource(false, true, false));
     }
     request = {C::presence}; request.text = L"bogus"; CHECK(aurelia::arguments(request).empty());
+    request = {C::presence}; request.text = L"offline";
+    CHECK(aurelia::arguments(request) == std::vector<std::wstring>({L"--json", L"config", L"presence", L"offline"}));
+    request = {C::presence, 7}; request.text = L"online"; // Not the chat history that follows it in the switch.
+    CHECK(aurelia::arguments(request) == std::vector<std::wstring>({L"--json", L"config", L"presence", L"online"}));
     request = {C::move, 902}; request.folder = L"relative"; CHECK(aurelia::arguments(request).empty());
     CHECK(aurelia::arguments({C::uninstall, 0}).empty());
     request = {C::cloud_sync, 902}; request.direction = aurelia::Request::Direction::down;

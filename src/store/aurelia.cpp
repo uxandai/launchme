@@ -70,7 +70,9 @@ std::vector<std::wstring> arguments(const Request& r) {
     case C::info: add({L"info", app, L"--extended", L"--lang", r.language}); break;
     case C::achievements: add({L"achievements", app, L"--lang", r.language}); break;
     case C::friends: add({L"friends"}); break;
-    case C::presence: if (r.text != L"online" && r.text != L"offline") return {}; // Aurelia's two modes (offline: invisible). add({L"config", L"presence", r.text}); break;
+    case C::presence: // Aurelia's two modes (offline: invisible).
+        if (r.text != L"online" && r.text != L"offline") return {};
+        add({L"config", L"presence", r.text}); break;
     case C::chat_history: if (!r.id) return {}; add({L"chat", L"history", id, L"--count", L"200"}); break;
     case C::chat_send: if (!r.id || r.text.empty() || r.text.size() > 4000) return {}; add({L"chat", L"send", id, L"--", r.text}); break;
     case C::chat_live: if (!r.id) return {}; add({L"chat", L"open", id}); break;

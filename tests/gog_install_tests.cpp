@@ -14,6 +14,11 @@ void parsing() {
     const auto part = gog::parseInstallerChecksum(xml, L"https://cdn.gog.com/secure/fixture");
     check(part && part->bytes == 3 && part->name == L"setup_fixture.exe", "checksum XML exact size/name/hash");
     check(!gog::parseInstallerChecksum(xml, L"https://gog.com.evil.test/file"), "no foreign signed download URL");
+    for (const auto* url : {L"https://evil.test?.gog.com/file", L"https://evil.test:443.gog.com/file", L"https://cdn.gog.com:8443/file",
+                            L"https://evil.test%2f.gog.com/file", L"https://cdn.gog.com?x=/file"})
+        check(!gog::installerDownloadUrl(url), "the host ends where WinHTTP and libcurl end it");
+    check(gog::installerDownloadUrl(L"https://CDN.GOG.com/secure/file?token=1") && gog::installerDownloadUrl(L"https://gog-statics.com/a"),
+          "GOG hosts, any case, a query after the path");
     check(!gog::parseInstallerChecksum("<!DOCTYPE file>" + std::string(xml), L"https://cdn.gog.com/file"), "no XML entity expansion");
     for (const auto* name : {L"../setup.exe", L"C:\\setup.exe", L"setup.exe:stream", L"CON.exe", L"setup.exe.", L"setup.bat", L".exe"})
         check(!gog::installerFilename(name), "unsafe filename rejected");

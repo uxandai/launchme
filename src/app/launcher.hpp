@@ -34,6 +34,9 @@
 #include "../library/steam_accounts.hpp"
 #include "../library/rawg.hpp"
 #include "../library/game_index_service.hpp"
+#include "../library/organization.hpp"
+#include "../library/smart_filter.hpp"
+#include "../ui/library_manager_view.hpp"
 #include "../library/play_journal.hpp"
 #include "../library/studios.hpp"
 #include "../net/companion_memory.hpp"
@@ -120,6 +123,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <type_traits>
 #include <random>
 #include <set>
 #include <string>
@@ -413,6 +417,7 @@ public:
     std::string remoteLook(const std::string& key);
     std::string remoteRestart();
     void companionRemoteSync(); // Starts or stops the server as Settings say.
+    bool remote_key_checked_ = false; // Its key read from (or moved to) companion_remote.key once.
     std::vector<companion::GameFact> companionGames() const;
     companion::Look companionLook() const;       // The host: the look chosen in Settings.
     companion::Persona companionPersona() const; // Hers.
@@ -1202,6 +1207,7 @@ private:
     ProfileReader profile_reader_; // UI tests answer it; empty: readProfile on a worker (the running launcher only).
     play_journal::Journal journal_;
     bool journal_loaded_ = false, journal_dirty_ = false;
+    bool journal_readable_ = true; // false: play-journal.tsv was there but unreadable at load (profile.cpp).
     uint64_t next_journal_save_ = 0;
     achievement_history::History history_;
     bool history_loaded_ = false;
@@ -1417,6 +1423,21 @@ private:
     void collectionDialogBack();
     void collectionDialogEdit(wchar_t ch);
     void collectionDialogClick(float x, float y);
+    // Kolekcje dynamiczne and Zaawansowany filtr (src/app/smart_collections.cpp, library/smart_filter.hpp).
+    using RuleTarget = library_manager_ui::RuleTarget;
+    SmartMembers smart_members_;          // What each dynamic collection's rules match (refreshSmartMembers).
+    smart_filter::Rules library_rules_;   // Tryb TV's library: Zaawansowany filtr for this session.
+    smart_filter::Rules desktop_rules_;   // The desktop window's games: likewise.
+    smart_filter::Facts smartFacts(const Game& game, const game_index::Record* record) const;
+    std::unordered_set<std::string> smartMatches(const smart_filter::Rules& rules, const std::vector<Game>& games) const;
+    void refreshSmartMembers();
+    void applySmartRules(std::vector<Game>& games, const smart_filter::Rules& rules) const;
+    void openRuleEditor(RuleTarget target, std::string collection = {});
+    smart_filter::Rules editedRules() const;               // The rules page's rules as they stand.
+    void storeRules(const smart_filter::Rules& rules);     // Into its target; the games beneath follow at once.
+    void rebuildRulePages();                               // rebuildCollectionDialog's part for the rule pages.
+    void ruleDialogAccept(const library_manager_ui::Row& row);
+    bool ruleDialogBack();                                 // False: not a rule page.
     // Ulubione switched off (hidden like any collection, Biblioteka → Kolekcje): no stars, no Ulubione shelf
     // or desktop section, nothing to add to it; what it holds stays for when it is on again.
     bool favoritesShown() const;
@@ -1538,6 +1559,15 @@ private:
     GameOverlayMonitor::Snapshot overlay_snapshot_;
     std::optional<GameWindow> overlay_target_;
     int overlay_selected_ = 0;
+    // Guide's Przełącz grę (src/app/game_switcher.cpp): the chosen row while its list is open, and the games in it.
+    std::optional<int> game_switcher_;
+    std::vector<Game> switcher_games_;
+    std::vector<Game> switcherGames() const;
+    void openGameSwitcher();
+    void closeGameSwitcher();
+    void gameSwitcherKey(WPARAM key);
+    void gameSwitcherAccept();
+    void gameSwitcherContext(ViewContext& context); // The art cache marks what it hands out as used.
     bool overlay_opening_ = false;
     bool overlay_closing_ = false;
     GuideMotion overlay_motion_;
@@ -1973,6 +2003,16 @@ private:
     bool steamGameRunning() const;
     void gogInstallAccept();
     void pollGogInstall();
+    // Kolejka instalacji (src/app/install_queue.cpp): GOG, Epic, Amazon and Xbox games waiting for the one
+    // installer slot, started in turn with the dialog's default folders.
+    std::deque<Game> install_queue_;
+    std::optional<std::string> queue_starting_; // The queued game the slot was just prepared for.
+    bool storeInstallBusy() const;
+    int installQueuePosition(const Game& game) const; // 1-based; 0: not queued.
+    void queueInstall(const Game& game);
+    bool unqueueInstall(const Game& game);
+    void openStoreInstall(const Game& game);
+    void pumpInstallQueue();
     void applyGogInstallProgress();
     void gogCommand(gog::Command command);
     // GOG achievements without Galaxy (src/app/gog_comet.cpp): comet beside a GOG game.
@@ -2931,6 +2971,23 @@ private:
     std::function<bool(HWND)> foreground_ = [](HWND window) { return GetForegroundWindow() == window && !IsIconic(window); };
     // Every worker thread is owned here; ~Launcher signals them, then joins within a budget.
     BackgroundWork work_;
+    // The worker → UI path (worker_messages.hpp): copy it into a worker's lambda, call it with what
+    // runs on the UI thread.
+    UiPost uiPost() const { return {hwnd_, alive_}; }
+    // `work` on a worker, its result to `done(app, result)` on the UI thread. A start that fails or a
+    // `work` that throws still reaches `done`, with nullopt: a busy or pending flag set before the
+    // call is always cleared. `done` runs only while the launcher lives; check generations there.
+    template <class Work, class Done> bool runOnWorker(Work work, Done done) {
+        using Result = std::invoke_result_t<Work&>;
+        const auto post = uiPost();
+        const auto finished = std::make_shared<Done>(std::move(done));
+        return work_.start([post, finished, work = std::move(work)]() mutable {
+            auto result = std::make_shared<Result>(work());
+            post([finished, result](Launcher& app) { (*finished)(app, std::optional<Result>(std::move(*result))); });
+        }, [post, finished](std::exception_ptr) {
+            post([finished](Launcher& app) { (*finished)(app, std::optional<Result>{}); });
+        });
+    }
     std::map<std::string, GameSession> game_sessions_;
     bool sleep_inhibited_ = false; // A game runs: SetThreadExecutionState keeps the computer and display awake.
     QuickResumeBackend quick_resume_;

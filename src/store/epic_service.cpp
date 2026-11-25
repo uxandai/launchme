@@ -218,6 +218,11 @@ public:
         const auto generation = ++generation_; result_.reset(); launch_.reset();
         if (command == Command::connect || command == Command::logout || command == Command::cancel) {
             busy_ = false; install_ = {}; install_.generation = generation; install_dirty_ = true;
+        } else if (busy_) {
+            // The new generation cancels the running install or launch (its cancel predicate), and its
+            // end no longer matches generation_ to clear busy_: ended here, as cancelOperation does.
+            busy_ = false;
+            if (install_.busy()) { install_.state = gog::InstallState::cancelled; install_dirty_ = true; }
         }
         queue_.push_back({command, std::move(input), generation}); wake_.notify_one();
     }

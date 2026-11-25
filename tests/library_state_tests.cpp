@@ -200,7 +200,12 @@ int main() {
     const std::unordered_map<std::string, uint64_t> minutes{{"steam:2", 30}, {"steam:3", 900}};
     const auto by_playtime = library_view::arrange({back, a, b, c}, {library_view::Order::playtime, false}, state.first_seen, false, nullptr, &minutes);
     if (by_playtime[0].kind != GameKind::back || by_playtime[1].app_id != 3 || by_playtime[2].app_id != 2 || by_playtime[3].app_id != 1) return 68;
-    for (const auto order : {library_view::Order::installed, library_view::Order::playtime})
+    // Najkrótsze do przejścia: the launcher turns the minutes over (largest = shortest); unknown last.
+    const std::unordered_map<std::string, uint64_t> short_first{{"steam:1", (1ull << 32) - 600}, {"steam:3", (1ull << 32) - 120}};
+    const auto by_length = library_view::arrange({back, a, b, c}, {library_view::Order::shortest, false}, state.first_seen, false, nullptr, &short_first);
+    if (by_length[1].app_id != 3 || by_length[2].app_id != 1 || by_length[3].app_id != 2) return 71;
+    for (const auto order : {library_view::Order::installed, library_view::Order::playtime, library_view::Order::rating,
+                             library_view::Order::shortest, library_view::Order::longest})
         if (library_view::orderFromPersisted(library_view::persistedOrder(order)) != order ||
             library_view::persistedOrder(order) >= library_view::persisted_order_count) return 69;
     Game gog; gog.source = GameSource::gog; gog.kind = GameKind::store; gog.source_id = "123"; gog.name = L"GOG fixture";
@@ -247,7 +252,10 @@ int main() {
     { std::ofstream played(file); played << "launchme-library 1\noption \"" << key_codec::encode("1:all") << "\" 6 0\n"; }
     const auto most_played = loadLibraryState(file);
     if (!most_played || most_played->options.at("1:all").order != library_view::Order::playtime) return 70;
-    { std::ofstream beyond(file); beyond << "launchme-library 1\noption \"" << key_codec::encode("1:all") << "\" 7 0\n"; }
+    { std::ofstream rated(file); rated << "launchme-library 1\noption \"" << key_codec::encode("1:all") << "\" 9 0\n"; }
+    const auto longest = loadLibraryState(file);
+    if (!longest || longest->options.at("1:all").order != library_view::Order::longest) return 72;
+    { std::ofstream beyond(file); beyond << "launchme-library 1\noption \"" << key_codec::encode("1:all") << "\" 10 0\n"; }
     if (loadLibraryState(file)) return 24;
     { std::ofstream older(file); older << "launchme-library 1\noption \"" << key_codec::encode("1:all") << "\" 1 1\n"; }
     { std::ofstream invalid(file, std::ios::app); invalid << "option \"" << key_codec::encode("2:all") << "\" 0 0 99\n"; }

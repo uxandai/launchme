@@ -60,7 +60,7 @@ std::vector<Game> library_view::arrange(const std::vector<Game>& games, Options 
         if (options.order == Order::added) added = addedTime(game, first_seen);
         if (options.order == Order::release && released)
             if (const auto found = released->find(gameKey(game)); found != released->end() && found->second > 0) added = static_cast<uint64_t>(found->second);
-        if ((options.order == Order::installed || options.order == Order::playtime) && values)
+        if (valueOrder(options.order) && values)
             if (const auto found = values->find(gameKey(game)); found != values->end()) added = found->second;
         entries.push_back({&game, added});
     }

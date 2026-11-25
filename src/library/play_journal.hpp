@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <map>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -39,7 +40,12 @@ void launched(Journal& journal, int date, const std::string& key, const std::wst
 
 std::string format(const Journal& journal);
 Journal parse(std::string_view text); // Never throws; bad lines are skipped.
-Journal load(const std::filesystem::path& file);
+// The file's journal; an empty one when there is no file yet, nullopt when one is there but cannot
+// be read (locked, damaged, a newer version): then it must not be saved over unseen.
+std::optional<Journal> read(const std::filesystem::path& file);
+Journal load(const std::filesystem::path& file); // read(), an empty journal when it fails.
+// Adds `from`'s days and names into `into` (what was played while the file could not be read).
+void merge(Journal& into, const Journal& from);
 bool save(const Journal& journal, const std::filesystem::path& file);
 
 // The seven days ending `today` (oldest first) and the seven before them.

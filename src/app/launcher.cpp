@@ -155,11 +155,17 @@ Launcher::~Launcher() {
     jobs_->wake.notify_all();
     { std::lock_guard lock(steam_sync_queue_->mutex); }
     steam_sync_queue_->wake.notify_all();
+    // Each wake after its queue's lock: a worker between its `alive` check and its wait would
+    // otherwise miss it, sleep on, and hold the shutdown for its whole budget.
+    { std::lock_guard lock(store_jobs_->mutex); }
     store_jobs_->wake.notify_all();
     { std::lock_guard lock(plugin_jobs_->mutex); }
     plugin_jobs_->wake.notify_all();
+    { std::lock_guard lock(artwork_jobs_->mutex); }
     artwork_jobs_->wake.notify_all();
+    { std::lock_guard lock(music_jobs_->mutex); }
     music_jobs_->wake.notify_all();
+    { std::lock_guard lock(game_activity_jobs_->mutex); }
     game_activity_jobs_->wake.notify_all();
     { std::lock_guard lock(running_scan_->mutex); } // A scan between its check and its wait still gets the wake-up.
     running_scan_->wake.notify_all();
@@ -944,6 +950,7 @@ void Launcher::tick() {
     pollAmazon();
     pollXbox();
     pollGogInstall();
+    pumpInstallQueue();
     pollPcInstallations();
     pollDrmFree();
     if (gogInstallOpen() && gog_install_ui_.snapshot.busy()) needs_paint = true;

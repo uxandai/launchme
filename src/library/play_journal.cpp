@@ -121,19 +121,41 @@ Journal parse(std::string_view text) {
     return journal;
 }
 
-Journal load(const std::filesystem::path& file) {
+std::optional<Journal> read(const std::filesystem::path& file) {
+    std::error_code ec;
+    const bool exists = std::filesystem::exists(file, ec);
+    if (ec) return std::nullopt;
+    if (!exists) return Journal{}; // None yet.
     std::ifstream input(file, std::ios::binary | std::ios::ate);
-    if (!input || input.tellg() <= 0 || input.tellg() > 16 * 1024 * 1024) return {};
+    if (!input || input.tellg() < 0 || input.tellg() > 16 * 1024 * 1024) return std::nullopt;
+    if (input.tellg() == 0) return Journal{};
     std::string text(static_cast<size_t>(input.tellg()), '\0');
     input.seekg(0);
-    if (!input.read(text.data(), static_cast<std::streamsize>(text.size()))) return {};
+    if (!input.read(text.data(), static_cast<std::streamsize>(text.size()))) return std::nullopt;
+    // Without its header line the file is damaged or of a newer version: not an empty journal.
+    std::string_view body(text);
+    if (body.starts_with("\xef\xbb\xbf")) body.remove_prefix(3);
+    if (!body.starts_with("launchme-journal\t1\n") && !body.starts_with("launchme-journal\t1\r\n") && body != "launchme-journal\t1") return std::nullopt;
     return parse(text);
+}
+
+Journal load(const std::filesystem::path& file) { return read(file).value_or(Journal{}); }
+
+void merge(Journal& into, const Journal& from) {
+    for (const auto& [date, games] : from.days)
+        for (const auto& [key, entry] : games) {
+            auto& sum = into.days[date][key];
+            sum.ms = std::min<uint64_t>(sum.ms + entry.ms, 24ull * 3600 * 1000);
+            sum.launches = std::min<uint32_t>(sum.launches + entry.launches, 10000);
+        }
+    for (const auto& [key, name] : from.names) into.names[key] = name;
+    trim(into);
 }
 
 bool save(const Journal& journal, const std::filesystem::path& file) {
     std::error_code error;
     std::filesystem::create_directories(file.parent_path(), error);
-    return atomic_file::write(file, format(journal));
+    return atomic_file::writeDurable(file, format(journal)); // The player's history: flushed before the rename.
 }
 
 Week week(const Journal& journal, int today) {

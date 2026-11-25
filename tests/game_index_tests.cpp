@@ -162,6 +162,18 @@ int appinfo() {
         // Torn files and other formats are not an empty cache.
         auto torn = file; torn.resize(torn.size() / 2);
         if (steam_appinfo::parse(torn, wanted) || steam_appinfo::parse(std::vector<uint8_t>{1, 2, 3, 4, 5, 6, 7, 8}, wanted)) return 25;
+        if (v29) {
+            // A string-table offset near UINT64_MAX (it once wrapped past the bounds check) and a
+            // name count the file cannot hold.
+            auto wrapped = file;
+            for (int i = 8; i < 16; ++i) wrapped[i] = 0xFF;
+            wrapped[8] = 0xFC;
+            if (steam_appinfo::parse(wrapped, wanted)) return 290;
+            auto counted = file;
+            uint64_t offset = 0; std::memcpy(&offset, counted.data() + 8, 8);
+            const uint32_t many = 900'000; std::memcpy(counted.data() + offset, &many, 4);
+            if (steam_appinfo::parse(counted, wanted)) return 291;
+        }
         // Into a patch: the original release wins, tags by name, features after them.
         const TagNames tags{{1664, L"Puzzle"}, {4182, L"Singleplayer"}};
         const auto patch = fromAppInfo(portal, tags);

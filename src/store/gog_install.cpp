@@ -64,9 +64,15 @@ bool installerFilename(std::wstring_view name) {
 }
 bool installerDownloadUrl(std::wstring_view url) {
     if (!url.starts_with(L"https://") || url.size() > 16384 || url.find_first_of(L"\r\n\\#@") != url.npos) return false;
-    const auto end = url.find(L'/', 8);
-    if (end == url.npos) return false;
-    const auto host = url.substr(8, end - 8);
+    // The authority ends at the first of these, as WinHTTP and libcurl read it: with only '/',
+    // "https://evil.test?.gog.com/x" would pass as a GOG host and connect to evil.test.
+    const auto end = url.find_first_of(L"/?#:", 8);
+    if (end == url.npos || url[end] != L'/') return false; // A path right after the host: no port, no query.
+    std::wstring host(url.substr(8, end - 8));
+    for (auto& ch : host) {
+        if (ch >= L'A' && ch <= L'Z') ch = static_cast<wchar_t>(ch - L'A' + L'a');
+        if (!((ch >= L'a' && ch <= L'z') || (ch >= L'0' && ch <= L'9') || ch == L'-' || ch == L'.')) return false;
+    }
     // The resolver issues signed URLs on GOG's CDN domains; do not send a
     // bearer or follow a redirect to a URL selected by a downloaded document.
     return host == L"gog.com" || host.ends_with(L".gog.com") || host == L"gog-statics.com" || host.ends_with(L".gog-statics.com");

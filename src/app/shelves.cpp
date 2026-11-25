@@ -387,12 +387,13 @@ void Launcher::buildShelves() {
             if (settings_.hidden_collections.contains(collectionKey(account_, collection))) settings_.hidden_library_tabs.insert(collection.id);
         settings_.home_rows_migrated = true; // Saved with the next change (the migration is idempotent until then).
     }
+    refreshSmartMembers(); // Kolekcje dynamiczne: what their rules match in this library.
     std::vector<SteamCollection> shown; // One call indexes the library once for every shelf.
     for (const auto& collection : settings_collections_) {
         if (srmCollectionsHidden() && srmCollection(collection)) continue; // Emulacja (or the ROM folder) lists them by platform.
         shown.push_back(collection);
     }
-    for (auto& shelf : managedShelves(account_, shown, library_state_.collections, public_library_, private_shelf_))
+    for (auto& shelf : managedShelves(account_, shown, library_state_.collections, public_library_, private_shelf_, &smart_members_))
         categories_.push_back(Category{std::move(shelf.name), std::move(shelf.games), 0, std::move(shelf.id)});
     steam_rows_available_ = collections_source_.empty() && steam;
     if (collections_source_.empty() && steam) {
@@ -569,7 +570,10 @@ void Launcher::rebuildCards(bool preserve_background) {
         const auto values = orderValues(source, library_controls_.options.order); // Ostatnio zainstalowane, Najdłużej grane.
         // A board of logos keeps its own order (most games first, or the player's).
         arranged = studioBoard() ? source : library_view::arrange(source, library_controls_.options, library_state_.first_seen, private_shelf_, &released, &values);
-        if (!studioBoard()) applyLibraryFilters(arranged, library_controls_.options.filters); // Filtry (the order's menu).
+        if (!studioBoard()) {
+            applyLibraryFilters(arranged, library_controls_.options.filters); // Filtry (the order's menu).
+            applySmartRules(arranged, library_rules_);                         // Zaawansowany filtr.
+        }
         // The library's search field keeps the games whose title contains the typed text, in order,
         // and the games of a typed genre or tag ("rpg", "przygodowe", "roguelike") or studio ("capcom").
         if (screen_ == ScreenMode::library && library_controls_.search) {

@@ -30,7 +30,7 @@ inline bool write(const std::filesystem::path& file, std::string_view text, cons
     if (text.size() > MAXDWORD) return false;
     DATA_BLOB plain{static_cast<DWORD>(text.size()), reinterpret_cast<BYTE*>(const_cast<char*>(text.data()))}, encrypted{};
     if (!CryptProtectData(&plain, description, nullptr, nullptr, nullptr, CRYPTPROTECT_UI_FORBIDDEN, &encrypted)) return false;
-    const bool saved = atomic_file::write(file, std::span<const uint8_t>(encrypted.pbData, encrypted.cbData));
+    const bool saved = atomic_file::writeDurable(file, std::span<const uint8_t>(encrypted.pbData, encrypted.cbData)); // Flushed before the rename.
     LocalFree(encrypted.pbData); return saved;
 }
 #endif

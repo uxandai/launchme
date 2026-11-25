@@ -21,6 +21,9 @@ set(LAUNCHME_APP_SOURCES
     src/app/library_worker.cpp
     src/app/shelves.cpp
     src/app/collections.cpp
+    src/app/smart_collections.cpp
+    src/app/game_switcher.cpp
+    src/app/install_queue.cpp
     src/app/steam_sync.cpp
     src/app/versions.cpp
     src/ui/library_manager_renderer.cpp
@@ -344,6 +347,7 @@ set(LAUNCHME_APP_SOURCES
     src/library/game_index_service.cpp
     src/library/steam_tags_builtin.cpp
     src/library/view_options.cpp
+    src/library/smart_filter.cpp
     src/library/store_adapter.cpp
     src/library/custom_games.cpp
     src/library/litedb_v7.cpp

@@ -176,7 +176,7 @@ void Launcher::desktopActivate(const desktop_ui::Hit& hit) {
             if (primary) { desktop_query_.clear(); desktop_caret_ = 0; desktopApplyQuery(); }
             else { const auto query = desktop_query_; desktopShowSection("all"); desktop_query_ = query; desktopApplyQuery(); }
         } else if (desktopFiltered() && !desktopSource().empty()) {
-            settings_.desktop_installed = false; settings_.desktop_filters = 0; settings_dirty_ = true; settings_edited_ = std::chrono::steady_clock::now();
+            settings_.desktop_installed = false; settings_.desktop_filters = 0; desktop_rules_.clear(); settings_dirty_ = true; settings_edited_ = std::chrono::steady_clock::now();
             rebuildCards(true);
         } else if (entry && entry->kind == EntryKind::collection) desktopCollectionDialog(entry->collection, Page::games);
         else if (public_library_.empty()) {

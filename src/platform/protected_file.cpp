@@ -76,11 +76,9 @@ std::optional<Key> fileKey(bool create) {
     if (RAND_bytes(key.data(), static_cast<int>(key.size())) != 1) return std::nullopt;
     std::error_code error;
     std::filesystem::create_directories(file.parent_path(), error);
-    const mode_t previous = ::umask(077);
-    const bool saved = atomic_file::writeDurable(file, hex(key) + "\n");
-    ::umask(previous);
-    if (!saved) return std::nullopt;
-    ::chmod(file.c_str(), 0600);
+    // Created 0600 itself: no umask change, which is process-wide while other threads create files.
+    if (!atomic_file::writeDurable(file, hex(key) + "\n", 0600)) return std::nullopt;
+    ::chmod(file.c_str(), 0600); // A file left by an older version with wider rights.
     return key;
 }
 
@@ -150,6 +148,7 @@ bool write(const std::filesystem::path& file, std::string_view text, const wchar
         EVP_EncryptFinal_ex(cipher.value, body + length, &final_length) == 1 &&
         EVP_CIPHER_CTX_ctrl(cipher.value, EVP_CTRL_GCM_GET_TAG, static_cast<int>(tag_size), body + text.size()) == 1;
     if (!ok) return false;
-    return atomic_file::write(file, std::span<const uint8_t>(bytes));
+    // Durable (a key the user typed once is not lost to a power cut) and readable by this user only.
+    return atomic_file::writeDurable(file, std::span<const uint8_t>(bytes), 0600);
 }
 }

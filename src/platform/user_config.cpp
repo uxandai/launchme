@@ -1,5 +1,6 @@
 #include "user_config.hpp"
 #include "atomic_file.hpp"
+#include "file_io.hpp"
 #include "protected_file.hpp"
 #include "sound_cues.hpp"
 #include "music_themes.hpp"
@@ -65,10 +66,16 @@ std::wstring userSecretFile(const std::filesystem::path& file) {
     // Saved by launchme: readable only by this user (DPAPI; AES-GCM on Linux).
     if (const auto stored = protected_file::read(file, 8192)) return text_encoding::wide(secretLine(*stored));
     // A plain one-line file (written by hand, or by launchme up to 0.7.12): used, then encrypted in place.
-    std::ifstream input(file, std::ios::binary);
-    std::string bytes;
-    std::getline(input, bytes);
-    input.close();
+    // Not an encrypted one that could not be opened now (a locked keyring, another user's DPAPI):
+    // read as text it would be garbage, and encrypting that over it would lose the key for good.
+    const auto head = file_io::readBytes(file, 8192);
+#ifdef _WIN32
+    static constexpr uint8_t encrypted[] = {0x01, 0x00, 0x00, 0x00, 0xD0, 0x8C, 0x9D, 0xDF}; // A DPAPI blob's version and provider.
+#else
+    static constexpr uint8_t encrypted[] = {'L', 'M', 'P', '1'}; // protected_file.cpp's magic.
+#endif
+    if (head.size() >= sizeof(encrypted) && std::equal(std::begin(encrypted), std::end(encrypted), head.begin())) return {};
+    std::string bytes(head.begin(), head.end());
     bytes = secretLine(std::move(bytes));
     if (bytes.empty()) return {};
     auto value = text_encoding::wide(bytes);
@@ -627,11 +634,11 @@ AppSettings parseAppSettings(std::string_view text) {
             const auto parsed = std::from_chars(value.data(), value.data() + value.size(), percent);
             if (parsed.ec == std::errc{} && parsed.ptr == value.data() + value.size()) settings.stage_dim = std::clamp(percent / 10 * 10, 0, 80);
         }
-        else if (key == "desktop_sort" && value.size() == 1 && value[0] >= '1' && value[0] <= '6') settings.desktop_sort = value[0] - '0';
-        else if (key == "desktop_filters" && !value.empty() && value.size() <= 3 && std::all_of(value.begin(), value.end(), [](char c) { return c >= '0' && c <= '9'; })) {
+        else if (key == "desktop_sort" && value.size() == 1 && value[0] >= '1' && value[0] <= '9') settings.desktop_sort = value[0] - '0';
+        else if (key == "desktop_filters" && !value.empty() && value.size() <= 4 && std::all_of(value.begin(), value.end(), [](char c) { return c >= '0' && c <= '9'; })) {
             int bits = 0;
             for (const char c : value) bits = bits * 10 + (c - '0');
-            if (bits < 256) settings.desktop_filters = static_cast<uint32_t>(bits);
+            if (bits < 1024) settings.desktop_filters = static_cast<uint32_t>(bits); // Ten Filter bits (Game Pass, Kupione included).
         }
         else if ((key == "desktop_section" || key == "desktop_game") && value.size() < 400 &&
                  value.find_first_of("\r\n") == std::string_view::npos) (key == "desktop_section" ? settings.desktop_section : settings.desktop_game) = std::string(value);
@@ -926,7 +933,12 @@ AppSettings loadAppSettings(const std::filesystem::path& file) {
         input.seekg(0);
         if (!input.read(text.data(), static_cast<std::streamsize>(text.size()))) continue;
         if (text.empty() || text.find_first_not_of(std::string_view("\0 \t\r\n", 5)) == std::string::npos) break; // Zeroed by a power cut.
-        return parseAppSettings(text);
+        auto settings = parseAppSettings(text);
+        // Launchme never writes a NUL, and its file is all key=value lines: a damaged one (partly
+        // zeroed, binary, a sync client's conflict file) keeps what parsed, but is marked so the
+        // user hears of it and the damaged file is kept as settings.unreadable.ini before a save.
+        if (text.find('\0') != std::string::npos || text.find('=') == std::string::npos) settings.load_failed = true;
+        return settings;
     }
     AppSettings defaults;
     defaults.load_failed = true;
@@ -963,9 +975,9 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
            << "desktop_poster=" << std::clamp(settings.desktop_poster, 112, 240) << '\n'
            << "stage_dim=" << std::clamp(settings.stage_dim, 0, 80) << '\n'
            << "desktop_view=" << std::clamp(settings.desktop_view, 0, 3) << '\n'
-           << "desktop_sort=" << std::clamp(settings.desktop_sort, 1, 6) << '\n'
+           << "desktop_sort=" << std::clamp(settings.desktop_sort, 1, 9) << '\n'
            << "desktop_installed=" << settings.desktop_installed << '\n'
-           << "desktop_filters=" << (settings.desktop_filters & 0xFFu) << '\n'
+           << "desktop_filters=" << (settings.desktop_filters & 0x3FFu) << '\n'
            << "desktop_narrow=" << settings.desktop_narrow << '\n'
            << "desktop_pane=" << (settings.desktop_pane <= 0 ? 0 : std::clamp(settings.desktop_pane, 300, 4000)) << '\n'
            << "desktop_section=" << (settings.desktop_section.find_first_of("\r\n") == std::string::npos ? settings.desktop_section : std::string("all")) << '\n'
@@ -1178,7 +1190,8 @@ bool saveAppSettings(const AppSettings& settings, const std::filesystem::path& f
     output << "companion_weather=" << settings.companion_weather << '\n';
     output << "companion_remote=" << settings.companion_remote << '\n';
     output << "companion_remote_port=" << settings.companion_remote_port << '\n';
-    output << "companion_remote_key=" << settings.companion_remote_key << '\n';
+    // companion_remote_key: not written any more (an older file's is read once and moved to the
+    // encrypted companion_remote.key, src/app/companion_remote.cpp).
     output << "companion_photos=" << (settings.companion_photos == AppSettings::CompanionPhotos::folder ? "folder" : "off") << '\n';
     output << "companion_photo_folder=" << text_encoding::utf8Lenient(settings.companion_photo_folder) << '\n';
     output << "companion_reply_length=" << companion::replyStyle(settings.companion_reply_length).key << '\n';

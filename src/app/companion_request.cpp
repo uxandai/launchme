@@ -253,7 +253,7 @@ void Launcher::requestCompanion(CompanionMessage::Purpose purpose, std::wstring 
     // kolekcje_i_ulubione: snapshot of the player's collections and favorites from the UI thread.
     std::vector<companion::tools::CollectionInfo> collections_snapshot;
     if (chatting && library_state_readable_) {
-        for (const auto& shelf : managedShelves(account_, settings_collections_, library_state_.collections, public_library_, private_shelf_)) {
+        for (const auto& shelf : managedShelves(account_, settings_collections_, library_state_.collections, public_library_, private_shelf_, &smart_members_)) {
             companion::tools::CollectionInfo info;
             const auto found = std::find_if(settings_collections_.begin(), settings_collections_.end(), [&](const auto& c) { return c.id == shelf.id; });
             info.name = shelf.name;

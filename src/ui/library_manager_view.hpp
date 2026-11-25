@@ -1,8 +1,15 @@
 #pragma once
 #include "settings_view.hpp"
+#include "../library/smart_filter.hpp"
 
 namespace library_manager_ui {
-enum class Page { collections, collection, games, membership, name, versions, excluded };
+// rules: a dynamic collection's or Zaawansowany filtr's rules (each a row, Dodaj regułę, …); rule: one
+// rule being made or changed (its value in the text field, Pole, Warunek, suggestions, Gotowe);
+// rule_field: the list of fields to choose from.
+enum class Page { collections, collection, games, membership, name, versions, excluded, rules, rule, rule_field };
+// Whose rules the rules page edits: a dynamic collection's (State::collection), Tryb TV's library or the
+// desktop window's games (both for this session).
+enum class RuleTarget { collection, library, desktop };
 struct Row {
     std::wstring title, subtitle;
     std::string key;
@@ -27,7 +34,28 @@ struct State {
     std::vector<Game> more_games;
     bool close_after_save = false;
     bool settings_return = false; // Opened from a collection's page in Settings: Back closes the dialog.
-    bool textField() const { return page == Page::name || page == Page::games || page == Page::excluded; }
+    // Kolekcje dynamiczne and Zaawansowany filtr.
+    bool smart_collection = false;     // Nowa kolekcja: the third kind (dynamic), beside steam_collection.
+    RuleTarget rule_target = RuleTarget::collection;
+    smart_filter::Rules rules;         // A new dynamic collection's first rules (Zapisz jako kolekcję dynamiczną).
+    smart_filter::Rule draft;          // Page::rule: the rule being made or changed.
+    int rule_index = -1;               // Page::rule: which rule (-1: a new one).
+    int matching = -1;                 // Page::rules: games the rules match now (-1: not counted).
+    bool ruleText() const { return page == Page::rule && !smart_filter::choiceField(draft.field); }
+    bool textField() const { return page == Page::name || page == Page::games || page == Page::excluded || ruleText(); }
+    const wchar_t* placeholder() const {
+        using smart_filter::Field;
+        if (page == Page::name) return tr(L"Nazwa");
+        if (page != Page::rule) return tr(L"Szukaj");
+        switch (draft.field) {
+        case Field::title: return tr(L"Słowa z tytułu, np. tekken (przecinek: kilka)");
+        case Field::studio: return tr(L"Np. capcom, bandai namco");
+        case Field::label: return tr(L"Np. rpg, roguelike, przygodowe");
+        case Field::rating: return tr(L"Procent, np. 80");
+        case Field::length: return tr(L"Godziny, np. 10");
+        default: return tr(L"Rok, np. 2015");
+        }
+    }
 };
 struct Layout {
     float width, height;

@@ -223,7 +223,7 @@ void Launcher::tickGameOverlay(uint64_t now) {
 void Launcher::dismissGameOverlay() {
     if (!gameOverlayOpen() || overlay_closing_) return;
     overlay_closing_ = true;
-    closeFriends(); closePowerMenu();
+    closeFriends(); closePowerMenu(); closeGameSwitcher();
     invalidateGameOverlay();
 }
 
@@ -303,6 +303,7 @@ void Launcher::closeGameOverlay(bool return_to_game) {
     const auto target = *overlay_target_;
     overlay_target_.reset(); // Hide may synchronously send WM_ACTIVATE.
     overlay_closing_ = false;
+    closeGameSwitcher();
     overlay_motion_ = {};
     closeFriends(); friends_progress_ = 0;
     closePowerMenu();
@@ -337,6 +338,7 @@ void Launcher::overlayAccept() {
     const auto action = quick_menu::action(overlay_selected_, 0, true);
     if (action == quick_menu::Action::widgets) { openOverlayDrawer(); invalidateGameOverlay(); return; }
     if (action == quick_menu::Action::close_game) { openGameCloseMenu(); return; }
+    if (action == quick_menu::Action::switch_game) { openGameSwitcher(); return; }
     if (action == quick_menu::Action::power) { openPowerMenu(); invalidateGameOverlay(); return; }
     const auto target = overlay_target_;
     overlayDashboard();
@@ -391,6 +393,7 @@ void Launcher::overlayKey(WPARAM key, bool repeated) {
         return;
     }
     if (power_menu_) { powerMenuKey(key, repeated); invalidateGameOverlay(); return; }
+    if (game_switcher_) { if (!repeated || key == VK_UP || key == VK_DOWN) gameSwitcherKey(key); invalidateGameOverlay(); return; }
     if (friendChatOpen()) { friendChatKey(key, repeated); invalidateGameOverlay(); return; } // Typing a message over the game.
     if (key == VK_ESCAPE || key == VK_BACK) {
         if (friends_open_) friendsBack();
@@ -414,6 +417,14 @@ void Launcher::overlayClick(float x, float y) {
     if (!gameOverlayOpen() || overlay_closing_) return;
     const auto view = drawerViewport();
     x /= view.scale; y /= view.scale;
+    if (game_switcher_) {
+        // A row switches to its game; anywhere else shuts the list (the bar's buttons included).
+        const float button_x = quick_menu::center(view.width, 1, quick_menu::store_slots, true);
+        const int row = quick_menu::switcher::hit(view.width, view.height, button_x, static_cast<int>(switcher_games_.size()), x, y, overlay_motion_.bar);
+        if (row >= 0) { game_switcher_ = row; gameSwitcherAccept(); } else closeGameSwitcher();
+        invalidateGameOverlay();
+        return;
+    }
     if (power_menu_) {
         const auto layout = powerMenuGeometryFor(view.width, view.height);
         const int row = layout.hit(x, y);

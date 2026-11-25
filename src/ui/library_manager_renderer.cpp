@@ -69,7 +69,7 @@ void Renderer::drawLibraryManager() {
         const auto r = layout.input(); brush(D2D1::ColorF(0.02f, 0.03f, 0.04f)); target_->FillRoundedRectangle(pill(rect(r)), solid_.Get());
         if (ui.focus == -2) { brush(uiAccent()); target_->DrawRoundedRectangle(pill(rect(r)), solid_.Get(), 1.5f); }
         if (ui.selected && ui.focus == -2) { brush(uiAccent(0.20f)); target_->FillRoundedRectangle(pill(rect(r)), solid_.Get()); }
-        const auto placeholder = ui.page == library_manager_ui::Page::name ? tr(L"Nazwa") : tr(L"Szukaj");
+        const auto placeholder = ui.placeholder();
         textLine(ui.input.empty() ? std::wstring(placeholder) : ui.input + (ui.focus == -2 && !ui.selected ? L"│" : L""), r.left + 16,
             (r.top + r.bottom) / 2, r.right - r.left - 32, settings_body_font_.Get(), ui.input.empty() ? muted : white);
     }

@@ -519,7 +519,12 @@ DownloadError httpDownload(const std::wstring& original_url, const std::filesyst
             }
             if (!status || status >= 500) break;
             if (status != 200 && status != 206) return DownloadError::network;
-            if (!stream.started) return DownloadError::invalid_response; // An empty body where the file was expected.
+            if (!stream.started) {
+                // As on Windows: a cancel is no error, and a connection cut before the first byte is retried.
+                if (cancel()) return DownloadError::none;
+                if (result == CURLE_OK) return DownloadError::invalid_response; // An empty body where the file was expected.
+                break;
+            }
             if (::fsync(file.value) != 0) return DownloadError::storage;
             const bool finished = result == CURLE_OK && offset == total;
             if (finished || (cancel() && offset <= total)) return DownloadError::none;

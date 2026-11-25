@@ -12,6 +12,8 @@
 #include "../platform/text_encoding.hpp"
 #include "../platform/user_config.hpp"
 
+#include <algorithm>
+#include <cctype>
 #include <future>
 
 namespace {
@@ -144,6 +146,20 @@ void Launcher::onRemote(std::unique_ptr<RemoteMessage> message) {
 }
 
 void Launcher::companionRemoteSync() {
+    // The key is the server's only password: kept encrypted (companion_remote.key), not in
+    // settings.ini. A key an older version wrote there moves over once; the next save drops it.
+    constexpr const wchar_t* key_file = L"companion_remote.key";
+    if (!remote_key_checked_) {
+        remote_key_checked_ = true;
+        if (!settings_.companion_remote_key.empty()) {
+            if (!storedUserSecret(key_file)) saveUserSecret(key_file, text_encoding::wideLenient(settings_.companion_remote_key));
+            settings_dirty_ = true; settings_edited_ = std::chrono::steady_clock::now();
+        } else {
+            const auto stored = text_encoding::utf8Lenient(userSecretFile(userConfigDirectory() / key_file));
+            if (stored.size() >= 8 && stored.size() <= 64 && std::all_of(stored.begin(), stored.end(), [](char ch) { return std::isalnum(static_cast<unsigned char>(ch)) != 0; }))
+                settings_.companion_remote_key = stored;
+        }
+    }
     const bool wanted = settings_.companion && settings_.companion_remote;
     const auto port = static_cast<uint16_t>(settings_.companion_remote_port);
     if (!wanted) {
@@ -154,7 +170,8 @@ void Launcher::companionRemoteSync() {
     if (remote_ && remote_->running() && remote_->port() == port) return;
     if (settings_.companion_remote_key.empty()) {
         settings_.companion_remote_key = remote::newKey();
-        settings_dirty_ = true; settings_save_failed_ = false; settings_edited_ = std::chrono::steady_clock::now();
+        if (!saveUserSecret(key_file, text_encoding::wideLenient(settings_.companion_remote_key)))
+            diagnostics::log("warning", "Phone access: its key could not be saved; a new one comes at the next start");
     }
     if (!remote_) remote_ = std::make_unique<remote::Server>();
     Context context{hwnd_, alive_, settings_.companion_remote_key, userConfigDirectory()};

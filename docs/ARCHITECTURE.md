@@ -48,7 +48,10 @@ workers and comes back as posted messages.
 - A finished job posts its result with `PostMessageW`. Typed results use the messages listed in
   `src/app/worker_messages.def` (ID, payload type, `Launcher::on*` handler; the same table drives
   dispatch in `message_dispatch.hpp` and the cleanup of undelivered payloads at shutdown). Small
-  one-off results use `RemoteMessage{run}`, a callback run on the UI thread.
+  one-off results use `RemoteMessage{run}`, a callback run on the UI thread: post it with a copied
+  `uiPost()` (`UiPost`, which checks `alive_` and frees an undelivered message), or start the whole
+  job with `runOnWorker(work, done)`, whose `done` also runs (with nullopt) when the job throws or
+  cannot start, so a busy flag set before it is always cleared.
 - A result that can be overtaken by a newer request carries a generation number and is dropped when
   it no longer matches (see `src/app/tarot.cpp` and `steam_install.cpp`).
 - Injectable transports (`glance_get_`, `tarot_get_`, `game_index_configure_`, the backends in

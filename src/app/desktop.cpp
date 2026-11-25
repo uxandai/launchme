@@ -173,7 +173,7 @@ void Launcher::buildDesktopSidebar() {
         collections.push_back(c);
     }
     std::unordered_map<std::string, size_t> counts;
-    for (const auto& shelf : managedShelves(account_, collections, library_state_.collections, public_library_, private_shelf_))
+    for (const auto& shelf : managedShelves(account_, collections, library_state_.collections, public_library_, private_shelf_, &smart_members_))
         counts[shelf.id] = versions_.collapse(shelf.games, library_state_.preferred_versions, library_state_.first_seen).size();
     for (const auto& c : collections) {
         auto& entry = add(EntryKind::collection, Group::collections, "collection:" + c.id, c.name, counts[c.id], glyph::folder);
@@ -224,7 +224,7 @@ const SteamCollection* Launcher::desktopCollection(const std::string& id) const 
 std::vector<Game> Launcher::desktopFavoriteGames() const {
     std::vector<Game> games;
     std::unordered_set<std::string> keys;
-    for (auto& shelf : managedShelves(account_, {desktopFavorites()}, library_state_.collections, public_library_, private_shelf_))
+    for (auto& shelf : managedShelves(account_, {desktopFavorites()}, library_state_.collections, public_library_, private_shelf_, &smart_members_))
         for (auto& game : versions_.collapse(shelf.games, library_state_.preferred_versions, library_state_.first_seen))
             if (isGame(game) && keys.insert(library_view::selectionKey(game)).second) games.push_back(std::move(game));
     for (const auto& game : grouped_library_)
@@ -262,7 +262,7 @@ std::vector<Game> Launcher::desktopSource() const {
     case EntryKind::studio: return studioGames(entry->id);
     case EntryKind::collection:
         if (const auto* collection = desktopCollection(entry->collection))
-            for (auto& shelf : managedShelves(account_, {*collection}, library_state_.collections, public_library_, private_shelf_))
+            for (auto& shelf : managedShelves(account_, {*collection}, library_state_.collections, public_library_, private_shelf_, &smart_members_))
                 return versions_.collapse(shelf.games, library_state_.preferred_versions, library_state_.first_seen);
         return games;
     }
@@ -284,6 +284,7 @@ std::vector<Game> Launcher::desktopGames() const {
     auto games = library_view::arrange(source, options, library_state_.first_seen, include_private, &released, &values);
     std::erase_if(games, [](const Game& game) { return !isGame(game); });
     applyLibraryFilters(games, options.filters);
+    applySmartRules(games, desktop_rules_); // Zaawansowany filtr.
     // Search: the title, a genre/tag the game index knows ("rpg", "roguelike") or its developer or publisher.
     const auto typed = trimmed(desktop_query_);
     const auto query = foldGameTitle(typed);
@@ -830,7 +831,7 @@ void Launcher::desktopView(desktop_ui::View& view) {
     view.count = cards_.size();
     view.sort_label = library_view::label(library_view::orderFromPersisted(settings_.desktop_sort));
     view.installed_only = settings_.desktop_installed;
-    view.filter_count = library_view::activeFilters(library_view::Options{.installed_only = settings_.desktop_installed, .filters = settings_.desktop_filters});
+    view.filter_count = library_view::activeFilters(library_view::Options{.installed_only = settings_.desktop_installed, .filters = settings_.desktop_filters}) + static_cast<int>(desktop_rules_.size());
     view.scroll = desktop_scroll_;
     view.scrollbar = desktop_scrollbar_;
     view.card_hover = desktop_card_hover_;
@@ -899,7 +900,7 @@ void Launcher::desktopView(desktop_ui::View& view) {
             empty.body = tr(L"Sprawdź pisownię albo wpisz gatunek lub tag.");
             empty.primary = tr(L"Wyczyść wyszukiwanie");
             if (desktop_section_ != "all") empty.secondary = tr(L"Szukaj we wszystkich grach");
-        } else if (settings_.desktop_filters && !desktopSource().empty()) {
+        } else if ((settings_.desktop_filters || !desktop_rules_.empty()) && !desktopSource().empty()) {
             empty.icon = glyph::filter;
             empty.title = tr(L"Żadna gra nie pasuje do filtrów");
             empty.body = tr(L"Filtry trybów gry biorą się z tagów sklepów i RAWG; gry bez nich nie pasują do żadnego.");
@@ -987,8 +988,8 @@ void Launcher::desktopView(desktop_ui::View& view) {
 
 bool Launcher::desktopMember(const Game& game, const SteamCollection& collection) const {
     if (!game.version_group.empty()) if (const auto* copies = versions_.find(game))
-        return std::any_of(copies->begin(), copies->end(), [&](const Game& copy) { return collectionContains(library_state_.collections, account_, collection, copy); });
-    return collectionContains(library_state_.collections, account_, collection, game);
+        return std::any_of(copies->begin(), copies->end(), [&](const Game& copy) { return collectionContains(library_state_.collections, account_, collection, copy, &smart_members_); });
+    return collectionContains(library_state_.collections, account_, collection, game, &smart_members_);
 }
 
 // ---- Persistence -----------------------------------------------------------------------------

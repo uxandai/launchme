@@ -21,8 +21,13 @@ const std::pair<const char*, std::wstring Override::*> fields[] = {
 
 bool Overrides::load(const std::filesystem::path& file) {
     items_.clear();
+    readable_ = false;
+    std::error_code ec;
+    const bool exists = std::filesystem::exists(file, ec);
+    if (ec) return false;
+    if (!exists) return readable_ = true; // None yet.
     std::ifstream input(file, std::ios::binary | std::ios::ate);
-    if (!input) return true; // None yet.
+    if (!input) return false;
     const auto size = input.tellg();
     if (size < 0 || size > static_cast<std::streamoff>(max_file)) return false;
     std::string text(static_cast<size_t>(size), '\0');
@@ -30,7 +35,8 @@ bool Overrides::load(const std::filesystem::path& file) {
     if (!input.read(text.data(), static_cast<std::streamsize>(text.size()))) return false;
     const auto root = json::parse(text, max_file);
     const auto* games = root ? root->get("games") : nullptr;
-    if (!games) return false;
+    if (!games || games->type != json::Value::Type::object) return false;
+    readable_ = true;
     for (const auto& [key, entry] : games->properties) {
         Override value;
         for (const auto& [name, member] : fields)
@@ -48,7 +54,23 @@ bool Overrides::load(const std::filesystem::path& file) {
     return true;
 }
 
-bool Overrides::save(const std::filesystem::path& file) const {
+bool Overrides::save(const std::filesystem::path& file) {
+    if (!readable_) {
+        // Unreadable when loaded: read again, this session's entries over the file's own; still
+        // unreadable, the file is kept beside the new one rather than replaced unseen.
+        Overrides stored;
+        if (stored.load(file)) {
+            for (auto& [key, value] : items_) stored.items_[key] = std::move(value);
+            items_ = std::move(stored.items_);
+        } else {
+            auto kept = file;
+            kept.replace_extension(L".unreadable.json");
+            std::error_code ec;
+            std::filesystem::copy_file(file, kept, std::filesystem::copy_options::overwrite_existing, ec);
+            if (ec) return false;
+        }
+        readable_ = true;
+    }
     auto games = json::object();
     for (const auto& [key, value] : items_) {
         auto entry = json::object();
@@ -67,7 +89,7 @@ bool Overrides::save(const std::filesystem::path& file) const {
     const auto text = json::serialize(root);
     std::error_code error;
     std::filesystem::create_directories(file.parent_path(), error);
-    return atomic_file::write(file, std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(text.data()), text.size()));
+    return atomic_file::writeDurable(file, text); // The player's own edits: flushed before the rename.
 }
 
 const Override* Overrides::find(const std::string& key) const {

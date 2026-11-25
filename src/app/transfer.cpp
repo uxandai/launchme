@@ -62,12 +62,9 @@ const PlayniteOption playnite_options[] = {
 };
 }
 
-// Posts `run` to the UI thread from a worker (RemoteMessage).
+// Posts `run` to the UI thread from a worker (UiPost, worker_messages.hpp).
 static void postToLauncher(HWND hwnd, const std::shared_ptr<std::atomic_bool>& alive, std::function<void(Launcher&)> run) {
-    if (!alive->load()) return;
-    auto message = std::make_unique<RemoteMessage>();
-    message->run = std::move(run);
-    if (PostMessageW(hwnd, remote_message, 0, reinterpret_cast<LPARAM>(message.get()))) message.release();
+    UiPost{hwnd, alive}(std::move(run));
 }
 
 bool Launcher::transferPage() const {

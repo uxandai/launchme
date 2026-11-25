@@ -128,6 +128,54 @@ void Renderer::drawQuickPanel() {
     target_->SetTransform(screen);
 }
 
+// Guide's Przełącz grę: a glass panel rising from its button, one row per running or suspended game: its
+// cover, its name and what it is doing; the chosen row lit. Covers decode in this window's own renderer.
+void Renderer::drawGameSwitcher() {
+    const auto& rows = context_->game_switcher;
+    if (rows.empty()) { if (!switcher_covers_.empty()) switcher_covers_.clear(); return; }
+    const float alpha = smoothFade(context_->quick_progress);
+    if (alpha < 0.004f) return;
+    namespace sw = quick_menu::switcher;
+    const int count = sw::shown(static_cast<int>(rows.size()));
+    if (switcher_covers_.size() != static_cast<size_t>(count)) switcher_covers_.resize(static_cast<size_t>(count));
+    const float button_x = quick_menu::center(viewport_.width, 1, quick_menu::store_slots, true);
+    const auto p = sw::panel(viewport_.width, viewport_.height, button_x, count, context_->quick_progress);
+    const auto panel = D2D1::RoundedRect(D2D1::RectF(p.left, p.top, p.right, p.bottom), 18, 18);
+    brush(color(0.07f, 0.075f, 0.085f, 0.94f * alpha)); target_->FillRoundedRectangle(panel, solid_.Get());
+    brush(color(1, 1, 1, 0.12f * alpha)); target_->DrawRoundedRectangle(panel, solid_.Get(), 1);
+    // A small notch pointing down at the button.
+    brush(color(0.07f, 0.075f, 0.085f, 0.94f * alpha));
+    {
+        ComPtr<ID2D1PathGeometry> path; ComPtr<ID2D1GeometrySink> sink;
+        if (SUCCEEDED(factory_->CreatePathGeometry(path.GetAddressOf())) && SUCCEEDED(path->Open(sink.GetAddressOf()))) {
+            sink->BeginFigure(D2D1::Point2F(button_x - 10, p.bottom - 1), D2D1_FIGURE_BEGIN_FILLED);
+            sink->AddLine(D2D1::Point2F(button_x + 10, p.bottom - 1)); sink->AddLine(D2D1::Point2F(button_x, p.bottom + 9));
+            sink->EndFigure(D2D1_FIGURE_END_CLOSED);
+            if (SUCCEEDED(sink->Close())) target_->FillGeometry(path.Get(), solid_.Get());
+        }
+    }
+    for (int i = 0; i < count; ++i) {
+        const auto& item = rows[static_cast<size_t>(i)];
+        const auto r = sw::row(viewport_.width, viewport_.height, button_x, i, context_->quick_progress);
+        const bool chosen = context_->game_switcher_selected == i;
+        if (chosen) { brush(color(1, 1, 1, 0.13f * alpha)); target_->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(r.left, r.top, r.right, r.bottom), 12, 12), solid_.Get()); }
+        // The cover: a square tile at the left, its art cropped to fill it.
+        const auto art = D2D1::RectF(r.left + 8, r.top + 8, r.left + 8 + (r.bottom - r.top - 16), r.bottom - 8);
+        if (auto* shown = dialogImage(switcher_covers_[static_cast<size_t>(i)], item.cover)) {
+            fillImage(*shown, art, 8, reveal(*shown) * alpha);
+        } else {
+            brush(color(1, 1, 1, 0.07f * alpha)); target_->FillRoundedRectangle(D2D1::RoundedRect(art, 8, 8), solid_.Get());
+            const auto initial = item.name.empty() ? std::wstring(L"?") : item.name.substr(0, 1);
+            textLine(initial, art.left, (art.top + art.bottom) * 0.5f, art.right - art.left, category_font_.Get(), color(0.8f, 0.8f, 0.8f, alpha), DWRITE_TEXT_ALIGNMENT_CENTER);
+        }
+        if (chosen) { brush(color(0.96f, 0.96f, 0.96f, alpha)); target_->DrawRoundedRectangle(D2D1::RoundedRect(art, 8, 8), solid_.Get(), 2); }
+        const float text_left = art.right + 16, text_width = r.right - text_left - 16, mid = (r.top + r.bottom) * 0.5f;
+        textLine(item.name, text_left, mid - 12, text_width, menu_font_.Get(), color(0.96f, 0.96f, 0.96f, alpha));
+        textLine(item.status, text_left, mid + 15, text_width, toast_sub_font_.Get(),
+                 item.current ? uiAccent(alpha) : color(0.65f, 0.65f, 0.65f, alpha));
+    }
+}
+
 // One quick-bar icon centred on (x, cy), about 44 px across: the bar and the Guide overlay's bar.
 void Renderer::drawQuickGlyph(quick_menu::Action action, float x, float cy, D2D1_COLOR_F ink, int index, bool home) {
     brush(ink);
@@ -141,6 +189,11 @@ void Renderer::drawQuickGlyph(quick_menu::Action action, float x, float cy, D2D1
     } else if (action == quick_menu::Action::close_game) {
         line(x - 13, cy - 13, x + 13, cy + 13, ink, 2.8f);
         line(x + 13, cy - 13, x - 13, cy + 13, ink, 2.8f);
+    } else if (action == quick_menu::Action::switch_game) {
+        // Two game cases, the back one offset up and to the right: another game behind this one.
+        target_->DrawRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(x - 6, cy - 21, x + 18, cy + 11), 3.5f, 3.5f), solid_.Get(), 2.3f);
+        target_->DrawRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(x - 18, cy - 11, x + 6, cy + 21), 3.5f, 3.5f), solid_.Get(), 2.3f);
+        line(x - 11, cy + 5, x - 1, cy + 5, ink, 2.3f); line(x - 5, cy, x - 1, cy + 5, ink, 2.3f); line(x - 5, cy + 10, x - 1, cy + 5, ink, 2.3f);
     } else if (action == quick_menu::Action::search) {
         target_->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(x - 4, cy - 4), 12, 12), solid_.Get(), 2.7f);
         line(x + 5, cy + 5, x + 18, cy + 18, ink, 3);

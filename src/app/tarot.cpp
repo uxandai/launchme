@@ -204,13 +204,8 @@ void Launcher::tarotDivine() {
     t.waiting = true;
     const auto generation = ++tarot_generation_;
     const auto cancel = tarot_cancel_;
-    const auto alive = alive_;
-    const auto window = hwnd_;
-    const auto deliver = [alive, window, generation](std::vector<tarot::Pick> picks, bool failed) {
-        if (!alive->load()) return;
-        auto message = std::make_unique<RemoteMessage>();
-        message->run = [generation, picks = std::move(picks), failed](Launcher& app) mutable { app.tarotStoreFinished(generation, std::move(picks), failed); };
-        if (PostMessageW(window, remote_message, 0, reinterpret_cast<LPARAM>(message.get()))) message.release();
+    const auto deliver = [post = uiPost(), generation](std::vector<tarot::Pick> picks, bool failed) {
+        post([generation, picks = std::move(picks), failed](Launcher& app) mutable { app.tarotStoreFinished(generation, std::move(picks), failed); });
     };
     const bool started = work_.start([wish, owned, seed = tarot_seed_, en = english(), get = tarot_get_, cancel, deliver,
                                       cache = userConfigDirectory() / L"tarot"] {

@@ -8,6 +8,7 @@
 #include <array>
 #include <charconv>
 #include <fstream>
+#include <iterator>
 #include <string_view>
 #include <vector>
 
@@ -85,6 +86,45 @@ std::optional<int> hwmonGpu(const std::filesystem::path& hwmon) {
     return hottest(gpus);
 }
 
+std::optional<std::pair<int, int>> meminfoUsage(std::string_view text) {
+    const auto field = [&](std::string_view name) -> std::optional<uint64_t> {
+        for (size_t at = 0; at < text.size();) {
+            const auto end = std::min(text.find('\n', at), text.size());
+            auto line = text.substr(at, end - at);
+            at = end + 1;
+            if (!line.starts_with(name) || line.size() <= name.size() || line[name.size()] != ':') continue;
+            line.remove_prefix(name.size() + 1);
+            while (!line.empty() && (line.front() == ' ' || line.front() == '\t')) line.remove_prefix(1);
+            uint64_t kilobytes = 0;
+            const auto [ptr, error] = std::from_chars(line.data(), line.data() + line.size(), kilobytes);
+            if (error != std::errc{} || ptr == line.data()) return std::nullopt;
+            return kilobytes;
+        }
+        return std::nullopt;
+    };
+    const auto total = field("MemTotal"), available = field("MemAvailable");
+    if (!total || !available || !*total || *available > *total) return std::nullopt;
+    return std::pair{static_cast<int>((*total - *available) / 1024), static_cast<int>(*total / 1024)};
+}
+
+std::optional<std::pair<int, int>> drmVram(const std::filesystem::path& drm) {
+    std::optional<std::pair<int, int>> best;
+    std::error_code error;
+    for (std::filesystem::directory_iterator entry(drm, error), end; !error && entry != end; entry.increment(error)) {
+        const auto name = entry->path().filename().string();
+        if (!name.starts_with("card") || name.find('-') != std::string::npos) continue;
+        const auto device = entry->path() / "device";
+        if (firstLine(device / "power" / "runtime_status") == "suspended") continue;
+        uint64_t used = 0, total = 0;
+        const auto used_text = firstLine(device / "mem_info_vram_used"), total_text = firstLine(device / "mem_info_vram_total");
+        if (std::from_chars(used_text.data(), used_text.data() + used_text.size(), used).ec != std::errc{} ||
+            std::from_chars(total_text.data(), total_text.data() + total_text.size(), total).ec != std::errc{} || !total || used > total) continue;
+        const std::pair reading{static_cast<int>(used / (1024 * 1024)), static_cast<int>(total / (1024 * 1024))};
+        if (!best || reading.second > best->second) best = reading;
+    }
+    return best;
+}
+
 namespace {
 // The few NVML declarations used here (nvml.h), resolved at run time: libnvidia-ml.so.1 ships
 // with NVIDIA's driver only.
@@ -94,6 +134,8 @@ using NvmlShutdown = int (*)();
 using NvmlCount = int (*)(unsigned*);
 using NvmlHandle = int (*)(unsigned, NvmlDevice*);
 using NvmlTemperature = int (*)(NvmlDevice, int, unsigned*);
+struct NvmlMemoryInfo { unsigned long long total, free, used; };
+using NvmlMemory = int (*)(NvmlDevice, NvmlMemoryInfo*);
 constexpr int nvml_success = 0, nvml_temperature_gpu = 0;
 
 // True when an NVIDIA card is awake: NVML would otherwise power up a laptop's sleeping dGPU.
@@ -115,6 +157,8 @@ struct Reader::State {
     NvmlCount count = nullptr;
     NvmlHandle handle = nullptr;
     NvmlTemperature temperature = nullptr;
+    NvmlMemory memory = nullptr;
+    std::optional<std::pair<int, int>> nvidia_vram; // The last nvidia() poll's card with the most memory.
 
     ~State() {
         if (nvml_ready) if (const auto shutdown = reinterpret_cast<NvmlShutdown>(dlsym(nvml, "nvmlShutdown"))) shutdown();
@@ -131,8 +175,10 @@ struct Reader::State {
             count = reinterpret_cast<NvmlCount>(dlsym(nvml, "nvmlDeviceGetCount_v2"));
             handle = reinterpret_cast<NvmlHandle>(dlsym(nvml, "nvmlDeviceGetHandleByIndex_v2"));
             temperature = reinterpret_cast<NvmlTemperature>(dlsym(nvml, "nvmlDeviceGetTemperature"));
+            memory = reinterpret_cast<NvmlMemory>(dlsym(nvml, "nvmlDeviceGetMemoryInfo"));
             nvml_ready = init && count && handle && temperature && init() == nvml_success;
         }
+        nvidia_vram.reset();
         if (!nvml_ready || !nvidiaAwake()) return std::nullopt;
         unsigned devices = 0;
         if (count(&devices) != nvml_success) return std::nullopt;
@@ -140,8 +186,13 @@ struct Reader::State {
         for (unsigned index = 0; index < std::min(devices, 8u); ++index) {
             NvmlDevice device = nullptr;
             unsigned celsius = 0;
-            if (handle(index, &device) == nvml_success && temperature(device, nvml_temperature_gpu, &celsius) == nvml_success)
-                readings.push_back(celsiusFromMilli(int64_t{celsius} * 1000));
+            if (handle(index, &device) != nvml_success) continue;
+            if (temperature(device, nvml_temperature_gpu, &celsius) == nvml_success) readings.push_back(celsiusFromMilli(int64_t{celsius} * 1000));
+            NvmlMemoryInfo info{};
+            if (memory && memory(device, &info) == nvml_success && info.total && info.used <= info.total) {
+                const std::pair reading{static_cast<int>(info.used / (1024 * 1024)), static_cast<int>(info.total / (1024 * 1024))};
+                if (!nvidia_vram || reading.second > nvidia_vram->second) nvidia_vram = reading;
+            }
         }
         return hottest(readings);
     }
@@ -156,6 +207,13 @@ Reading Reader::read() {
     reading.cpu = hwmonCpu("/sys/class/hwmon");
     const std::array<std::optional<int>, 2> gpus{hwmonGpu("/sys/class/hwmon"), state_->nvidia()};
     reading.gpu = hottest(gpus);
+    std::ifstream meminfo("/proc/meminfo", std::ios::binary);
+    const std::string text((std::istreambuf_iterator<char>(meminfo)), std::istreambuf_iterator<char>());
+    if (const auto ram = meminfoUsage(text)) { reading.ram_used = ram->first; reading.ram_total = ram->second; }
+    // The card with the most memory of its own: amdgpu's counters, else NVIDIA's (read with the temperature).
+    auto vram = drmVram("/sys/class/drm");
+    if (state_->nvidia_vram && (!vram || state_->nvidia_vram->second > vram->second)) vram = state_->nvidia_vram;
+    if (vram) { reading.vram_used = vram->first; reading.vram_total = vram->second; }
     return reading;
 }
 

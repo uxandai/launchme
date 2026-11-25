@@ -91,6 +91,7 @@ set(LAUNCHME_CORE_SOURCES
     src/library/ubisoft_catalog.cpp
     src/library/versions.cpp
     src/library/view_options.cpp
+    src/library/smart_filter.cpp
     src/library/visibility.cpp
     src/net/companion.cpp
     src/net/companion_chats.cpp
@@ -360,6 +361,7 @@ if(BUILD_TESTING)
     launchme_executable(shortcuts_tests TEST steam_nonsteam_shortcuts SOURCES tests/shortcuts_tests.cpp)
     launchme_executable(category_menu_tests TEST long_collection_menu SOURCES tests/category_menu_tests.cpp)
     launchme_executable(search_tests TEST live_library_search SOURCES tests/search_tests.cpp)
+    launchme_executable(smart_filter_tests TEST smart_collections_and_advanced_filter SOURCES tests/smart_filter_tests.cpp)
     launchme_executable(retry_policy_tests TEST artwork_retry_backoff SOURCES tests/retry_policy_tests.cpp)
     launchme_executable(lru_cache_tests TEST artwork_memory_lru SOURCES tests/lru_cache_tests.cpp)
     launchme_executable(background_work_tests TEST owned_background_workers SOURCES tests/background_work_tests.cpp)
