@@ -122,6 +122,8 @@ void Launcher::onCover(std::unique_ptr<CoverMessage> cover) {
     else { asset.hero = shareImage(std::move(cover->bytes)); asset.hero_tone = cover->hero_tone; asset.hero_focus = cover->focus; }
     art_.resize(cover->key);
     if (cover->kind == CoverMessage::Kind::cover) {
+        if (game_switcher_ && std::any_of(switcher_games_.begin(), switcher_games_.end(), [&](const Game& game) { return gameKey(game) == cover->key; }))
+            invalidateGameOverlay(); // Przełącz grę: the row's cover replaces its initial.
         tarotArtArrived(cover->key, cover->kind, asset.cover); profileArtArrived(cover->key, cover->kind, asset.cover);
         desktopRecentArtArrived(cover->key, cover->kind, asset.cover, asset.focus); // Ostatnio grane.
     }

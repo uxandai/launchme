@@ -110,6 +110,27 @@ int LauncherUiTest::collectionBand(HWND window) {
     if (!capture(L"collection-band-posters.png")) return 13025;
     app.library_controls_.options.grid_posters = false; app.applyLibraryOptions();
     app.renderer_.setTileShape(AppSettings::TileShape::squircle); app.focusCard(0); settle();
+    { // Scrolling: the collection tiles ride with the game tiles, gliding at their rate instead of jumping.
+        const float maximum = library_layout::maxScroll(app.libraryView(), app.cards_.size(), view.width, view.height, app.libraryPresentation());
+        if (maximum < 60) return 13028;
+        const float before = app.band_scroll_, target = std::min(maximum, 320.0f);
+        app.grid_scroll_ = target;
+        app.last_frame_ -= std::chrono::milliseconds(16); app.tick();
+        if (!(app.band_scroll_ > before + 1 && app.band_scroll_ < target - 1)) return 13029; // Mid-glide, not there at once.
+        const float rows = 190 + library_layout::gridHead(library_view::View::grid, view.width, app.libraryPresentation());
+        if (std::abs(app.cards_[0].y - (rows - app.band_scroll_)) > 2) return 13030; // The tiles and the games move together.
+        settle();
+        if (app.band_scroll_ != app.grid_scroll_ || std::abs(app.cards_[0].y - (rows - target)) > 1) return 13031;
+        // Up to the tiles: the page glides back to the top; Down returns to the first row, not where the wheel left the focus.
+        app.selected_ = std::min<size_t>(app.cards_.size() - 1, static_cast<size_t>(app.libraryColumns()) * 2 + 1);
+        app.libraryBandFocus(0);
+        app.last_frame_ -= std::chrono::milliseconds(16); app.tick();
+        if (app.grid_scroll_ != 0 || app.band_scroll_ <= 1) return 13032;
+        settle();
+        app.changeCategory(1);
+        if (app.libraryBandFocused() || app.selected_ != 1) return 13033;
+        app.focusCard(0); settle();
+    }
     // Off again: the rows return to the top.
     app.openLibraryPanel(library_ui::Panel::views);
     app.library_controls_.view_row = 3; app.adjustLibraryView(-1);

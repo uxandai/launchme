@@ -151,8 +151,6 @@ void Renderer::drawRectangularCard(const GameCard& card, size_t index, float alp
     D2D1_COLOR_F accent = cover_accent_ ? D2D1::ColorF(((cover_accent_ >> 16) & 255) / 255.0f, ((cover_accent_ >> 8) & 255) / 255.0f, (cover_accent_ & 255) / 255.0f) :
                           poster ? poster->accent : cover ? cover->accent : D2D1::ColorF(0.94f, 0.96f, 0.97f);
     if (frozen) accent = D2D1::ColorF(0.80f, 0.82f, 0.84f);
-    const bool perfect = perfectGame(game);
-    if (perfect && !frozen) accent = perfect_gold; // Every achievement unlocked.
     if (platform_tile) {
         if (cover) {
             // Store and console logos, fitted inside the tile.
@@ -255,10 +253,6 @@ void Renderer::drawRectangularCard(const GameCard& card, size_t index, float alp
     if (ring < 0.996f) {
         brush(gray(1, (1.0f - ring) * 0.16f * transparency));
         target_->DrawGeometry(frame_shape.Get(), solid_.Get(), 1.0f);
-    }
-    if (perfect) {
-        brush(D2D1::ColorF(perfect_gold.r, perfect_gold.g, perfect_gold.b, (0.92f - 0.5f * ring) * transparency));
-        target_->DrawGeometry(frame_shape.Get(), solid_.Get(), 2.4f);
     }
     // Experimental spring focus: the outline on its own rectangle, zoomed like the tile.
     if (focused && context_->focus_ring && emphasis > 0.004f) drawFocusRing(accent, emphasis * transparency, scale, false);

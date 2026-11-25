@@ -2068,13 +2068,14 @@ int LauncherUiTest::quickResume(HWND window) {
     app.launch(); app.finishLaunch();
     if (dispatched.back() != L"steam://rungameid/3001" || app.audio_.music_target_ != 0) return 311;
     running(GetTickCount64() + 100, {"steam:3000", "steam:3001"});
-    // Resuming the first one suspends the running second one first.
+    // Resuming the first one suspends the running second one once the first has the foreground (a suspended
+    // window in front would stall the launcher's input joined to it).
     log.clear();
     if (!focus(3000)) return 312;
     const auto launches = dispatched.size();
     app.launch();
     if (app.pending_launch_ || dispatched.size() != launches ||
-        log != std::vector<std::string>{"suspend:3001", "resume:3000", "focus:3000"} ||
+        log != std::vector<std::string>{"resume:3000", "focus:3000", "suspend:3001"} ||
         app.sessionState(first) != SessionState::running || app.sessionState(second) != SessionState::frozen) return 313;
     // "Graj" on the running game switches to it instead of starting it again.
     log.clear(); app.launch();

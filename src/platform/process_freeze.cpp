@@ -176,9 +176,32 @@ bool focus(const std::vector<GameProcess>& processes) {
     GetWindowThreadProcessId(search.best, &pid);
     AllowSetForegroundWindow(pid);
     if (IsIconic(search.best)) ShowWindowAsync(search.best, SW_RESTORE);
-    SetForegroundWindow(search.best);
-    const auto foreground = GetForegroundWindow();
-    return foreground == search.best || (foreground && GetAncestor(foreground, GA_ROOTOWNER) == search.best);
+    const HWND best = search.best;
+    const auto landed = [best] {
+        const auto foreground = GetForegroundWindow();
+        return foreground == best || (foreground && GetAncestor(foreground, GA_ROOTOWNER) == best);
+    };
+    // Windows refuses the foreground to a process that is not in front (only the taskbar button flashes).
+    // Joining the input of the window in front covers that; when its input lock still holds, an empty
+    // mouse event (no move, no button) makes this process the last input's provider, as the launcher's
+    // own return does (game_sessions.cpp).
+    const auto attempt = [&] {
+        const HWND front = GetForegroundWindow();
+        const DWORD self = GetCurrentThreadId();
+        const DWORD other = front ? GetWindowThreadProcessId(front, nullptr) : 0;
+        // Never joined to a window that does not answer (a suspended game's): its input would stall ours.
+        const bool attached = other && other != self && !IsHungAppWindow(front) &&
+            SendMessageTimeoutW(front, WM_NULL, 0, 0, SMTO_ABORTIFHUNG | SMTO_BLOCK, 100, nullptr) &&
+            AttachThreadInput(self, other, TRUE);
+        SetForegroundWindow(best);
+        BringWindowToTop(best);
+        if (attached) AttachThreadInput(self, other, FALSE);
+        return landed();
+    };
+    if (attempt()) return true;
+    INPUT input{};
+    input.type = INPUT_MOUSE;
+    return SendInput(1, &input, sizeof(input)) == 1 && attempt();
 }
 #else
 // SIGSTOP stops every thread of a process; it cannot be caught or ignored.

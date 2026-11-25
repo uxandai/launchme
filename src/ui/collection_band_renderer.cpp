@@ -18,7 +18,7 @@ void Renderer::drawCollectionBand() {
     if (!context_ || !context_->band) return;
     namespace cb = collection_band;
     const auto& options = context_->library_options;
-    const float width = viewport_.width, scroll = context_->grid_scroll;
+    const float width = viewport_.width, scroll = context_->band_scroll;
     const float top = cb::top(scroll);
     if (top + cb::height(width, options) < 40) return; // Scrolled away under the header.
     const float left = cb::left(width, options), right = cb::right(width, options);

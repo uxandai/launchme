@@ -1561,6 +1561,7 @@ private:
     int overlay_selected_ = 0;
     // Guide's Przełącz grę (src/app/game_switcher.cpp): the chosen row while its list is open, and the games in it.
     std::optional<int> game_switcher_;
+    bool switcher_release_ = false; // A went down on a row: the pick waits for its release (input.cpp).
     std::vector<Game> switcher_games_;
     std::vector<Game> switcherGames() const;
     void openGameSwitcher();
@@ -2155,7 +2156,7 @@ private:
     std::wstring drmSummary() const;
     void openPlatform(const std::wstring& name);
     // Wydawcy and Developerzy (src/app/studio_libraries.cpp): the studios with a logo, from the game index.
-    bool refreshStudios();                       // True when the studios or the perfect games changed.
+    bool refreshStudios();                       // True when the studios changed.
     bool studiosShown() const { return settings_.show_publishers || settings_.show_developers || settings_.show_companies; }
     // Settings → Biblioteka: Wydawcy, Developerzy, the Steam rows, a hidden studio shown again, the tab
     // icons; false: not one of them.
@@ -3322,10 +3323,9 @@ private:
     std::vector<Game> shortcut_library_, nested_games_;
     std::unordered_map<std::wstring, std::vector<Game>> platform_games_;
     // Wydawcy and Developerzy: each studio's game keys (most games first) and its games by its key
-    // (L"publisher:capcom"); the games with every achievement unlocked (a gold border).
+    // (L"publisher:capcom").
     std::array<std::vector<studios::Entry>, studios::role_count> studio_groups_;
     std::unordered_map<std::wstring, std::vector<Game>> studio_games_;
-    std::unordered_set<std::string> perfect_games_;
     std::string studio_board_return_;            // The board a studio's library was opened from (Back returns there).
     std::wstring nested_platform_;
     std::vector<SteamCollection> collections_source_, settings_collections_;
@@ -3401,6 +3401,9 @@ private:
     // Siatka's collection tiles: the focused one (-1: the games have the focus), the last one, the pointer's,
     // the row's sideways slide (eased towards its target) and the collection opened from them (Back returns).
     int band_focus_ = -1, band_last_ = 0, band_hover_ = -1;
+    // Siatka's collection tiles ride on the games' scroll as the game tiles do: eased towards grid_scroll_
+    // at the cards' own rate, so the band and the rows below it move together instead of the band jumping.
+    float band_scroll_ = 0;
     float band_slide_ = 0, band_slide_target_ = 0;
     std::string band_return_;
     std::wstring search_query_;

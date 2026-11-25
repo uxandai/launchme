@@ -328,7 +328,6 @@ void Renderer::drawDesktopPoster(const Layout& layout, const View& view, size_t 
         if (!view.poster_glow) return uiAccent();
         if (sessionOf(game) == SessionState::frozen) return rgb(0.80f, 0.82f, 0.84f);
         if (cover_accent_) return rgb(((cover_accent_ >> 16) & 255) / 255.0f, ((cover_accent_ >> 8) & 255) / 255.0f, (cover_accent_ & 255) / 255.0f);
-        if (perfectGame(game)) return perfect_gold;
         if (!glow_art) return uiAccent();
         const float shown = reveal(*glow_art);
         return rgb(std::lerp(0.94f, glow_art->accent.r, shown), std::lerp(0.96f, glow_art->accent.g, shown), std::lerp(0.97f, glow_art->accent.b, shown));
@@ -403,10 +402,7 @@ void Renderer::drawDesktopPoster(const Layout& layout, const View& view, size_t 
     // Marked for a group action: a tint over the poster and its check (top left), not the
     // selection's ring, so marked, selected and keyboard focus stay three different things.
     if (marked && !selected) { const auto tint = uiAccent(); fill(rgb(tint.r, tint.g, tint.b, 0.16f * alpha)); }
-    if (perfectGame(game)) { // Every achievement unlocked: a gold edge.
-        brush(rgb(perfect_gold.r, perfect_gold.g, perfect_gold.b, 0.95f * alpha));
-        target_->DrawGeometry(shape, solid_.Get(), 2.2f);
-    } else {
+    {
         brush(gray(1, (0.07f + 0.16f * hover) * alpha));
         if (shaped->outline) realizer_->DrawGeometryRealization(shaped->outline.Get(), solid_.Get());
         else target_->DrawGeometry(shape, solid_.Get(), 1);

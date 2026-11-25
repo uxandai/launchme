@@ -698,6 +698,12 @@ void Launcher::tick() {
     // One spring for the lift, rather than stacking the slow drawer fade and
     // card easing. About 95% of the 100px movement completes in 170ms.
     const float ease_y = ease(dt, quick_open_ || quick_progress_ > 0.003f ? 18.0f : 9.0f);
+    // Siatka's collection tiles follow the scroll at the cards' rate (their tiles ease the same way).
+    if (libraryBandShown() && arrived_ > 0.05f) {
+        band_scroll_ += (grid_scroll_ - band_scroll_) * ease_y;
+        if (std::abs(grid_scroll_ - band_scroll_) < 0.5f) band_scroll_ = grid_scroll_;
+        else needs_paint = true;
+    } else band_scroll_ = grid_scroll_; // Shown fresh: in place at once.
     float focus_x = 0, focus_y = 0, focus_w = 0, focus_h = 0; // The focused card's resting rectangle.
     if (metro) { // The Metro tab strip glides with the pages.
         const float page = static_cast<float>(metro_page_);

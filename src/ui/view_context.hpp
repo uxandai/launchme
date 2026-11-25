@@ -369,8 +369,8 @@ struct ViewContext {
     std::wstring primary_action;
     bool primary_enabled = true;
     float grid_scroll = 0;
+    float band_scroll = 0; // Siatka's collection tiles: the games' scroll as their tiles show it (eased).
     // Games with every achievement unlocked (their keys): a gold edge on their tiles and posters.
-    const std::unordered_set<std::string>* perfect_games = nullptr;
     std::wstring category;
     std::wstring platform;
     bool main_row = true;

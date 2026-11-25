@@ -515,6 +515,10 @@ int LauncherUiTest::gameOverlay(HWND window) {
             return -1;
         }();
         if (!app.game_switcher_ || *app.game_switcher_ != 1 || app.switcher_games_.size() < 2 || gameKey(app.switcher_games_[0]) != target.key || other_row < 1) return 61122;
+        { // A row without its cover in memory (let go while the game ran) asks for it instead of keeping the initial.
+            std::lock_guard lock(app.jobs_->mutex);
+            if (!app.jobs_->requested.contains(artRequestKey(other, CoverMessage::Kind::cover))) return 61129;
+        }
         animate(); // The focus circle glides onto Przełącz grę.
         if (!capture(L"game-guide-switcher.png")) return 61123;
         app.overlayKey(VK_DOWN);
@@ -528,8 +532,34 @@ int LauncherUiTest::gameOverlay(HWND window) {
         const auto view = app.drawerViewport();
         const auto row = quick_menu::switcher::row(view.width, view.height, quick_menu::center(view.width, 1, plugins, true), other_row, app.overlay_motion_.bar);
         const int switches = game_switches;
+        bool focused_under_overlay = false; // Windows gives the foreground only while the overlay holds it.
+        // With quick resume the game left behind is suspended only after the picked one has the foreground:
+        // a suspended window in front would stall the launcher's input joined to it.
+        std::string order;
+        const auto saved_focus = app.quick_resume_.focus;
+        const auto saved_suspend = app.quick_resume_.suspend;
+        const bool saved_quick = app.settings_.quick_resume;
+        app.settings_.quick_resume = true;
+        app.quick_resume_.focus = [&](const auto&) { ++game_switches; focused_under_overlay = app.gameOverlayOpen(); order += 'f'; return true; };
+        app.quick_resume_.suspend = [&](auto&) { order += 's'; return process_freeze::Result::denied; };
         app.overlayClick((row.left + 40) * view.scale, (row.top + 20) * view.scale);
-        if (app.gameOverlayOpen() || app.game_switcher_ || game_switches != switches + 1) return 61127;
+        app.quick_resume_.focus = saved_focus; app.quick_resume_.suspend = saved_suspend; app.settings_.quick_resume = saved_quick;
+        app.notifications_.clear();
+        if (app.gameOverlayOpen() || app.game_switcher_ || game_switches != switches + 1 || !focused_under_overlay) return 61127;
+        if (order.empty() || order.front() != 'f' || order.find('s') == std::string::npos) return 61128;
+        // The pad: a row is picked on A's release, so the game brought forward never finds A held (games read
+        // the pad whatever window is in front). The A that opened the list is no pick when it comes up.
+        if (!app.openGameOverlay(target)) return 61130;
+        app.overlay_selected_ = switch_index;
+        pad.buttons = XINPUT_GAMEPAD_A; app.controller(pad);
+        pad.buttons = 0; app.controller(pad);
+        if (!app.game_switcher_ || !app.gameOverlayOpen()) return 61131;
+        const int before_pad = game_switches;
+        pad.buttons = XINPUT_GAMEPAD_A; app.controller(pad);
+        if (!app.game_switcher_ || !app.gameOverlayOpen() || game_switches != before_pad) return 61132; // Held: nothing yet.
+        pad.buttons = 0; app.controller(pad);
+        if (app.game_switcher_ || app.gameOverlayOpen() || game_switches != before_pad + 1) return 61133;
+        app.notifications_.clear();
         app.game_sessions_.erase(gameKey(other));
     }
 

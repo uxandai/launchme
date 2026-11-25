@@ -412,9 +412,17 @@ void Launcher::controllerInput(const PadReading& state) {
         }
         dashboardPollHold(now);
         const bool widget_release = !(buttons & XINPUT_GAMEPAD_A) && (controller_buttons_ & XINPUT_GAMEPAD_A);
-        if (widget_release) dashboardPress(2, false, now);
-        if (pressed(XINPUT_GAMEPAD_A) && !dashboardPress(2, true, now)) overlayKey(VK_RETURN);
-        else if (pressed(XINPUT_GAMEPAD_B)) overlayKey(VK_ESCAPE);
+        if (game_switcher_) {
+            // Przełącz grę picks on A's release: on the press the picked game would come forward with A still
+            // down and act on it (games read the pad whatever window is in front; the keyboard goes to one).
+            if (pressed(XINPUT_GAMEPAD_A)) switcher_release_ = true;
+            else if (widget_release && std::exchange(switcher_release_, false)) overlayKey(VK_RETURN);
+            else if (pressed(XINPUT_GAMEPAD_B)) overlayKey(VK_ESCAPE);
+        } else {
+            if (widget_release) dashboardPress(2, false, now);
+            if (pressed(XINPUT_GAMEPAD_A) && !dashboardPress(2, true, now)) overlayKey(VK_RETURN);
+            else if (pressed(XINPUT_GAMEPAD_B)) overlayKey(VK_ESCAPE);
+        }
         controller_direction_ = direction; controller_buttons_ = buttons;
         return;
     }

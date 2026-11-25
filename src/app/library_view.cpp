@@ -775,7 +775,12 @@ bool Launcher::libraryVertical(int amount) {
     } else if (libraryBandFocused()) { // The collection tiles: Up to the top bar, Down to the games.
         band_focus_ = -1;
         if (amount < 0) { library_controls_.focus = library_ui::filters_button; grid_scroll_ = 0; audio_.navigate(); }
-        else if (!cards_.empty()) { focusCard(selected_); audio_.navigate(); }
+        else if (!cards_.empty()) {
+            // Down lands in the first row (the games' focus may have been left further down by the wheel).
+            const auto columns = static_cast<size_t>(std::max(1, libraryColumns()));
+            focusCard(selected_ < columns ? selected_ : std::min(selected_ % columns, cards_.size() - 1));
+            audio_.navigate();
+        }
     } else if (library_controls_.focus >= 0) {
         if (amount > 0 && libraryBandShown() && !libraryBandTiles().empty()) libraryBandFocus(band_last_);
         else if (amount > 0 && !cards_.empty()) { library_controls_.focus = -1; focusCard(selected_); }

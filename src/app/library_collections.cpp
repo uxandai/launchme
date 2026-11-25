@@ -45,7 +45,7 @@ int Launcher::libraryBandHit(float x, float y) const {
     if (!libraryBandShown() || library_controls_.open() || menu_open_ || friends_open_ || quick_open_ || y < 150) return -1;
     const auto view = renderer_.viewport();
     const auto& options = library_controls_.options;
-    return collection_band::hit(x, y, static_cast<int>(libraryBandTiles().size()), view.width, grid_scroll_, band_slide_, options);
+    return collection_band::hit(x, y, static_cast<int>(libraryBandTiles().size()), view.width, band_scroll_, band_slide_, options);
 }
 
 namespace {

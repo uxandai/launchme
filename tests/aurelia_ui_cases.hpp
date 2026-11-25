@@ -493,6 +493,26 @@ int LauncherUiTest::aureliaIntegration(HWND window) {
         app.aureliaCloudCatchUp(GetTickCount64());
         if (!wait([&] { return !app.aurelia_catch_up_busy_; }) || fake->count(C::cloud_sync) != syncs + 1 || !app.settings_.aurelia_cloud_pending.empty()) return 10437;
         app.settings_.aurelia_cloud_skip.erase("902");
+        { // Running as Launchme sees it (started through Steam, or by a play lost with a closed Launchme): it waits.
+            const auto game = *std::find_if(installed.begin(), installed.end(), [](const Game& g) { return g.app_id == 902; });
+            if (!app.aureliaManaged(game)) return 61150;
+            app.settings_.aurelia_cloud_pending = {"902"}; app.aurelia_caught_up_.clear(); app.aurelia_catch_up_at_ = 0;
+            app.game_sessions_.try_emplace(gameKey(game), 0).first->second.observe(GameActivity::running, 1);
+            app.aureliaCloudCatchUp(GetTickCount64());
+            if (!wait([&] { return !app.aurelia_catch_up_busy_; }) || fake->count(C::cloud_sync) != syncs + 1 || !app.settings_.aurelia_cloud_pending.contains("902")) return 61151;
+            app.game_sessions_.erase(gameKey(game));
+            // Switched to the Steam client since: Steam keeps its saves; dropped, nothing sent.
+            auto& exceptions = app.settings_.aurelia_default ? app.settings_.aurelia_steam : app.settings_.aurelia_standalone;
+            const bool by_default = app.settings_.aurelia_default, client = app.aurelia_steam_client_;
+            app.aurelia_steam_client_ = true; // A Steam client here (without one every game is Aurelia's).
+            if (by_default) exceptions.insert("902"); else exceptions.erase("902");
+            if (app.aureliaManaged(game)) return 61153;
+            app.aurelia_catch_up_at_ = 0;
+            app.aureliaCloudCatchUp(GetTickCount64());
+            if (!wait([&] { return !app.aurelia_catch_up_busy_; }) || fake->count(C::cloud_sync) != syncs + 1 || !app.settings_.aurelia_cloud_pending.empty()) return 61152;
+            if (by_default) exceptions.erase("902"); else exceptions.insert("902");
+            app.aurelia_steam_client_ = client;
+        }
         fake->cloud_ok = false; app.aurelia_cloud_.clear(); app.notifications_.clear();
     }
     fake->logged_in = false; app.aureliaRescan();

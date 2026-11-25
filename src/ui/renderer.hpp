@@ -586,8 +586,6 @@ private:
     void drawLaunchAnimation();
     void drawHero();
     void drawCard(const GameCard& card, size_t index);
-    static constexpr D2D1_COLOR_F perfect_gold{0.98f, 0.77f, 0.30f, 1.0f}; // Every achievement unlocked.
-    bool perfectGame(const Game& game) const;
     // The soft squircle shadow under a square card (larger under the focused one).
     void drawSquareShadow(float x, float y, float size, bool selected, float transparency);
     // Experimental spring focus (ViewContext::focus_ring): the outline on its own rectangle, zoomed

@@ -196,14 +196,6 @@ int LauncherUiTest::studioLibraries(HWND window) {
         std::none_of(publishers.begin(), publishers.end(), [](const studios::Entry& e) { return e.studio->id == "ubisoft"; })) return 9851;
     app.settings_.studio_min_games = 1; app.buildShelves();
 
-    // A game with every achievement: a gold edge.
-    app.history_.progress["steam:9800"] = {12, 12};
-    app.refreshStudios();
-    if (!app.perfect_games_.contains("steam:9800") || app.perfect_games_.contains("steam:9801")) return 9824;
-    app.showCategory(0);
-    for (int i = 0; i < 20; ++i) { app.last_frame_ -= std::chrono::milliseconds(50); app.tick(); }
-    if (!capture(L"studios-perfect-tv.png")) return 9825;
-
     // ---- The desktop window: Wydawcy and Developerzy folded; a section's title is its logo.
     app.desktop_mode_ = true; app.audio_.setDesktop(true);
     app.buildShelves(); app.showCategory(0);

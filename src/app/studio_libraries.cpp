@@ -1,8 +1,7 @@
 // Wydawcy and Developerzy (src/library/studios.hpp): the games of the publishers and developers
 // with a logo, from what the game index knows of each game. Tryb TV: a row of each under Platformy
 // PC whose tiles are the logos (its "Wszystkie" opens the board of all of them, a logo the
-// studio's library); the desktop window: two sidebar groups, folded until opened. The games with
-// every achievement unlocked are collected here too (a gold border on their covers).
+// studio's library); the desktop window: two sidebar groups, folded until opened.
 #include "launcher.hpp"
 #include "../platform/text_encoding.hpp"
 #include "../library/search.hpp"
@@ -17,7 +16,6 @@ std::wstring wideKey(studios::Role role, std::string_view id) { return text_enco
 
 bool Launcher::refreshStudios() {
     std::array<std::vector<studios::Entry>, studios::role_count> groups;
-    std::unordered_set<std::string> perfect;
     if (game_index_ && game_index_->loaded()) {
         std::unordered_set<std::string> keys;
         for (const auto& game : public_library_)
@@ -29,7 +27,6 @@ bool Launcher::refreshStudios() {
                 if (!record) continue;
                 if (!record->publishers.empty()) publishers.push_back({key, record->publishers});
                 if (!record->developers.empty()) developers.push_back({key, record->developers});
-                if (record->achievements_total && record->achievements_unlocked >= record->achievements_total) perfect.insert(key);
             }
         });
         if (settings_.show_companies) {
@@ -49,9 +46,6 @@ bool Launcher::refreshStudios() {
             if (settings_.show_developers) groups[static_cast<size_t>(studios::Role::developer)] = studios::group(developers);
         }
     }
-    // What the profile saw complete (other stores' achievements through plugins).
-    for (const auto& [key, progress] : history_.progress)
-        if (progress.total && progress.unlocked >= progress.total) perfect.insert(key);
     // Hidden ones and those with fewer games than Najmniej gier out; the player's order first (Move
     // up / Move down), the rest by most games, then by name.
     std::unordered_map<std::string, size_t> positions;
@@ -75,9 +69,7 @@ bool Launcher::refreshStudios() {
         });
     }
     const bool changed = groups != studio_groups_;
-    const bool perfect_changed = perfect != perfect_games_;
-    perfect_games_ = std::move(perfect);
-    if (!changed) return perfect_changed;
+    if (!changed) return false;
     studio_groups_ = std::move(groups);
     studio_games_.clear();
     std::unordered_map<std::string, const Game*> by_key;

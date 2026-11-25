@@ -227,7 +227,7 @@ void Launcher::animateFocus(float dt, float target_x, float target_y, float targ
     } else artwork_cell_glide_.valid = false;
     // Siatka's collection tiles: the focused tile, following the row as it slides.
     if (libraryBandFocused()) {
-        const auto r = collection_band::tile(band_focus_, view.width, grid_scroll_, band_slide_, library_controls_.options);
+        const auto r = collection_band::tile(band_focus_, view.width, band_scroll_, band_slide_, library_controls_.options);
         glideBox(band_glide_, true, 0, r.left, r.top, r.right, r.bottom);
     } else band_glide_.valid = false;
     // Aurelia (Tryb TV): Back, a row, the field, the question's answers; another page snaps.

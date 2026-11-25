@@ -330,7 +330,7 @@ void Launcher::paint(bool overlay) {
         context.primary_enabled = actionEnabled(cards_[selected_].game);
     }
     context.grid_scroll = grid_scroll_;
-    context.perfect_games = perfect_games_.empty() ? nullptr : &perfect_games_;
+    context.band_scroll = band_scroll_;
     context.main_row = category_ == 0;
     context.category = categories_.empty() ? tr(L"Ostatnio grane") : categories_[category_].title;
     if (screen_ == ScreenMode::platform_games) context.category = nested_platform_;

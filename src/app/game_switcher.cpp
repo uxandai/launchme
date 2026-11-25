@@ -37,16 +37,23 @@ std::vector<Game> Launcher::switcherGames() const {
 
 void Launcher::openGameSwitcher() {
     switcher_games_ = switcherGames();
+    switcher_release_ = false; // The A that opened it is not a pick when it comes up.
     if (switcher_games_.empty()) { navigationBoundary(); return; }
     const bool front = overlay_target_ && gameKey(switcher_games_.front()) == overlay_target_->key;
     // The first other game is chosen: one press of A switches between two games.
     game_switcher_ = front && switcher_games_.size() > 1 ? 1 : 0;
+    // Covers let go while a game runs (or never loaded): asked for again; onCover repaints the list.
+    for (const auto& game : switcher_games_) {
+        const auto* art = art_.peek(gameKey(game));
+        if (!art || (!art->cover && !art->poster && !art->landscape)) requestArt(game, CoverMessage::Kind::cover);
+    }
     audio_.context();
     invalidateGameOverlay();
 }
 
 void Launcher::closeGameSwitcher() {
     game_switcher_.reset();
+    switcher_release_ = false;
     switcher_games_.clear();
 }
 
@@ -69,8 +76,12 @@ void Launcher::gameSwitcherAccept() {
     const auto game = switcher_games_[static_cast<size_t>(*game_switcher_)];
     closeGameSwitcher();
     if (overlay_target_ && gameKey(game) == overlay_target_->key) { dismissGameOverlay(); return; } // Back to it.
-    closeGameOverlay(false); // The overlay goes without handing the foreground back to the game it covered.
-    if (!switchToGame(game)) showNotification(NotificationKind::error, tr(L"Nie można przełączyć gry"), game.name);
+    // The picked game is brought in front while the overlay still holds the foreground (Windows refuses
+    // it to a process in the background); only then does the overlay go, without handing the foreground
+    // back to the game it covered.
+    const bool switched = switchToGame(game);
+    closeGameOverlay(false);
+    if (!switched) showNotification(NotificationKind::error, tr(L"Nie można przełączyć gry"), game.name);
 }
 
 void Launcher::gameSwitcherContext(ViewContext& context) {

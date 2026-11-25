@@ -419,7 +419,11 @@ void Launcher::aureliaCloudCatchUp(uint64_t now) {
             const auto game = std::find_if(app.installed_library_.begin(), app.installed_library_.end(),
                                            [&](const Game& g) { return g.source == GameSource::steam && g.app_id == app_id; });
             if (game == app.installed_library_.end()) continue; // The library is not read yet.
-            if (!game->installed) { dropped.push_back(id); continue; }
+            // No longer Aurelia's (switched to the Steam client since): Steam keeps its saves; nothing goes up.
+            if (!game->installed || !app.aureliaManaged(*game)) { dropped.push_back(id); continue; }
+            // Running or suspended as Launchme sees it (started through Steam, or by a play Aurelia lost with a
+            // closed Launchme): its saves go up only once it has ended.
+            if (const auto session = app.game_sessions_.find(gameKey(*game)); session != app.game_sessions_.end()) continue;
             app.aurelia_caught_up_.insert(id);
             app.aureliaCloudSync(*game, true);
         }
@@ -576,7 +580,7 @@ void Launcher::aureliaLaunch(const Game& game) {
         if (!reply.ok && !reply.cancelled && !to_steam) {
             // A sync that failed before the start kept the game from starting over saves that could be lost.
             if (cloud_failed) app.aureliaCloudFailed(game, finished ? tr(L"Synchronizacja zapisów nie powiodła się") : tr(L"Gra nie została uruchomiona: zapisy w chmurze"), reply.error);
-            else app.showNotification(NotificationKind::error, tr(L"Nie udało się uruchomić gry"), reply.error);
+            else app.showNotification(NotificationKind::error, tr(L"Nie udało się uruchomić gry"), L"Aurelia · " + game.name + L": " + reply.error);
         }
         // The CLI has ended. Let the normal activity observer account for any actually running
         // process, but a rejected preflight must not leave a phantom starting session behind.

@@ -41,9 +41,6 @@ void Renderer::drawSquareShadow(float x, float y, float size, bool selected, flo
     target_->SetTransform(base);
 }
 
-bool Renderer::perfectGame(const Game& game) const {
-    return context_ && context_->perfect_games && isGame(game) && context_->perfect_games->contains(gameKey(game));
-}
 
 void Renderer::drawCard(const GameCard& card, size_t index) {
     // Siatka (and the search results) of posters or landscape capsules: shallower corners than a square.
@@ -211,7 +208,6 @@ void Renderer::drawCard(const GameCard& card, size_t index) {
         color(((cover_accent_ >> 16) & 255) / 255.0f,
               ((cover_accent_ >> 8) & 255) / 255.0f,
               (cover_accent_ & 255) / 255.0f) :
-        perfectGame(card.game) ? perfect_gold :
         card.game.kind == GameKind::platform && !studioPlatform(card.game.platform) ?
         (card.game.platform == L"PS3" ? color(0.66f, 0.66f, 0.70f) :
          platformColor(card.game.platform)) :
@@ -246,10 +242,6 @@ void Renderer::drawCard(const GameCard& card, size_t index) {
     if (edge < 0.996f && !context_->psfive) {
         brush(color(1, 1, 1, (1.0f - edge) * 0.30f * transparency));
         strokeSquircle(solid_.Get(), 1.0f / size);
-    }
-    if (perfectGame(card.game)) { // Every achievement unlocked: a gold edge.
-        brush(color(perfect_gold.r, perfect_gold.g, perfect_gold.b, (0.92f - 0.5f * edge) * transparency));
-        strokeSquircle(solid_.Get(), 2.4f / size);
     }
     target_->SetTransform(base);
     if (selected && context_->focus_ring && emphasis > 0.004f) drawFocusRing(tint, emphasis * transparency, focus_zoom, true);

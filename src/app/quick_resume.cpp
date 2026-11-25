@@ -221,7 +221,6 @@ void Launcher::resumeGame(const Game& game) {
     const auto key = gameKey(game);
     const auto session = game_sessions_.find(key);
     if (session == game_sessions_.end() || !session->second.frozen()) return;
-    if (settings_.quick_resume) freezeOthers(key);
     const auto processes = session->second.frozenProcesses();
     const auto result = quick_resume_.resume(processes);
     if (result == process_freeze::Result::denied) {
@@ -238,7 +237,11 @@ void Launcher::resumeGame(const Game& game) {
     InvalidateRect(hwnd_, nullptr, FALSE);
     if (result == process_freeze::Result::gone) return; // The activity worker ends the session.
     audio_.stopMusic();
-    if (!quick_resume_.focus(processes)) requestGameFocus(observed);
+    // Focus first, then the others are suspended: a suspended game in front would leave the foreground
+    // with a thread that answers nothing (and a game suspended while still in front keeps its grip on it).
+    const bool focused = quick_resume_.focus(processes);
+    if (settings_.quick_resume) freezeOthers(key);
+    if (!focused) requestGameFocus(observed);
 }
 
 // "Zamknij grę": ends the game's processes at once, like quitting on a console.
@@ -299,9 +302,10 @@ bool Launcher::switchToGame(const Game& game) {
     if (!observable(tracked)) tracked = game;
     const auto processes = quick_resume_.find(tracked);
     dismissMenu();
-    if (settings_.quick_resume) freezeOthers(key);
     audio_.stopMusic();
-    if (processes.empty() || !quick_resume_.focus(processes)) requestGameFocus(tracked);
+    const bool focused = !processes.empty() && quick_resume_.focus(processes); // Before the others are suspended (resumeGame).
+    if (settings_.quick_resume) freezeOthers(key);
+    if (!focused) requestGameFocus(tracked);
     return true;
 }
 
